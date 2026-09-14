@@ -24,6 +24,10 @@ Core:Spawn({
 		Values  = { 70, 20, 0.1, 1 },
 	},
 
+	-- One of Yellow, Blue, Glitch, Static, Rush -- the real list, read
+	-- from the game rather than the spawner's two-entry table.
+	DeathType = "Glitch",
+
 	DeathHints = {
 		"Oh hey there",
 		"You died to rebound",

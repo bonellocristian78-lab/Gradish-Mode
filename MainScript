@@ -123,6 +123,16 @@ warn(("[Gradish] schedule for seed %s -- Retter %d, Rose %d, Yeller %d, Rebound 
 require(game.Players.LocalPlayer.PlayerGui.MainUI.Initiator.Main_Game).caption("Loaded",true)
 warn("Loaded")
 
+-- Writes the game's real death-type list to the log on startup.
+task.spawn(function()
+	local ok, Core = pcall(function()
+		return loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/GradishCore"))()
+	end)
+	if ok and Core and Core.DiscoverDeathTypes then
+		Core.DiscoverDeathTypes()
+	end
+end)
+
 -- Gradish extras. Both are loaded once per run and are independent of the
 -- entity spawns below.
 --   CrucifixSpawner  hides one crucifix in the furniture for you to find

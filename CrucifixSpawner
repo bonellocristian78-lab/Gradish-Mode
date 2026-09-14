@@ -48,9 +48,22 @@ Core.Crucifix:EnableDrawers({
 	-- everything that comes after it.
 	MinRoom = 10,
 
-	-- How many can be found in a single run. One keeps it precious, which is
-	-- the whole point of it being a find rather than a button.
-	MaxPerRun = 1,
+	-- How many FINDS in a single run. Each one rolls the loot table below,
+	-- so three finds is three items, not three crucifixes.
+	MaxPerRun = 3,
+
+	--[[ Per-item caps. The loot table is weighted -- Crucifix 34, Bandage 22,
+	     Glowstick 20, Vitamins 14, Corroded Crucifix 4 -- and these stop a
+	     lucky run handing you four crucifixes.
+
+	     Add or reweight items in the LOOT_TABLE inside GradishCore. ]]
+	Caps = {
+		Crucifix         = 2,
+		CorrodedCrucifix = 1,
+		Bandage          = 3,
+		Glowstick        = 2,
+		Vitamins         = 2,
+	},
 
 	-- It goes in your backpack, not your hand. Finding it and choosing to
 	-- hold it are two different decisions.

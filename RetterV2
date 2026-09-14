@@ -28,6 +28,10 @@ Core:Spawn({
 		Shatter         = true,
 	},
 
+	-- One of Yellow, Blue, Glitch, Static, Rush -- the real list, read
+	-- from the game rather than the spawner's two-entry table.
+	DeathType = "Yellow",
+
 	DeathHints = {
 		"You died to Retter",
 		"if you want to beat him",

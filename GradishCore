@@ -1094,6 +1094,30 @@ local function startCrucifixionWatch(session)
 		end)
 	end
 
+	--[[ A corroded crucifix overrides the resist roll while you hold it.
+
+	     Resist is read once, when the ritual starts, so it is enough to keep
+	     the flag correct in real time rather than trying to intercept the
+	     moment you raise it. Holding the green one turns her rare accident
+	     into a decision you made in a drawer ten rooms ago. ]]
+	session.janitor:Give(RunService.Heartbeat:Connect(function()
+		if not session.active or session.corroded then return end
+
+		local character = getCharacter()
+		local held = character and character:FindFirstChildOfClass("Tool")
+		if not held or held:GetAttribute("Corroded") ~= true then return end
+
+		local config = session.entity and session.entity.Config
+		if not config or not config.Crucifixion.Resist then return end
+
+		config.Crucifixion.Resist = false
+		session.corroded = true
+		session.ritualColour = (session.profile.Corroded or {}).Color
+			or Color3.fromRGB(86, 214, 92)
+
+		log(session.name, "you are holding the corroded one -- she cannot resist it")
+	end))
+
 	if model:GetAttribute("BeingBanished") == true then
 		resolve()
 		return
@@ -1496,6 +1520,57 @@ end
      always is eventually, and neither outcome feels arbitrary. MinRoom also
      keeps it out of the opening rooms entirely, where a crucifix would trivial-
      ise everything that comes next. ]]
+---====== DEATH TYPES ======---
+--[[ The spawner resolves Death.Type against its own two-entry table, and then
+     against the children of
+
+         PlayerGui.MainUI.Initiator.Main_Game.Health.Music
+
+     which is the game's own list. Read out of the place dump, that list is:
+
+         Yellow   the curious light
+         Blue     the guiding light
+         Glitch
+         Static
+         Rush
+
+     So there were never two death types. There are five, the spawner already
+     accepts all of them, and nobody had used the other three. Set DeathType on
+     any profile to one of these names.
+
+     Discovered again at runtime and written to the log, in case an update
+     changes the list. ]]
+
+Core.DeathTypes = { "Yellow", "Blue", "Glitch", "Static", "Rush" }
+
+function Core.DiscoverDeathTypes()
+	local ok, found = pcall(function()
+		local gui = LocalPlayer:FindFirstChild("PlayerGui")
+		local music = gui and gui:FindFirstChild("MainUI")
+		music = music and music:FindFirstChild("Initiator")
+		music = music and music:FindFirstChild("Main_Game")
+		music = music and music:FindFirstChild("Health")
+		music = music and music:FindFirstChild("Music")
+		if not music then return nil end
+
+		local names = {}
+		for _, child in ipairs(music:GetChildren()) do
+			table.insert(names, child.Name)
+		end
+		return names
+	end)
+
+	if ok and found and #found > 0 then
+		Core.DeathTypes = found
+		logAlways("Core", "death types available: %s", table.concat(found, ", "))
+	else
+		logAlways("Core", "could not read Health.Music, using the known list: %s",
+			table.concat(Core.DeathTypes, ", "))
+	end
+
+	return Core.DeathTypes
+end
+
 ---====== RITUAL COLOUR ======---
 --[[ The spawner only knows two banish colours:
 
@@ -1590,6 +1665,256 @@ function Crucifix:WatchRitual()
 	end)
 end
 
+---====== LOOT ======---
+--[[ Drawers used to hold one thing: a crucifix, or nothing. Now they hold a
+     weighted table, and the crucifix is one entry in it.
+
+     Every item here is built from parts and does something real on use. None
+     of them pretend to be a DOORS item -- there is no way to make a genuine
+     one from the client, and a Tool that looks official and does nothing is
+     worse than an obviously homemade one that works.
+
+     Weights are relative, not percentages. The roll that decides WHETHER a
+     drawer has anything is separate and unchanged; this only decides what. ]]
+
+local Loot = {
+	found = {},   -- [itemKey] = how many this run
+}
+
+Core.Loot = Loot
+
+local function makeHandle(size, colour, material)
+	local handle = Instance.new("Part")
+	handle.Name          = "Handle"
+	handle.Size          = size
+	handle.Color         = colour
+	handle.Material      = material or Enum.Material.SmoothPlastic
+	handle.CanCollide    = false
+	handle.CanQuery      = false
+	handle.Massless      = true
+	handle.TopSurface    = Enum.SurfaceType.Smooth
+	handle.BottomSurface = Enum.SurfaceType.Smooth
+	return handle
+end
+
+local function consume(tool)
+	task.delay(0.1, function()
+		pcall(function() tool:Destroy() end)
+	end)
+end
+
+--[[ THE TABLE.
+
+     Each entry: a weight, a builder that returns a Tool, and whatever the
+     builder wires up itself. Add your own by adding a row. ]]
+local LOOT_TABLE = {
+
+	{
+		Key    = "Crucifix",
+		Weight = 34,
+		Label  = "a crucifix",
+		-- Handled specially: it comes from the loader, not built here.
+		FromLoader = true,
+	},
+
+	{
+		Key    = "CorrodedCrucifix",
+		Weight = 4,
+		Label  = "a corroded crucifix",
+		--[[ The rare one. Rose Hell resists an ordinary crucifix 85% of the
+		     time; this one she cannot resist at all, and the ritual runs
+		     green. Carrying it turns her rare accident into a decision. ]]
+		FromLoader = true,
+		Corroded   = true,
+	},
+
+	{
+		Key    = "Bandage",
+		Weight = 22,
+		Label  = "a bandage",
+		Build = function()
+			local tool = Instance.new("Tool")
+			tool.Name           = "Bandage"
+			tool.ToolTip        = "Heals 30"
+			tool.RequiresHandle = true
+			tool.CanBeDropped   = false
+
+			local handle = makeHandle(Vector3.new(0.5, 0.25, 0.5), Color3.fromRGB(240, 235, 220))
+			handle.Parent = tool
+
+			tool.Activated:Connect(function()
+				local character = LocalPlayer.Character
+				local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+				if not humanoid or humanoid.Health <= 0 then return end
+
+				local before = humanoid.Health
+				humanoid.Health = math.min(humanoid.Health + 30, humanoid.MaxHealth)
+
+				logAlways("Loot", "bandage used, %d -> %d HP",
+					math.floor(before), math.floor(humanoid.Health))
+				consume(tool)
+			end)
+
+			return tool
+		end,
+	},
+
+	{
+		Key    = "Glowstick",
+		Weight = 20,
+		Label  = "a glowstick",
+		Build = function()
+			local tool = Instance.new("Tool")
+			tool.Name           = "Glowstick"
+			tool.ToolTip        = "Cracks once, lasts 90 seconds"
+			tool.RequiresHandle = true
+			tool.CanBeDropped   = false
+
+			local handle = makeHandle(Vector3.new(0.22, 1.1, 0.22),
+				Color3.fromRGB(120, 255, 160), Enum.Material.Neon)
+			handle.Transparency = 0.15
+			handle.Parent = tool
+
+			local light = Instance.new("PointLight")
+			light.Color      = Color3.fromRGB(120, 255, 160)
+			light.Brightness = 0
+			light.Range      = 26
+			light.Shadows    = true
+			light.Parent     = handle
+
+			local cracked = false
+
+			tool.Activated:Connect(function()
+				if cracked then return end
+				cracked = true
+
+				logAlways("Loot", "glowstick cracked")
+				tween(light, 0.4, { Brightness = 3.2 })
+
+				-- Burns down rather than switching off.
+				task.delay(75, function()
+					tween(light, 15, { Brightness = 0 })
+					task.delay(16, function() consume(tool) end)
+				end)
+			end)
+
+			return tool
+		end,
+	},
+
+	{
+		Key    = "Vitamins",
+		Weight = 14,
+		Label  = "vitamins",
+		Build = function()
+			local tool = Instance.new("Tool")
+			tool.Name           = "Vitamins"
+			tool.ToolTip        = "Faster, for a while"
+			tool.RequiresHandle = true
+			tool.CanBeDropped   = false
+
+			local handle = makeHandle(Vector3.new(0.4, 0.6, 0.4), Color3.fromRGB(255, 180, 60))
+			handle.Parent = tool
+
+			tool.Activated:Connect(function()
+				local character = LocalPlayer.Character
+				local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+				if not humanoid then return end
+
+				local base = humanoid.WalkSpeed
+				humanoid.WalkSpeed = base * 1.35
+				logAlways("Loot", "vitamins taken, speed %d -> %d", base, humanoid.WalkSpeed)
+
+				task.delay(20, function()
+					pcall(function()
+						-- Put back the ratio, not the old number: something
+						-- else may have changed the speed meanwhile.
+						if humanoid.Parent then
+							humanoid.WalkSpeed = humanoid.WalkSpeed / 1.35
+						end
+					end)
+					logAlways("Loot", "vitamins wore off")
+				end)
+
+				consume(tool)
+			end)
+
+			return tool
+		end,
+	},
+}
+
+function Loot:Pick(settings)
+	local pool = {}
+	local total = 0
+
+	for _, entry in ipairs(LOOT_TABLE) do
+		local weight = entry.Weight or 0
+
+		-- Per-item caps, so you cannot end a run holding four crucifixes.
+		local cap = (settings.Caps or {})[entry.Key]
+		if cap and (self.found[entry.Key] or 0) >= cap then
+			weight = 0
+		end
+
+		if weight > 0 then
+			total += weight
+			table.insert(pool, { entry = entry, upTo = total })
+		end
+	end
+
+	if total == 0 then return nil end
+
+	local roll = math.random() * total
+	for _, slot in ipairs(pool) do
+		if roll <= slot.upTo then return slot.entry end
+	end
+
+	return pool[#pool] and pool[#pool].entry or nil
+end
+
+function Loot:Grant(entry, equip)
+	self.found[entry.Key] = (self.found[entry.Key] or 0) + 1
+
+	if entry.FromLoader then
+		local tool = Core.Crucifix:Give("found in furniture", equip)
+
+		if tool and entry.Corroded then
+			-- Marked rather than renamed: the spawner matches on the name
+			-- "Crucifix", so renaming it would stop it working entirely.
+			tool:SetAttribute("Corroded", true)
+			tool.ToolTip = "It has gone green"
+
+			local handle = tool:FindFirstChild("Handle")
+			if handle and handle:IsA("BasePart") then
+				pcall(function()
+					handle.Color = Color3.fromRGB(110, 200, 90)
+				end)
+			end
+
+			logAlways("Loot", "that crucifix is CORRODED -- Rose Hell cannot resist it")
+		end
+
+		return tool
+	end
+
+	local ok, tool = pcall(entry.Build)
+	if not ok or not tool then
+		logAlways("Loot", "could not build %s: %s", entry.Key, tostring(tool))
+		return nil
+	end
+
+	local character = LocalPlayer.Character
+	tool.Parent = LocalPlayer:FindFirstChildOfClass("Backpack") or character
+
+	if equip and character then
+		local humanoid = character:FindFirstChildOfClass("Humanoid")
+		if humanoid then pcall(function() humanoid:EquipTool(tool) end) end
+	end
+
+	return tool
+end
+
 ---====== SHOWING IT IN THE DRAWER ======---
 --[[ Without this, finding a crucifix is a line in the console and a tool that
      quietly appears in your backpack. You can easily search the drawer that
@@ -1659,7 +1984,7 @@ local function buildVisual(tool)
 	return part
 end
 
-function Crucifix:ShowInDrawer(prompt, tool, settings)
+function Crucifix:ShowInDrawer(prompt, tool, settings, entry)
 	settings = settings or {}
 	if settings.Enabled == false then return end
 
@@ -1686,7 +2011,12 @@ function Crucifix:ShowInDrawer(prompt, tool, settings)
 	visual.CFrame       = anchor * CFrame.Angles(0, 0, math.rad(90))
 	visual.Parent       = pile
 
+	-- A corroded crucifix glows green in the drawer, so you can tell before
+	-- you pick it up that this one is the rare one.
 	local colour = settings.Color or Color3.fromRGB(255, 238, 170)
+	if entry and entry.Corroded then
+		colour = Color3.fromRGB(110, 220, 90)
+	end
 
 	local highlight = Instance.new("Highlight")
 	highlight.Name                = "GradishCrucifixGlow"
@@ -1796,12 +2126,23 @@ function Crucifix:EnableDrawers(settings)
 
 		     The visual goes first, immediately, while the drawer is still
 		     open. The tool arrives when it arrives. ]]
+		local entry = Core.Loot:Pick(settings)
+		if not entry then
+			logAlways("Crucifix", "loot table is empty, nothing to give")
+			return
+		end
+
+		logAlways("Crucifix", "there is %s in this one", entry.Label or entry.Key)
+
 		safe("Crucifix", "show in drawer", function()
-			self:ShowInDrawer(prompt, self.template, settings.Highlight or {})
+			self:ShowInDrawer(prompt, self.template, settings.Highlight or {}, entry)
 		end)
 
-		local tool = self:Give("found in furniture", equip)
-		if tool then
+		local tool = Core.Loot:Grant(entry, equip)
+
+		-- The find achievement is for the crucifix specifically, which is
+		-- what it has always said on it.
+		if tool and entry.FromLoader then
 			Achievements:Award(crucifixFoundAchievement())
 		end
 	end)

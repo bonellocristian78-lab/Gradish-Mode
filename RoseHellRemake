@@ -25,6 +25,10 @@ Core:Spawn({
 	},
 
 	DeathCause = "Rose hell",
+	-- One of Yellow, Blue, Glitch, Static, Rush -- the real list, read
+	-- from the game rather than the spawner's two-entry table.
+	DeathType = "Blue",
+
 	DeathHints = {
 		"You died to...",
 		"Rose Hell. It is an easy one",
