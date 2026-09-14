@@ -1,7 +1,15 @@
 # Gradish mode
 
 Drop-in replacement for the repo. Upload everything here to
-`github.com/J63633S/Gradish-mode`, `main` branch.
+`github.com/bonellocristian78-lab/Gradish-Mode`, `main` branch.
+
+**The repo must be public.** `game:HttpGet` has no way to authenticate, so a
+private repo returns 404 to the executor exactly as it does to a browser that
+is not logged in, and nothing loads.
+
+Note the capital M in `Gradish-Mode`. `raw.githubusercontent.com` is
+case-sensitive, so a URL written with the old lowercase `Gradish-mode` will 404
+against this repo.
 
 ## Read this first: one file is renamed
 
@@ -13,7 +21,7 @@ refused to see that file. It is gone; **delete the old one from the repo** and
 update whatever loadstring you use to run the mod:
 
 ```lua
-loadstring(game:HttpGet("https://raw.githubusercontent.com/J63633S/Gradish-mode/main/MainScript"))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/MainScript"))()
 ```
 
 Nothing else referenced it, so that is the only change on your side.

@@ -8,7 +8,7 @@ local Spawner = loadstring(game:HttpGet("https://raw.githubusercontent.com/Regul
 local entity = Spawner:Create({
 	Entity = {
 		Name = "Retter",
-		Asset = "https://raw.githubusercontent.com/J63633S/Gradish-mode/main/retter.rbxm",
+		Asset = "https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/retter.rbxm",
 		HeightOffset = 0
 	},
 	Lights = {

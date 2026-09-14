@@ -10,10 +10,23 @@ local function getGitSoundId(GithubSoundPath: string, AssetName: string): Sound
 	return Sound 
 end
 
-local CustomMusic = getGitSoundId("https://raw.githubusercontent.com/J63633S/Fog-script/refs/heads/main/ambient%20that%20doesn't%20work%20FOR%20GODS%20SAKE.mp3", "ambience")
-CustomMusic.Parent = game.SoundService
-CustomMusic.Looped = true
-CustomMusic:Play()
+--[[ The ambience lives in a different repo (J63633S/Fog-script) and is the
+     first thing this script touches. Unwrapped, a dead link there threw before
+     a single entity was registered and took the whole mod down with it -- for
+     background music. Now a failure costs you the music and nothing else. ]]
+local musicOk, CustomMusic = pcall(
+	getGitSoundId,
+	"https://raw.githubusercontent.com/J63633S/Fog-script/refs/heads/main/ambient%20that%20doesn't%20work%20FOR%20GODS%20SAKE.mp3",
+	"ambience"
+)
+
+if musicOk and CustomMusic then
+	CustomMusic.Parent = game.SoundService
+	CustomMusic.Looped = true
+	CustomMusic:Play()
+else
+	warn("[Gradish] ambience could not be loaded, running without it: " .. tostring(CustomMusic))
+end
 
 game.SoundService.AmbientReverb = Enum.ReverbType.Cave
 
@@ -67,11 +80,11 @@ warn("Loaded")
 --   RedSeek          paints the Seek chase red and watches you survive it
 -- Each is spawned separately so a failure in one cannot hold up the other.
 task.spawn(function()
-	loadstring(game:HttpGet("https://raw.githubusercontent.com/J63633S/Gradish-mode/main/CrucifixSpawner"))()
+	loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/CrucifixSpawner"))()
 end)
 
 task.spawn(function()
-	loadstring(game:HttpGet("https://raw.githubusercontent.com/J63633S/Gradish-mode/main/RedSeek"))()
+	loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/RedSeek"))()
 end)
 
 
@@ -89,25 +102,25 @@ lastroom.changed:connect(function()
 	if table.find(Rettersp, lastroom.Value) then
 		task.spawn(function()
 			task.wait(r3:NextInteger(5,15,lastroom.Value))
-			loadstring(game:HttpGet("https://raw.githubusercontent.com/J63633S/Gradish-mode/main/RetterV2"))()
+			loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/RetterV2"))()
 		end)
 	end
 	if table.find(rosesp, lastroom.Value) then
 		task.spawn(function()
 			task.wait(r3:NextInteger(2,12,lastroom.Value))
-	loadstring(game:HttpGet("https://raw.githubusercontent.com/J63633S/Gradish-mode/main/RoseHellRemake"))()
+	loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/RoseHellRemake"))()
 		end)
 	end
 if table.find(yellersp, lastroom.Value) then
 		task.spawn(function()
 			task.wait(r3:NextInteger(18,23,lastroom.Value))
-	loadstring(game:HttpGet("https://raw.githubusercontent.com/J63633S/Gradish-mode/main/Yeller"))()
+	loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/Yeller"))()
 		end)
 	end
 if table.find(reboundsp, lastroom.Value) then
 		task.spawn(function()
 			task.wait(r3:NextInteger(5,12,lastroom.Value))
-	loadstring(game:HttpGet("https://raw.githubusercontent.com/J63633S/Gradish-mode/main/Rebounddd"))()
+	loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/Rebounddd"))()
 		end)
 	end
 end)

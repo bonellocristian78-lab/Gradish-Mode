@@ -1,12 +1,12 @@
 if game.Workspace:FindFirstChild("SeekMovingNewClone") then return end
 
 local Core = loadstring(game:HttpGet(
-	"https://raw.githubusercontent.com/J63633S/Gradish-mode/main/GradishCore"
+	"https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/GradishCore"
 ))()
 
 Core:Spawn({
 	Name  = "Yeller",
-	Asset = "https://raw.githubusercontent.com/J63633S/Gradish-mode/main/Yeller.rbxm",
+	Asset = "https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/Yeller.rbxm",
 
 	Speed       = 380,
 	Delay       = 5,
