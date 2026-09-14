@@ -60,6 +60,9 @@ Core.Crucifix:EnableDrawers({
 	Caps = {
 		Crucifix         = 2,
 		CorrodedCrucifix = 1,
+		VioletCrucifix   = 1,
+		CrimsonCrucifix  = 1,
+		RainbowCrucifix  = 1,
 		Bandage          = 3,
 		Glowstick        = 2,
 		Vitamins         = 2,

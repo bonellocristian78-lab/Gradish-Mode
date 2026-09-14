@@ -278,6 +278,16 @@ return {
 			Image      = "rbxassetid://94856612573782",
 		},
 
+		-- The rainbow crucifix beats everything, which is exactly why having
+		-- used it is worth saying out loud.
+		DevCrucifix = {
+			Identifier = "You tried the dev crucifix",
+			Title      = "You tried the dev crucifix",
+			Desc       = "That one was not supposed to be in the drawers",
+			Reason     = "Banish anything with the rainbow crucifix",
+			Image      = "rbxassetid://133397789900538",
+		},
+
 		-- Lived through a Seek chase while Red Mode had hold of him.
 		RedSeek = {
 			Identifier = "You Survived Red Seek",

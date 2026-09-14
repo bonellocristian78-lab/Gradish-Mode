@@ -1396,6 +1396,26 @@ local function startCrucifixionWatch(session)
 				Achievements:Award(session.achievements.Crucify)
 			end
 
+			-- The dev crucifix says so, whichever entity it was used on.
+			if session.crucifixVariant then
+				local variant = Core.CrucifixVariants[session.crucifixVariant]
+				if variant and variant.Achievement then
+					local data = AchievementConfig:Get()
+					local entry = (data.Special or {})[variant.Achievement]
+
+					if type(entry) ~= "table" then
+						entry = {
+							Identifier = "You tried the dev crucifix",
+							Title      = "You tried the dev crucifix",
+							Desc       = "That one was not supposed to be in the drawers",
+							Reason     = "Banish anything with the rainbow crucifix",
+						}
+					end
+
+					Achievements:Award(entry)
+				end
+			end
+
 			-- The rare one. Only reachable on a corroded roll, so it is its
 			-- own award rather than a variant of the usual banish.
 			if session.corroded then
@@ -1438,17 +1458,24 @@ local function startCrucifixionWatch(session)
 
 		local character = getCharacter()
 		local held = character and character:FindFirstChildOfClass("Tool")
-		if not held or held:GetAttribute("Corroded") ~= true then return end
+		if not held then return end
+
+		local beats, key, variant = Core.CrucifixBeats(held, session.name)
+		if not beats then return end
 
 		local config = session.entity and session.entity.Config
-		if not config or not config.Crucifixion.Resist then return end
+		if not config then return end
 
-		config.Crucifixion.Resist = false
+		if config.Crucifixion.Resist then
+			config.Crucifixion.Resist = false
+			log(session.name, "you are holding the %s one -- it cannot resist that", key)
+		end
+
 		session.corroded = true
-		session.ritualColour = (session.profile.Corroded or {}).Color
+		session.crucifixVariant = key
+		session.ritualColour = variant.Color
+			or (session.profile.Corroded or {}).Color
 			or Color3.fromRGB(86, 214, 92)
-
-		log(session.name, "you are holding the corroded one -- she cannot resist it")
 	end))
 
 	if model:GetAttribute("BeingBanished") == true then
@@ -2001,18 +2028,32 @@ end
 
 Core.DeathLights = {
 	-- name -> what to paint. Add your own.
+	--[[ Image swaps the character picture itself, not just its colour.
+	     Hodler.Label.Label is an ImageLabel, and getcustomasset works on
+	     ImageLabel.Image -- so the image manager serves the death screen too
+	     and nothing has to be uploaded to Roblox. ]]
 	Mischievous = {
-		Light  = Color3.fromRGB(196, 232, 255),  -- the character itself
-		Dialog = Color3.fromRGB(196, 232, 255),  -- the hint text
-		Screen = Color3.fromRGB(180, 210, 235),  -- overall tint
-		Static = Color3.fromRGB(70, 110, 140),   -- the grain
+		Light  = Color3.fromRGB(255, 70, 70),    -- the character itself
+		Dialog = Color3.fromRGB(255, 120, 120),  -- the hint text
+		Screen = Color3.fromRGB(235, 90, 90),    -- overall tint
+		Static = Color3.fromRGB(120, 20, 20),    -- the grain
+		Image  = "mischievous",                  -- resolved through ImagesA
 	},
 
 	Corroded = {
+		Image  = "corroded",
 		Light  = Color3.fromRGB(120, 230, 70),
 		Dialog = Color3.fromRGB(150, 240, 110),
 		Screen = Color3.fromRGB(110, 190, 90),
 		Static = Color3.fromRGB(40, 90, 30),
+	},
+
+	Violet = {
+		Image  = "violet",
+		Light  = Color3.fromRGB(230, 120, 255),
+		Dialog = Color3.fromRGB(240, 170, 255),
+		Screen = Color3.fromRGB(210, 120, 240),
+		Static = Color3.fromRGB(80, 30, 110),
 	},
 
 	Rose = {
@@ -2043,8 +2084,20 @@ local function paintDeathScreen(screen, palette)
 
 	paint(screen, "ImageColor3", palette.Screen)
 
+	-- Swap the character picture as well, if this light has one. Resolved
+	-- through the same ImagesA manager the badges use.
+	local picture
+	if palette.Image then
+		picture = Core.Images:Resolve(palette.Image)
+	end
+
 	local holder = screen:FindFirstChild("Hodler")
 	if holder then
+		if picture then
+			local label = holder:FindFirstChild("Label")
+			paint(label, "Image", picture)
+			paint(label and label:FindFirstChild("Label"), "Image", picture)
+		end
 		-- The colour lives on the INNER Label, not the outer one.
 		local label = holder:FindFirstChild("Label")
 		if label then
@@ -2277,11 +2330,38 @@ local LOOT_TABLE = {
 		Key    = "CorrodedCrucifix",
 		Weight = 4,
 		Label  = "a corroded crucifix",
+		Variant    = "Corroded",
 		--[[ The rare one. Rose Hell resists an ordinary crucifix 85% of the
 		     time; this one she cannot resist at all, and the ritual runs
 		     green. Carrying it turns her rare accident into a decision. ]]
 		FromLoader = true,
 		Corroded   = true,
+	},
+
+	{
+		Key    = "VioletCrucifix",
+		Weight = 4,
+		Label  = "a violet crucifix",
+		FromLoader = true,
+		Variant    = "Violet",
+	},
+
+	{
+		Key    = "CrimsonCrucifix",
+		Weight = 4,
+		Label  = "a crimson crucifix",
+		FromLoader = true,
+		Variant    = "Crimson",
+	},
+
+	{
+		--[[ Should not be findable, and that is the joke. One per run at the
+		     very bottom of the weights. ]]
+		Key    = "RainbowCrucifix",
+		Weight = 1,
+		Label  = "something that should not be in a drawer",
+		FromLoader = true,
+		Variant    = "Rainbow",
 	},
 
 	{
@@ -2400,36 +2480,90 @@ local LOOT_TABLE = {
 	},
 }
 
---[[ Turns an ordinary crucifix into the corroded one.
+--[[ CRUCIFIX VARIANTS.
 
-     GREEN IS THE HARD PART. The real crucifix Handle is a MeshPart with a
-     TextureID, and setting Color on a textured MeshPart does nothing you can
-     see -- the same thing that had Seek coming out black. So the green comes
-     from a Highlight, which tints through textures and meshes, with the plain
-     Color set underneath as a backup for the hand-built fallback handle.
+     One crucifix per entity, plus a developer one that works on everything.
 
-     Marked with an attribute rather than renamed: the spawner matches on the
-     name "Crucifix" exactly, so renaming it would stop it working at all. ]]
-local CORRODED_GREEN = Color3.fromRGB(96, 214, 84)
+     A variant is marked with an ATTRIBUTE, never a rename. The spawner matches
+     on the exact name "Crucifix" -- rename it and it stops being a crucifix at
+     all.
 
-function Core.MakeCorroded(tool, colour)
-	if not tool then return nil end
+     GREEN IS THE HARD PART, and the same trap as Seek coming out black: the
+     real crucifix Handle is a MeshPart with a TextureID, and setting Color on
+     a textured MeshPart does nothing visible. The colour comes from a
+     Highlight, which tints through textures and meshes. Plain Color is set
+     underneath as a backup for the hand-built fallback handle, which has no
+     texture to fight. ]]
 
-	colour = colour or CORRODED_GREEN
+Core.CrucifixVariants = {
+	Corroded = {
+		Color   = Color3.fromRGB(96, 214, 84),
+		Tooltip = "It has gone green",
+		-- Entities that cannot resist this one, whatever their resist roll.
+		Beats   = { "Rose Hell" },
+		Note    = "Rose Hell resists an ordinary crucifix 85% of the time. Not this.",
+	},
 
-	tool:SetAttribute("Corroded", true)
-	tool.ToolTip = "It has gone green"
+	Crimson = {
+		Color   = Color3.fromRGB(255, 42, 42),
+		Tooltip = "Warm to hold",
+		Beats   = { "Retter", "Mischievous Light" },
+		Note    = "The red one. It answers to whatever carries the Mischievous light.",
+	},
 
-	local handle = tool:FindFirstChild("Handle") or tool:FindFirstChildWhichIsA("BasePart")
-	if not handle then
-		logAlways("Loot", "corroded crucifix has no handle to tint")
-		return tool
+	Violet = {
+		Color   = Color3.fromRGB(230, 120, 255),
+		Tooltip = "It hums",
+		Beats   = { "Yeller", "Rude" },
+		Note    = "The violet one.",
+	},
+
+	--[[ The developer crucifix. Works on everything, which is exactly why it
+	     is not something you are supposed to have -- so using it says so. ]]
+	Rainbow = {
+		Rainbow     = true,
+		Tooltip     = "This should not be in here",
+		Beats       = "*",
+		Achievement = "DevCrucifix",
+		Note        = "Beats every entity. Awards You tried the dev crucifix.",
+	},
+}
+
+-- Does this crucifix beat that entity?
+function Core.CrucifixBeats(tool, entityName)
+	if not tool then return false end
+
+	local key = tool:GetAttribute("CrucifixVariant")
+
+	-- The old attribute, kept so a crucifix from a previous version still works.
+	if not key and tool:GetAttribute("Corroded") then key = "Corroded" end
+	if not key then return false end
+
+	local variant = Core.CrucifixVariants[key]
+	if not variant then return false end
+
+	if variant.Beats == "*" then return true, key, variant end
+
+	if type(variant.Beats) == "table" then
+		for _, name in ipairs(variant.Beats) do
+			if name == entityName then return true, key, variant end
+		end
 	end
 
-	-- The part that actually makes it green.
+	return false, key, variant
+end
+
+local function tintTool(tool, colour)
+	local handle = tool:FindFirstChild("Handle") or tool:FindFirstChildWhichIsA("BasePart")
+	if not handle then return nil end
+
+	local existing = handle:FindFirstChild("VariantTint")
+	if existing then existing:Destroy() end
+
+	local highlight
 	pcall(function()
-		local highlight = Instance.new("Highlight")
-		highlight.Name                = "CorrodedTint"
+		highlight = Instance.new("Highlight")
+		highlight.Name                = "VariantTint"
 		highlight.FillColor           = colour
 		highlight.FillTransparency    = 0.4
 		highlight.OutlineColor        = colour
@@ -2439,7 +2573,6 @@ function Core.MakeCorroded(tool, colour)
 		highlight.Parent              = handle
 	end)
 
-	-- Backups, for the hand-built handle which has no texture to fight.
 	pcall(function() handle.Color = colour end)
 
 	for _, descendant in ipairs(tool:GetDescendants()) do
@@ -2452,18 +2585,66 @@ function Core.MakeCorroded(tool, colour)
 		end)
 	end
 
-	-- A faint glow of its own, so it reads as wrong in a dark corridor.
-	pcall(function()
-		local light = Instance.new("PointLight")
-		light.Name       = "CorrodedGlow"
-		light.Color      = colour
-		light.Brightness = 1.2
-		light.Range      = 10
-		light.Parent     = handle
-	end)
+	local glow = handle:FindFirstChild("VariantGlow")
+	if not glow then
+		pcall(function()
+			glow = Instance.new("PointLight")
+			glow.Name       = "VariantGlow"
+			glow.Brightness  = 1.2
+			glow.Range       = 10
+			glow.Parent      = handle
+		end)
+	end
+	if glow then pcall(function() glow.Color = colour end) end
 
-	logAlways("Loot", "that crucifix is CORRODED -- Rose Hell cannot resist it")
+	return highlight, glow
+end
+
+function Core.MakeVariant(tool, key)
+	if not tool then return nil end
+
+	local variant = Core.CrucifixVariants[key]
+	if not variant then
+		logAlways("Crucifix", "no variant called %q", tostring(key))
+		return tool
+	end
+
+	tool:SetAttribute("CrucifixVariant", key)
+	tool.ToolTip = variant.Tooltip or key
+
+	if variant.Rainbow then
+		--[[ Cycles rather than sitting on one colour. A thing that beats every
+		     entity in the game should not look like the other three. ]]
+		local highlight, glow = tintTool(tool, Color3.fromRGB(255, 255, 255))
+
+		task.spawn(function()
+			local hue = 0
+			while tool.Parent do
+				hue = (hue + 0.012) % 1
+				local colour = Color3.fromHSV(hue, 0.85, 1)
+
+				pcall(function()
+					if highlight then
+						highlight.FillColor = colour
+						highlight.OutlineColor = colour
+					end
+					if glow then glow.Color = colour end
+				end)
+
+				task.wait(0.05)
+			end
+		end)
+	else
+		tintTool(tool, variant.Color)
+	end
+
+	logAlways("Crucifix", "%s crucifix -- %s", key, variant.Note or "")
 	return tool
+end
+
+-- Kept so older calls still work.
+function Core.MakeCorroded(tool, colour)
+	return Core.MakeVariant(tool, "Corroded")
 end
 
 function Loot:Pick(settings)
@@ -2501,8 +2682,8 @@ function Loot:Grant(entry, equip)
 	if entry.FromLoader then
 		local tool = Core.Crucifix:Give("found in furniture", equip)
 
-		if tool and entry.Corroded then
-			Core.MakeCorroded(tool)
+		if tool and entry.Variant then
+			Core.MakeVariant(tool, entry.Variant)
 		end
 
 		return tool

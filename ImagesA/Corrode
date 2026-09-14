@@ -1,12 +1,10 @@
---[[ Badge image for Corrode  (placeholder, reusing the Yeller decal).
+--[[ Corrode -- the trefoil, green.
 
-     Just paste the thing. It works out which of the three it is:
+     Drawn fresh rather than traced from the reference: those were small,
+     dark-background JPEGs with compression haze on every edge. This one has
+     real alpha, so it scales without a grey box behind it.
 
-         "rbxassetid://123456"   a Roblox asset
-         "123456"                a bare asset number, same thing
-         "https://.../rose.png"  any image on the internet, fetched once
-         "myimages/rose.png"     a file on your PC, relative to the executor
+     Source is worked out from the value. This is a URL, so it is fetched once,
+     cached on disk and handed to getcustomasset. ]]
 
-     Delete this file and the badge falls back to AchievementConfig. ]]
-
-return "rbxassetid://120554381732238"
+return "https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/ImagesA/png/corroded.png"
