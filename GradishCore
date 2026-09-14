@@ -1289,12 +1289,52 @@ local function paintInstance(instance, colour, strip)
 	end
 end
 
-local function paintModel(model, colour, strip)
+--[[ A Highlight is the thing that actually makes something red.
+
+     Setting Color on every part was the original approach and it is not
+     enough: a MeshPart wearing a SurfaceAppearance or a TextureID draws the
+     texture and ignores Color completely, and if the underlying part happens
+     to be black then stripping the texture leaves you with black, not red.
+     That is exactly the "he is always black" result.
+
+     A Highlight sits on top of the whole model and tints it regardless of
+     material, texture or mesh, which is why it goes on first and the
+     per-part colouring is now the backup rather than the plan. ]]
+local function addHighlight(model, colour, settings)
+	if not settings.UseHighlight then return nil end
+
+	local existing = model:FindFirstChild("GradishRedTint")
+	if existing then return existing end
+
+	local highlight = Instance.new("Highlight")
+	highlight.Name              = "GradishRedTint"
+	highlight.FillColor         = colour
+	highlight.FillTransparency  = settings.FillTransparency or 0.35
+	highlight.OutlineColor      = colour
+	highlight.OutlineTransparency = settings.OutlineTransparency or 0
+	highlight.DepthMode         = Enum.HighlightDepthMode.Occluded
+	highlight.Adornee           = model
+	highlight.Parent            = model
+
+	return highlight
+end
+
+local function paintModel(model, colour, strip, settings)
+	settings = settings or {}
+
+	pcall(function() addHighlight(model, colour, settings) end)
 	pcall(function() paintInstance(model, colour, strip) end)
 
+	local painted, parts = 0, 0
 	for _, descendant in ipairs(model:GetDescendants()) do
-		pcall(function() paintInstance(descendant, colour, strip) end)
+		if descendant:IsA("BasePart") then parts += 1 end
+
+		local ok = pcall(function() paintInstance(descendant, colour, strip) end)
+		if ok then painted += 1 end
 	end
+
+	print(("[Gradish/RedSeek] %s: %d descendant(s), %d BasePart(s), highlight=%s")
+		:format(model.Name, painted, parts, tostring(settings.UseHighlight ~= false)))
 end
 
 function RedSeek:Track(model)
@@ -1305,8 +1345,8 @@ function RedSeek:Track(model)
 	local colour   = settings.Color
 	local strip    = settings.StripTextures
 
-	print(("[Gradish/RedSeek] painting %s"):format(model.Name))
-	paintModel(model, colour, strip)
+	print(("[Gradish/RedSeek] painting %s at %s"):format(model.Name, model:GetFullName()))
+	paintModel(model, colour, strip, settings)
 
 	-- The chase model builds itself up over a second or two, so anything that
 	-- arrives after the first pass gets painted as it lands.
@@ -1348,11 +1388,20 @@ function RedSeek:Track(model)
 	end)
 end
 
+--[[ FindFirstChild returns ONE match. That was the bug behind "the wall eyes
+     do not work either": there are many objects named Eye in a run and only
+     the first one ever got painted. This walks the whole tree and takes all
+     of them. ]]
 function RedSeek:Scan()
-	for _, name in ipairs(self.settings.Models) do
-		local found = Workspace:FindFirstChild(name, true)
-		if found and not self.tracked[found] then
-			self:Track(found)
+	local wanted = {}
+	for _, name in ipairs(self.settings.Models) do wanted[name] = true end
+
+	for _, descendant in ipairs(Workspace:GetDescendants()) do
+		if wanted[descendant.Name] and not self.tracked[descendant] then
+			-- Only Models and Parts: a Sound called Eye is not a wall eye.
+			if descendant:IsA("Model") or descendant:IsA("BasePart") then
+				self:Track(descendant)
+			end
 		end
 	end
 end
@@ -1370,6 +1419,12 @@ function RedSeek:Enable(settings)
 		StripTextures = settings.StripTextures ~= false,
 		DeathGrace    = settings.DeathGrace or 1.5,
 		PollInterval  = settings.PollInterval or 2,
+
+		-- The Highlight is what actually makes him red. Per-part colouring is
+		-- the fallback for anything a Highlight will not cover.
+		UseHighlight        = settings.UseHighlight ~= false,
+		FillTransparency    = settings.FillTransparency or 0.35,
+		OutlineTransparency = settings.OutlineTransparency or 0,
 	}
 
 	local wanted = {}
@@ -1788,6 +1843,16 @@ end
 ---====== HELPERS FOR ENTITY SCRIPTS ======---
 
 -- True if any Gradish entity is currently out.
+--[[ Public award, for entities that are not built on Spawner:Create.
+
+     Rude is the reason this exists: he stands still and changes the rules
+     rather than walking a path, so he never goes through Core:Spawn and never
+     gets a session -- but his achievements still belong in the same queue, or
+     two popups land on the same frame and eat each other. ]]
+function Core.AwardAchievement(entry)
+	Achievements:Award(entry)
+end
+
 function Core:AnyActive()
 	return liveCount() > 0
 end

@@ -28,13 +28,28 @@ local Core = loadstring(game:HttpGet(
 Core.RedSeek:Enable({
 	Color = Color3.fromRGB(255, 0, 0),
 
-	-- Models to paint. Add any other name you want turned red.
+	-- Models to paint. Every object with one of these names gets painted, not
+	-- just the first one found -- there are many wall eyes in a run and the
+	-- old code only ever caught one of them.
 	Models = { "SeekMovingNewClone", "Eye" },
 
 	-- Which of those counts as the chase for the achievement.
 	SeekName = "SeekMovingNewClone",
 
-	-- See the note above. Without this most of Seek stays its normal colour.
+	--[[ The Highlight is what actually turns him red.
+
+	     Colouring each part was the first approach and it does not work: a
+	     MeshPart with a SurfaceAppearance or a TextureID draws the texture and
+	     ignores Color entirely, and if the part underneath is black, stripping
+	     the texture leaves black. That is the "he is always black" result.
+
+	     A Highlight tints the whole model regardless of material or texture.
+	     FillTransparency 0 is solid red; 0.35 keeps his shape readable. ]]
+	UseHighlight        = true,
+	FillTransparency    = 0.35,
+	OutlineTransparency = 0,
+
+	-- Now the backup rather than the plan, for anything the Highlight misses.
 	StripTextures = true,
 
 	-- How long to wait after the model disappears before deciding you

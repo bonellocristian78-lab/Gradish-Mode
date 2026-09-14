@@ -50,27 +50,73 @@ _G.rebound = false
 
 _G.insp = true
 
-local Rettersp = {}
-local rosesp = {}
-local yellersp = {}
-local reboundsp = {}
+--[[ ===================== SPAWN SCHEDULE =====================
 
-for i = 15 , 95 , r:NextInteger(6,8,seed) do
-	table.insert(Rettersp,r2:NextInteger(i - 4,i + 7,seed + i))
+     Rewritten. The old version had five separate problems:
+
+     1. THE STEP WAS NOT RANDOM. "for i = 15, 95, r:NextInteger(6,8)" looks
+        like it rolls a new gap each time, but Lua evaluates the step of a
+        numeric for ONCE, before the loop starts. Every gap in the whole run
+        was the same number. That is why the pacing felt mechanical: it was.
+
+     2. Rose Hell rolled NextInteger(8, 5) -- min above max.
+
+     3. Every call passed a third argument, "seed". NextInteger takes two.
+        The third was silently ignored, so those calls were not seeded the way
+        they looked like they were.
+
+     4. The offsets (i - 4 to i + 7) overlap the next step, so the same room
+        could appear twice in one list and the list could go backwards.
+
+     5. captions used NextInteger(0, #captions), which can return 0, and
+        captions[0] is nil.
+
+     Now each gap is rolled per iteration, lists are strictly increasing with
+     no duplicates, and two entities cannot land on the same room unless the
+     roll deliberately allows it. ]]
+
+local ROOM_LAST = 99
+
+local generators = {
+	Retter  = { first = 15, gapMin = 6,  gapMax = 11, rng = Random.new(seed + 11) },
+	Rose    = { first = 12, gapMin = 5,  gapMax = 10, rng = Random.new(seed + 22) },
+	Yeller  = { first = 30, gapMin = 12, gapMax = 19, rng = Random.new(seed + 33) },
+	Rebound = { first = 8,  gapMin = 12, gapMax = 19, rng = Random.new(seed + 44) },
+}
+
+-- Rooms already claimed by some entity, so two do not land together by
+-- accident. A deliberate overlap is still possible: see OVERLAP_CHANCE.
+local claimed = {}
+local OVERLAP_CHANCE = 0.08
+local overlapRng = Random.new(seed + 55)
+
+local function buildSchedule(config)
+	local rooms = {}
+	local room = config.first + config.rng:NextInteger(0, config.gapMin)
+
+	while room <= ROOM_LAST do
+		if not claimed[room] then
+			claimed[room] = true
+			table.insert(rooms, room)
+		elseif overlapRng:NextNumber() < OVERLAP_CHANCE then
+			-- Two at once, on purpose. There is an achievement for it.
+			table.insert(rooms, room)
+		end
+
+		-- Rolled fresh every iteration. This is the actual fix.
+		room += config.rng:NextInteger(config.gapMin, config.gapMax)
+	end
+
+	return rooms
 end
 
-for i = 12 , 99 , r:NextInteger(8,5,seed) do
-	table.insert(rosesp,r2:NextInteger(i - 4,i + 7,seed + i))
-end
+local Rettersp  = buildSchedule(generators.Retter)
+local rosesp    = buildSchedule(generators.Rose)
+local yellersp  = buildSchedule(generators.Yeller)
+local reboundsp = buildSchedule(generators.Rebound)
 
-for i = 30 , 99 , r:NextInteger(12,19,seed) do
-	table.insert(yellersp,r2:NextInteger(i - 4,i + 7,seed + i))
-end
-
-for i = 8 , 99 , r:NextInteger(12,19,seed) do
-	table.insert(reboundsp,r2:NextInteger(i - 4,i + 7,seed + i))
-end
-
+warn(("[Gradish] schedule for seed %s -- Retter %d, Rose %d, Yeller %d, Rebound %d")
+	:format(tostring(seed), #Rettersp, #rosesp, #yellersp, #reboundsp))
 
 require(game.Players.LocalPlayer.PlayerGui.MainUI.Initiator.Main_Game).caption("Loaded",true)
 warn("Loaded")
@@ -88,6 +134,12 @@ task.spawn(function()
 	loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/RedSeek"))()
 end)
 
+-- Rude is not on the room schedule below. He watches the shared registry for
+-- another entity spawning and turns up 20 seconds later, most of the time.
+task.spawn(function()
+	loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/Rude"))()
+end)
+
 
 lastroom.changed:wait()
 
@@ -97,30 +149,30 @@ require(game.Players.LocalPlayer.PlayerGui.MainUI.Initiator.Main_Game).caption("
 task.wait(2)
 require(game.Players.LocalPlayer.PlayerGui.MainUI.Initiator.Main_Game).caption("Any mode thats not made by mmsauce21 or kardin purple but haas the name Gradish in it thats not ours you got the wrong one",true)
 task.wait(1)
-require(game.Players.LocalPlayer.PlayerGui.MainUI.Initiator.Main_Game).caption(captions[r3:NextInteger(0,#captions,seed)],true)
+require(game.Players.LocalPlayer.PlayerGui.MainUI.Initiator.Main_Game).caption(captions[r3:NextInteger(1, #captions)],true)
 
 lastroom.changed:connect(function()
 	if table.find(Rettersp, lastroom.Value) then
 		task.spawn(function()
-			task.wait(r3:NextInteger(5,15,lastroom.Value))
+			task.wait(r3:NextInteger(5, 15))
 			loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/RetterV2"))()
 		end)
 	end
 	if table.find(rosesp, lastroom.Value) then
 		task.spawn(function()
-			task.wait(r3:NextInteger(2,12,lastroom.Value))
+			task.wait(r3:NextInteger(2, 12))
 	loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/RoseHellRemake"))()
 		end)
 	end
 if table.find(yellersp, lastroom.Value) then
 		task.spawn(function()
-			task.wait(r3:NextInteger(18,23,lastroom.Value))
+			task.wait(r3:NextInteger(18, 23))
 	loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/Yeller"))()
 		end)
 	end
 if table.find(reboundsp, lastroom.Value) then
 		task.spawn(function()
-			task.wait(r3:NextInteger(5,12,lastroom.Value))
+			task.wait(r3:NextInteger(5, 12))
 	loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/Rebounddd"))()
 		end)
 	end

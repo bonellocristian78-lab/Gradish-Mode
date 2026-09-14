@@ -1,0 +1,796 @@
+--[[
+================================================================================
+
+        R U D E
+
+        He does not chase you. He arrives while something else already is, he
+        parks himself in the middle of your room like Eyes, and for as long as
+        he is there the two things you normally do to survive will kill you:
+
+            hiding in a closet
+            opening a drawer
+
+        That is the whole design. Every other entity in Gradish mode teaches
+        you to get in a closet. Rude turns that reflex into the trap. Yeller
+        starts rebounding, you run for the closet like you have learned to,
+        and Rude is standing in the room watching you do it.
+
+        HOW HE ARRIVES
+        --------------
+        He is not on the room schedule. He waits for another Gradish entity to
+        spawn, rolls TriggerChance, and if it hits he turns up TriggerDelay
+        seconds later -- long enough that you have already committed to dealing
+        with the first one.
+
+        HOW HE LEAVES
+        -------------
+        A timer, or a crucifix. There is an achievement for the crucifix.
+
+        WHY THIS IS NOT BUILT ON THE ENTITY SPAWNER
+        ------------------------------------------
+        Spawner:Create exists to move something along a path from room to room.
+        Rude does not move along a path -- he stands still and changes the
+        rules. Everything the spawner would have given him (the ritual, the
+        damage loop, the pathfinding) is either unused or actively wrong here,
+        so this file implements the parts he actually needs: placement, the
+        rules, the crucifix, the death.
+
+        THE DRAWER PROBLEM, STATED HONESTLY
+        -----------------------------------
+        I do not know how DOORS opens drawers. The screenshots of Dresser and
+        Table show an Event and a Constraint inside each DrawerContainer and no
+        ProximityPrompt that I can see. So rather than pick one and hope, Rude
+        arms four detectors at once and kills you on whichever fires first. It
+        also prints which one it was, so after one death we will know for
+        certain, and CrucifixSpawner can be rewritten around the real answer.
+
+================================================================================
+]]
+
+---====== CONFIG ======---
+
+local Config = {
+	Name     = "Rude",
+	ModelUrl = "https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/Rude.rbxm",
+
+	--[[ ARRIVAL ]]
+	-- "Most of the time" when another entity is out. Not always, or he stops
+	-- being a surprise and becomes a tax.
+	TriggerChance = 0.7,
+	TriggerDelay  = 20,   -- seconds after the other entity spawned
+	MinRoom       = 10,   -- never in the opening rooms
+
+	-- Seconds he stays before leaving on his own.
+	Duration = { 35, 55 },
+
+	-- He relocates to the middle of whatever room you walk into. Set false and
+	-- he stays in the room he arrived in, which makes running away a valid
+	-- answer and the whole thing much softer.
+	FollowPlayer = true,
+
+	-- Studs above the room floor. Eyes-height, not floor-height.
+	Height = 6,
+
+	--[[ THE RULES ]]
+	HideKills   = true,
+	DrawerKills = true,
+
+	-- You get this long after he appears before the rules bite, so that
+	-- arriving while you are ALREADY in a closet is survivable if you move.
+	Grace = 3,
+
+	--[[ CRUCIFIX ]]
+	Crucifix = {
+		Enabled      = true,
+		Range        = 40,
+		RequireSight = true,  -- you have to be looking at him
+		ConsumeTool  = true,  -- the crucifix is spent, as it is everywhere else
+		RitualTime   = 4,
+	},
+
+	--[[ PRESENTATION ]]
+	-- His own jumpscare frame, which ships inside the model. Off makes his
+	-- kill silent and instant.
+	Jumpscare = true,
+
+	-- Distance in studs at which the close sounds take over from the far one.
+	CloseDistance = 35,
+
+	Debug = true,
+}
+
+---====== SERVICES ======---
+
+local Players            = game:GetService("Players")
+local RunService         = game:GetService("RunService")
+local TweenService       = game:GetService("TweenService")
+local ReplicatedStorage  = game:GetService("ReplicatedStorage")
+local Workspace          = game:GetService("Workspace")
+local SoundService       = game:GetService("SoundService")
+local ProximityPromptService = game:GetService("ProximityPromptService")
+local CollectionService  = game:GetService("CollectionService")
+
+local LocalPlayer = Players.LocalPlayer
+
+local Core = loadstring(game:HttpGet(
+	"https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/GradishCore"
+))()
+
+---====== UTIL ======---
+
+local function log(format, ...)
+	if not Config.Debug then return end
+	print("[Gradish/Rude] " .. format:format(...))
+end
+
+local function safe(label, fn, ...)
+	local ok, err = pcall(fn, ...)
+	if not ok then
+		warn(("[Gradish/Rude] %s failed: %s"):format(label, tostring(err)))
+	end
+	return ok
+end
+
+local function getCharacter()
+	return LocalPlayer.Character
+end
+
+local function getHumanoid()
+	local character = getCharacter()
+	return character and character:FindFirstChildOfClass("Humanoid") or nil
+end
+
+local function getRoot()
+	local character = getCharacter()
+	return character and character:FindFirstChild("HumanoidRootPart") or nil
+end
+
+local function isPlayerDead()
+	local humanoid = getHumanoid()
+	return humanoid == nil or humanoid.Health <= 0
+end
+
+local function isHiding()
+	local character = getCharacter()
+	return character ~= nil and character:GetAttribute("Hiding") == true
+end
+
+local function currentRoomNumber()
+	local data = ReplicatedStorage:FindFirstChild("GameData")
+	local value = data and data:FindFirstChild("LatestRoom")
+	return value and tonumber(value.Value) or 0
+end
+
+local function currentRoom()
+	local rooms = Workspace:FindFirstChild("CurrentRooms")
+	return rooms and rooms:FindFirstChild(tostring(currentRoomNumber())) or nil
+end
+
+--[[ Same mechanism the Entity Spawner uses for its own assets: pull the file
+     down, write it to disk, hand it to getcustomasset, and let GetObjects turn
+     it back into an Instance. If Vynixu's utilities are already loaded, reuse
+     theirs instead of duplicating it. ]]
+local function loadModel(url)
+	if type(LoadCustomInstance) == "function" then
+		local ok, result = pcall(LoadCustomInstance, url)
+		if ok and typeof(result) == "Instance" then return result end
+	end
+
+	if not (getcustomasset and writefile and isfile and delfile) then
+		warn("[Gradish/Rude] this executor has no getcustomasset, cannot load the model")
+		return nil
+	end
+
+	local fileName = ("rude_%d.txt"):format(math.floor(tick()))
+
+	local ok, result = pcall(function()
+		writefile(fileName, game:HttpGet(url))
+		return game:GetObjects(getcustomasset(fileName, true))[1]
+	end)
+
+	pcall(function()
+		if isfile(fileName) then delfile(fileName) end
+	end)
+
+	if not ok then
+		warn("[Gradish/Rude] model load failed: " .. tostring(result))
+		return nil
+	end
+
+	return result
+end
+
+---====== STATE ======---
+
+local State = {
+	active     = false,
+	model      = nil,
+	arrivedAt  = 0,
+	leaveAt    = 0,
+	template   = nil,   -- downloaded once, cloned after
+	killedBy   = nil,
+	banished   = false,
+	connections = {},
+	sounds     = {},
+	gui        = nil,
+	triggeredBy = nil,
+}
+
+local function track(connection)
+	table.insert(State.connections, connection)
+	return connection
+end
+
+local function clearConnections()
+	for _, connection in ipairs(State.connections) do
+		pcall(function() connection:Disconnect() end)
+	end
+	table.clear(State.connections)
+end
+
+---====== PLACEMENT ======---
+
+-- The middle of the room, at head height rather than on the floor.
+local function roomCentre(room)
+	if not room then return nil end
+
+	local ok, cframe, size = pcall(function()
+		return room:GetBoundingBox()
+	end)
+	if not ok or not cframe then return nil end
+
+	local floor = cframe.Position.Y - (size and size.Y / 2 or 0)
+	return CFrame.new(cframe.X, floor + Config.Height, cframe.Z)
+end
+
+local function placeIn(room)
+	local target = roomCentre(room)
+	if not target or not State.model then return false end
+
+	-- Face the player, so he is always looking at you.
+	local root = getRoot()
+	if root then
+		target = CFrame.lookAt(target.Position, Vector3.new(root.Position.X, target.Position.Y, root.Position.Z))
+	end
+
+	pcall(function() State.model:PivotTo(target) end)
+	return true
+end
+
+---====== AUDIO ======---
+--[[ The model ships with Arrival, Far1, Close1, Close2, Jumpscare and Repent.
+     They are collected once and driven by distance, so he sounds further away
+     when he is. ]]
+
+local function collectSounds()
+	table.clear(State.sounds)
+	if not State.model then return end
+
+	for _, descendant in ipairs(State.model:GetDescendants()) do
+		if descendant:IsA("Sound") then
+			State.sounds[descendant.Name] = descendant
+		end
+	end
+
+	local names = {}
+	for name in pairs(State.sounds) do table.insert(names, name) end
+	table.sort(names)
+	log("sounds found: %s", #names > 0 and table.concat(names, ", ") or "none")
+end
+
+local function playSound(name, volume)
+	local sound = State.sounds[name]
+	if not sound or not sound.Parent then return end
+
+	pcall(function()
+		if volume then sound.Volume = volume end
+		sound.TimePosition = 0
+		sound:Play()
+	end)
+end
+
+local function stopAllSounds()
+	for _, sound in pairs(State.sounds) do
+		pcall(function() sound:Stop() end)
+	end
+end
+
+-- Runs while he is present: swaps the ambient loop as you get closer.
+local function startAudioDirector()
+	local lastState = nil
+
+	track(RunService.Heartbeat:Connect(function()
+		if not State.active or not State.model then return end
+
+		local root = getRoot()
+		if not root then return end
+
+		local ok, pivot = pcall(function() return State.model:GetPivot().Position end)
+		if not ok then return end
+
+		local distance = (pivot - root.Position).Magnitude
+		local wanted = distance <= Config.CloseDistance and "close" or "far"
+
+		if wanted ~= lastState then
+			lastState = wanted
+
+			if wanted == "close" then
+				playSound(math.random() < 0.5 and "Close1" or "Close2")
+			else
+				playSound("Far1")
+			end
+		end
+	end))
+end
+
+---====== DEATH ======---
+
+local function showJumpscare()
+	if not Config.Jumpscare or not State.model then return end
+
+	local frame = State.model:FindFirstChild("E22Jumpscare", true)
+	if not frame then return end
+
+	--[[ The frame ships with its own LocalScript, but a LocalScript created at
+	     runtime on the client does not execute, so the shake it was meant to do
+	     has to be driven from here. ]]
+	local gui = Instance.new("ScreenGui")
+	gui.Name           = "RudeJumpscare"
+	gui.IgnoreGuiInset = true
+	gui.DisplayOrder   = 10000
+	gui.ResetOnSpawn   = false
+
+	pcall(function()
+		if syn and syn.protect_gui then syn.protect_gui(gui) end
+	end)
+
+	local ok = pcall(function()
+		gui.Parent = (gethui and gethui()) or game:GetService("CoreGui")
+	end)
+	if not ok then
+		gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+	end
+
+	local clone = frame:Clone()
+	clone.Visible = true
+	clone.Parent  = gui
+
+	State.gui = gui
+
+	task.spawn(function()
+		for _ = 1, 20 do
+			clone.Position = UDim2.fromScale(
+				(math.random() - 0.5) * 0.06,
+				(math.random() - 0.5) * 0.06
+			)
+			clone.Rotation = math.random(-4, 4)
+			task.wait(0.03)
+		end
+
+		task.wait(0.6)
+		pcall(function() gui:Destroy() end)
+		State.gui = nil
+	end)
+end
+
+local Rude -- forward declared so the rules can call Rude.Leave
+
+local function kill(reason)
+	if not State.active or isPlayerDead() then return end
+
+	State.killedBy = reason
+	log("killed you: %s", reason)
+
+	safe("jumpscare sound", playSound, "Jumpscare", 1)
+	safe("jumpscare", showJumpscare)
+
+	local humanoid = getHumanoid()
+	if humanoid then
+		--[[ Client-side, exactly as the Entity Spawner does it -- its
+		     DamagePlayer is a plain Humanoid.Health assignment too. ]]
+		pcall(function() humanoid.Health = 0 end)
+	end
+
+	task.delay(0.5, function()
+		if Rude then Rude.Leave("killed the player") end
+	end)
+end
+
+---====== THE RULES ======---
+--[[ Hiding and opening drawers both kill you while he is out.
+
+     The hiding half is easy: the Character carries a Hiding attribute and the
+     spawner reads it too, so it is authoritative.
+
+     The drawer half is not, because I cannot confirm how DOORS opens them.
+     Four detectors go up at once and whichever fires wins. The log line says
+     which, and that answer is worth keeping. ]]
+
+local function armHidingRule()
+	if not Config.HideKills then return end
+
+	track(RunService.Heartbeat:Connect(function()
+		if not State.active then return end
+		if os.clock() - State.arrivedAt < Config.Grace then return end
+		if not isHiding() then return end
+
+		kill("you hid while Rude was in the room")
+	end))
+
+	log("hiding rule armed")
+end
+
+local function armDrawerRules()
+	if not Config.DrawerKills then return end
+
+	local function trip(how)
+		if not State.active then return end
+		if os.clock() - State.arrivedAt < Config.Grace then return end
+
+		log("DRAWER DETECTOR FIRED: %s", how)
+		kill("you opened a drawer while Rude was in the room")
+	end
+
+	-- 1. The prompt route, which is what CrucifixSpawner currently assumes.
+	track(ProximityPromptService.PromptTriggered:Connect(function(prompt, player)
+		if player ~= LocalPlayer then return end
+		trip("ProximityPrompt " .. prompt:GetFullName())
+	end))
+
+	-- 2, 3, 4. Whatever the furniture in this room is actually made of.
+	local room = currentRoom()
+	if not room then return end
+
+	local armedContainers = 0
+
+	for _, descendant in ipairs(room:GetDescendants()) do
+		local isDrawer = descendant.Name == "DrawerContainer"
+			or descendant:FindFirstChild("LootHolder") ~= nil
+
+		if isDrawer then
+			armedContainers += 1
+
+			for _, child in ipairs(descendant:GetDescendants()) do
+				if child:IsA("RemoteEvent") then
+					track(child.OnClientEvent:Connect(function()
+						trip("RemoteEvent " .. child:GetFullName())
+					end))
+				elseif child:IsA("BindableEvent") then
+					track(child.Event:Connect(function()
+						trip("BindableEvent " .. child:GetFullName())
+					end))
+				end
+			end
+
+			local loot = descendant:FindFirstChild("LootHolder")
+			if loot then
+				track(loot.ChildAdded:Connect(function(child)
+					trip("LootHolder.ChildAdded " .. child.Name)
+				end))
+			end
+
+			track(descendant.AttributeChanged:Connect(function(name)
+				trip(("attribute %q on %s"):format(name, descendant.Name))
+			end))
+		end
+	end
+
+	log("drawer rules armed on %d container(s) in room %d", armedContainers, currentRoomNumber())
+end
+
+---====== CRUCIFIXION ======---
+--[[ Rude is not a spawner entity, so the spawner's crucifix handling never
+     sees him. This is a reimplementation of the same contract: a Tool on your
+     Character named or tagged Crucifix, within range, with line of sight.
+
+     The vanilla ritual is not reproduced -- that lives inside the spawner and
+     needs its Repentance asset. He gets his own: his Repent sound, a fade, and
+     the achievement. ]]
+
+local function holdingCrucifix()
+	local character = getCharacter()
+	if not character then return nil end
+
+	local tool = character:FindFirstChildOfClass("Tool")
+	if not tool then return nil end
+
+	if tool.Name == "Crucifix" then return tool end
+
+	local tagged = false
+	pcall(function() tagged = CollectionService:HasTag(tool, "Crucifix") end)
+	return tagged and tool or nil
+end
+
+local function canSee(target)
+	if not Config.Crucifix.RequireSight then return true end
+
+	local root = getRoot()
+	local character = getCharacter()
+	if not root or not target then return false end
+
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	params.FilterDescendantsInstances = { character, State.model }
+
+	local direction = target - root.Position
+	local result = Workspace:Raycast(root.Position, direction, params)
+
+	-- Nothing in the way means nothing between you and him.
+	return result == nil
+end
+
+local function armCrucifix()
+	if not Config.Crucifix.Enabled then return end
+
+	local busy = false
+
+	track(RunService.Heartbeat:Connect(function()
+		if not State.active or busy or State.banished then return end
+
+		local tool = holdingCrucifix()
+		if not tool then return end
+
+		local root = getRoot()
+		if not root or not State.model then return end
+
+		local ok, pivot = pcall(function() return State.model:GetPivot().Position end)
+		if not ok then return end
+
+		if (pivot - root.Position).Magnitude > Config.Crucifix.Range then return end
+		if not canSee(pivot) then return end
+
+		busy = true
+		State.banished = true
+		log("crucifix used on him")
+
+		if Config.Crucifix.ConsumeTool then
+			pcall(function() tool:Destroy() end)
+		end
+
+		stopAllSounds()
+		playSound("Repent", 1)
+
+		-- His own small ritual: he rises and fades rather than vanishing.
+		task.spawn(function()
+			local model = State.model
+
+			if model then
+				local start = model:GetPivot()
+				local finish = start + Vector3.new(0, 14, 0)
+				local steps = 60
+
+				for index = 1, steps do
+					if not model.Parent then break end
+					local alpha = index / steps
+
+					pcall(function()
+						model:PivotTo(start:Lerp(finish, alpha))
+					end)
+
+					for _, part in ipairs(model:GetDescendants()) do
+						if part:IsA("BasePart") then
+							part.Transparency = math.min(part.Transparency + (1 / steps), 1)
+						elseif part:IsA("ParticleEmitter") then
+							part.Rate = part.Rate * 0.94
+						end
+					end
+
+					task.wait(Config.Crucifix.RitualTime / steps)
+				end
+			end
+
+			safe("award", function()
+				Rude.AwardBanish()
+			end)
+
+			Rude.Leave("banished by crucifix")
+		end)
+	end))
+
+	log("crucifix watch armed (range %d, sight %s)",
+		Config.Crucifix.Range, tostring(Config.Crucifix.RequireSight))
+end
+
+---====== LIFECYCLE ======---
+
+Rude = {}
+
+function Rude.AwardBanish()
+	-- Pulled from AchievementConfig like every other badge, with a fallback
+	-- so a missing entry never silently loses the award.
+	local data = Core.AchievementConfig and Core.AchievementConfig:Get() or {}
+	local entry = ((data.Entities or {})["Rude"] or {}).Crucify
+
+	if type(entry) ~= "table" then
+		entry = {
+			Identifier = "Rude Banished",
+			Title      = "Told Him To Leave",
+			Desc       = "Successfully crucify Rude",
+			Reason     = "Does not count towards progression",
+		}
+	end
+
+	Core.AwardAchievement(entry)
+end
+
+function Rude.Leave(why)
+	if not State.active then return end
+	State.active = false
+
+	log("leaving (%s)", why)
+
+	stopAllSounds()
+	clearConnections()
+
+	local model = State.model
+	State.model = nil
+
+	if model then
+		task.delay(0.2, function()
+			pcall(function() model:Destroy() end)
+		end)
+	end
+
+	if State.gui then
+		pcall(function() State.gui:Destroy() end)
+		State.gui = nil
+	end
+
+	-- Survived him, and he was not crucified: that is its own achievement.
+	if not State.banished and not isPlayerDead() and why ~= "killed the player" then
+		local data = Core.AchievementConfig and Core.AchievementConfig:Get() or {}
+		local entry = ((data.Entities or {})["Rude"] or {}).Survive
+
+		if type(entry) ~= "table" then
+			entry = {
+				Identifier = "Rude",
+				Title      = "Outstayed Rude",
+				Desc       = "He stood in your room and you did nothing wrong",
+				Reason     = "Survive Rude without hiding or opening a drawer",
+			}
+		end
+
+		Core.AwardAchievement(entry)
+	end
+end
+
+function Rude.Arrive(triggeredBy)
+	if State.active then
+		log("already here, not arriving twice")
+		return
+	end
+
+	local room = currentRoom()
+	if not room then
+		log("no current room, skipping")
+		return
+	end
+
+	if not State.template then
+		log("downloading the model")
+		State.template = loadModel(Config.ModelUrl)
+		if not State.template then
+			warn("[Gradish/Rude] no model, he cannot arrive")
+			return
+		end
+	end
+
+	State.model = State.template:Clone()
+	State.model.Name = Config.Name
+	State.model.Parent = Workspace
+
+	if not placeIn(room) then
+		warn("[Gradish/Rude] could not place him in the room")
+		pcall(function() State.model:Destroy() end)
+		State.model = nil
+		return
+	end
+
+	State.active      = true
+	State.arrivedAt   = os.clock()
+	State.banished    = false
+	State.killedBy    = nil
+	State.triggeredBy = triggeredBy
+
+	local duration = Config.Duration[1]
+		+ math.random() * math.max(Config.Duration[2] - Config.Duration[1], 0)
+	State.leaveAt = State.arrivedAt + duration
+
+	collectSounds()
+	playSound("Arrival", 1)
+
+	log("arrived in room %d, staying %.0fs (triggered by %s)",
+		currentRoomNumber(), duration, tostring(triggeredBy))
+	log("while he is here: do not hide, do not open drawers")
+
+	safe("audio", startAudioDirector)
+	safe("hiding rule", armHidingRule)
+	safe("drawer rules", armDrawerRules)
+	safe("crucifix", armCrucifix)
+
+	-- Follow you from room to room, and re-arm the drawer detectors on the
+	-- new room's furniture, or the rule would only apply where he landed.
+	if Config.FollowPlayer then
+		local value = ReplicatedStorage:FindFirstChild("GameData")
+		value = value and value:FindFirstChild("LatestRoom")
+
+		if value then
+			track(value.Changed:Connect(function()
+				if not State.active then return end
+				task.wait(0.4)
+
+				local nextRoom = currentRoom()
+				if nextRoom then
+					placeIn(nextRoom)
+					safe("re-arm drawers", armDrawerRules)
+					log("moved with you into room %d", currentRoomNumber())
+				end
+			end))
+		end
+	end
+
+	-- His own timer.
+	task.spawn(function()
+		while State.active do
+			if os.clock() >= State.leaveAt then
+				Rude.Leave("his time was up")
+				break
+			end
+			task.wait(0.5)
+		end
+	end)
+end
+
+---====== TRIGGER ======---
+--[[ He is not on the room schedule. He watches the shared registry in
+     GradishCore for another entity spawning, and turns up afterwards. That
+     registry only exists because every entity script shares one Core
+     instance -- a per-script setup could not see the others. ]]
+
+local seen = {}
+
+task.spawn(function()
+	log("watching for other entities (%.0f%% chance, %ds later)",
+		Config.TriggerChance * 100, Config.TriggerDelay)
+
+	while true do
+		task.wait(1)
+
+		if not State.active and currentRoomNumber() >= Config.MinRoom then
+			for name in pairs(Core.Active) do
+				if not seen[name] then
+					seen[name] = true
+
+					if math.random() < Config.TriggerChance then
+						log("%s is out -- he will be along in %ds", name, Config.TriggerDelay)
+
+						task.delay(Config.TriggerDelay, function()
+							if not State.active and not isPlayerDead() then
+								safe("arrive", Rude.Arrive, name)
+							end
+						end)
+					else
+						log("%s is out, but he is not coming this time", name)
+					end
+				end
+			end
+		end
+
+		-- Let an entity trigger him again on a later visit.
+		for name in pairs(seen) do
+			if not Core.Active[name] then seen[name] = nil end
+		end
+	end
+end)
+
+if getgenv then
+	local previous = getgenv().__GradishRudeCleanup
+	if type(previous) == "function" then pcall(previous) end
+
+	getgenv().__GradishRudeCleanup = function()
+		pcall(function() Rude.Leave("script reloaded") end)
+		clearConnections()
+	end
+end
+
+log("armed")

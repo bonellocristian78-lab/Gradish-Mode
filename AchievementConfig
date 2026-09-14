@@ -152,6 +152,37 @@ return {
 				Reason     = "Does not count towards progression",
 			},
 		},
+
+		--[[ Rude does not go through Spawner:Create -- he stands still and
+		     changes the rules instead of walking a path -- but his badges live
+		     here with everyone else's. ]]
+		["Rude"] = {
+			-- PLACEHOLDER IMAGE. This is your Rebound decal, reused so the
+			-- popup is not blank. I cannot upload decals to Roblox, that needs
+			-- your account, and I will not paste an ID I found somewhere and
+			-- hope it belongs to nobody. Swap it when you have made one.
+			Image = "rbxassetid://77454064533741",
+
+			Survive = {
+				Identifier = "Rude",
+				Title      = "Outstayed Rude",
+				Desc       = "He stood in your room and you did nothing wrong",
+				Reason     = "Survive Rude without hiding or opening a drawer",
+			},
+			Death = {
+				Identifier = "Rude Victim",
+				Title      = "He Was Watching",
+				Desc       = "You did the thing that normally saves you",
+				Reason     = "Die to Rude",
+			},
+			Untouched = false, -- he does not damage, he kills. No middle state.
+			Crucify = {
+				Identifier = "Rude Banished",
+				Title      = "Told Him To Leave",
+				Desc       = "Successfully crucify Rude",
+				Reason     = "Does not count towards progression",
+			},
+		},
 	},
 
 	--[[ Achievements that do not belong to any one entity. ]]
@@ -163,7 +194,8 @@ return {
 			Title      = "Two At Once",
 			Desc       = "The hallway was not big enough",
 			Reason     = "Be hunted by two Gradish entities at the same time",
-			Image      = "",
+			-- PLACEHOLDER: your Rose Hell decal, so the popup is not blank.
+			Image      = "rbxassetid://133397789900538",
 		},
 
 		-- Found a crucifix while rummaging through furniture.
@@ -172,7 +204,8 @@ return {
 			Title      = "I Have No Fear In them",
 			Desc       = "Somebody left it in a drawer, and now it is yours",
 			Reason     = "Find a crucifix hidden in the furniture",
-			Image      = "",
+			-- PLACEHOLDER: your Retter decal.
+			Image      = "rbxassetid://94856612573782",
 		},
 
 		-- Lived through a Seek chase while Red Mode had hold of him.
@@ -181,7 +214,8 @@ return {
 			Title      = "You Survived Red Seek",
 			Desc       = "He was redder than usual and you outran him anyway",
 			Reason     = "Survive a Seek chase in Gradish mode",
-			Image      = "",
+			-- PLACEHOLDER: your Yeller decal.
+			Image      = "rbxassetid://120554381732238",
 		},
 	},
 }
