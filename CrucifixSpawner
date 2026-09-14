@@ -78,6 +78,14 @@ Core.Crucifix:EnableDrawers({
 	-- Wait for the drawer to finish opening before it appears.
 	Delay = 0.35,
 
+	--[[ TESTING. Press this and the NEXT drawer you open is a guaranteed
+	     find, ignoring the odds, the per-run cap and the room floor.
+
+	     A 4% chance that climbs slowly is correct for playing and useless for
+	     checking whether the thing works at all. Set it to nil when you are
+	     done. ]]
+	ForceKey = Enum.KeyCode.G,
+
 	-- Prints every prompt you trigger, the odds of each roll, and whether the
 	-- drawer still had its clutter in it.
 	Debug = false,

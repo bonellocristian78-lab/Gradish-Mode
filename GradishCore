@@ -1421,10 +1421,14 @@ function Crucifix:EnableDrawers(settings)
 		if not anyPrompt and not looksLikeFurniture(prompt, hints) then return end
 
 		-- One roll per piece of furniture. No standing there spamming it.
-		if self.searched[prompt] then return end
-		self.searched[prompt] = true
+		-- A forced test ignores both this and the room floor, or you could
+		-- not test in the room you happen to be standing in.
+		if not self.forceNext then
+			if self.searched[prompt] then return end
+			self.searched[prompt] = true
 
-		if currentRoomNumber() < minRoom then return end
+			if currentRoomNumber() < minRoom then return end
+		end
 
 		local odds = math.min(base + ramp * searches, ceiling)
 		searches += 1
@@ -1435,25 +1439,51 @@ function Crucifix:EnableDrawers(settings)
 				:format(searches, odds * 100, hasLoot and what or tostring(hasLoot)))
 		end
 
-		if math.random() > odds then return end
+		if not self.forceNext and math.random() > odds then return end
+		self.forceNext = false
 
 		self.foundInDrawers += 1
 		print("[Gradish/Crucifix] there is something in this one")
 
 		task.wait(settings.Delay or 0.35) -- let the drawer finish opening
 
+		--[[ ORDER MATTERS HERE, and getting it wrong is why this looked dead.
+
+		     Give() runs the crucifix loader, which on the first call takes up
+		     to twelve seconds. Showing the drawer visual afterwards meant it
+		     appeared long after the drawer had slid shut and you had walked
+		     off -- indistinguishable from nothing happening at all.
+
+		     The visual goes first, immediately, while the drawer is still
+		     open. The tool arrives when it arrives. ]]
+		safe("Crucifix", "show in drawer", function()
+			self:ShowInDrawer(prompt, self.template, settings.Highlight or {})
+		end)
+
 		local tool = self:Give("found in furniture", equip)
 		if tool then
-			-- Put a glowing one where the game puts loot, so finding it is
-			-- something you see in the drawer rather than a console line and a
-			-- tool that silently appears in your backpack.
-			safe("Crucifix", "show in drawer", function()
-				self:ShowInDrawer(prompt, tool, settings.Highlight or {})
-			end)
-
 			Achievements:Award(crucifixFoundAchievement())
 		end
 	end)
+
+	--[[ A four percent chance that climbs slowly is unplayable to TEST. This
+	     makes the next drawer you open a guaranteed find, so the placement,
+	     the glow and the handover can be checked in one go rather than by
+	     opening forty drawers and hoping. ]]
+	if settings.ForceKey then
+		local UserInputService = game:GetService("UserInputService")
+
+		UserInputService.InputBegan:Connect(function(input, processed)
+			if processed or input.KeyCode ~= settings.ForceKey then return end
+
+			self.forceNext = true
+			self.foundInDrawers = 0  -- lift the per-run cap for the test
+			print("[Gradish/Crucifix] forced: the NEXT drawer you open has one")
+		end)
+
+		print(("[Gradish/Crucifix] press %s to force the next drawer")
+			:format(settings.ForceKey.Name))
+	end
 
 	print(("[Gradish/Crucifix] drawer search armed (from %d%%, +%.1f%% each, room %d onward, %d per run)")
 		:format(math.floor(base * 100 + 0.5), ramp * 100, minRoom, maxPerRun))
