@@ -623,24 +623,69 @@ end
          Each one returns after its own small delay, so the colour drains out
          of the map instead of being switched off. ]]
 
+--[[ THE ORIGINALS MUST BE SHARED, NOT PER SESSION.
+
+     They were a local inside startTell, one table per entity, and that quietly
+     broke the restore the moment two entities were out together -- which the
+     schedule allows on purpose and which the Two At Once achievement exists
+     for.
+
+     What happened: Retter tints a light amber. Yeller arrives, and ITS
+     remember() snapshots the light as it reads right now -- amber -- and files
+     that as the original. Retter leaves and correctly restores white. Yeller
+     leaves later and faithfully restores the light to Retter's amber. The
+     corridor is now permanently wearing a dead entity's colour, which is
+     exactly the bug this mechanic was written to fix.
+
+     It also ruined the tell itself in two ways: the second entity's colour was
+     blended against the first one's instead of against the room, washing it
+     out, and whichever entity despawned first wiped the survivor's warning
+     light while it was still hunting you.
+
+     So the true original lives at module scope, written once by whoever
+     touches a light first and never overwritten. Ownership is tracked as a set
+     of sessions per light, so a restore can tell the difference between "the
+     last entity left, put it back" and "one of two left, the other still needs
+     its colour".
+
+     Weak keys: DOORS unloads rooms behind you, and without them every light in
+     a 100-room run would be pinned in memory for the whole session. ]]
+
+local trueOriginals = setmetatable({}, { __mode = "k" })
+local tellOwners    = setmetatable({}, { __mode = "k" })
+
 local function startTell(session)
 	local settings = session.profile.Tell
 	if not settings or not settings.Color then return end
 
-	local reach     = settings.Reach or 5
-	local minimum   = settings.MinStrength or 0.2
-	local originals = {}
-	local tinted    = {}
+	local reach   = settings.Reach or 5
+	local minimum = settings.MinStrength or 0.2
+	local mine    = {}   -- lights this session tinted
+	local tinted  = {}   -- rooms this session already walked
 
+	-- Records the genuine value, once, the first time anything touches it.
 	local function remember(instance, keys)
-		if originals[instance] then return end
+		if trueOriginals[instance] then return trueOriginals[instance] end
 
 		local snapshot = {}
 		for _, key in ipairs(keys) do
 			local ok, value = pcall(function() return instance[key] end)
 			if ok then snapshot[key] = value end
 		end
-		originals[instance] = snapshot
+
+		trueOriginals[instance] = snapshot
+		return snapshot
+	end
+
+	local function claim(instance)
+		local owners = tellOwners[instance]
+		if not owners then
+			owners = {}
+			tellOwners[instance] = owners
+		end
+
+		owners[session] = settings
+		mine[instance] = true
 	end
 
 	-- strength 1 is right on top of you, 0 is out past the entity's reach.
@@ -661,9 +706,13 @@ local function startTell(session)
 
 		for _, descendant in ipairs(room:GetDescendants()) do
 			if descendant:IsA("Light") then
-				remember(descendant, { "Color", "Brightness" })
-				local original = originals[descendant]
-				local base     = original.Color or Color3.new(1, 1, 1)
+				-- Always blend from the TRUE original, never from what the
+				-- light happens to read right now. Reading it live is what let
+				-- one entity's tint become another's baseline.
+				local original = remember(descendant, { "Color", "Brightness" })
+				claim(descendant)
+
+				local base = original.Color or Color3.new(1, 1, 1)
 
 				tween(descendant, fade, {
 					Color      = base:Lerp(settings.Color, strength),
@@ -672,9 +721,10 @@ local function startTell(session)
 				})
 
 			elseif descendant:IsA("BasePart") and descendant.Name == "Neon" then
-				remember(descendant, { "Color" })
-				local base = originals[descendant].Color or Color3.new(1, 1, 1)
+				local original = remember(descendant, { "Color" })
+				claim(descendant)
 
+				local base = original.Color or Color3.new(1, 1, 1)
 				tween(descendant, fade, { Color = base:Lerp(settings.Color, strength) })
 			end
 		end
@@ -707,19 +757,68 @@ local function startTell(session)
 		end))
 	end
 
+	--[[ RESTORE, OWNERSHIP AWARE.
+
+	     Three outcomes rather than one:
+
+	       last owner leaves    put the light back to its true original
+	       another owner stays  re-apply THAT entity's colour, because the old
+	                            code wiped a living entity's warning light when
+	                            the other one despawned
+	       owner is stale       a session that died without cleaning up used to
+	                            pin the light forever. Swept here instead. ]]
 	session.janitor:Give(function()
 		local fade = settings.FadeOut or 0.8
 
-		for instance, snapshot in pairs(originals) do
+		for instance in pairs(mine) do
 			if typeof(instance) == "Instance" and instance.Parent then
-				-- Each light lets go on its own beat.
-				task.delay(math.random() * (settings.RestoreStagger or 0.4), function()
-					tween(instance, fade, snapshot)
-				end)
+				local owners = tellOwners[instance]
+
+				if owners then
+					owners[session] = nil
+
+					-- Sweep anyone who is no longer running, or a leaked
+					-- session would keep this light hostage for the whole run.
+					for other in pairs(owners) do
+						if not other.active then owners[other] = nil end
+					end
+				end
+
+				local original = trueOriginals[instance] or {}
+
+				-- Whoever is still hunting you gets their colour back. The
+				-- strongest remaining claim wins if there are several.
+				local remaining, strongest = nil, -1
+				if owners then
+					for other, otherSettings in pairs(owners) do
+						local weight = otherSettings.Priority or 0
+						if weight > strongest then
+							strongest = weight
+							remaining = otherSettings
+						end
+					end
+				end
+
+				local delay = math.random() * (settings.RestoreStagger or 0.4)
+
+				if remaining then
+					local base = original.Color or Color3.new(1, 1, 1)
+					local goal = { Color = base:Lerp(remaining.Color, remaining.MinStrength or 0.6) }
+
+					task.delay(delay, function()
+						if instance.Parent then tween(instance, fade, goal) end
+					end)
+				else
+					if owners then tellOwners[instance] = nil end
+
+					task.delay(delay, function()
+						if instance.Parent then tween(instance, fade, original) end
+					end)
+				end
 			end
 		end
 
-		table.clear(originals)
+		table.clear(mine)
 		table.clear(tinted)
 	end)
 
@@ -921,6 +1020,12 @@ local function isPlayersRoom(room)
 	return tonumber(room.Name) == currentRoomNumber()
 end
 
+--[[ Forward declaration. The acid can kill you after its entity has gone, so
+     it needs to end that visit itself -- but finish() is defined much further
+     down with the rest of the lifecycle, and a local is not visible before it
+     is declared. Assigned the moment finish() exists. ]]
+local finishSession
+
 ---====== MECHANIC: ACID TRAIL ======---
 --[[ It spits as it goes, and what lands stays.
 
@@ -995,8 +1100,15 @@ local function startAcidTrail(session)
 		fumes.LightEmission = 0.5
 		fumes.Parent        = puddle
 
+		--[[ NOT given to the janitor, deliberately.
+
+		     It was, and that quietly broke the one thing this mechanic exists
+		     for. The janitor runs 1.5s after despawn and Destroys everything it
+		     holds, so a 14-second lifetime was being cut to 1.5 and the floor
+		     was safe the frame Corrode left. Every puddle already deletes
+		     itself through the delay chain below, which is independent of the
+		     session, so an orphan lives out its natural life and no longer. ]]
 		table.insert(puddles, puddle)
-		session.janitor:Give(puddle)
 
 		-- Boils away rather than blinking out.
 		task.delay(lifetime - 2, function()
@@ -1014,61 +1126,97 @@ local function startAcidTrail(session)
 		return puddle
 	end
 
+	--[[ TWO loops, not one, and only one of them belongs to the session.
+
+	     They were a single Heartbeat, and that was the second half of the bug.
+	     The shared guard `if not model.Parent then return end` sat at the top,
+	     so the burning stopped the instant the entity despawned or was
+	     crucified -- the floor went safe immediately and banishing Corrode
+	     sanitised the whole map, which is the opposite of the intended trade.
+
+	     SPIT needs the model and dies with the session.
+	     BURN must never mention the model, is not janitored, and ends itself
+	     when the last puddle is gone. ]]
+
 	session.janitor:Give(RunService.Heartbeat:Connect(function()
+		if not session.active then return end
+
 		local model = session.entity and session.entity.Model
-		local root  = getRoot()
-		if not model or not model.Parent or not root then return end
+		if not model or not model.Parent then return end
 
 		local now = os.clock()
+		if now - lastDrop < interval then return end
 
-		---------------------------------------------------------- spitting
-		if session.active and now - lastDrop >= interval then
-			local ok, pivot = pcall(function() return model:GetPivot().Position end)
+		local ok, pivot = pcall(function() return model:GetPivot().Position end)
+		if not ok or not pivot then return end
 
-			if ok and pivot then
-				-- Only drip while it is actually moving. A paused or
-				-- lingering entity should not pool acid under itself.
-				local moved = lastPosition == nil or (pivot - lastPosition).Magnitude > 1
-				lastPosition = pivot
+		-- Only drip while it is actually moving. A paused or lingering entity
+		-- should not pool acid under itself.
+		local moved = lastPosition == nil or (pivot - lastPosition).Magnitude > 1
+		lastPosition = pivot
+		if not moved or model:GetAttribute("Paused") then return end
 
-				if moved and not model:GetAttribute("Paused") then
-					lastDrop = now
+		lastDrop = now
 
-					local params = RaycastParams.new()
-					params.FilterType = Enum.RaycastFilterType.Exclude
-					params.FilterDescendantsInstances = { model, getCharacter() }
+		local params = RaycastParams.new()
+		params.FilterType = Enum.RaycastFilterType.Exclude
+		params.FilterDescendantsInstances = { model, getCharacter() }
 
-					local hit = Workspace:Raycast(pivot, Vector3.new(0, -60, 0), params)
-					if hit then
-						safe(session.name, "acid drop", makePuddle, hit.Position + Vector3.new(0, 0.15, 0))
-					end
-				end
-			end
-		end
-
-		---------------------------------------------------------- burning
-		-- The puddles keep hurting after it has gone. That is the point.
-		if now - lastHurt >= tickRate then
-			lastHurt = now
-
-			local humanoid = getHumanoid()
-			if humanoid and humanoid.Health > 0 then
-				for _, puddle in ipairs(puddles) do
-					if puddle.Parent then
-						local flat = Vector3.new(puddle.Position.X, root.Position.Y, puddle.Position.Z)
-
-						if (flat - root.Position).Magnitude <= radius then
-							humanoid.Health = math.max(humanoid.Health - damage, 0)
-							session.stats.acidTicks = (session.stats.acidTicks or 0) + 1
-
-							log(session.name, "acid burn, %d HP left", math.floor(humanoid.Health))
-							break -- one burn per tick, not one per puddle
-						end
-					end
-				end
-			end
+		local hit = Workspace:Raycast(pivot, Vector3.new(0, -60, 0), params)
+		if hit then
+			safe(session.name, "acid drop", makePuddle, hit.Position + Vector3.new(0, 0.15, 0))
 		end
 	end))
+
+	local burning
+	burning = RunService.Heartbeat:Connect(function()
+		local now = os.clock()
+		if now - lastHurt < tickRate then return end
+		lastHurt = now
+
+		-- Self-terminating, or every Corrode visit would leave a Heartbeat
+		-- connection running for the rest of the session with nothing to do.
+		if #puddles == 0 and not session.active then
+			log(session.name, "acid field burned out, %d burn(s) total", session.stats.acidTicks or 0)
+			pcall(function() burning:Disconnect() end)
+			return
+		end
+
+		-- Everything here is nil-guarded independently: nothing will ever
+		-- disconnect this loop for us, so a death or a respawn must not turn
+		-- it into an error thrown every frame forever.
+		local root = getRoot()
+		local humanoid = getHumanoid()
+		if not root or not humanoid or humanoid.Health <= 0 then return end
+
+		for index = #puddles, 1, -1 do
+			local puddle = puddles[index]
+
+			if not puddle or not puddle.Parent then
+				table.remove(puddles, index)
+			else
+				local flat = Vector3.new(puddle.Position.X, root.Position.Y, puddle.Position.Z)
+
+				if (flat - root.Position).Magnitude <= radius then
+					humanoid.Health = math.max(humanoid.Health - damage, 0)
+					session.stats.acidTicks = (session.stats.acidTicks or 0) + 1
+					log(session.name, "acid burn, %d HP left", math.floor(humanoid.Health))
+
+					--[[ The acid can finish you after Corrode has gone. It has
+					     to claim that kill itself, or finish() sees a corpse
+					     with stats.died false and every OTHER entity that
+					     happens to be out awards its own death badge. ]]
+					if humanoid.Health <= 0 and not session.stats.died then
+						session.stats.died = true
+						log(session.name, "the acid finished you")
+						safe(session.name, "acid death", function() finishSession(session) end)
+					end
+
+					break -- one burn per tick, not one per puddle
+				end
+			end
+		end
+	end)
 
 	log(session.name, "acid trail online (%.1fs interval, %d damage every %.1fs, %ds lifetime)",
 		interval, damage, tickRate, lifetime)
@@ -2679,17 +2827,42 @@ local function finish(session)
 		stats.died and "DIED" or (stats.crucifixBanished and "BANISHED" or "SURVIVED"),
 		stats.hits, stats.rebounds, stats.closetChecks, stats.lingers, stats.acidTicks or 0)
 
-	if stats.died or isPlayerDead() then
+	--[[ ONLY stats.died decides the death badge.
+
+	     It used to be `stats.died or isPlayerDead()`, and the second half is
+	     global. So when Yeller killed you while Corrode was out, Corrode's
+	     despawn saw a dead player and awarded "Dissolved" as well -- and the
+	     schedule puts two entities on screen together often enough that this
+	     was the normal case, not an edge one. Rude's kill, an acid kill and any
+	     ordinary DOORS death all reached it the same way. isPlayerDead also
+	     returns true while the Character is nil, so a despawn landing in the
+	     respawn window awarded a death badge for an entity that never touched
+	     you.
+
+	     stats.died is per-session and is set only by this entity's own
+	     OnDamagePlayer, or by its own acid. isPlayerDead survives purely as the
+	     guard that stops Survive being handed to a corpse.
+
+	     A Gradish entity that is merely present when something else kills you
+	     now correctly awards nothing: it did not kill you, and you did not walk
+	     away from it either. ]]
+	if stats.died then
 		if list.Death then Achievements:Award(list.Death) end
-		return
-	end
 
-	if list.Survive then Achievements:Award(list.Survive) end
+	elseif not isPlayerDead() then
+		if list.Survive then Achievements:Award(list.Survive) end
 
-	if stats.hits == 0 and list.Untouched then
-		Achievements:Award(list.Untouched)
+		if stats.hits == 0 and list.Untouched then
+			Achievements:Award(list.Untouched)
+		end
+
+	else
+		log(session.name, "you died, but not to this one -- no award")
 	end
 end
+
+-- Fills the forward declaration made above the acid mechanic.
+finishSession = finish
 
 local function waitRoomChanges(count)
 	local value = latestRoomValue()

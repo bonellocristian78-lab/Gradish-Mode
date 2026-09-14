@@ -381,6 +381,32 @@ local function kill(reason)
 	State.killedBy = reason
 	log("killed you: %s", reason)
 
+	--[[ He has to claim his own kill.
+
+	     Rude has no session -- he never goes through Core:Spawn -- so nothing
+	     was awarding his death badge. Worse, finish() used to fall back to
+	     isPlayerDead(), which meant whichever OTHER entity happened to be out
+	     when he killed you awarded ITS death badge instead. His kill was being
+	     credited to Yeller.
+
+	     Awarding it here rather than writing stats.died onto the entity that
+	     triggered him: that entity did not kill you either. ]]
+	safe("death badge", function()
+		local data = Core.AchievementConfig and Core.AchievementConfig:Get() or {}
+		local entry = ((data.Entities or {})["Rude"] or {}).Death
+
+		if type(entry) ~= "table" then
+			entry = {
+				Identifier = "Rude Victim",
+				Title      = "He Was Watching",
+				Desc       = "You did the thing that normally saves you",
+				Reason     = "Die to Rude",
+			}
+		end
+
+		Core.AwardAchievement(entry)
+	end)
+
 	safe("jumpscare sound", playSound, "Jumpscare", 1)
 	safe("jumpscare", showJumpscare)
 
