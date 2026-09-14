@@ -56,6 +56,25 @@ Core.Crucifix:EnableDrawers({
 	-- hold it are two different decisions.
 	AutoEquip = false,
 
+	--[[ A glowing crucifix appears in the drawer you just opened.
+
+	     It is placed at LootHolder > SpawnPile > ItemSpawn, which is where the
+	     game anchors its own clutter, so it sits exactly where a real item
+	     would. The Highlight draws AlwaysOnTop, so the glow shows through the
+	     drawer front the moment it slides open.
+
+	     Purely visual -- the Tool you actually receive is separate and goes to
+	     your backpack as usual. This one dissolves after Duration. ]]
+	Highlight = {
+		Enabled          = true,
+		Color            = Color3.fromRGB(255, 238, 170),
+		FillTransparency = 0.25,
+		Duration         = 10,   -- seconds before it fades out
+		-- The whole drawer glows faintly too, so you can spot it from across
+		-- the room if you walked away before it appeared.
+		GlowDrawer       = true,
+	},
+
 	-- Wait for the drawer to finish opening before it appears.
 	Delay = 0.35,
 
