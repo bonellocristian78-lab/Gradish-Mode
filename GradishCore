@@ -595,6 +595,7 @@ local function startClosetCheck(session)
 
 			while os.clock() < until_ do
 				if not session.active or not model.Parent then break end
+				if model:GetAttribute("BeingBanished") then break end
 				if not isHiding() then
 					log(session.name, "you moved, it heard you")
 					break
@@ -602,7 +603,18 @@ local function startClosetCheck(session)
 				task.wait(0.1)
 			end
 
-			pcall(function() entity:Resume() end)
+			--[[ Do NOT resume a banished entity.
+
+			     The crucifixion pauses the model to hold it still for the
+			     ritual. Resuming here would hand it straight back its
+			     movement -- you would watch it get crucified and then simply
+			     carry on, which looks exactly like the crucifix failing. ]]
+			if model.Parent and not model:GetAttribute("BeingBanished") then
+				pcall(function() entity:Resume() end)
+			else
+				log(session.name, "not resuming, it is being banished")
+			end
+
 			nextAllowed = os.clock() + cooldown
 			busy = false
 		end)
@@ -821,6 +833,17 @@ local function startCrucifixionWatch(session)
 
 			if session.achievements.Crucify then
 				Achievements:Award(session.achievements.Crucify)
+			end
+
+			--[[ A banish does not go through Despawn().
+
+			     The ritual locks the model to the prop and then calls
+			     model:Destroy() on it directly, so the OnDespawned callback
+			     never fires. Without this, finish() never runs -- no survive
+			     achievement, no cleanup -- and the tinted lights stay on for
+			     the rest of the run. ]]
+			if session.onBanished then
+				safe(session.name, "banish cleanup", session.onBanished)
 			end
 		end)
 	end
@@ -1656,6 +1679,26 @@ function Core:Spawn(profile, passIndex, carriedStats)
 	end)
 
 	---------------------------------------------------------------- despawn
+	--[[ Stands in for OnDespawned when the entity is banished.
+
+	     The crucifix ritual destroys the model directly rather than going
+	     through Despawn(), so that callback never arrives. Everything the
+	     despawn path would have done has to happen here instead, or a
+	     crucified entity leaves its lights tinted and its achievements
+	     unawarded. Passes and encores are deliberately skipped: a banished
+	     entity is gone. ]]
+	session.onBanished = function()
+		if not session.active then return end
+
+		session.active = false
+		unregister(session)
+		finish(session)
+
+		task.delay(1.5, function()
+			safe(session.name, "cleanup", function() session.janitor:Clean() end)
+		end)
+	end
+
 	hook("OnDespawned", function()
 		session.active = false
 		unregister(session)
