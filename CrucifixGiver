@@ -1,65 +1,283 @@
 --[[
-        C R U C I F I X   G I V E R        -- the dev one
+================================================================================
 
-        Press a key, get a crucifix, straight into your hand. For testing the
-        banish achievements without walking the map opening drawers.
+        C R U C I F I X   G I V E R
 
-        For the realistic version -- one hidden in the furniture, found by
-        searching -- use CrucifixSpawner. Main script already loads that one.
+        Runs your crucifix loader and makes sure the result is equipped, so the
+        Entity Spawner can see it.
 
-        The model comes from your loader via GradishCore, which runs it ONCE
-        per session and then clones the result. That script is MoonSec
-        obfuscated: this cannot sandbox it and does not pretend to. What it
-        does is set its knobs before it runs (Range = 0, so the Entity Spawner
-        keeps ownership of crucifixion), run it once instead of every time,
-        and own the tool afterwards.
+        STANDALONE ON PURPOSE. It does not load GradishCore, it does not need
+        the repo to be up, and it can be pasted on its own. The previous
+        version started with a GradishCore fetch and died on the spot whenever
+        that URL was not reachable.
+
+        WHAT IT DOES, IN FULL
+        ---------------------
+            _G.Uses  = 1
+            _G.Range = 30
+            loadstring(game:HttpGet(<your loader>))()
+
+        Which is exactly what you already run by hand. Everything else in this
+        file is just the keybind, the equip, and enough printing that if it
+        still fails you can tell me where it stopped.
+
+        WHY YOUR VALUES AND NOT MINE
+        ----------------------------
+        An earlier version forced Range = 0, on the theory that the Entity
+        Spawner should own crucifixion and the loader's own logic should stay
+        inert. That was me being clever about a script I cannot read. If Range
+        gates whether the tool gets built at all, I had simply switched it off.
+        Defaults are yours now. Set Range = 0 below only if you want to try it.
+
+        WHAT THE SPAWNER NEEDS (Entity Spawner V2, line 281)
+        ---------------------------------------------------
+            local tool = Character:FindFirstChildOfClass("Tool")
+            if tool and (tool.Name == name or tool:HasTag(name)) then
+
+        A Tool, parented to your Character -- equipped, not in the Backpack --
+        named "Crucifix" or tagged "Crucifix". If your loader already produces
+        that, this script changes nothing about it and only equips it.
+
+================================================================================
 ]]
 
 local Config = {
-	Keybind    = Enum.KeyCode.K,
-	AutoEquip  = true,  -- straight into your hand, not the backpack
+	Url = "https://raw.githubusercontent.com/PenguinManiack/Crucifix/main/Crucifix.lua",
+
+	-- Your values, unchanged.
+	Uses  = 1,
+	Range = 30,
+
+	Keybind     = Enum.KeyCode.K,
 	GiveOnStart = true,
-	GiveOnRespawn = true,
+	AutoEquip   = true,
+
+	-- Rename and tag whatever tool appears, so the spawner recognises it even
+	-- if the loader calls it something else. Harmless if it is already right.
+	EnsureName = true,
+
+	-- Seconds to keep looking for a new tool after running the loader.
+	Timeout = 12,
+
+	-- Leave this on until it works. It prints every step.
+	Debug = true,
 }
 
-local Core = loadstring(game:HttpGet(
-	"https://raw.githubusercontent.com/J63633S/Gradish-mode/main/GradishCore"
-))()
+---====== SERVICES ======---
 
-local UserInputService = game:GetService("UserInputService")
-local LocalPlayer = game:GetService("Players").LocalPlayer
+local Players           = game:GetService("Players")
+local UserInputService  = game:GetService("UserInputService")
+local CollectionService = game:GetService("CollectionService")
+
+local LocalPlayer = Players.LocalPlayer
+
+local function log(format, ...)
+	if not Config.Debug then return end
+	print("[Crucifix] " .. format:format(...))
+end
+
+local function getCharacter()
+	return LocalPlayer.Character
+end
+
+local function getHumanoid()
+	local character = getCharacter()
+	return character and character:FindFirstChildOfClass("Humanoid") or nil
+end
+
+local function getBackpack()
+	return LocalPlayer:FindFirstChildOfClass("Backpack")
+end
+
+---====== FINDING TOOLS ======---
+--[[ The loader can put its tool in the Backpack or straight onto the
+     Character, and different versions do different things, so both are
+     watched rather than assumed. ]]
+
+local function containers()
+	return { getBackpack(), getCharacter() }
+end
+
+local function snapshot()
+	local seen = {}
+	for _, container in ipairs(containers()) do
+		if container then
+			for _, child in ipairs(container:GetChildren()) do
+				if child:IsA("Tool") then seen[child] = true end
+			end
+		end
+	end
+	return seen
+end
+
+local function firstNewTool(seen)
+	for _, container in ipairs(containers()) do
+		if container then
+			for _, child in ipairs(container:GetChildren()) do
+				if child:IsA("Tool") and not seen[child] then return child end
+			end
+		end
+	end
+	return nil
+end
+
+-- Anything already lying around that the spawner would accept.
+local function existingCrucifix()
+	for _, container in ipairs(containers()) do
+		if container then
+			for _, child in ipairs(container:GetChildren()) do
+				if child:IsA("Tool") and child.Name == "Crucifix" then return child end
+			end
+		end
+	end
+	return nil
+end
+
+---====== DIAGNOSTICS ======---
+
+local function listTools(label)
+	if not Config.Debug then return end
+
+	local found = {}
+	for _, container in ipairs(containers()) do
+		if container then
+			for _, child in ipairs(container:GetChildren()) do
+				if child:IsA("Tool") then
+					table.insert(found, ("%s (in %s)"):format(child.Name, container.Name))
+				end
+			end
+		end
+	end
+
+	if #found == 0 then
+		log("%s: no tools at all", label)
+	else
+		log("%s: %s", label, table.concat(found, ", "))
+	end
+end
+
+---====== THE ACTUAL WORK ======---
+
+local function equip(tool)
+	local character = getCharacter()
+	local humanoid  = getHumanoid()
+	if not tool or not character or not humanoid then return false end
+
+	if tool.Parent == character then
+		log("already in your hand")
+		return true
+	end
+
+	pcall(function() humanoid:EquipTool(tool) end)
+
+	-- EquipTool can refuse if the backpack is busy. Parenting straight to the
+	-- character still satisfies the spawner check; it just will not be welded
+	-- to your hand properly.
+	if tool.Parent ~= character then
+		log("EquipTool did not take, parenting to the character directly")
+		pcall(function() tool.Parent = character end)
+	end
+
+	return tool.Parent == character
+end
+
+local function claim(tool)
+	if not Config.EnsureName then return end
+
+	if tool.Name ~= "Crucifix" then
+		log("renaming %q to Crucifix so the spawner sees it", tool.Name)
+		tool.Name = "Crucifix"
+	end
+
+	pcall(function() CollectionService:AddTag(tool, "Crucifix") end)
+end
+
+local function give()
+	local humanoid = getHumanoid()
+	if not humanoid or humanoid.Health <= 0 then
+		log("no living character yet, skipping")
+		return nil
+	end
+
+	listTools("before")
+
+	local before = snapshot()
+
+	log("running the loader with Uses=%s Range=%s", tostring(Config.Uses), tostring(Config.Range))
+
+	_G.Uses  = Config.Uses
+	_G.Range = Config.Range
+
+	local ok, err = pcall(function()
+		loadstring(game:HttpGet(Config.Url))()
+	end)
+
+	if not ok then
+		warn("[Crucifix] the loader itself errored: " .. tostring(err))
+		warn("[Crucifix] that is your crucifix script failing, not this one.")
+		return nil
+	end
+
+	log("loader finished without error, waiting for a tool to appear")
+
+	-- It may parent the tool a frame or several later.
+	local deadline = os.clock() + Config.Timeout
+	local tool
+
+	while os.clock() < deadline do
+		tool = firstNewTool(before)
+		if tool then break end
+		task.wait(0.15)
+	end
+
+	if not tool then
+		listTools("after")
+
+		-- The loader may refuse to build a second one in the same session.
+		local fallback = existingCrucifix()
+		if fallback then
+			log("no NEW tool, but there is already a Crucifix -- using that")
+			tool = fallback
+		else
+			warn("[Crucifix] the loader ran but produced no tool within " .. Config.Timeout .. "s.")
+			warn("[Crucifix] Tell me what the 'before'/'after' lines above said.")
+			return nil
+		end
+	end
+
+	log("got %q", tool.Name)
+	claim(tool)
+
+	if Config.AutoEquip then
+		if equip(tool) then
+			log("equipped, the spawner can see it now")
+		else
+			warn("[Crucifix] could not get it onto your character. The spawner only")
+			warn("[Crucifix] checks Character:FindFirstChildOfClass('Tool'), so a tool")
+			warn("[Crucifix] sitting in your Backpack will never be detected.")
+		end
+	end
+
+	return tool
+end
+
+---====== INPUT ======---
 
 local connections = {}
 
-local function track(connection)
-	table.insert(connections, connection)
-	return connection
-end
-
-track(UserInputService.InputBegan:Connect(function(input, processed)
+table.insert(connections, UserInputService.InputBegan:Connect(function(input, processed)
 	if processed then return end
 	if input.KeyCode ~= Config.Keybind then return end
 
-	Core.Crucifix:Give("keybind", Config.AutoEquip)
+	task.spawn(give)
 end))
 
-track(LocalPlayer.CharacterAdded:Connect(function()
-	Core.Crucifix.current = nil
-
-	if Config.GiveOnRespawn then
-		task.wait(2) -- let the character and backpack finish loading
-		Core.Crucifix:Give("respawn", Config.AutoEquip)
-	end
-end))
-
--- Running this twice should not leave two sets of keybinds listening.
+-- Running this twice should not leave two keybinds listening.
 if getgenv then
-	local previous = getgenv().__GradishCrucifixGiver
-	if type(previous) == "function" then
-		pcall(previous)
-	end
+	local previous = getgenv().__CrucifixGiverCleanup
+	if type(previous) == "function" then pcall(previous) end
 
-	getgenv().__GradishCrucifixGiver = function()
+	getgenv().__CrucifixGiverCleanup = function()
 		for _, connection in ipairs(connections) do
 			pcall(function() connection:Disconnect() end)
 		end
@@ -67,8 +285,8 @@ if getgenv then
 	end
 end
 
-print(("[Gradish/Crucifix] giver ready, press %s"):format(Config.Keybind.Name))
+log("ready. press %s for a crucifix.", Config.Keybind.Name)
 
 if Config.GiveOnStart then
-	Core.Crucifix:Give("startup", Config.AutoEquip)
+	task.spawn(give)
 end
