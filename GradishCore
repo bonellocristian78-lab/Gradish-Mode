@@ -10,7 +10,7 @@
         HOW TO USE IT
 
             local Core = loadstring(game:HttpGet(
-                "https://raw.githubusercontent.com/J63633S/Gradish-mode/main/GradishCore"
+                "https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/GradishCore"
             ))()
 
             Core:Spawn({ Name = "Yeller", Asset = "...", ... })
@@ -277,7 +277,7 @@ end
      entity name and nothing breaks. ]]
 
 local AchievementConfig = {
-	Url    = "https://raw.githubusercontent.com/J63633S/Gradish-mode/main/AchievementConfig",
+	Url    = "https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/AchievementConfig",
 	data   = nil,
 	loaded = false,
 }
@@ -899,13 +899,19 @@ local Crucifix = {
 
 Core.Crucifix = Crucifix
 
+--[[ These are the values you already run by hand, and they stay that way.
+
+     An earlier version forced Range = 0, reasoning that the Entity Spawner
+     should own crucifixion and the loader's own logic should stay inert. That
+     was being clever about a script that cannot be read: if Range gates
+     whether the tool is built at all, setting it to zero quietly switches the
+     whole thing off. If you want to try the inert version, change it here and
+     see whether a crucifix still appears. ]]
 Crucifix.Loader = {
-	Url   = "https://raw.githubusercontent.com/PenguinManiack/Crucifix/main/Crucifix.lua",
-	Uses  = 99,
-	-- 0 leaves its own banishing logic inert so the Entity Spawner owns the
-	-- crucifixion. Put it back to 30 if you want its behaviour too.
-	Range = 0,
-	Timeout = 10,
+	Url     = "https://raw.githubusercontent.com/PenguinManiack/Crucifix/main/Crucifix.lua",
+	Uses    = 1,
+	Range   = 30,
+	Timeout = 12,
 }
 
 local function collectTools(into)
@@ -965,7 +971,23 @@ local function runLoader()
 		task.wait(0.1)
 	end
 
-	warn("[Gradish/Crucifix] the loader ran but produced no tool")
+	-- Nothing NEW showed up. The loader may refuse to build a second one in
+	-- the same session, in which case an existing crucifix is the right
+	-- answer rather than a failure.
+	local backpack = LocalPlayer:FindFirstChildOfClass("Backpack")
+	for _, container in ipairs({ backpack, getCharacter() }) do
+		if container then
+			for _, child in ipairs(container:GetChildren()) do
+				if child:IsA("Tool") and child.Name == "Crucifix" then
+					print("[Gradish/Crucifix] no new tool, reusing the one already here")
+					return child
+				end
+			end
+		end
+	end
+
+	warn("[Gradish/Crucifix] the loader ran but produced no tool within "
+		.. settings.Timeout .. "s")
 	return nil
 end
 
