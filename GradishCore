@@ -1,0 +1,1749 @@
+--[[
+================================================================================
+
+        G R A D I S H   C O R E
+
+        Shared engine for every Gradish entity. Each entity script becomes a
+        short profile; everything below is written once and used by all of
+        them.
+
+        HOW TO USE IT
+
+            local Core = loadstring(game:HttpGet(
+                "https://raw.githubusercontent.com/J63633S/Gradish-mode/main/GradishCore"
+            ))()
+
+            Core:Spawn({ Name = "Yeller", Asset = "...", ... })
+
+        WHAT EVERY ENTITY NOW GETS FOR FREE
+        -----------------------------------
+        * Four achievements instead of one: survived, died, untouched, and
+          banished with a crucifix. All of the wording lives in one file,
+          AchievementConfig, so nobody has to edit four scripts to change a
+          title.
+        * Crucifixion detection, for all of them, without hijacking the ritual.
+        * Light tells that RESTORE. The old scripts tinted rooms and never put
+          them back, so the colour of a dead entity stayed on the map for the
+          rest of the run.
+        * Closet checks, escalation, multi-pass chains and encores. See the
+          MECHANICS section.
+
+        THREE THINGS I LEARNED FROM THE SPAWNER SOURCE, WRITTEN DOWN SO NOBODY
+        HAS TO REDISCOVER THEM
+        ---------------------------------------------------------------------
+        1. entity:Run(true) deep-copies the entity, config included, and runs
+           the COPY. Anything you change on your object afterwards is ignored.
+           This core uses Run(false) so live tuning actually reaches the entity
+           that is moving.
+
+        2. Movement.Speed is not the number you wrote. Create() rewrites it as
+           65 / 100 * yourSpeed. So escalation multiplies the stored value; it
+           never assigns a raw one.
+
+        3. The model attribute "Running" is set to true on run and never set
+           back. Re-running the same entity object silently does nothing. Each
+           extra pass therefore builds a fresh entity, which is exactly why the
+           old nested Rebound script worked.
+
+        MECHANICS (all of them are world actions, none of them draw on screen)
+        ---------------------------------------------------------------------
+        Tell         rooms ahead shift to the entity colour before it arrives
+                     and shift back when it leaves, strongest nearest you
+        ClosetCheck  if you are hiding as it passes, it stops beside your
+                     closet for a moment before moving on
+        Linger       it reaches YOUR room and stays a few seconds before
+                     carrying on, still fully able to hurt you
+        Escalate     every rebound makes it faster and widens its reach
+        Variance     a few percent of random speed on every spawn, so you
+                     cannot count it out
+        Passes       run the entity several times in one visit, N rooms apart
+        Encore       a chance it turns around and comes back after despawning
+        Registry     entities know about each other; two at once is its own
+                     achievement, and the same entity cannot double-spawn
+
+        Two more subsystems live here rather than on any one entity:
+
+        Core.Crucifix   owns the crucifix model, hands one out, and can hide
+                        one in the furniture on a rising-odds search
+        Core.RedSeek    paints the Seek chase models red and awards you for
+                        living through one
+
+================================================================================
+]]
+
+-- One instance shared by every entity script, so they all see the same
+-- registry and the achievements library is fetched once.
+if getgenv and getgenv().GradishCore then
+	return getgenv().GradishCore
+end
+
+---====== SERVICES ======---
+
+local Players           = game:GetService("Players")
+local RunService        = game:GetService("RunService")
+local TweenService      = game:GetService("TweenService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace         = game:GetService("Workspace")
+
+local LocalPlayer = Players.LocalPlayer
+
+---====== CORE ======---
+
+local Core = {
+	Version = "1.0",
+	Debug   = true,
+
+	-- Live entities, by name. Cross-script, because every entity shares this
+	-- module instance.
+	Active = {},
+
+	-- Achievement identifiers already granted this session.
+	Granted = {},
+}
+
+---====== UTIL ======---
+
+local function log(name, format, ...)
+	if not Core.Debug then return end
+	print(("[Gradish/%s] "):format(name) .. format:format(...))
+end
+
+-- Runs fn, reports failure, never lets it escape. A broken cosmetic must not
+-- be able to stop an entity from moving.
+local function safe(name, label, fn, ...)
+	local ok, err = pcall(fn, ...)
+	if not ok then
+		warn(("[Gradish/%s] %s failed: %s"):format(name, label, tostring(err)))
+	end
+	return ok
+end
+
+local function tween(instance, duration, properties)
+	if typeof(instance) ~= "Instance" then return nil end
+	local info = TweenInfo.new(duration, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
+	local ok, animation = pcall(TweenService.Create, TweenService, instance, info, properties)
+	if ok and animation then
+		animation:Play()
+		return animation
+	end
+	return nil
+end
+
+local function isBlank(value)
+	return value == nil or value == ""
+end
+
+local function getCharacter()
+	return LocalPlayer.Character
+end
+
+local function getHumanoid()
+	local character = getCharacter()
+	return character and character:FindFirstChildOfClass("Humanoid") or nil
+end
+
+local function getRoot()
+	local character = getCharacter()
+	return character and character:FindFirstChild("HumanoidRootPart") or nil
+end
+
+local function isPlayerDead()
+	local humanoid = getHumanoid()
+	return humanoid == nil or humanoid.Health <= 0
+end
+
+-- The spawner reads this same attribute to decide whether you are safe, so it
+-- is the authoritative answer to "am I in a closet".
+local function isHiding()
+	local character = getCharacter()
+	if not character then return false end
+	return character:GetAttribute("Hiding") == true
+end
+
+local function currentRoomNumber()
+	local data = ReplicatedStorage:FindFirstChild("GameData")
+	local value = data and data:FindFirstChild("LatestRoom")
+	return value and tonumber(value.Value) or 0
+end
+
+local function latestRoomValue()
+	local data = ReplicatedStorage:FindFirstChild("GameData")
+	return data and data:FindFirstChild("LatestRoom") or nil
+end
+
+local function getCurrentRooms()
+	return Workspace:FindFirstChild("CurrentRooms")
+end
+
+--[[ Janitor. Hand it connections, instances or undo functions; Clean() runs
+     everything in reverse. This is what guarantees a despawned entity leaves
+     no tinted lights and no listeners behind. ]]
+local Janitor = {}
+Janitor.__index = Janitor
+
+function Janitor.new()
+	return setmetatable({ _tasks = {} }, Janitor)
+end
+
+function Janitor:Give(item)
+	table.insert(self._tasks, item)
+	return item
+end
+
+function Janitor:Clean()
+	for index = #self._tasks, 1, -1 do
+		local item = self._tasks[index]
+		self._tasks[index] = nil
+
+		pcall(function()
+			if typeof(item) == "RBXScriptConnection" then
+				item:Disconnect()
+			elseif typeof(item) == "Instance" then
+				item:Destroy()
+			elseif type(item) == "function" then
+				item()
+			end
+		end)
+	end
+end
+
+---====== ACHIEVEMENTS ======---
+--[[ One library instance for the whole mod, fetched on first use. Awards are
+     queued with a gap, because two popups on the same frame make the DOORS
+     achievement UI overwrite itself. ]]
+
+local Achievements = {
+	library  = nil,
+	loaded   = false,
+	queue    = {},
+	draining = false,
+}
+
+function Achievements:Load()
+	if self.loaded then return self.library end
+	self.loaded = true
+
+	local ok, result = pcall(function()
+		return loadstring(game:HttpGet(
+			"https://raw.githubusercontent.com/RegularVynixu/DOORS-Custom-Achievements/main/init.luau"
+		))()
+	end)
+
+	if ok and result then
+		self.library = result
+	else
+		warn("[Gradish] could not load the achievements library: " .. tostring(result))
+	end
+
+	return self.library
+end
+
+function Achievements:Drain()
+	if self.draining then return end
+	self.draining = true
+
+	task.spawn(function()
+		while #self.queue > 0 do
+			local entry = table.remove(self.queue, 1)
+			local library = self:Load()
+
+			if library then
+				pcall(function()
+					library:Grant(entry, { CheckOwned = false, Remember = true })
+				end)
+			end
+
+			print("[Gradish] achievement: " .. tostring(entry.Title))
+			task.wait(2.6) -- let each popup finish before the next one starts
+		end
+
+		self.draining = false
+	end)
+end
+
+function Achievements:Award(entry)
+	if not entry or isBlank(entry.Identifier) then return end
+	if Core.Granted[entry.Identifier] then return end
+
+	Core.Granted[entry.Identifier] = true
+	table.insert(self.queue, entry)
+	self:Drain()
+end
+
+---====== ACHIEVEMENT CONFIG ======---
+--[[ All the wording lives in one editable file so nobody has to go hunting
+     through four entity scripts to change a title. Fetched once per session;
+     if it is unreachable, every achievement still gets generated from the
+     entity name and nothing breaks. ]]
+
+local AchievementConfig = {
+	Url    = "https://raw.githubusercontent.com/J63633S/Gradish-mode/main/AchievementConfig",
+	data   = nil,
+	loaded = false,
+}
+
+Core.AchievementConfig = AchievementConfig
+
+function AchievementConfig:Get()
+	if self.loaded then return self.data end
+	self.loaded = true
+
+	local ok, result = pcall(function()
+		return loadstring(game:HttpGet(self.Url))()
+	end)
+
+	if ok and type(result) == "table" then
+		self.data = result
+	else
+		warn("[Gradish] AchievementConfig unreachable, using generated names: " .. tostring(result))
+		self.data = { Entities = {}, Special = {} }
+	end
+
+	return self.data
+end
+
+-- Pulls one of the shared achievements out of the config file.
+local function specialAchievement(key, fallback)
+	local data  = AchievementConfig:Get()
+	local entry = (data.Special or {})[key]
+
+	if type(entry) ~= "table" then
+		entry = fallback
+	end
+	if not entry then return nil end
+
+	-- A blank Image must be absent rather than empty, or the popup tries to
+	-- load "" as a texture.
+	local copy = {}
+	for key2, value in pairs(entry) do copy[key2] = value end
+	if isBlank(copy.Image) then copy.Image = nil end
+
+	return copy
+end
+
+--[[ Builds the four achievements for an entity.
+
+     Three layers, each overriding the one below it:
+         1. generated from the entity name   (always works)
+         2. AchievementConfig.Entities[name] (where you normally edit)
+         3. profile.Achievements             (inline, for one-offs)
+
+     Setting a key to false at either of the top two layers switches that
+     achievement off. ]]
+local function buildAchievements(profile)
+	local name     = profile.Name
+	local data     = AchievementConfig:Get()
+	local fromFile = (data.Entities or {})[name] or {}
+	local inline   = profile.Achievements or {}
+	local image    = inline.Image or fromFile.Image or data.DefaultImage
+
+	local function build(key, defaults)
+		if inline[key] == false or fromFile[key] == false then return nil end
+
+		local fileEntry   = type(fromFile[key]) == "table" and fromFile[key] or {}
+		local inlineEntry = type(inline[key])   == "table" and inline[key]   or {}
+
+		local entry = {
+			Identifier = inlineEntry.Identifier or fileEntry.Identifier or defaults.Identifier,
+			Title      = inlineEntry.Title      or fileEntry.Title      or defaults.Title,
+			Desc       = inlineEntry.Desc       or fileEntry.Desc       or defaults.Desc,
+			Reason     = inlineEntry.Reason     or fileEntry.Reason     or defaults.Reason,
+		}
+
+		local chosen = inlineEntry.Image or fileEntry.Image or image
+		if not isBlank(chosen) then
+			entry.Image = chosen
+		end
+
+		return entry
+	end
+
+	return {
+		Survive = build("Survive", {
+			Identifier = name,
+			Title      = ("Survived %s"):format(name),
+			Desc       = ("You walked away from %s"):format(name),
+			Reason     = ("Survive an encounter with %s"):format(name),
+		}),
+
+		Death = build("Death", {
+			Identifier = name .. " Victim",
+			Title      = ("Died to %s"):format(name),
+			Desc       = ("%s caught you"):format(name),
+			Reason     = ("Die to %s"):format(name),
+		}),
+
+		Untouched = build("Untouched", {
+			Identifier = name .. " Untouched",
+			Title      = ("Untouched by %s"):format(name),
+			Desc       = "Not a scratch on you",
+			Reason     = ("Survive %s without taking a single hit"):format(name),
+		}),
+
+		Crucify = build("Crucify", {
+			Identifier = name .. " Banished",
+			Title      = ("Banished %s"):format(name),
+			Desc       = ("%s met the crucifix"):format(name),
+			Reason     = "Does not count towards progression",
+		}),
+	}
+end
+
+-- The shared ones, with hardcoded fallbacks so they still fire if the config
+-- file cannot be reached.
+local function doubleTroubleAchievement()
+	return specialAchievement("DoubleTrouble", {
+		Identifier = "Gradish Double Trouble",
+		Title      = "Two At Once",
+		Desc       = "The hallway was not big enough",
+		Reason     = "Be hunted by two Gradish entities at the same time",
+	})
+end
+
+local function crucifixFoundAchievement()
+	return specialAchievement("CrucifixFound", {
+		Identifier = "I Have No Fear In them",
+		Title      = "I Have No Fear In them",
+		Desc       = "Somebody left it in a drawer, and now it is yours",
+		Reason     = "Find a crucifix hidden in the furniture",
+	})
+end
+
+local function redSeekAchievement()
+	return specialAchievement("RedSeek", {
+		Identifier = "You Survived Red Seek",
+		Title      = "You Survived Red Seek",
+		Desc       = "He was redder than usual and you outran him anyway",
+		Reason     = "Survive a Seek chase in Gradish mode",
+	})
+end
+
+---====== MECHANIC: THE TELL ======---
+--[[ Rooms ahead of you shift to the entity colour before it arrives, and
+     shift BACK when it leaves.
+
+     The old per-entity scripts did the first half by hand and never did the
+     second, so after Rose Hell died the corridor stayed pink for the rest of
+     the run and Rebound's blue stacked on top of it.
+
+     Two details make it read as light rather than as a filter:
+
+       * Falloff. The room you are standing in gets the colour at full
+         strength; each room further along gets less of it, blended against
+         whatever colour that light already was. A corridor lit from one end
+         looks lit from one end.
+
+       * Staggered restore. Lights do not all snap back on the same frame.
+         Each one returns after its own small delay, so the colour drains out
+         of the map instead of being switched off. ]]
+
+local function startTell(session)
+	local settings = session.profile.Tell
+	if not settings or not settings.Color then return end
+
+	local reach     = settings.Reach or 5
+	local minimum   = settings.MinStrength or 0.2
+	local originals = {}
+	local tinted    = {}
+
+	local function remember(instance, keys)
+		if originals[instance] then return end
+
+		local snapshot = {}
+		for _, key in ipairs(keys) do
+			local ok, value = pcall(function() return instance[key] end)
+			if ok then snapshot[key] = value end
+		end
+		originals[instance] = snapshot
+	end
+
+	-- strength 1 is right on top of you, 0 is out past the entity's reach.
+	local function strengthFor(roomNumber)
+		if not settings.Falloff then return 1 end
+
+		local gap = math.abs(roomNumber - currentRoomNumber())
+		return math.clamp(1 - (gap / reach), minimum, 1)
+	end
+
+	local function tintRoom(room)
+		if not room or tinted[room] then return end
+		tinted[room] = true
+
+		local number   = tonumber(room.Name) or currentRoomNumber()
+		local strength = strengthFor(number)
+		local fade     = settings.FadeIn or 1
+
+		for _, descendant in ipairs(room:GetDescendants()) do
+			if descendant:IsA("Light") then
+				remember(descendant, { "Color", "Brightness" })
+				local original = originals[descendant]
+				local base     = original.Color or Color3.new(1, 1, 1)
+
+				tween(descendant, fade, {
+					Color      = base:Lerp(settings.Color, strength),
+					Brightness = (original.Brightness or 1)
+						* (1 + ((settings.BrightnessBoost or 1) - 1) * strength),
+				})
+
+			elseif descendant:IsA("BasePart") and descendant.Name == "Neon" then
+				remember(descendant, { "Color" })
+				local base = originals[descendant].Color or Color3.new(1, 1, 1)
+
+				tween(descendant, fade, { Color = base:Lerp(settings.Color, strength) })
+			end
+		end
+	end
+
+	local function tintAhead()
+		local rooms = getCurrentRooms()
+		if not rooms then return end
+
+		local latest = currentRoomNumber()
+		for _, room in ipairs(rooms:GetChildren()) do
+			local number = tonumber(room.Name)
+			if number and number >= latest then
+				tintRoom(room)
+			end
+		end
+	end
+
+	tintAhead()
+	session.tintAhead = tintAhead
+
+	-- Rooms generated while it chases you get tinted too, otherwise you
+	-- outrun your own warning light within a few doors.
+	local rooms = getCurrentRooms()
+	if rooms then
+		session.janitor:Give(rooms.ChildAdded:Connect(function(room)
+			if not session.active then return end
+			task.wait(0.15) -- let the room finish streaming in
+			pcall(tintRoom, room)
+		end))
+	end
+
+	session.janitor:Give(function()
+		local fade = settings.FadeOut or 0.8
+
+		for instance, snapshot in pairs(originals) do
+			if typeof(instance) == "Instance" and instance.Parent then
+				-- Each light lets go on its own beat.
+				task.delay(math.random() * (settings.RestoreStagger or 0.4), function()
+					tween(instance, fade, snapshot)
+				end)
+			end
+		end
+
+		table.clear(originals)
+		table.clear(tinted)
+	end)
+
+	log(session.name, "tell online")
+end
+
+---====== MECHANIC: CLOSET CHECK ======---
+--[[ If you are in a closet when it comes past, it stops outside and waits.
+
+     Safe by construction, and that is the point. EntityMoveTo checks the
+     Paused attribute every Stepped frame, and the detection loop skips damage
+     and crucifixion entirely while paused, so a paused entity beside your
+     closet cannot hurt you. All it does is refuse to leave.
+
+     Step out early and it notices: leaving the closet resumes it at once,
+     which is a far worse outcome than simply waiting. ]]
+
+local function startClosetCheck(session)
+	local settings = session.profile.ClosetCheck
+	if not settings or not settings.Enabled then return end
+
+	local range    = settings.Range or 22
+	local pauseFor = settings.PauseFor or 1.6
+	local chance   = settings.Chance or 1
+	local cooldown = settings.Cooldown or 12
+
+	local nextAllowed = 0
+	local busy = false
+
+	session.janitor:Give(RunService.Heartbeat:Connect(function()
+		if not session.active or busy then return end
+
+		local entity = session.entity
+		local model  = entity and entity.Model
+		local root   = getRoot()
+		if not model or not model.Parent or not root then return end
+
+		if model:GetAttribute("BeingBanished") then return end
+		if model:GetAttribute("Paused") then return end
+		if not isHiding() then return end
+		if os.clock() < nextAllowed then return end
+
+		local ok, pivot = pcall(function() return model:GetPivot().Position end)
+		if not ok or (pivot - root.Position).Magnitude > range then return end
+
+		if math.random() > chance then
+			nextAllowed = os.clock() + cooldown
+			return
+		end
+
+		busy = true
+		session.stats.closetChecks += 1
+		log(session.name, "stopped outside your closet")
+
+		pcall(function() entity:Pause() end)
+
+		task.spawn(function()
+			local until_ = os.clock() + pauseFor
+
+			while os.clock() < until_ do
+				if not session.active or not model.Parent then break end
+				if not isHiding() then
+					log(session.name, "you moved, it heard you")
+					break
+				end
+				task.wait(0.1)
+			end
+
+			pcall(function() entity:Resume() end)
+			nextAllowed = os.clock() + cooldown
+			busy = false
+		end)
+	end))
+
+	log(session.name, "closet check online")
+end
+
+---====== SPEED STACK ======---
+--[[ Two mechanics own the speed at the same time: escalation raises it on
+     every rebound, lingering drops it to a crawl in your room.
+
+     An earlier version had both writing absolute numbers, and they fought. A
+     rebound starting mid-linger wiped the throttle and the entity shot off
+     while it was supposed to be standing still; then the linger ended and
+     restored the pre-escalation number, wiping the escalation with it.
+
+     Now neither one writes the speed. Each owns a multiplier and the value is
+     always base * escalation * linger, recomputed whenever either changes. ]]
+
+local function ensureSpeedStack(session)
+	if session.speed then return session.speed end
+
+	local config = session.entity and session.entity.Config
+	if not config then return nil end
+
+	session.speed = {
+		base       = config.Movement.Speed, -- already includes Variance
+		escalation = 1,
+		linger     = 1,
+	}
+	return session.speed
+end
+
+local function applySpeed(session)
+	local stack  = session.speed
+	local config = session.entity and session.entity.Config
+	if not stack or not config then return end
+
+	config.Movement.Speed = stack.base * stack.escalation * stack.linger
+end
+
+---====== MECHANIC: LINGER ======---
+--[[ It reaches the room you are standing in and stays there for a few
+     seconds before carrying on.
+
+     This deliberately does NOT use Pause. Pause sets the attribute the
+     detection loop reads, so a paused entity cannot damage you at all, and
+     stopping in your room would make it SAFER than passing through. That is
+     backwards.
+
+     So the speed is throttled to a crawl instead. The entity is effectively
+     standing still, every damage and crucifixion check stays live, and if you
+     are out in the open while it sits there it will still take you.
+
+     EntityMoveTo captures speed when it is called, so the throttle lands on
+     the next node rather than the current one. That is a fraction of a second
+     and you cannot see it. ]]
+
+local function startLinger(session)
+	local settings = session.profile.Linger
+	if not settings or not settings.Enabled then return end
+
+	local stack = ensureSpeedStack(session)
+	if not stack then return end
+
+	local duration   = settings.Duration or { 2, 3 }
+	local factor     = settings.SpeedFactor or 0.02
+	local chance     = settings.Chance or 1
+	local cooldown   = settings.Cooldown or 6
+	local maxPerVisit = settings.MaxPerVisit or math.huge
+
+	local nextAllowed = 0
+	local busy = false
+
+	session.linger = function()
+		if busy or not session.active then return end
+		if os.clock() < nextAllowed then return end
+		if session.stats.lingers >= maxPerVisit then return end
+		if math.random() > chance then return end
+
+		local model = session.entity and session.entity.Model
+		if not model or not model.Parent then return end
+		if model:GetAttribute("BeingBanished") then return end
+
+		busy = true
+		session.stats.lingers += 1
+
+		local seconds = duration[1]
+			+ math.random() * math.max((duration[2] or duration[1]) - duration[1], 0)
+
+		log(session.name, "stopping in your room for %.1fs", seconds)
+
+		-- Own the linger slot of the stack, not the speed itself. A rebound
+		-- escalating mid-linger now raises the base it is throttling, instead
+		-- of cancelling the throttle.
+		stack.linger = factor
+		applySpeed(session)
+
+		task.spawn(function()
+			task.wait(seconds)
+
+			stack.linger = 1
+			applySpeed(session)
+
+			nextAllowed = os.clock() + cooldown
+			busy = false
+			log(session.name, "moving again")
+		end)
+	end
+
+	log(session.name, "linger online")
+end
+
+-- Is that room the one the player is standing in?
+local function isPlayersRoom(room)
+	if not room then return false end
+	return tonumber(room.Name) == currentRoomNumber()
+end
+
+---====== MECHANIC: ESCALATION ======---
+--[[ Every rebound makes it faster and widens its reach, so the fifth pass of
+     something like Yeller is not the fight the first pass was.
+
+     Movement.Speed is MULTIPLIED, never assigned: Create() already rewrote it
+     as 65 / 100 * yourSpeed, so assigning a raw number would send the entity
+     into orbit. And this only reaches the entity at all because Core runs it
+     with Run(false); Run(true) would be escalating a discarded copy. ]]
+
+local function setupEscalation(session)
+	local settings = session.profile.Escalate
+	if not settings then return end
+
+	local config = session.entity and session.entity.Config
+	local stack  = ensureSpeedStack(session)
+	if not config or not stack then return end
+
+	session.escalation = {
+		baseRange = config.Damage.Range,
+		steps     = 0,
+	}
+end
+
+local function escalate(session)
+	local settings = session.profile.Escalate
+	local state    = session.escalation
+	local stack    = session.speed
+	if not settings or not state or not stack then return end
+
+	local config = session.entity and session.entity.Config
+	if not config then return end
+
+	state.steps += 1
+
+	local speedGain = settings.SpeedPerRebound or 0
+	local rangeGain = settings.RangePerRebound or 0
+	local speedCap  = settings.MaxSpeedMultiplier or 2
+
+	if speedGain ~= 0 then
+		stack.escalation = math.min(1 + speedGain * state.steps, speedCap)
+		applySpeed(session)
+	end
+
+	if rangeGain ~= 0 then
+		local cap = settings.MaxRange or (state.baseRange * 3)
+		config.Damage.Range = math.min(state.baseRange + rangeGain * state.steps, cap)
+	end
+
+	log(session.name, "escalated to speed x%.2f, range %.0f",
+		stack.escalation, config.Damage.Range)
+end
+
+---====== MECHANIC: CRUCIFIXION WATCH ======---
+--[[ Do NOT reach for the CrucifixionOverwrite callback to detect this. It
+     does not notify you, it REPLACES the whole banish ritual with your
+     function, pentagram and all.
+
+     The spawner already tells us everything through an attribute:
+
+        BeingBanished -> true        the ritual started
+        flipped back to false        the entity resisted
+        never reset, or model gone   the banish stuck
+
+     Polling the outcome rather than assuming it means this keeps working if
+     an entity is ever given Resist = true. ]]
+
+local function startCrucifixionWatch(session)
+	local entity = session.entity
+	local model  = entity and entity.Model
+	if not model then return end
+
+	local watching = false
+
+	local function resolve()
+		watching = true
+		session.stats.crucifixUsed = true
+		log(session.name, "crucifix ritual started")
+
+		task.spawn(function()
+			local deadline = os.clock() + (session.profile.CrucifixTimeout or 12)
+
+			while os.clock() < deadline do
+				if not model.Parent then break end
+
+				if model:GetAttribute("BeingBanished") ~= true then
+					watching = false -- a later attempt can still be caught
+					log(session.name, "crucifixion resisted")
+					return
+				end
+
+				task.wait(0.25)
+			end
+
+			session.stats.crucifixBanished = true
+			log(session.name, "banished")
+
+			if session.achievements.Crucify then
+				Achievements:Award(session.achievements.Crucify)
+			end
+		end)
+	end
+
+	if model:GetAttribute("BeingBanished") == true then
+		resolve()
+		return
+	end
+
+	session.janitor:Give(model:GetAttributeChangedSignal("BeingBanished"):Connect(function()
+		if watching then return end
+		if model:GetAttribute("BeingBanished") ~= true then return end
+		resolve()
+	end))
+end
+
+---====== REGISTRY ======---
+--[[ Every entity script shares this module instance, so entities can see each
+     other. That buys two things a per-script setup could not: the same entity
+     cannot spawn twice at once, and being caught between two of them is its
+     own achievement. ]]
+
+local function liveCount()
+	local count = 0
+	for _ in pairs(Core.Active) do count += 1 end
+	return count
+end
+
+local function register(session)
+	Core.Active[session.name] = session
+
+	local count = liveCount()
+	if count > 1 then
+		local names = {}
+		for name in pairs(Core.Active) do table.insert(names, name) end
+		table.sort(names)
+
+		log(session.name, "two at once: %s", table.concat(names, " + "))
+		Achievements:Award(doubleTroubleAchievement())
+	end
+end
+
+local function unregister(session)
+	if Core.Active[session.name] == session then
+		Core.Active[session.name] = nil
+	end
+end
+
+---====== CRUCIFIX ======---
+--[[ Shared by both crucifix scripts, so the model is fetched once no matter
+     which one you use.
+
+     WHAT THE SPAWNER ACTUALLY CHECKS (Entity Spawner V2, line 281):
+
+         local tool = Character:FindFirstChildOfClass("Tool")
+         if tool and (tool.Name == name or tool:HasTag(name)) then
+
+     A Tool, parented to your Character -- equipped, not sitting in the
+     Backpack -- named "Crucifix" or tagged "Crucifix". That is the whole
+     check. The spawner brings its own Repentance asset for the pentagram, so
+     the tool needs no contents of its own, and it calls tool:Destroy() when it
+     fires, which is how the counters below know one was spent. ]]
+
+local CollectionService = game:GetService("CollectionService")
+local ProximityPromptService = game:GetService("ProximityPromptService")
+
+local Crucifix = {
+	template  = nil,  -- captured once, cloned after that
+	current   = nil,  -- the live Tool
+	given     = 0,
+	spent     = 0,
+	foundInDrawers = 0,
+	source    = "none",
+	searched  = {},   -- prompts already rummaged through
+}
+
+Core.Crucifix = Crucifix
+
+Crucifix.Loader = {
+	Url   = "https://raw.githubusercontent.com/PenguinManiack/Crucifix/main/Crucifix.lua",
+	Uses  = 99,
+	-- 0 leaves its own banishing logic inert so the Entity Spawner owns the
+	-- crucifixion. Put it back to 30 if you want its behaviour too.
+	Range = 0,
+	Timeout = 10,
+}
+
+local function collectTools(into)
+	local backpack = LocalPlayer:FindFirstChildOfClass("Backpack")
+	for _, container in ipairs({ backpack, getCharacter() }) do
+		if container then
+			for _, child in ipairs(container:GetChildren()) do
+				if child:IsA("Tool") then into[child] = true end
+			end
+		end
+	end
+end
+
+local function firstUnseenTool(seen)
+	local backpack = LocalPlayer:FindFirstChildOfClass("Backpack")
+	for _, container in ipairs({ backpack, getCharacter() }) do
+		if container then
+			for _, child in ipairs(container:GetChildren()) do
+				if child:IsA("Tool") and not seen[child] then return child end
+			end
+		end
+	end
+	return nil
+end
+
+--[[ Runs the crucifix loader once and takes whatever Tool it drops.
+
+     That script is MoonSec obfuscated, so this cannot sandbox it and does not
+     pretend to. What it does do is run it ONCE per session rather than on
+     every crucifix, set its own knobs before it runs, and then own the result
+     -- the tool gets renamed, tagged and watched here, not there. ]]
+local function runLoader()
+	local settings = Crucifix.Loader
+
+	local seen = {}
+	collectTools(seen)
+
+	print(("[Gradish/Crucifix] running the model loader (Uses=%s, Range=%s)")
+		:format(tostring(settings.Uses), tostring(settings.Range)))
+
+	local ok, err = pcall(function()
+		_G.Uses  = settings.Uses
+		_G.Range = settings.Range
+		loadstring(game:HttpGet(settings.Url))()
+	end)
+
+	if not ok then
+		warn("[Gradish/Crucifix] the loader errored: " .. tostring(err))
+		return nil
+	end
+
+	-- It may parent the tool a frame or several later.
+	local deadline = os.clock() + settings.Timeout
+	while os.clock() < deadline do
+		local found = firstUnseenTool(seen)
+		if found then return found end
+		task.wait(0.1)
+	end
+
+	warn("[Gradish/Crucifix] the loader ran but produced no tool")
+	return nil
+end
+
+-- Last resort so you are never left with nothing. Two planks, and it works.
+local function buildCrucifix()
+	local tool = Instance.new("Tool")
+	tool.RequiresHandle = true
+
+	local handle = Instance.new("Part")
+	handle.Name          = "Handle"
+	handle.Size          = Vector3.new(0.22, 1.7, 0.22)
+	handle.Color         = Color3.fromRGB(92, 64, 42)
+	handle.Material      = Enum.Material.Wood
+	handle.CanCollide    = false
+	handle.CanQuery      = false
+	handle.Massless      = true
+	handle.TopSurface    = Enum.SurfaceType.Smooth
+	handle.BottomSurface = Enum.SurfaceType.Smooth
+	handle.Parent        = tool
+
+	local bar = handle:Clone()
+	bar.Name   = "Crossbar"
+	bar.Size   = Vector3.new(0.95, 0.22, 0.22)
+	bar.CFrame = handle.CFrame * CFrame.new(0, 0.42, 0)
+	bar.Parent = tool
+
+	local weld = Instance.new("WeldConstraint")
+	weld.Part0  = handle
+	weld.Part1  = bar
+	weld.Parent = handle
+
+	tool.Grip = CFrame.new(0, -0.45, 0) * CFrame.Angles(math.rad(-90), 0, 0)
+	return tool
+end
+
+--[[ Deliberately light. The loader's tool arrives configured correctly, and
+     touching more than the name and the tag is exactly what broke an earlier
+     attempt at this. Only the two things the spawner reads are guaranteed. ]]
+local function claim(tool)
+	tool.Name = "Crucifix"
+	pcall(function() CollectionService:AddTag(tool, "Crucifix") end)
+	tool:SetAttribute("GradishCrucifix", true)
+	return tool
+end
+
+function Crucifix:Obtain()
+	if self.template then
+		self.source = "template"
+		return claim(self.template:Clone())
+	end
+
+	local fromLoader = runLoader()
+	if fromLoader then
+		self.source = "loader"
+		self.template = fromLoader:Clone() -- pristine, taken before claiming
+		return claim(fromLoader)
+	end
+
+	self.source = "built"
+	return claim(buildCrucifix())
+end
+
+function Crucifix:Watch(tool)
+	-- The spawner destroys the tool when the banish begins, so losing its
+	-- ancestry is the signal that one was spent.
+	tool.AncestryChanged:Connect(function(_, parent)
+		if parent ~= nil then return end
+		if self.current ~= tool then return end
+
+		self.current = nil
+		self.spent += 1
+		print(("[Gradish/Crucifix] used (%d spent)"):format(self.spent))
+	end)
+end
+
+--[[ reason is just for the log. equip = true puts it straight in your hand,
+     which is what the dev giver wants; the drawer version leaves it in your
+     backpack so you have to choose to hold it. ]]
+function Crucifix:Give(reason, equip)
+	local character = getCharacter()
+	local humanoid  = getHumanoid()
+
+	if not character or not humanoid or humanoid.Health <= 0 then
+		return nil
+	end
+
+	if self.current and self.current.Parent then
+		self.current:Destroy()
+		self.current = nil
+	end
+
+	local ok, tool = pcall(function() return self:Obtain() end)
+	if not ok or not tool then
+		warn("[Gradish/Crucifix] could not obtain one: " .. tostring(tool))
+		return nil
+	end
+
+	if tool.Parent == nil then
+		tool.Parent = LocalPlayer:FindFirstChildOfClass("Backpack") or character
+	end
+
+	self.current = tool
+	self.given += 1
+	self:Watch(tool)
+
+	if equip and tool.Parent ~= character then
+		pcall(function() humanoid:EquipTool(tool) end)
+		if tool.Parent ~= character then
+			pcall(function() tool.Parent = character end)
+		end
+	end
+
+	print(("[Gradish/Crucifix] given via %s (%s)"):format(self.source, reason or "manual"))
+	return tool
+end
+
+---====== CRUCIFIX: FOUND IN DRAWERS ======---
+--[[ Rummage through furniture and occasionally one is in there.
+
+     Hooking ProximityPromptService.PromptTriggered rather than hunting for
+     specific models means this does not depend on knowing what DOORS calls
+     its furniture: whatever you just searched, we see it.
+
+     The name matching below IS a guess though, and an honest one. If your
+     drawers are named something not in Hints, set Debug = true and the full
+     path of everything you open gets printed, so you can read the real name
+     off the console and add it. ]]
+
+local DRAWER_HINTS = {
+	"drawer", "dresser", "wardrobe", "cabinet", "closet",
+	"chest", "desk", "shelf", "bin", "nightstand", "locker",
+}
+
+local function looksLikeFurniture(prompt, hints)
+	local text = ((prompt.ObjectText or "") .. " " .. (prompt.ActionText or "")):lower()
+
+	local node = prompt
+	local depth = 0
+	while node and depth < 6 do
+		local name = node.Name:lower()
+		for _, hint in ipairs(hints) do
+			if name:find(hint, 1, true) or text:find(hint, 1, true) then
+				return true
+			end
+		end
+		node = node.Parent
+		depth += 1
+	end
+
+	return false
+end
+
+--[[ The odds are a rising curve, not a flat roll.
+
+     A flat 12% was wrong in both directions: you search dozens of drawers in a
+     DOORS run, so you would almost always find one within the first few rooms,
+     and on an unlucky run you could search fifty and get nothing.
+
+     So it starts low and climbs with every drawer you have opened without
+     finding anything. Early searching is rarely rewarded, persistent searching
+     always is eventually, and neither outcome feels arbitrary. MinRoom also
+     keeps it out of the opening rooms entirely, where a crucifix would trivial-
+     ise everything that comes next. ]]
+function Crucifix:EnableDrawers(settings)
+	settings = settings or {}
+
+	local base       = settings.Chance or 0.04
+	local ramp       = settings.RampPerSearch or 0.012
+	local ceiling    = settings.MaxChance or 0.4
+	local minRoom    = settings.MinRoom or 10
+	local maxPerRun  = settings.MaxPerRun or 1
+	local hints      = settings.Hints or DRAWER_HINTS
+	local anyPrompt  = settings.AnyPrompt or false
+	local equip      = settings.AutoEquip or false
+	local debugMode  = settings.Debug or false
+
+	if self.drawersEnabled then return end
+	self.drawersEnabled = true
+
+	local searches = 0
+
+	ProximityPromptService.PromptTriggered:Connect(function(prompt, player)
+		if player ~= LocalPlayer then return end
+
+		if debugMode then
+			print(("[Gradish/Crucifix] you opened: %s  (ObjectText=%q ActionText=%q)")
+				:format(prompt:GetFullName(), tostring(prompt.ObjectText), tostring(prompt.ActionText)))
+		end
+
+		if self.foundInDrawers >= maxPerRun then return end
+
+		-- Not furniture: costs you nothing, does not count as a search.
+		if not anyPrompt and not looksLikeFurniture(prompt, hints) then return end
+
+		-- One roll per piece of furniture. No standing there spamming it.
+		if self.searched[prompt] then return end
+		self.searched[prompt] = true
+
+		if currentRoomNumber() < minRoom then return end
+
+		local odds = math.min(base + ramp * searches, ceiling)
+		searches += 1
+
+		if debugMode then
+			print(("[Gradish/Crucifix] search %d, odds were %.1f%%"):format(searches, odds * 100))
+		end
+
+		if math.random() > odds then return end
+
+		self.foundInDrawers += 1
+		print("[Gradish/Crucifix] there is something in this one")
+
+		task.wait(settings.Delay or 0.35) -- let the drawer finish opening
+
+		local tool = self:Give("found in furniture", equip)
+		if tool then
+			Achievements:Award(crucifixFoundAchievement())
+		end
+	end)
+
+	print(("[Gradish/Crucifix] drawer search armed (from %d%%, +%.1f%% each, room %d onward, %d per run)")
+		:format(math.floor(base * 100 + 0.5), ramp * 100, minRoom, maxPerRun))
+end
+
+---====== RED SEEK ======---
+--[[ Turns the Seek chase models red, and awards you for living through one.
+
+     Two models are handled: SeekMovingNewClone, which is the chase Seek that
+     the entity scripts already check for before spawning, and Eye.
+
+     WHY IT IS NOT JUST part.Color = red
+     -----------------------------------
+     A BasePart wearing a SurfaceAppearance or a MeshPart with a TextureID
+     draws the texture, not the colour, so setting Color on those does exactly
+     nothing visible. Stripping them is what actually makes the model red.
+     That is destructive to the local copy of the model, which is fine here --
+     it is a clone that gets thrown away when the chase ends -- but it is the
+     reason StripTextures exists as a switch rather than being unconditional.
+
+     The chase model also streams its parts in rather than arriving complete,
+     so DescendantAdded keeps painting whatever shows up late. ]]
+
+local RedSeek = {
+	enabled = false,
+	tracked = {},
+	settings = nil,
+}
+
+Core.RedSeek = RedSeek
+
+local function paintInstance(instance, colour, strip)
+	if instance:IsA("BasePart") then
+		instance.Color = colour
+
+		if strip then
+			-- PBR and mesh textures both win over Color, so they have to go.
+			local appearance = instance:FindFirstChildOfClass("SurfaceAppearance")
+			if appearance then appearance:Destroy() end
+
+			if instance:IsA("MeshPart") and instance.TextureID ~= "" then
+				instance.TextureID = ""
+			end
+		end
+
+	elseif instance:IsA("Decal") or instance:IsA("Texture") then
+		instance.Color3 = colour
+
+	elseif instance:IsA("ParticleEmitter") or instance:IsA("Beam") then
+		instance.Color = ColorSequence.new(colour)
+
+	elseif instance:IsA("Light") then
+		instance.Color = colour
+
+	elseif instance:IsA("SurfaceAppearance") and strip then
+		instance:Destroy()
+	end
+end
+
+local function paintModel(model, colour, strip)
+	pcall(function() paintInstance(model, colour, strip) end)
+
+	for _, descendant in ipairs(model:GetDescendants()) do
+		pcall(function() paintInstance(descendant, colour, strip) end)
+	end
+end
+
+function RedSeek:Track(model)
+	if self.tracked[model] then return end
+	self.tracked[model] = true
+
+	local settings = self.settings
+	local colour   = settings.Color
+	local strip    = settings.StripTextures
+
+	print(("[Gradish/RedSeek] painting %s"):format(model.Name))
+	paintModel(model, colour, strip)
+
+	-- The chase model builds itself up over a second or two, so anything that
+	-- arrives after the first pass gets painted as it lands.
+	local streaming
+	streaming = model.DescendantAdded:Connect(function(descendant)
+		task.defer(function()
+			pcall(function() paintInstance(descendant, colour, strip) end)
+		end)
+	end)
+
+	local isSeek = (model.Name == settings.SeekName)
+
+	local leaving
+	leaving = model.AncestryChanged:Connect(function(_, parent)
+		if parent ~= nil then return end
+
+		pcall(function() streaming:Disconnect() end)
+		pcall(function() leaving:Disconnect() end)
+		self.tracked[model] = nil
+
+		if not isSeek then return end
+
+		--[[ The model is removed both when you escape and when it catches
+		     you, so surviving has to be checked rather than assumed. The
+		     short wait is for the case where the killing blow and the model
+		     removal land on the same frame: without it you can be awarded a
+		     survival a moment before your health reaches zero. ]]
+		task.spawn(function()
+			task.wait(settings.DeathGrace or 1.5)
+
+			if isPlayerDead() then
+				print("[Gradish/RedSeek] he got you")
+				return
+			end
+
+			print("[Gradish/RedSeek] you made it out")
+			Achievements:Award(redSeekAchievement())
+		end)
+	end)
+end
+
+function RedSeek:Scan()
+	for _, name in ipairs(self.settings.Models) do
+		local found = Workspace:FindFirstChild(name, true)
+		if found and not self.tracked[found] then
+			self:Track(found)
+		end
+	end
+end
+
+function RedSeek:Enable(settings)
+	if self.enabled then return end
+	self.enabled = true
+
+	settings = settings or {}
+
+	self.settings = {
+		Color         = settings.Color or Color3.fromRGB(255, 0, 0),
+		Models        = settings.Models or { "SeekMovingNewClone", "Eye" },
+		SeekName      = settings.SeekName or "SeekMovingNewClone",
+		StripTextures = settings.StripTextures ~= false,
+		DeathGrace    = settings.DeathGrace or 1.5,
+		PollInterval  = settings.PollInterval or 2,
+	}
+
+	local wanted = {}
+	for _, name in ipairs(self.settings.Models) do wanted[name] = true end
+
+	-- Direct children of Workspace are caught the instant they appear.
+	Workspace.ChildAdded:Connect(function(child)
+		if not wanted[child.Name] then return end
+		task.wait(0.1) -- let it finish parenting its first parts
+		pcall(function() self:Track(child) end)
+	end)
+
+	-- And a slow poll for anything that turns up nested rather than at the
+	-- top level. Two name lookups every couple of seconds is cheap; hooking
+	-- Workspace.DescendantAdded instead would fire on every part in the game.
+	task.spawn(function()
+		while self.enabled do
+			pcall(function() self:Scan() end)
+			task.wait(self.settings.PollInterval)
+		end
+	end)
+
+	self:Scan()
+
+	print(("[Gradish/RedSeek] armed for: %s"):format(table.concat(self.settings.Models, ", ")))
+end
+
+---====== SPAWNER ======---
+
+local Spawner
+
+local function getSpawner()
+	if not Spawner then
+		Spawner = loadstring(game:HttpGet(
+			"https://raw.githubusercontent.com/RegularVynixu/DOORS-Entity-Spawner-V2/main/init.luau"
+		))()
+	end
+	return Spawner
+end
+
+-- Translates a Gradish profile into the shape Spawner:Create expects.
+local function buildConfig(profile)
+	local rebounds   = profile.Rebounds or {}
+	local reboundMin = rebounds[1] or 0
+	local reboundMax = rebounds[2] or 0
+
+	local lights      = profile.Lights or {}
+	local shake       = profile.CameraShake or {}
+	local crucifixion = profile.Crucifixion or {}
+
+	return {
+		Entity = {
+			Name         = profile.Name,
+			Asset        = profile.Asset,
+			HeightOffset = profile.HeightOffset or 0,
+		},
+
+		Lights = {
+			Flicker = {
+				Enabled  = lights.Flicker or false,
+				Duration = lights.FlickerDuration or 1,
+			},
+			Shatter = lights.Shatter or false,
+			Repair  = lights.Repair or false,
+		},
+
+		Earthquake = {
+			Enabled = profile.Earthquake or false,
+		},
+
+		CameraShake = {
+			Enabled = shake.Enabled or false,
+			Range   = shake.Range or 100,
+			Values  = shake.Values or { 30, 40, 0.1, 1 },
+		},
+
+		Movement = {
+			Speed    = profile.Speed or 100,
+			Delay    = profile.Delay or 0,
+			Reversed = profile.Reversed or false,
+		},
+
+		Rebounding = {
+			-- The spawner throws if this is enabled with a zero or inverted
+			-- range, so the switch is derived rather than trusted.
+			Enabled = (reboundMin > 0 and reboundMax >= reboundMin),
+			Type    = profile.ReboundType or "Ambush",
+			Min     = math.max(reboundMin, 1),
+			Max     = math.max(reboundMax, 1),
+			Delay   = profile.ReboundDelay or 0,
+		},
+
+		Damage = {
+			Enabled      = true,
+			IgnoreHiding = profile.IgnoreHiding or false,
+			Range        = profile.DamageRange or 30,
+			Amount       = profile.Damage or 125,
+		},
+
+		Crucifixion = {
+			Enabled = crucifixion.Enabled ~= false,
+			Type    = crucifixion.Type or "Guiding",
+			Range   = crucifixion.Range or 40,
+			Resist  = crucifixion.Resist or false,
+			Break   = crucifixion.Break ~= false,
+		},
+
+		Death = {
+			Type  = profile.DeathType or "Guiding",
+			Hints = profile.DeathHints or { "You died to...", profile.Name },
+			Cause = profile.DeathCause or profile.Name,
+		},
+	}
+end
+
+---====== SESSION ======---
+
+local function newStats()
+	return {
+		hits             = 0,
+		rebounds         = 0,
+		closetChecks     = 0,
+		lingers          = 0,
+		lowestHealth     = 100,
+		died             = false,
+		crucifixUsed     = false,
+		crucifixBanished = false,
+	}
+end
+
+-- Hands out the achievements this visit earned. Crucify is not here: the
+-- watch awards that the moment the banish sticks.
+local function finish(session)
+	if session.finished then return end
+	session.finished = true
+
+	local stats = session.stats
+	local list  = session.achievements
+
+	log(session.name, "visit over | %s | %d hit(s) | %d rebound(s) | %d closet check(s) | %d linger(s)",
+		stats.died and "DIED" or (stats.crucifixBanished and "BANISHED" or "SURVIVED"),
+		stats.hits, stats.rebounds, stats.closetChecks, stats.lingers)
+
+	if stats.died or isPlayerDead() then
+		if list.Death then Achievements:Award(list.Death) end
+		return
+	end
+
+	if list.Survive then Achievements:Award(list.Survive) end
+
+	if stats.hits == 0 and list.Untouched then
+		Achievements:Award(list.Untouched)
+	end
+end
+
+local function waitRoomChanges(count)
+	local value = latestRoomValue()
+	if not value then
+		task.wait(5)
+		return
+	end
+
+	for _ = 1, count do
+		value.Changed:Wait()
+	end
+end
+
+---====== CORE:SPAWN ======---
+--[[ profile fields, all optional except Name and Asset:
+
+     Name, Asset, HeightOffset
+     Speed, Delay, Reversed
+     Damage, DamageRange, IgnoreHiding
+     Rebounds = {min, max}, ReboundType, ReboundDelay
+     Lights = { Flicker, FlickerDuration, Shatter, Repair }
+     CameraShake = { Enabled, Range, Values }
+     Earthquake
+     DeathType, DeathHints, DeathCause
+     Crucifixion = { Enabled, Type, Range, Resist, Break }
+
+     Tell        = { Color, FadeIn, FadeOut, BrightnessBoost }
+     ClosetCheck = { Enabled, Range, PauseFor, Chance, Cooldown }
+     Escalate    = { SpeedPerRebound, RangePerRebound, MaxSpeedMultiplier, MaxRange }
+     Passes, PassGap
+     Encore      = { Chance, Delay, Reversed }
+     Achievements = { Image, Survive = {...} or false, Death, Untouched, Crucify }
+
+     Callbacks you can add on top: OnSpawned, OnStartMoving, OnEnterRoom,
+     OnRebounding, OnDespawned, OnDamagePlayer. They receive the session. ]]
+
+function Core:Spawn(profile, passIndex, carriedStats)
+	assert(type(profile) == "table", "Core:Spawn needs a profile table")
+	assert(not isBlank(profile.Name),  "profile.Name is required")
+	assert(not isBlank(profile.Asset), "profile.Asset is required")
+
+	-- Their original guard: never spawn on top of Seek.
+	if Workspace:FindFirstChild("SeekMovingNewClone") then
+		log(profile.Name, "skipped, Seek is running")
+		return nil
+	end
+
+	local pass = passIndex or 1
+
+	-- One at a time. Without the shared registry each script could only
+	-- guess at this.
+	if pass == 1 and Core.Active[profile.Name] then
+		log(profile.Name, "already out there, not spawning a second one")
+		return nil
+	end
+
+	local session = {
+		profile      = profile,
+		name         = profile.Name,
+		pass         = pass,
+		passes       = profile.Passes or 1,
+		janitor      = Janitor.new(),
+		active       = false,
+		finished     = false,
+		entity       = nil,
+		achievements = buildAchievements(profile),
+		stats        = carriedStats or newStats(),
+	}
+
+	local ok, entity = pcall(function()
+		return getSpawner():Create(buildConfig(profile))
+	end)
+
+	if not ok or not entity then
+		warn(("[Gradish/%s] could not create the entity: %s"):format(profile.Name, tostring(entity)))
+		return nil
+	end
+
+	session.entity = entity
+
+	--[[ A small random speed difference on every spawn.
+
+	     Fixed numbers are what make a fanmade entity feel like a script: the
+	     third time you meet it you already know exactly how long you have.
+	     Five percent either way is not enough to notice as unfairness, and it
+	     is enough that you cannot count it out. ]]
+	local variance = profile.Variance or 0
+	if variance > 0 then
+		local factor = 1 + (math.random() * 2 - 1) * variance
+		entity.Config.Movement.Speed *= factor
+		log(profile.Name, "arriving %+.0f%% off its usual pace", (factor - 1) * 100)
+	end
+
+	local function hook(name, fn)
+		entity:SetCallback(name, fn)
+	end
+
+	local function custom(name, ...)
+		local fn = profile[name]
+		if type(fn) == "function" then
+			safe(session.name, name .. " hook", fn, session, ...)
+		end
+	end
+
+	---------------------------------------------------------------- spawned
+	hook("OnSpawned", function()
+		session.active = true
+		log(session.name, "spawned (pass %d of %d)", session.pass, session.passes)
+
+		register(session)
+
+		safe(session.name, "tell",        startTell, session)
+		safe(session.name, "closet check",startClosetCheck, session)
+		safe(session.name, "linger",      startLinger, session)
+		safe(session.name, "escalation",  setupEscalation, session)
+		safe(session.name, "crucifix watch", startCrucifixionWatch, session)
+
+		custom("OnSpawned")
+	end)
+
+	hook("OnStartMoving", function()
+		custom("OnStartMoving")
+	end)
+
+	hook("OnEnterRoom", function(room, firstTime)
+		-- Keep the tell ahead of the entity as the map keeps generating.
+		if session.tintAhead then
+			pcall(session.tintAhead)
+		end
+
+		-- It has walked into the room you are standing in.
+		if session.linger and isPlayersRoom(room) then
+			safe(session.name, "linger", session.linger)
+		end
+
+		custom("OnEnterRoom", room, firstTime)
+	end)
+
+	hook("OnLookAt", function(lineOfSight)
+		session.lookingAt = lineOfSight
+	end)
+
+	hook("OnRebounding", function(startOfRebound)
+		if startOfRebound then
+			session.stats.rebounds += 1
+			safe(session.name, "escalate", escalate, session)
+		end
+		custom("OnRebounding", startOfRebound)
+	end)
+
+	hook("OnDespawning", function()
+		custom("OnDespawning")
+	end)
+
+	---------------------------------------------------------------- despawn
+	hook("OnDespawned", function()
+		session.active = false
+		unregister(session)
+		log(session.name, "despawned")
+
+		custom("OnDespawned")
+
+		-- Put the world back before anything else decides what happens next.
+		task.delay(1.5, function()
+			safe(session.name, "cleanup", function() session.janitor:Clean() end)
+		end)
+
+		local stats = session.stats
+
+		-- A banished or lethal entity does not come back.
+		if stats.died or stats.crucifixBanished then
+			finish(session)
+			return
+		end
+
+		-- Another scheduled pass of the same visit.
+		if session.pass < session.passes then
+			task.spawn(function()
+				waitRoomChanges(profile.PassGap or 2)
+				-- A fresh entity each time: the Running attribute is never
+				-- reset, so re-running this one would silently do nothing.
+				Core:Spawn(profile, session.pass + 1, stats)
+			end)
+			return
+		end
+
+		-- Encore: it turns around and comes back.
+		local encore = profile.Encore
+		if encore and not session.encored and math.random() < (encore.Chance or 0) then
+			session.encored = true
+
+			task.spawn(function()
+				task.wait(encore.Delay or 3)
+
+				local returning = {}
+				for key, value in pairs(profile) do returning[key] = value end
+				returning.Passes = 1
+				returning.Encore = nil
+				if encore.Reversed ~= false then
+					returning.Reversed = not profile.Reversed
+				end
+
+				log(session.name, "encore, coming back the other way")
+				Core:Spawn(returning, 1, stats)
+			end)
+			return
+		end
+
+		finish(session)
+	end)
+
+	------------------------------------------------------------------ damage
+	hook("OnDamagePlayer", function(newHealth)
+		local stats = session.stats
+		stats.hits += 1
+		stats.lowestHealth = math.min(stats.lowestHealth, math.max(newHealth, 0))
+
+		if newHealth <= 0 then
+			stats.died = true
+			log(session.name, "killed the player")
+			-- Award now: the entity may keep running long after you drop.
+			finish(session)
+		else
+			log(session.name, "hit you, %d HP left", newHealth)
+		end
+
+		custom("OnDamagePlayer", newHealth)
+	end)
+
+	--[[ Run(false), not Run(true).
+
+	     Run(true) deep-copies the entity and runs the copy, which means the
+	     object we are holding is not the one moving and every live tweak
+	     below -- escalation, pause, resume -- would land on a discarded
+	     table. Each pass already builds a fresh entity, so there is nothing
+	     for the copy to protect. ]]
+	entity:Run(false)
+
+	return session
+end
+
+---====== HELPERS FOR ENTITY SCRIPTS ======---
+
+-- True if any Gradish entity is currently out.
+function Core:AnyActive()
+	return liveCount() > 0
+end
+
+function Core:IsActive(name)
+	return Core.Active[name] ~= nil
+end
+
+function Core:ActiveNames()
+	local names = {}
+	for name in pairs(Core.Active) do table.insert(names, name) end
+	table.sort(names)
+	return names
+end
+
+---====== EXPORT ======---
+
+if getgenv then
+	getgenv().GradishCore = Core
+end
+
+print(("[Gradish] core %s loaded"):format(Core.Version))
+
+return Core

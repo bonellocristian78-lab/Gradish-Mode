@@ -1,0 +1,69 @@
+--[[
+        C R U C I F I X   S P A W N E R        -- the realistic one
+
+        Hides a crucifix in the furniture. Rummage through drawers and
+        wardrobes like you already do, and occasionally one is in there.
+
+        Loaded once per run by Main script. For a crucifix on demand while you
+        are building an entity, use CrucifixGiver instead -- that one just
+        hands it to you.
+
+        HOW IT FINDS FURNITURE
+        ----------------------
+        It hooks ProximityPromptService.PromptTriggered rather than hunting
+        for specific models, so it does not need to know what DOORS calls its
+        drawers: whatever you just opened, it sees.
+
+        The NAME MATCHING is a guess, and an honest one. If your drawers are
+        called something not in the list below, nothing will ever spawn. Set
+        Debug = true, open a drawer, and the console prints its real full path
+        -- add that word to Hints and you are done.
+]]
+
+local Core = loadstring(game:HttpGet(
+	"https://raw.githubusercontent.com/J63633S/Gradish-mode/main/GradishCore"
+))()
+
+Core.Crucifix:EnableDrawers({
+	--[[ The odds climb as you search.
+
+	     A flat percentage was wrong both ways: you open dozens of drawers in a
+	     run, so a flat 12% found you one almost immediately, and an unlucky
+	     run could still turn up nothing after fifty. Starting at 4% and adding
+	     1.2% per drawer means early searching is rarely rewarded, persistent
+	     searching always pays off eventually, and neither result feels random.
+
+	     Roughly: half of runs have found one by the tenth drawer searched. ]]
+	Chance        = 0.04, -- where it starts
+	RampPerSearch = 0.012, -- added for each drawer that came up empty
+	MaxChance     = 0.40, -- and it stops climbing here
+
+	-- Nothing before this room. A crucifix in the first few rooms trivialises
+	-- everything that comes after it.
+	MinRoom = 10,
+
+	-- How many can be found in a single run. One keeps it precious, which is
+	-- the whole point of it being a find rather than a button.
+	MaxPerRun = 1,
+
+	-- It goes in your backpack, not your hand. Finding it and choosing to
+	-- hold it are two different decisions.
+	AutoEquip = false,
+
+	-- Wait for the drawer to finish opening before it appears.
+	Delay = 0.35,
+
+	-- Turn this on to print the full path of everything you open, then read
+	-- the real furniture names off the console.
+	Debug = false,
+
+	-- Words matched against the prompt and its parents, case-insensitive.
+	Hints = {
+		"drawer", "dresser", "wardrobe", "cabinet", "closet",
+		"chest", "desk", "shelf", "bin", "nightstand", "locker",
+	},
+
+	-- Set true to let ANY prompt roll, ignoring the names entirely. Blunt,
+	-- but it works everywhere while you are figuring out the right words.
+	AnyPrompt = false,
+})

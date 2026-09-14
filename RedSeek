@@ -1,0 +1,48 @@
+--[[
+        R E D   S E E K
+
+        Paints the Seek chase red and watches whether you live through it.
+
+        Loaded once per run by MainScript. Handles two models:
+
+            SeekMovingNewClone   the chase Seek. Surviving one awards
+                                 "You Survived Red Seek".
+            Eye                  painted as well, no achievement of its own.
+
+        NOTE ON STRIPTEXTURES
+        ---------------------
+        A part wearing a SurfaceAppearance, or a MeshPart with a TextureID,
+        draws its texture and ignores Color entirely. Setting the colour on
+        those does nothing you can see. StripTextures removes them so the red
+        actually shows.
+
+        It only touches the local clone of the chase model, which is thrown
+        away when the chase ends, so nothing permanent is damaged. Turn it off
+        if you would rather keep Seek's textures and accept a weaker tint.
+]]
+
+local Core = loadstring(game:HttpGet(
+	"https://raw.githubusercontent.com/J63633S/Gradish-mode/main/GradishCore"
+))()
+
+Core.RedSeek:Enable({
+	Color = Color3.fromRGB(255, 0, 0),
+
+	-- Models to paint. Add any other name you want turned red.
+	Models = { "SeekMovingNewClone", "Eye" },
+
+	-- Which of those counts as the chase for the achievement.
+	SeekName = "SeekMovingNewClone",
+
+	-- See the note above. Without this most of Seek stays its normal colour.
+	StripTextures = true,
+
+	-- How long to wait after the model disappears before deciding you
+	-- survived. The model is removed whether you escaped or were caught, and
+	-- on a catch the removal can land a frame before your health hits zero.
+	DeathGrace = 1.5,
+
+	-- How often to sweep for a model that appeared nested somewhere instead of
+	-- directly under Workspace.
+	PollInterval = 2,
+})

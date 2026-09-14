@@ -1,0 +1,113 @@
+local function getGitSoundId(GithubSoundPath: string, AssetName: string): Sound
+	local Url = GithubSoundPath
+
+	if not isfile(AssetName..".mp3") then 
+		writefile(AssetName..".mp3", game:HttpGet(Url)) 
+	end
+
+	local Sound = Instance.new("Sound")
+	Sound.SoundId = getcustomasset(AssetName..".mp3", true)
+	return Sound 
+end
+
+local CustomMusic = getGitSoundId("https://raw.githubusercontent.com/J63633S/Fog-script/refs/heads/main/ambient%20that%20doesn't%20work%20FOR%20GODS%20SAKE.mp3", "ambience")
+CustomMusic.Parent = game.SoundService
+CustomMusic.Looped = true
+CustomMusic:Play()
+
+game.SoundService.AmbientReverb = Enum.ReverbType.Cave
+
+warn("Loading")
+_G.ver = 1.1
+
+
+local seed = game.ReplicatedStorage.GameData.GameSeed.Value
+local r = Random.new(seed)
+local r2 = Random.new(seed+1)
+local r3 = Random.new(seed+2)
+local lastroom = game.ReplicatedStorage.GameData.LatestRoom
+local tweenservice = game:GetService("TweenService")
+
+local captions = {"Good Luck","Retter used to look goofy loll"}
+_G.Retter = false
+_G.rose = false
+_G.yeller = false
+_G.rebound = false
+
+_G.insp = true
+
+local Rettersp = {}
+local rosesp = {}
+local yellersp = {}
+local reboundsp = {}
+
+for i = 15 , 95 , r:NextInteger(6,8,seed) do
+	table.insert(Rettersp,r2:NextInteger(i - 4,i + 7,seed + i))
+end
+
+for i = 12 , 99 , r:NextInteger(8,5,seed) do
+	table.insert(rosesp,r2:NextInteger(i - 4,i + 7,seed + i))
+end
+
+for i = 30 , 99 , r:NextInteger(12,19,seed) do
+	table.insert(yellersp,r2:NextInteger(i - 4,i + 7,seed + i))
+end
+
+for i = 8 , 99 , r:NextInteger(12,19,seed) do
+	table.insert(reboundsp,r2:NextInteger(i - 4,i + 7,seed + i))
+end
+
+
+require(game.Players.LocalPlayer.PlayerGui.MainUI.Initiator.Main_Game).caption("Loaded",true)
+warn("Loaded")
+
+-- Gradish extras. Both are loaded once per run and are independent of the
+-- entity spawns below.
+--   CrucifixSpawner  hides one crucifix in the furniture for you to find
+--   RedSeek          paints the Seek chase red and watches you survive it
+-- Each is spawned separately so a failure in one cannot hold up the other.
+task.spawn(function()
+	loadstring(game:HttpGet("https://raw.githubusercontent.com/J63633S/Gradish-mode/main/CrucifixSpawner"))()
+end)
+
+task.spawn(function()
+	loadstring(game:HttpGet("https://raw.githubusercontent.com/J63633S/Gradish-mode/main/RedSeek"))()
+end)
+
+
+lastroom.changed:wait()
+
+require(game.Players.LocalPlayer.PlayerGui.MainUI.Initiator.Main_Game).caption("Gradish mode ".. _G.ver .." activated",true)
+task.wait(3)
+require(game.Players.LocalPlayer.PlayerGui.MainUI.Initiator.Main_Game).caption("Made by mmsauce21 and Kardin purple. Main script scripts credits go to localplayer",true)
+task.wait(2)
+require(game.Players.LocalPlayer.PlayerGui.MainUI.Initiator.Main_Game).caption("Any mode thats not made by mmsauce21 or kardin purple but haas the name Gradish in it thats not ours you got the wrong one",true)
+task.wait(1)
+require(game.Players.LocalPlayer.PlayerGui.MainUI.Initiator.Main_Game).caption(captions[r3:NextInteger(0,#captions,seed)],true)
+
+lastroom.changed:connect(function()
+	if table.find(Rettersp, lastroom.Value) then
+		task.spawn(function()
+			task.wait(r3:NextInteger(5,15,lastroom.Value))
+			loadstring(game:HttpGet("https://raw.githubusercontent.com/J63633S/Gradish-mode/main/RetterV2"))()
+		end)
+	end
+	if table.find(rosesp, lastroom.Value) then
+		task.spawn(function()
+			task.wait(r3:NextInteger(2,12,lastroom.Value))
+	loadstring(game:HttpGet("https://raw.githubusercontent.com/J63633S/Gradish-mode/main/RoseHellRemake"))()
+		end)
+	end
+if table.find(yellersp, lastroom.Value) then
+		task.spawn(function()
+			task.wait(r3:NextInteger(18,23,lastroom.Value))
+	loadstring(game:HttpGet("https://raw.githubusercontent.com/J63633S/Gradish-mode/main/Yeller"))()
+		end)
+	end
+if table.find(reboundsp, lastroom.Value) then
+		task.spawn(function()
+			task.wait(r3:NextInteger(5,12,lastroom.Value))
+	loadstring(game:HttpGet("https://raw.githubusercontent.com/J63633S/Gradish-mode/main/Rebounddd"))()
+		end)
+	end
+end)

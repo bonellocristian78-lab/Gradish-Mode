@@ -1,0 +1,187 @@
+--[[
+================================================================================
+
+        A C H I E V E M E N T   C O N F I G
+
+        Every achievement in Gradish mode, in one file. Edit here and nothing
+        else needs touching -- the entity scripts no longer carry their own
+        wording.
+
+        HOW IT WORKS
+        ------------
+        GradishCore fetches this once per session and looks entities up by the
+        name in their profile. An entity with no block here still gets all four
+        achievements, generated from its name.
+
+        Each entry takes four fields:
+
+            Identifier   unique key. Changing it makes it a NEW achievement,
+                         so someone who already earned the old one keeps both.
+            Title        the headline in the popup
+            Desc         the line under the title
+            Reason       the hint shown for one you do not own yet
+
+        Image is per entity and applies to all four of that entity's
+        achievements unless one overrides it.
+
+        To switch one off entirely, set it to false:
+            Untouched = false,
+
+================================================================================
+]]
+
+return {
+	-- Used when an entity block has no Image of its own. Blank means the
+	-- popup falls back to its own default icon.
+	DefaultImage = "",
+
+	Entities = {
+
+		["Retter"] = {
+			Image = "rbxassetid://94856612573782",
+
+			Survive = {
+				Identifier = "Retter",
+				Title      = "Survived Retter",
+				Desc       = "You cant run but can hide",
+				Reason     = "Listen for his rumble",
+			},
+			Death = {
+				Identifier = "Retter Victim",
+				Title      = "Caught In The Rumble",
+				Desc       = "You were still in the corridor",
+				Reason     = "Die to Retter",
+			},
+			Untouched = {
+				Identifier = "Retter Nerve",
+				Title      = "Held Your Nerve",
+				Desc       = "He waited outside and you did not move",
+				Reason     = "Stay hidden while Retter checks your closet",
+			},
+			Crucify = {
+				Identifier = "Silenced Rumble",
+				Title      = "Silenced Rumble",
+				Desc       = "Successfully crucify Retter",
+				Reason     = "Does not count towards progression",
+			},
+		},
+
+		["Rose Hell"] = {
+			Image = "rbxassetid://133397789900538",
+
+			Survive = {
+				Identifier = "Rose hell",
+				Title      = "Survived the rose coloured hell",
+				Desc       = "Rose hell, more like no match for me",
+				Reason     = "Watch out when lights turn reddish pink",
+			},
+			Death = {
+				Identifier = "Too Many Roses",
+				Title      = "Too Many Roses",
+				Desc       = "Die To Rose Hell",
+				Reason     = "Die to Rose Hell",
+			},
+			Untouched = {
+				Identifier = "Rose Hell Untouched",
+				Title      = "Not A Thorn On You",
+				Desc       = "She never laid a petal on you",
+				Reason     = "Survive Rose Hell without being hit",
+			},
+			Crucify = {
+				Identifier = "Dry Roses",
+				Title      = "Dry Roses",
+				Desc       = "Successfully crucify Rose Hell",
+				Reason     = "Does not count towards progression",
+			},
+		},
+
+		["Yeller"] = {
+			Image = "rbxassetid://120554381732238",
+
+			Survive = {
+				Identifier = "Yeller",
+				Title      = "Survived the Yellers screech",
+				Desc       = "It hurts my ears!!",
+				Reason     = "You must avoid going deaf",
+			},
+			Death = {
+				Identifier = "Yeller Victim",
+				Title      = "Deafened",
+				Desc       = "The last thing you heard",
+				Reason     = "Die to Yeller",
+			},
+			Untouched = {
+				Identifier = "Yeller Perfect",
+				Title      = "Not One Scratch",
+				Desc       = "Every single pass, and it never touched you",
+				Reason     = "Survive all of Yellers rebounds without being hit",
+			},
+			Crucify = {
+				Identifier = "Finally Quiet",
+				Title      = "Finally Quiet",
+				Desc       = "Successfully crucify Yeller",
+				Reason     = "Does not count towards progression",
+			},
+		},
+
+		["Rebound"] = {
+			Image = "rbxassetid://77454064533741",
+
+			Survive = {
+				Identifier = "rebOund",
+				Title      = "Back Again",
+				Desc       = "Coming again for more!",
+				Reason     = "Encounter Rebound",
+			},
+			Death = {
+				Identifier = "Rebound Victim",
+				Title      = "It Came Back",
+				Desc       = "One pass too many",
+				Reason     = "Die to Rebound",
+			},
+			Untouched = {
+				Identifier = "Rebound Clean",
+				Title      = "Three For Three",
+				Desc       = "All three passes, not one of them landed",
+				Reason     = "Survive every Rebound pass without being hit",
+			},
+			Crucify = {
+				Identifier = "No Coming Back",
+				Title      = "No Coming Back",
+				Desc       = "Successfully crucify Rebound",
+				Reason     = "Does not count towards progression",
+			},
+		},
+	},
+
+	--[[ Achievements that do not belong to any one entity. ]]
+	Special = {
+
+		-- Two Gradish entities alive at the same moment.
+		DoubleTrouble = {
+			Identifier = "Gradish Double Trouble",
+			Title      = "Two At Once",
+			Desc       = "The hallway was not big enough",
+			Reason     = "Be hunted by two Gradish entities at the same time",
+			Image      = "",
+		},
+
+		-- Found a crucifix while rummaging through furniture.
+		CrucifixFound = {
+			Identifier = "I Have No Fear In them",
+			Title      = "I Have No Fear In them",
+			Desc       = "Somebody left it in a drawer, and now it is yours",
+			Reason     = "Find a crucifix hidden in the furniture",
+			Image      = "",
+		},
+
+		-- Lived through a Seek chase while Red Mode had hold of him.
+		RedSeek = {
+			Identifier = "You Survived Red Seek",
+			Title      = "You Survived Red Seek",
+			Desc       = "He was redder than usual and you outran him anyway",
+			Reason     = "Survive a Seek chase in Gradish mode",
+			Image      = "",
+		},
+	},
+}

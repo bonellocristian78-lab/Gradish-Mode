@@ -1,0 +1,94 @@
+if game.Workspace:FindFirstChild("SeekMovingNewClone") then return end
+
+local Core = loadstring(game:HttpGet(
+	"https://raw.githubusercontent.com/J63633S/Gradish-mode/main/GradishCore"
+))()
+
+Core:Spawn({
+	Name  = "Yeller",
+	Asset = "https://raw.githubusercontent.com/J63633S/Gradish-mode/main/Yeller.rbxm",
+
+	Speed       = 380,
+	Delay       = 5,
+	Damage      = 125,
+	DamageRange = 25,
+
+	Rebounds     = { 5, 8 },
+	ReboundType  = "Ambush",
+	ReboundDelay = 0,
+
+	-- A few percent either way on every spawn. You can still learn the
+	-- rhythm; you just cannot set a watch by it.
+	Variance = 0.05,
+
+	Lights = {
+		Flicker         = true,
+		FlickerDuration = 5,
+		Shatter         = true,
+	},
+
+	CameraShake = {
+		Enabled = true,
+		Range   = 500,
+		Values  = { 30, 40, 0.1, 0.1 },
+	},
+
+	DeathHints = {
+		"Oh hey there.",
+		"Seems like you died to Yeller.",
+		"Theyre yelling noise is your signal to hide. Also, they rebound up to 8 times.",
+		"Goodluck.",
+	},
+
+	---====== MECHANICS ======---
+
+	Tell = {
+		Color           = Color3.fromRGB(255, 214, 64),
+		Falloff         = true,
+		Reach           = 4,
+		FadeIn          = 0.6,  -- it arrives fast, the warning has to as well
+		FadeOut         = 0.8,
+		BrightnessBoost = 1.3,
+	},
+
+	--[[ THE ONE YOU ASKED FOR.
+
+	     It reaches the room you are standing in, stops there for two to three
+	     seconds, and only then goes back to rebounding.
+
+	     It does this by dropping to 2% speed, NOT by pausing. A paused entity
+	     cannot damage you at all -- the spawner's detection loop skips paused
+	     models entirely -- so pausing would have made stopping in your room
+	     safer than passing through it, which is backwards. At 2% speed it is
+	     standing still for all practical purposes and every damage check is
+	     still live. Be in the open while it sits there and it takes you. ]]
+	Linger = {
+		Enabled     = true,
+		Duration    = { 2, 3 },
+		SpeedFactor = 0.02,
+		Chance      = 0.7,
+		Cooldown    = 5,
+		-- With up to eight rebounds, stopping every single time would turn a
+		-- chase into a siege. Three is enough that you never stop expecting
+		-- it and few enough that the encounter still ends.
+		MaxPerVisit = 3,
+	},
+
+	--[[ Five to eight rebounds all at one speed meant that counting the first
+	     pass told you everything about the last. Every rebound now adds 6%
+	     speed and two studs of reach, capped at 1.6x. Pass eight is a
+	     different animal from pass one.
+
+	     This only works because the core runs entities with Run(false).
+	     Run(true) hands the mover a deep copy of the config and these numbers
+	     would change nothing at all. ]]
+	Escalate = {
+		SpeedPerRebound    = 0.06,
+		RangePerRebound    = 2,
+		MaxSpeedMultiplier = 1.6,
+		MaxRange           = 45,
+	},
+
+	-- Achievement wording lives in AchievementConfig, so all four of
+	-- this entity's badges are edited in one place with everyone else's.
+})

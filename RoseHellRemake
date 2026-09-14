@@ -1,0 +1,65 @@
+if game.Workspace:FindFirstChild("SeekMovingNewClone") then return end
+
+local Core = loadstring(game:HttpGet(
+	"https://raw.githubusercontent.com/J63633S/Gradish-mode/main/GradishCore"
+))()
+
+Core:Spawn({
+	Name  = "Rose Hell",
+	Asset = "https://raw.githubusercontent.com/J63633S/Gradish-mode/main/roseHell.rbxm",
+
+	Speed        = 100,
+	Delay        = 2,
+	Damage       = 125,
+	DamageRange  = 30,
+	Rebounds     = { 1, 1 },
+	ReboundType  = "Ambush",
+
+	-- A little random pace on every spawn so she is never metronomic.
+	Variance = 0.05,
+
+	CameraShake = {
+		Enabled = true,
+		Range   = 100,
+		Values  = { 70, 100, 0.1, 1 },
+	},
+
+	DeathCause = "Rose hell",
+	DeathHints = {
+		"You died to...",
+		"Rose Hell. It is an easy one",
+		"To beat it, hide each rebound",
+		"It acts like ambush, Goodluck.",
+	},
+
+	---====== MECHANICS ======---
+
+	-- The pink that was already here, except now it fades back out when she
+	-- leaves instead of staying on the map for the rest of the run.
+	Tell = {
+		Color   = Color3.fromRGB(254, 44, 84),
+		Falloff = true,
+		Reach   = 5,
+		FadeIn  = 1,
+		FadeOut = 0.8,
+	},
+
+	-- One rebound, and the return trip is faster than the approach. You do
+	-- not get to time the second pass off the first.
+	Escalate = {
+		SpeedPerRebound    = 0.18,
+		RangePerRebound    = 4,
+		MaxSpeedMultiplier = 1.4,
+	},
+
+	-- A quarter of the time she turns around and comes back the other way
+	-- once the corridor has already gone quiet.
+	Encore = {
+		Chance   = 0.25,
+		Delay    = 4,
+		Reversed = true,
+	},
+
+	-- Achievement wording lives in AchievementConfig, so all four of
+	-- this entity's badges are edited in one place with everyone else's.
+})

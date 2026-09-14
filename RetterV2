@@ -1,0 +1,69 @@
+if game.Workspace:FindFirstChild("SeekMovingNewClone") then return end
+
+local Core = loadstring(game:HttpGet(
+	"https://raw.githubusercontent.com/J63633S/Gradish-mode/main/GradishCore"
+))()
+
+Core:Spawn({
+	Name  = "Retter",
+	Asset = "https://raw.githubusercontent.com/J63633S/Gradish-mode/main/retterbetter.rbxm",
+
+	Speed  = 80,
+	Delay  = 0,
+	Damage = 125,
+
+	-- 330 studs. You are not outrunning this, the whole design is that you
+	-- have to be in a closet when it goes past.
+	DamageRange = 330,
+
+	Earthquake = true,
+
+	-- Slower or faster by a hair each time, so the rumble never means
+	-- exactly the same number of seconds twice.
+	Variance = 0.06,
+
+	Lights = {
+		Flicker         = true,
+		FlickerDuration = 3,
+		Shatter         = true,
+	},
+
+	DeathHints = {
+		"You died to Retter",
+		"if you want to beat him",
+		"You must listen for his rumbling and hide.",
+		"I wish you luck next time",
+	},
+
+	---====== MECHANICS ======---
+
+	-- Rumbling is an audio tell you can miss. This is the same warning in the
+	-- lights: a dirty amber creeping through the rooms ahead of him.
+	Tell = {
+		Color           = Color3.fromRGB(196, 104, 30),
+		Falloff         = true,
+		Reach           = 6,
+		FadeIn          = 1.4,
+		FadeOut         = 1,
+		BrightnessBoost = 0.8, -- dimmer, not brighter: he is smothering them
+	},
+
+	--[[ The one that changes how Retter actually plays.
+
+	     Because his reach is the whole map, the closet is not optional, and
+	     that made the encounter binary: hide correctly and nothing happens.
+	     Now he stops outside and waits. He cannot hurt you while stopped --
+	     the spawner skips damage entirely for a paused entity -- so the only
+	     thing that can go wrong is your nerve. Step out to check and he hears
+	     you and starts moving again immediately. ]]
+	ClosetCheck = {
+		Enabled  = true,
+		Range    = 26,
+		PauseFor = 2.4,
+		Chance   = 0.75,
+		Cooldown = 10,
+	},
+
+	-- Achievement wording lives in AchievementConfig, so all four of
+	-- this entity's badges are edited in one place with everyone else's.
+})

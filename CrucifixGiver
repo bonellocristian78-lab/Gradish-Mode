@@ -1,0 +1,74 @@
+--[[
+        C R U C I F I X   G I V E R        -- the dev one
+
+        Press a key, get a crucifix, straight into your hand. For testing the
+        banish achievements without walking the map opening drawers.
+
+        For the realistic version -- one hidden in the furniture, found by
+        searching -- use CrucifixSpawner. Main script already loads that one.
+
+        The model comes from your loader via GradishCore, which runs it ONCE
+        per session and then clones the result. That script is MoonSec
+        obfuscated: this cannot sandbox it and does not pretend to. What it
+        does is set its knobs before it runs (Range = 0, so the Entity Spawner
+        keeps ownership of crucifixion), run it once instead of every time,
+        and own the tool afterwards.
+]]
+
+local Config = {
+	Keybind    = Enum.KeyCode.K,
+	AutoEquip  = true,  -- straight into your hand, not the backpack
+	GiveOnStart = true,
+	GiveOnRespawn = true,
+}
+
+local Core = loadstring(game:HttpGet(
+	"https://raw.githubusercontent.com/J63633S/Gradish-mode/main/GradishCore"
+))()
+
+local UserInputService = game:GetService("UserInputService")
+local LocalPlayer = game:GetService("Players").LocalPlayer
+
+local connections = {}
+
+local function track(connection)
+	table.insert(connections, connection)
+	return connection
+end
+
+track(UserInputService.InputBegan:Connect(function(input, processed)
+	if processed then return end
+	if input.KeyCode ~= Config.Keybind then return end
+
+	Core.Crucifix:Give("keybind", Config.AutoEquip)
+end))
+
+track(LocalPlayer.CharacterAdded:Connect(function()
+	Core.Crucifix.current = nil
+
+	if Config.GiveOnRespawn then
+		task.wait(2) -- let the character and backpack finish loading
+		Core.Crucifix:Give("respawn", Config.AutoEquip)
+	end
+end))
+
+-- Running this twice should not leave two sets of keybinds listening.
+if getgenv then
+	local previous = getgenv().__GradishCrucifixGiver
+	if type(previous) == "function" then
+		pcall(previous)
+	end
+
+	getgenv().__GradishCrucifixGiver = function()
+		for _, connection in ipairs(connections) do
+			pcall(function() connection:Disconnect() end)
+		end
+		table.clear(connections)
+	end
+end
+
+print(("[Gradish/Crucifix] giver ready, press %s"):format(Config.Keybind.Name))
+
+if Config.GiveOnStart then
+	Core.Crucifix:Give("startup", Config.AutoEquip)
+end

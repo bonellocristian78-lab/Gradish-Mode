@@ -1,0 +1,76 @@
+if game.Workspace:FindFirstChild("SeekMovingNewClone") then return end
+
+local Core = loadstring(game:HttpGet(
+	"https://raw.githubusercontent.com/J63633S/Gradish-mode/main/GradishCore"
+))()
+
+Core:Spawn({
+	Name  = "Rebound",
+	Asset = "https://raw.githubusercontent.com/J63633S/Gradish-mode/main/ReboundGradishVer.rbxm",
+
+	Speed       = 200,
+	Delay       = 4,
+	Reversed    = true,
+	Damage      = 125,
+	DamageRange = 30,
+
+	-- Each of the three passes already differs in speed; this keeps the
+	-- first one from being identical run to run as well.
+	Variance = 0.05,
+
+	CameraShake = {
+		Enabled = true,
+		Range   = 50,
+		Values  = { 70, 20, 0.1, 1 },
+	},
+
+	DeathHints = {
+		"Oh hey there",
+		"You died to rebound",
+		"It is similar to the endless doors version. i know its original thing but to not spark confusion i just put it there",
+		"Goodluck next time",
+	},
+
+	---====== MECHANICS ======---
+
+	-- The blue that was already here, now with a restore so it does not stack
+	-- on top of whatever the last entity left behind.
+	Tell = {
+		Color   = Color3.fromRGB(0, 100, 255),
+		Falloff = true,
+		Reach   = 5,
+		FadeIn  = 1,
+		FadeOut = 0.8,
+	},
+
+	--[[ Three passes, two rooms apart.
+
+	     This is exactly what the old script did, except the old script did it
+	     by pasting itself inside its own despawn handler three times, 515
+	     lines deep. It had to build a new entity each time for a reason worth
+	     knowing: the spawner sets the model attribute "Running" to true and
+	     never sets it back, so re-running one entity object is a silent no-op.
+	     The core builds a fresh one per pass for the same reason. ]]
+	Passes  = 3,
+	PassGap = 2,
+
+	--[[ New: each pass arrives faster than the last.
+
+	     Custom hooks receive the session, so the entity script can reach into
+	     its own run without the core needing to know about it. Config speed is
+	     MULTIPLIED here, never assigned -- Create() already rewrote it as
+	     65 / 100 * 200, so writing a raw number would fire it across the map. ]]
+	OnSpawned = function(session)
+		if session.pass <= 1 then return end
+
+		local config = session.entity.Config
+		local boost  = 1 + 0.15 * (session.pass - 1)
+
+		config.Movement.Speed *= boost
+		print(("[Gradish/Rebound] pass %d arriving %d%% faster")
+			:format(session.pass, math.floor((boost - 1) * 100 + 0.5)))
+	end,
+
+	-- Achievement wording lives in AchievementConfig, so all four of
+	-- this entity's badges are edited in one place with everyone else's.
+})
