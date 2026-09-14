@@ -1,0 +1,23 @@
+--[[ Badge image for Retter.
+
+     Source can be one of three things:
+
+         "roblox"   an ordinary Roblox asset ID. Nothing is downloaded.
+         "url"      any image on the internet. Fetched once, cached on disk,
+                    and handed to getcustomasset. Use this to manage art from
+                    GitHub: commit a .png next to this file and point at its
+                    raw URL.
+         "file"     an image already on your machine, relative to the
+                    executor's workspace folder. Nothing leaves your PC.
+
+     Delete this file and the badge falls back to whatever AchievementConfig
+     has inline, so nothing breaks. ]]
+
+return {
+	Source = "roblox",
+	Value  = "rbxassetid://94856612573782",
+
+	-- Examples, swap the Source above to use one:
+	-- Source = "url",  Value = "https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/ImagesA/Retter.png",
+	-- Source = "file", Value = "myimages/Retter.png",
+}

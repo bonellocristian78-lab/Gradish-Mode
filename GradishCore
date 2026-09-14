@@ -335,6 +335,120 @@ function Achievements:Award(entry)
 	self:Drain()
 end
 
+---====== ACHIEVEMENT IMAGES ======---
+--[[ Badge art is managed from the repo, not from Roblox.
+
+     One file per entity in ImagesA/ (Images-Achievement), each returning a
+     table that says where its picture comes from:
+
+         return { Source = "roblox", Value = "rbxassetid://133397789900538" }
+         return { Source = "url",    Value = "https://example.com/rose.png" }
+         return { Source = "file",   Value = "myimages/rose.png" }
+
+     roblox  an ordinary asset ID. Nothing to download, always works.
+     url     any image on the internet. Fetched once, written to the executor's
+             folder, and handed to getcustomasset, which is the same trick the
+             entity models use to load a .rbxm from GitHub.
+     file    a picture already on your machine, relative to the executor's
+             workspace folder. Nothing leaves your PC.
+
+     Resolved once per key per session and cached, because getcustomasset on a
+     freshly downloaded file is not free. A file that is missing, unreachable or
+     malformed falls through to whatever the achievement had inline, so a broken
+     image can never stop a badge being awarded. ]]
+
+local Images = {
+	cache  = {},
+	folder = "ImagesA",
+	base   = "https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/ImagesA/",
+}
+
+Core.Images = Images
+
+-- "Rose Hell" -> "RoseHell", so the filename is predictable.
+local function imageKey(name)
+	return (tostring(name):gsub("[^%w]", ""))
+end
+
+local function downloadImage(url, key)
+	if not (getcustomasset and writefile) then
+		logAlways("Images", "executor has no getcustomasset, cannot use a url image")
+		return nil
+	end
+
+	-- Keep the original extension: getcustomasset decides how to read the file
+	-- from it, and a .png served as .txt will not load.
+	local extension = url:match("%.(%a%a%a%a?)$") or "png"
+	local fileName = ("gradish_badge_%s.%s"):format(key, extension)
+
+	local ok, result = pcall(function()
+		if not (isfile and isfile(fileName)) then
+			writefile(fileName, game:HttpGet(url))
+		end
+		return getcustomasset(fileName, true)
+	end)
+
+	if not ok then
+		logAlways("Images", "could not fetch %s: %s", url, tostring(result))
+		return nil
+	end
+
+	return result
+end
+
+function Images:Resolve(name)
+	local key = imageKey(name)
+	if key == "" then return nil end
+
+	local cached = self.cache[key]
+	if cached ~= nil then
+		return cached ~= false and cached or nil
+	end
+
+	local ok, definition = pcall(function()
+		return loadstring(game:HttpGet(self.base .. key))()
+	end)
+
+	if not ok or type(definition) ~= "table" then
+		-- No file for this entity is the normal case, not an error.
+		self.cache[key] = false
+		return nil
+	end
+
+	local source = tostring(definition.Source or "roblox"):lower()
+	local value  = definition.Value
+	local result = nil
+
+	if isBlank(value) then
+		logAlways("Images", "%s has no Value", key)
+
+	elseif source == "roblox" then
+		result = value
+
+	elseif source == "url" then
+		result = downloadImage(value, key)
+
+	elseif source == "file" then
+		if getcustomasset then
+			local worked, asset = pcall(getcustomasset, value, true)
+			result = worked and asset or nil
+			if not worked then
+				logAlways("Images", "%s: could not read the local file %s", key, tostring(value))
+			end
+		end
+
+	else
+		logAlways("Images", "%s has an unknown Source %q", key, source)
+	end
+
+	if result then
+		logAlways("Images", "%s resolved from %s", key, source)
+	end
+
+	self.cache[key] = result or false
+	return result
+end
+
 ---====== ACHIEVEMENT CONFIG ======---
 --[[ All the wording lives in one editable file so nobody has to go hunting
      through four entity scripts to change a title. Fetched once per session;
@@ -400,7 +514,14 @@ local function buildAchievements(profile)
 	local data     = AchievementConfig:Get()
 	local fromFile = (data.Entities or {})[name] or {}
 	local inline   = profile.Achievements or {}
-	local image    = inline.Image or fromFile.Image or data.DefaultImage
+	--[[ ImagesA wins. That folder is the whole point of the system: art is
+	     managed in the repo rather than pinned to a Roblox asset ID buried in
+	     a config file. A missing or broken ImagesA entry silently falls
+	     through to whatever was set inline, so nothing can stop a badge. ]]
+	local image = Images:Resolve(name)
+		or inline.Image
+		or fromFile.Image
+		or data.DefaultImage
 
 	local function build(key, defaults)
 		if inline[key] == false or fromFile[key] == false then return nil end

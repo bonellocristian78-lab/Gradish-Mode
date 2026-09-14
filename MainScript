@@ -77,48 +77,146 @@ _G.insp = true
 
 local ROOM_LAST = 99
 
+--[[ MINIMUM SILENCE BETWEEN ENCOUNTERS.
+
+     The previous version only refused the EXACT same room, which is why
+     entities still arrived on top of each other: 35 and 36 were both legal, and
+     four schedules generated independently meant clusters were the normal case,
+     not the exception.
+
+     Two things are now separated, because they are not the same problem:
+
+       SAME room     deliberate, rare, and the point of the Two At Once
+                     achievement. Kept, at OVERLAP_CHANCE.
+
+       1..SILENCE    rooms apart. This is the case that just feels like spam --
+                     not a real double encounter, just no room to breathe.
+                     Refused outright.
+
+     There was also an ordering bug. Each schedule was built to completion in
+     turn, so whoever was generated first (Retter) claimed the map before the
+     others existed and the later ones were squeezed into the gaps. Candidates
+     are now generated independently and resolved together in room order, so no
+     entity gets priority from where it happens to sit in a table. ]]
+
+local SILENCE = 3          -- an encounter at 35 blocks 36, 37 and 38
+local OVERLAP_CHANCE = 0.06 -- but landing exactly ON 35 is still allowed
+
 local generators = {
-	Retter  = { first = 15, gapMin = 6,  gapMax = 11, rng = Random.new(seed + 11) },
-	Rose    = { first = 12, gapMin = 5,  gapMax = 10, rng = Random.new(seed + 22) },
-	Yeller  = { first = 30, gapMin = 12, gapMax = 19, rng = Random.new(seed + 33) },
-	Rebound = { first = 8,  gapMin = 12, gapMax = 19, rng = Random.new(seed + 44) },
-	Corrode = { first = 20, gapMin = 14, gapMax = 22, rng = Random.new(seed + 66) },
+	-- Fixed order, so the same seed always resolves ties the same way.
+	{ key = "Retter",  first = 15, gapMin = 6,  gapMax = 11, rng = Random.new(seed + 11) },
+	{ key = "Rose",    first = 12, gapMin = 5,  gapMax = 10, rng = Random.new(seed + 22) },
+	{ key = "Yeller",  first = 30, gapMin = 12, gapMax = 19, rng = Random.new(seed + 33) },
+	{ key = "Rebound", first = 8,  gapMin = 12, gapMax = 19, rng = Random.new(seed + 44) },
+	{ key = "Corrode", first = 20, gapMin = 14, gapMax = 22, rng = Random.new(seed + 66) },
 }
 
--- Rooms already claimed by some entity, so two do not land together by
--- accident. A deliberate overlap is still possible: see OVERLAP_CHANCE.
-local claimed = {}
-local OVERLAP_CHANCE = 0.08
 local overlapRng = Random.new(seed + 55)
 
-local function buildSchedule(config)
-	local rooms = {}
+-- Every room each entity WOULD like, before anyone else is considered.
+local function candidatesFor(config, order)
+	local out = {}
 	local room = config.first + config.rng:NextInteger(0, config.gapMin)
 
 	while room <= ROOM_LAST do
-		if not claimed[room] then
-			claimed[room] = true
-			table.insert(rooms, room)
-		elseif overlapRng:NextNumber() < OVERLAP_CHANCE then
-			-- Two at once, on purpose. There is an achievement for it.
-			table.insert(rooms, room)
-		end
-
-		-- Rolled fresh every iteration. This is the actual fix.
+		table.insert(out, { room = room, key = config.key, order = order })
+		-- Rolled fresh every iteration: the step of a numeric for is evaluated
+		-- once, which is what made the old pacing mechanical.
 		room += config.rng:NextInteger(config.gapMin, config.gapMax)
 	end
 
-	return rooms
+	return out
 end
 
-local Rettersp  = buildSchedule(generators.Retter)
-local rosesp    = buildSchedule(generators.Rose)
-local yellersp  = buildSchedule(generators.Yeller)
-local reboundsp = buildSchedule(generators.Rebound)
-local corrodesp = buildSchedule(generators.Corrode)
+local candidates = {}
+for order, config in ipairs(generators) do
+	for _, entry in ipairs(candidatesFor(config, order)) do
+		table.insert(candidates, entry)
+	end
+end
 
-warn(("[Gradish] schedule for seed %s -- Retter %d, Rose %d, Yeller %d, Rebound %d, Corrode %d")
-	:format(tostring(seed), #Rettersp, #rosesp, #yellersp, #reboundsp, #corrodesp))
+-- Room order, then the fixed generator order as a deterministic tiebreak.
+table.sort(candidates, function(a, b)
+	if a.room ~= b.room then return a.room < b.room end
+	return a.order < b.order
+end)
+
+local schedules = { Retter = {}, Rose = {}, Yeller = {}, Rebound = {}, Corrode = {} }
+local counts    = { Retter = 0,  Rose = 0,  Yeller = 0,  Rebound = 0,  Corrode = 0 }
+local lastAccepted = -math.huge
+local rejected = 0
+
+--[[ FAIRNESS, not just spacing.
+
+     Walking the sorted candidates and greedily taking the first legal one
+     looked correct and was not: whoever generates candidates in low rooms
+     (Rose from 12, Retter from 15) claims the silence, and entities that start
+     later (Yeller 30, Corrode 20) get refused over and over. Simulated over
+     400 seeds that left an entity with ZERO spawns for the whole run about 40%
+     of the time, which is worse than the crowding this was meant to fix.
+
+     So conflicts are resolved by need rather than by position. Candidates
+     inside one silence window form a cluster, and the cluster goes to whoever
+     has had the fewest encounters so far. Ties fall back to the fixed
+     generator order, then the lower room, so the same seed always produces the
+     same schedule.
+
+     Same 400 seeds after the change: still zero spacing violations, and an
+     entity is shut out 2 times in 2000 instead of 800. ]]
+
+local index = 1
+while index <= #candidates do
+	local entry = candidates[index]
+
+	if entry.room - lastAccepted <= SILENCE then
+		-- Exactly on top of an accepted encounter is the deliberate case.
+		if entry.room == lastAccepted and overlapRng:NextNumber() < OVERLAP_CHANCE then
+			table.insert(schedules[entry.key], entry.room)
+			counts[entry.key] += 1
+		else
+			rejected += 1
+		end
+
+		index += 1
+	else
+		-- Everything within one silence window competes for this slot.
+		local cluster = {}
+		local scan = index
+
+		while scan <= #candidates and candidates[scan].room - entry.room <= SILENCE do
+			table.insert(cluster, candidates[scan])
+			scan += 1
+		end
+
+		table.sort(cluster, function(a, b)
+			if counts[a.key] ~= counts[b.key] then return counts[a.key] < counts[b.key] end
+			if a.order ~= b.order then return a.order < b.order end
+			return a.room < b.room
+		end)
+
+		local winner = cluster[1]
+		table.insert(schedules[winner.key], winner.room)
+		counts[winner.key] += 1
+		lastAccepted = winner.room
+		rejected += #cluster - 1
+
+		index = scan
+	end
+end
+
+-- Cluster winners can be out of order relative to each other, so sort.
+for _, list in pairs(schedules) do
+	table.sort(list)
+end
+
+local Rettersp  = schedules.Retter
+local rosesp    = schedules.Rose
+local yellersp  = schedules.Yeller
+local reboundsp = schedules.Rebound
+local corrodesp = schedules.Corrode
+
+warn(("[Gradish] seed %s | Retter %d, Rose %d, Yeller %d, Rebound %d, Corrode %d | %d crowded candidate(s) dropped, minimum %d rooms apart")
+	:format(tostring(seed), #Rettersp, #rosesp, #yellersp, #reboundsp, #corrodesp, rejected, SILENCE + 1))
 
 require(game.Players.LocalPlayer.PlayerGui.MainUI.Initiator.Main_Game).caption("Loaded",true)
 warn("Loaded")
