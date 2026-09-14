@@ -1,0 +1,432 @@
+--[[
+================================================================================
+
+        C R U C I F I X   T E S T
+
+        Finds the furniture in the room you are standing in, prints exactly how
+        it is built, arms one unlooted drawer, and hands you a crucifix when
+        you open it.
+
+        STANDALONE. No repo, no GradishCore. Paste it and run it.
+
+        WHY IT EXISTS
+        -------------
+        CrucifixSpawner hooks ProximityPromptService.PromptTriggered, and from
+        your screenshots I am not convinced DOORS drawers use ProximityPrompts
+        at all -- I can see an Event and a Constraint in each DrawerContainer,
+        and no prompt. If that is right, the hook never fires and no crucifix
+        can ever spawn, no matter what the odds are set to.
+
+        This script does not guess. It arms FOUR different detectors on the
+        same drawer at once and tells you which one actually fired. That
+        answer is what CrucifixSpawner needs to be rewritten around.
+
+        CONTROLS
+            J   scan the room you are in now, arm a drawer
+            H   give a crucifix immediately, ignoring drawers entirely
+            K   re-print the last scan without rescanning
+
+        WHAT TO SEND ME BACK
+        --------------------
+        The whole console output of one J press, and then the line that starts
+        with "FIRED:" after you open the armed drawer. If nothing says FIRED,
+        that itself is the answer and I will need a different approach.
+
+================================================================================
+]]
+
+local Config = {
+	ScanKey  = Enum.KeyCode.J,
+	GiveKey  = Enum.KeyCode.H,
+	PrintKey = Enum.KeyCode.K,
+
+	-- Your loader, your values.
+	LoaderUrl = "https://raw.githubusercontent.com/PenguinManiack/Crucifix/main/Crucifix.lua",
+	Uses      = 1,
+	Range     = 30,
+
+	-- A glowing block on the armed drawer so you know which one to open.
+	ShowMarker  = true,
+	MarkerColor = Color3.fromRGB(120, 220, 255),
+
+	-- Arm every drawer found instead of only the first unlooted one. Louder,
+	-- but it answers the question faster.
+	ArmAll = false,
+}
+
+---====== SERVICES ======---
+
+local Players            = game:GetService("Players")
+local ReplicatedStorage  = game:GetService("ReplicatedStorage")
+local Workspace          = game:GetService("Workspace")
+local UserInputService   = game:GetService("UserInputService")
+local CollectionService  = game:GetService("CollectionService")
+
+local LocalPlayer = Players.LocalPlayer
+
+local function say(format, ...)
+	print("[CrucifixTest] " .. format:format(...))
+end
+
+---====== ROOM ======---
+
+local function currentRoomNumber()
+	local data = ReplicatedStorage:FindFirstChild("GameData")
+	local value = data and data:FindFirstChild("LatestRoom")
+	return value and tonumber(value.Value) or 0
+end
+
+local function currentRoom()
+	local rooms = Workspace:FindFirstChild("CurrentRooms")
+	if not rooms then
+		say("no workspace.CurrentRooms -- are you actually in a run?")
+		return nil
+	end
+
+	local room = rooms:FindFirstChild(tostring(currentRoomNumber()))
+	if not room then
+		say("room %d not found under CurrentRooms", currentRoomNumber())
+	end
+	return room
+end
+
+---====== FINDING FURNITURE ======---
+--[[ Two ways in, because I do not want to depend on the name DrawerContainer
+     being universal. Anything holding a LootHolder counts as furniture too. ]]
+
+local function findDrawers(room)
+	local found = {}
+	local seen = {}
+
+	for _, descendant in ipairs(room:GetDescendants()) do
+		local isDrawer = descendant.Name == "DrawerContainer"
+			or (descendant:FindFirstChild("LootHolder") ~= nil)
+
+		if isDrawer and not seen[descendant] then
+			seen[descendant] = true
+			table.insert(found, descendant)
+		end
+	end
+
+	return found
+end
+
+---====== DESCRIBING ONE ======---
+
+local function childList(instance)
+	local parts = {}
+	for _, child in ipairs(instance:GetChildren()) do
+		table.insert(parts, ("%s<%s>"):format(child.Name, child.ClassName))
+	end
+	return #parts > 0 and table.concat(parts, ", ") or "(empty)"
+end
+
+local function findPrompts(container)
+	local prompts = {}
+	for _, descendant in ipairs(container:GetDescendants()) do
+		if descendant:IsA("ProximityPrompt") then
+			table.insert(prompts, descendant)
+		end
+	end
+	return prompts
+end
+
+local function findEvents(container)
+	local events = {}
+	for _, descendant in ipairs(container:GetDescendants()) do
+		if descendant:IsA("RemoteEvent")
+			or descendant:IsA("BindableEvent")
+			or descendant:IsA("RemoteFunction")
+			or descendant:IsA("BindableFunction")
+		then
+			table.insert(events, descendant)
+		end
+	end
+	return events
+end
+
+local function describe(drawer, index)
+	print("")
+	say("--- drawer %d ---", index)
+	print("  path      : " .. drawer:GetFullName())
+	print("  class     : " .. drawer.ClassName)
+	print("  furniture : " .. (drawer.Parent and drawer.Parent.Name or "?"))
+	print("  children  : " .. childList(drawer))
+
+	local loot = drawer:FindFirstChild("LootHolder")
+	if loot then
+		print(("  LootHolder: %s, %d child(ren) -> %s")
+			:format(loot.ClassName, #loot:GetChildren(), childList(loot)))
+	else
+		print("  LootHolder: NONE")
+	end
+
+	local events = findEvents(drawer)
+	if #events == 0 then
+		print("  events    : none")
+	else
+		for _, event in ipairs(events) do
+			print(("  event     : %s <%s>"):format(event:GetFullName(), event.ClassName))
+		end
+	end
+
+	local prompts = findPrompts(drawer)
+	if #prompts == 0 then
+		print("  prompts   : NONE  <-- this is the thing CrucifixSpawner relies on")
+	else
+		for _, prompt in ipairs(prompts) do
+			print(("  prompt    : %s | ActionText=%q ObjectText=%q Enabled=%s")
+				:format(prompt:GetFullName(), tostring(prompt.ActionText),
+					tostring(prompt.ObjectText), tostring(prompt.Enabled)))
+		end
+	end
+
+	return loot, events, prompts
+end
+
+---====== GIVING ======---
+
+local function giveCrucifix(why)
+	say("giving a crucifix (%s)", why)
+
+	local character = LocalPlayer.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	if not humanoid or humanoid.Health <= 0 then
+		say("no living character")
+		return nil
+	end
+
+	local before = {}
+	local backpack = LocalPlayer:FindFirstChildOfClass("Backpack")
+	for _, container in ipairs({ backpack, character }) do
+		if container then
+			for _, child in ipairs(container:GetChildren()) do
+				if child:IsA("Tool") then before[child] = true end
+			end
+		end
+	end
+
+	_G.Uses  = Config.Uses
+	_G.Range = Config.Range
+
+	local ok, err = pcall(function()
+		loadstring(game:HttpGet(Config.LoaderUrl))()
+	end)
+	if not ok then
+		warn("[CrucifixTest] the loader errored: " .. tostring(err))
+		return nil
+	end
+
+	local deadline = os.clock() + 12
+	local tool
+	while os.clock() < deadline do
+		for _, container in ipairs({ LocalPlayer:FindFirstChildOfClass("Backpack"), character }) do
+			if container then
+				for _, child in ipairs(container:GetChildren()) do
+					if child:IsA("Tool") and not before[child] then tool = child break end
+				end
+			end
+			if tool then break end
+		end
+		if tool then break end
+		task.wait(0.15)
+	end
+
+	if not tool then
+		warn("[CrucifixTest] the loader produced no tool")
+		return nil
+	end
+
+	tool.Name = "Crucifix"
+	pcall(function() CollectionService:AddTag(tool, "Crucifix") end)
+
+	pcall(function() humanoid:EquipTool(tool) end)
+	if tool.Parent ~= character then
+		pcall(function() tool.Parent = character end)
+	end
+
+	say("crucifix in hand: %s", tostring(tool.Parent == character))
+	return tool
+end
+
+---====== ARMING ======---
+
+local armed = {}
+
+local function marker(drawer, loot)
+	if not Config.ShowMarker then return end
+
+	local anchor = loot or drawer
+	local ok, pivot = pcall(function()
+		if anchor:IsA("BasePart") then return anchor.CFrame end
+		return anchor:GetPivot()
+	end)
+	if not ok or not pivot then return end
+
+	local part = Instance.new("Part")
+	part.Name         = "CrucifixTestMarker"
+	part.Size         = Vector3.new(0.6, 0.6, 0.6)
+	part.CFrame       = pivot + Vector3.new(0, 2, 0)
+	part.Anchored     = true
+	part.CanCollide   = false
+	part.CanQuery     = false
+	part.Material     = Enum.Material.Neon
+	part.Color        = Config.MarkerColor
+	part.Transparency = 0.3
+	part.Parent       = Workspace
+
+	local light = Instance.new("PointLight")
+	light.Color      = Config.MarkerColor
+	light.Brightness = 4
+	light.Range      = 12
+	light.Parent     = part
+
+	table.insert(armed, part)
+	return part
+end
+
+--[[ Four detectors on the same drawer. Whichever one prints FIRED is the one
+     the real spawner should be built on. ]]
+local function arm(drawer, loot, events, prompts, index)
+	local done = false
+
+	local function fire(how)
+		if done then return end
+		done = true
+
+		print("")
+		say("FIRED: %s  (drawer %d, %s)", how, index, drawer:GetFullName())
+		task.wait(0.35)
+		giveCrucifix("opened a drawer")
+	end
+
+	-- 1. ProximityPrompt, which is what CrucifixSpawner currently uses.
+	for _, prompt in ipairs(prompts) do
+		table.insert(armed, prompt.Triggered:Connect(function(player)
+			if player == LocalPlayer then fire("ProximityPrompt.Triggered") end
+		end))
+	end
+
+	-- 2. Whatever that Event object turns out to be.
+	for _, event in ipairs(events) do
+		if event:IsA("RemoteEvent") then
+			table.insert(armed, event.OnClientEvent:Connect(function()
+				fire("RemoteEvent.OnClientEvent on " .. event.Name)
+			end))
+		elseif event:IsA("BindableEvent") then
+			table.insert(armed, event.Event:Connect(function()
+				fire("BindableEvent.Event on " .. event.Name)
+			end))
+		end
+	end
+
+	-- 3. Something being put into the loot slot.
+	if loot then
+		table.insert(armed, loot.ChildAdded:Connect(function(child)
+			fire("LootHolder.ChildAdded -> " .. child.Name)
+		end))
+	end
+
+	-- 4. Any attribute on the drawer flipping. DOORS marks state this way in
+	--    other places, so it is worth watching.
+	table.insert(armed, drawer.AttributeChanged:Connect(function(name)
+		fire(("attribute %q changed to %s"):format(name, tostring(drawer:GetAttribute(name))))
+	end))
+
+	marker(drawer, loot)
+
+	say("armed drawer %d with %d prompt(s), %d event(s), loot=%s",
+		index, #prompts, #events, loot and "yes" or "no")
+end
+
+local function disarm()
+	for _, item in ipairs(armed) do
+		pcall(function()
+			if typeof(item) == "RBXScriptConnection" then item:Disconnect() else item:Destroy() end
+		end)
+	end
+	table.clear(armed)
+end
+
+---====== SCAN ======---
+
+local lastReport = {}
+
+local function scan()
+	disarm()
+	table.clear(lastReport)
+
+	local room = currentRoom()
+	if not room then return end
+
+	say("scanning room %d (%s)", currentRoomNumber(), room:GetFullName())
+
+	local drawers = findDrawers(room)
+	if #drawers == 0 then
+		say("NO furniture found in this room at all.")
+		say("Either there is none here, or they are not named DrawerContainer")
+		say("and have no LootHolder. Try another room, then tell me.")
+		return
+	end
+
+	say("found %d drawer-like container(s)", #drawers)
+
+	local armedCount = 0
+
+	for index, drawer in ipairs(drawers) do
+		local loot, events, prompts = describe(drawer, index)
+
+		-- "Not looted" is a guess: an empty LootHolder. If it turns out to be
+		-- the other way round, the printout above tells us and we flip it.
+		local empty = (loot == nil) or (#loot:GetChildren() == 0)
+
+		if Config.ArmAll or (empty and armedCount == 0) then
+			arm(drawer, loot, events, prompts, index)
+			armedCount += 1
+		end
+	end
+
+	print("")
+	if armedCount == 0 then
+		say("nothing armed: every LootHolder here already has something in it.")
+		say("Set ArmAll = true at the top and run again.")
+	else
+		say("%d drawer(s) armed. Open the one with the glowing marker.", armedCount)
+		say("Then send me everything above plus the FIRED line.")
+	end
+end
+
+---====== INPUT ======---
+
+local connections = {}
+
+table.insert(connections, UserInputService.InputBegan:Connect(function(input, processed)
+	if processed then return end
+
+	if input.KeyCode == Config.ScanKey then
+		task.spawn(scan)
+	elseif input.KeyCode == Config.GiveKey then
+		task.spawn(giveCrucifix, "forced by keybind")
+	elseif input.KeyCode == Config.PrintKey then
+		say("armed objects still live: %d", #armed)
+	end
+end))
+
+if getgenv then
+	local previous = getgenv().__CrucifixTestCleanup
+	if type(previous) == "function" then pcall(previous) end
+
+	getgenv().__CrucifixTestCleanup = function()
+		disarm()
+		for _, connection in ipairs(connections) do
+			pcall(function() connection:Disconnect() end)
+		end
+		table.clear(connections)
+	end
+end
+
+print("")
+say("ready.")
+say("  %s = scan this room and arm a drawer", Config.ScanKey.Name)
+say("  %s = give me a crucifix right now", Config.GiveKey.Name)
+say("Walk into a room with a dresser, press %s, then open the glowing one.", Config.ScanKey.Name)

@@ -10,13 +10,14 @@ local function getGitSoundId(GithubSoundPath: string, AssetName: string): Sound
 	return Sound 
 end
 
---[[ The ambience lives in a different repo (J63633S/Fog-script) and is the
-     first thing this script touches. Unwrapped, a dead link there threw before
-     a single entity was registered and took the whole mod down with it -- for
-     background music. Now a failure costs you the music and nothing else. ]]
+--[[ The ambience now lives in this repo as ambience.mp3. It used to be
+     fetched from J63633S/Fog-script, a repo you do not control, and it is the
+     first thing this script touches -- so a dead link there took the whole mod
+     down before a single entity was registered, for background music.
+     Self-hosted now, and still wrapped: a failure costs you the music only. ]]
 local musicOk, CustomMusic = pcall(
 	getGitSoundId,
-	"https://raw.githubusercontent.com/J63633S/Fog-script/refs/heads/main/ambient%20that%20doesn't%20work%20FOR%20GODS%20SAKE.mp3",
+	"https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/ambience.mp3",
 	"ambience"
 )
 
