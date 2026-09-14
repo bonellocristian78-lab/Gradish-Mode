@@ -22,7 +22,27 @@
             Reason       the hint shown for one you do not own yet
 
         Image is per entity and applies to all four of that entity's
-        achievements unless one overrides it.
+        achievements unless one overrides it. Better still: drop a file in
+        ImagesA/ named after the entity, containing one line:
+
+            return "rbxassetid://133397789900538"
+            return "https://raw.githubusercontent.com/you/repo/main/rose.png"
+            return "myimages/rose.png"
+
+        It works out which of the three it is. ImagesA wins over Image here.
+
+        SHORT FORM. A badge can be one string instead of a four-field table:
+
+            ["Corrode"] = {
+                Survive = "Survived Corrode | Slow, but the floor remembers him",
+                Death   = "Dissolved | It was not him that got you, it was the floor",
+            },
+
+        Title before the pipe, description after. Identifier and Reason are
+        derived. The blocks below stay in long form on purpose -- they carry
+        Identifiers that do not match the derived ones ("Corrosion", not
+        "Corrode"), and changing an Identifier orphans a badge somebody has
+        already earned.
 
         To switch one off entirely, set it to false:
             Untouched = false,
@@ -193,6 +213,17 @@ return {
 				Desc       = "Successfully crucify Corrode",
 				Reason     = "Does not count towards progression",
 			},
+		},
+
+		--[[ Uses its own death light, registered at startup rather than being
+		     one of the game's four. See RegisterDeathType in GradishCore. ]]
+		["MischievousLight"] = {
+			Image = "rbxassetid://76906701950679",
+
+			Survive   = "Walked Away From The Light | It was never trying to help",
+			Death     = "Followed It | You went toward the light",
+			Untouched = false,
+			Crucify   = "Put Out | Successfully crucify the Mischievous Light",
 		},
 
 		["Rude"] = {

@@ -396,6 +396,20 @@ local function downloadImage(url, key)
 	return result
 end
 
+--[[ Works out what you gave it, so you never have to say.
+
+     Source = "roblox" / "url" / "file" was ceremony: every value already tells
+     you which it is. Now an ImagesA file can be one line -- just the thing --
+     and the old table form still works if you prefer being explicit. ]]
+local function detectSource(value)
+	local text = tostring(value)
+
+	if text:match("^rbxassetid://") or text:match("^rbxasset://") then return "roblox" end
+	if text:match("^%d+$") then return "roblox" end        -- a bare asset number
+	if text:match("^https?://") then return "url" end
+	return "file"
+end
+
 function Images:Resolve(name)
 	local key = imageKey(name)
 	if key == "" then return nil end
@@ -409,21 +423,40 @@ function Images:Resolve(name)
 		return loadstring(game:HttpGet(self.base .. key))()
 	end)
 
-	if not ok or type(definition) ~= "table" then
+	if not ok or definition == nil then
 		-- No file for this entity is the normal case, not an error.
 		self.cache[key] = false
 		return nil
 	end
 
-	local source = tostring(definition.Source or "roblox"):lower()
-	local value  = definition.Value
-	local result = nil
+	--[[ Three shapes accepted, in order of how little you have to type:
+
+	         return "rbxassetid://123"                    a bare string
+	         return { Image = "https://..." }             a named field
+	         return { Source = "url", Value = "https://" } the old explicit form
+	]]
+	local value, source
+
+	if type(definition) == "string" then
+		value = definition
+	elseif type(definition) == "table" then
+		value = definition.Image or definition.Value or definition[1]
+		source = definition.Source
+	end
 
 	if isBlank(value) then
-		logAlways("Images", "%s has no Value", key)
+		logAlways("Images", "%s gave nothing usable", key)
+		self.cache[key] = false
+		return nil
+	end
 
-	elseif source == "roblox" then
-		result = value
+	source = tostring(source or detectSource(value)):lower()
+
+	local result = nil
+
+	if source == "roblox" then
+		-- A bare number is a perfectly reasonable thing to paste.
+		result = value:match("^%d+$") and ("rbxassetid://" .. value) or value
 
 	elseif source == "url" then
 		result = downloadImage(value, key)
@@ -442,7 +475,7 @@ function Images:Resolve(name)
 	end
 
 	if result then
-		logAlways("Images", "%s resolved from %s", key, source)
+		logAlways("Images", "%s resolved as %s", key, source)
 	end
 
 	self.cache[key] = result or false
@@ -523,11 +556,36 @@ local function buildAchievements(profile)
 		or fromFile.Image
 		or data.DefaultImage
 
+	--[[ SHORT FORM.
+
+	     Six lines per badge, four badges per entity, was a lot of typing to
+	     say two sentences. A badge can now be written as one string:
+
+	         Survive = "Survived Corrode | Slow, but the floor remembers him",
+
+	     Title before the pipe, description after it. The Identifier is derived
+	     the same way the generated defaults derive it, so a short-form badge
+	     and a full-table badge with no Identifier end up with the same save
+	     key -- switching between the two forms cannot orphan someone's
+	     earned badge.
+
+	     The full table form still works and still wins, for when you want the
+	     Reason line or a per-badge image. ]]
+	local function expand(value)
+		if type(value) == "table" then return value end
+		if type(value) ~= "string" then return {} end
+
+		local title, desc = value:match("^(.-)%s*|%s*(.+)$")
+		if not title then return { Title = value } end
+
+		return { Title = title, Desc = desc }
+	end
+
 	local function build(key, defaults)
 		if inline[key] == false or fromFile[key] == false then return nil end
 
-		local fileEntry   = type(fromFile[key]) == "table" and fromFile[key] or {}
-		local inlineEntry = type(inline[key])   == "table" and inline[key]   or {}
+		local fileEntry   = expand(fromFile[key])
+		local inlineEntry = expand(inline[key])
 
 		local entry = {
 			Identifier = inlineEntry.Identifier or fileEntry.Identifier or defaults.Identifier,
@@ -1810,7 +1868,13 @@ end
      Discovered again at runtime and written to the log, in case an update
      changes the list. ]]
 
-Core.DeathTypes = { "Yellow", "Blue", "Glitch", "Static", "Rush" }
+--[[ CORRECTION: Static is not one of these.
+
+     Health.Music is a Folder of Sounds named Yellow, Blue, Glitch and Rush.
+     Static exists, but it is a child INSIDE Glitch, and the spawner only walks
+     direct children of Music -- so DeathType = "Static" never resolves and
+     falls through to the default. It was wrong here and wrong on Yeller. ]]
+Core.DeathTypes = { "Yellow", "Blue", "Glitch", "Rush" }
 
 function Core.DiscoverDeathTypes()
 	local ok, found = pcall(function()
@@ -1838,6 +1902,61 @@ function Core.DiscoverDeathTypes()
 	end
 
 	return Core.DeathTypes
+end
+
+--[[ ADDING A DEATH TYPE THAT THE GAME DOES NOT HAVE.
+
+     The spawner resolves Death.Type by walking the children of Health.Music
+     and matching on name. That folder is an ordinary Folder of ordinary
+     Sounds, sitting in PlayerGui where the client can write to it -- so a new
+     death light is just a new child with the right name.
+
+     Clone an existing entry (to inherit whatever properties the death screen
+     reads), rename it, swap its SoundId, and DeathType = "Mischievous" starts
+     resolving. Nothing in the spawner needs to change and nothing is patched.
+
+     Each entry carries an End child, so that is cloned too and its sound
+     swapped if one is given. ]]
+function Core.RegisterDeathType(name, soundId, endSoundId, copyFrom)
+	if isBlank(name) then return false end
+
+	local ok, result = pcall(function()
+		local gui = LocalPlayer:FindFirstChild("PlayerGui")
+		local music = gui and gui:FindFirstChild("MainUI")
+		music = music and music:FindFirstChild("Initiator")
+		music = music and music:FindFirstChild("Main_Game")
+		music = music and music:FindFirstChild("Health")
+		music = music and music:FindFirstChild("Music")
+		if not music then return "no Health.Music" end
+
+		if music:FindFirstChild(name) then return "already there" end
+
+		local template = music:FindFirstChild(copyFrom or "Blue")
+			or music:FindFirstChildOfClass("Sound")
+		if not template then return "nothing to clone" end
+
+		local entry = template:Clone()
+		entry.Name = name
+
+		if not isBlank(soundId) then entry.SoundId = soundId end
+
+		local ending = entry:FindFirstChild("End")
+		if ending and not isBlank(endSoundId) then
+			ending.SoundId = endSoundId
+		end
+
+		entry.Parent = music
+		return true
+	end)
+
+	if ok and result == true then
+		table.insert(Core.DeathTypes, name)
+		logAlways("Core", "death type %q registered, cloned from %s", name, copyFrom or "Blue")
+		return true
+	end
+
+	logAlways("Core", "could not register death type %q: %s", name, tostring(result))
+	return false
 end
 
 ---====== RITUAL COLOUR ======---

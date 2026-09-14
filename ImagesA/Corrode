@@ -1,23 +1,12 @@
---[[ Badge image for Corrode  (PLACEHOLDER - reusing the Yeller decal).
+--[[ Badge image for Corrode  (placeholder, reusing the Yeller decal).
 
-     Source can be one of three things:
+     Just paste the thing. It works out which of the three it is:
 
-         "roblox"   an ordinary Roblox asset ID. Nothing is downloaded.
-         "url"      any image on the internet. Fetched once, cached on disk,
-                    and handed to getcustomasset. Use this to manage art from
-                    GitHub: commit a .png next to this file and point at its
-                    raw URL.
-         "file"     an image already on your machine, relative to the
-                    executor's workspace folder. Nothing leaves your PC.
+         "rbxassetid://123456"   a Roblox asset
+         "123456"                a bare asset number, same thing
+         "https://.../rose.png"  any image on the internet, fetched once
+         "myimages/rose.png"     a file on your PC, relative to the executor
 
-     Delete this file and the badge falls back to whatever AchievementConfig
-     has inline, so nothing breaks. ]]
+     Delete this file and the badge falls back to AchievementConfig. ]]
 
-return {
-	Source = "roblox",
-	Value  = "rbxassetid://120554381732238",
-
-	-- Examples, swap the Source above to use one:
-	-- Source = "url",  Value = "https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/ImagesA/Corrode.png",
-	-- Source = "file", Value = "myimages/Corrode.png",
-}
+return "rbxassetid://120554381732238"

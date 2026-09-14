@@ -228,6 +228,10 @@ task.spawn(function()
 	end)
 	if ok and Core and Core.DiscoverDeathTypes then
 		Core.DiscoverDeathTypes()
+
+		-- A death light the game does not ship. Health.Music is an ordinary
+		-- Folder of Sounds in PlayerGui, so a new one is just a new child.
+		Core.RegisterDeathType("Mischievous", "rbxassetid://111734134961936", nil, "Blue")
 	end
 end)
 
