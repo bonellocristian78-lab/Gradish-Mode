@@ -2134,70 +2134,83 @@ local DeathLight = {
 
 Core.DeathLight = DeathLight
 
-local function paintDeathScreen(screen, palette)
-	local painted = 0
+--[[ Paints EVERY ImageLabel under the holder, not three named ones.
+
+     The named-path version left the figure showing the previous death's
+     colour: the dialog turned red for Retter while the character stayed green
+     from a Corrode death before it. Whichever object actually carries the
+     figure, walking the whole subtree reaches it.
+
+     It also logs what it found and what the values were, so if a colour is
+     still wrong the log says which object kept it. ]]
+local function paintDeathScreen(screen, palette, verbose)
+	local painted = {}
 
 	local function paint(instance, property, colour)
 		if not instance or not colour then return end
+
 		pcall(function()
+			local before = instance[property]
 			instance[property] = colour
-			painted += 1
+
+			if verbose then
+				table.insert(painted, ("%s.%s %s -> %s")
+					:format(instance.Name, property, tostring(before), tostring(colour)))
+			end
 		end)
 	end
 
 	paint(screen, "ImageColor3", palette.Screen)
 
-	-- Swap the character picture as well, if this light has one. Resolved
-	-- through the same ImagesA manager the badges use.
-	--[[ OFF unless a palette explicitly asks for it.
-
-	     Hodler.Label.Label is the light's FIGURE -- the character that leans
-	     into frame and talks to you. Swapping it for a symbol replaces that
-	     character with a logo, which is not what a death light is. Tinting it
-	     keeps the figure and gives it the entity's colour, which is what the
-	     screenshot shows working. ]]
-	local picture
-	if palette.Image and palette.ReplaceFigure then
-		picture = Core.Images:Resolve(palette.Image)
-	end
-
 	local holder = screen:FindFirstChild("Hodler")
 	if holder then
-		if picture then
-			local label = holder:FindFirstChild("Label")
-			paint(label, "Image", picture)
-			paint(label and label:FindFirstChild("Label"), "Image", picture)
-		end
-		-- The colour lives on the INNER Label, not the outer one.
-		local label = holder:FindFirstChild("Label")
-		if label then
-			paint(label, "ImageColor3", palette.Light)
-			paint(label:FindFirstChild("Label"), "ImageColor3", palette.Light)
+		local picture
+		if palette.Image and palette.ReplaceFigure then
+			picture = Core.Images:Resolve(palette.Image)
 		end
 
-		local glitch = holder:FindFirstChild("GlitchLabel")
-		if glitch then
-			paint(glitch, "ImageColor3", palette.Light)
-			paint(glitch:FindFirstChild("Label"), "ImageColor3", palette.Light)
+		-- Everything under the holder is the light's figure in one form or
+		-- another: outer, inner, and the Glitch variants of both.
+		for _, descendant in ipairs(holder:GetDescendants()) do
+			if descendant:IsA("ImageLabel") then
+				paint(descendant, "ImageColor3", palette.Light)
+				if picture then paint(descendant, "Image", picture) end
+			elseif descendant:IsA("TextLabel") then
+				paint(descendant, "TextColor3", palette.Dialog or palette.Light)
+			end
+		end
+	elseif verbose then
+		table.insert(painted, "NO Hodler -- the figure could not be reached")
+	end
+
+	-- The grain, and its inner copy.
+	for _, name in ipairs({ "Static", "GlitchStatic" }) do
+		local layer = screen:FindFirstChild(name)
+		if layer then
+			paint(layer, "ImageColor3", palette.Static)
+			for _, descendant in ipairs(layer:GetDescendants()) do
+				if descendant:IsA("ImageLabel") then
+					paint(descendant, "ImageColor3", palette.Static)
+				end
+			end
 		end
 	end
 
-	local static = screen:FindFirstChild("Static")
-	if static then
-		paint(static, "ImageColor3", palette.Static)
-		paint(static:FindFirstChild("Static"), "ImageColor3", palette.Static)
+	-- The hint text sits beside the holder, not inside it.
+	for _, descendant in ipairs(screen:GetChildren()) do
+		if descendant:IsA("TextLabel") then
+			paint(descendant, "TextColor3", palette.Dialog or palette.Light)
+		end
 	end
 
-	local glitchStatic = screen:FindFirstChild("GlitchStatic")
-	if glitchStatic then
-		paint(glitchStatic, "ImageColor3", palette.Static)
-		paint(glitchStatic:FindFirstChild("Static"), "ImageColor3", palette.Static)
+	if verbose and #painted > 0 then
+		logAlways("DeathLight", "painted %d:", #painted)
+		for _, line in ipairs(painted) do
+			logAlways("DeathLight", "   %s", line)
+		end
 	end
 
-	paint(screen:FindFirstChild("HelpfulDialog"), "TextColor3", palette.Dialog)
-	paint(screen:FindFirstChild("GlitchDialog"),  "TextColor3", palette.Dialog)
-
-	return painted
+	return #painted
 end
 
 -- Called by an entity as it kills you, so the screen knows whose light to be.
@@ -2238,12 +2251,18 @@ function DeathLight:Watch()
 		-- DOORS paints these as the screen animates in, so one pass at the
 		-- wrong moment gets overwritten. Keep repainting for a second.
 		task.spawn(function()
-			local painted = 0
-			for _ = 1, 20 do
-				painted = paintDeathScreen(screen, palette)
+			-- First pass is logged in full so a wrong colour can be traced to
+			-- the object that kept it. The rest just hold the line.
+			local painted = paintDeathScreen(screen, palette, true)
+
+			-- Three seconds: DOORS keeps writing these as the screen animates
+			-- in, and one second was not covering it.
+			for _ = 1, 60 do
+				paintDeathScreen(screen, palette, false)
 				task.wait(0.05)
 			end
-			logAlways("DeathLight", "repainted the death screen, %d object(s)", painted)
+
+			logAlways("DeathLight", "held the repaint for 3s, %d object(s) on the first pass", painted)
 		end)
 	end)
 

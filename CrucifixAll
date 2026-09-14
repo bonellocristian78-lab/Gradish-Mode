@@ -1,0 +1,236 @@
+--[[
+================================================================================
+
+        C R U C I F I X   A L L
+
+        Every crucifix in the mod, one key each.
+
+            1   plain      the ordinary one
+            2   Corroded   green    -- Rose Hell cannot resist it
+            3   Crimson    red      -- Retter and the Mischievous Light
+            4   Violet     violet   -- Yeller and Rude
+            5   Rainbow    cycling  -- beats EVERYTHING, and says so
+
+        Banishing anything with the rainbow one awards "You tried the dev
+        crucifix". That is the point of it.
+
+        HOW A VARIANT WORKS
+        -------------------
+        It is an attribute, never a rename. The Entity Spawner matches on the
+        exact name "Crucifix":
+
+            local tool = Character:FindFirstChildOfClass("Tool")
+            if tool and (tool.Name == name or tool:HasTag(name)) then
+
+        so calling one "VioletCrucifix" would stop it being a crucifix at all.
+        Each carries CrucifixVariant = "<key>", which GradishCore reads to
+        decide whether the entity in front of you can resist it.
+
+        WHY THE COLOUR IS A HIGHLIGHT AND NOT handle.Color
+        --------------------------------------------------
+        The real crucifix Handle is a MeshPart with a TextureID, and a textured
+        MeshPart draws its texture and ignores Color completely. Setting Color
+        on it does nothing you can see -- the same trap that had Seek coming
+        out black no matter what colour was set. A Highlight tints through
+        textures and meshes, so that is what carries the colour, with Color set
+        underneath only as a backup for the hand-built fallback handle.
+
+        Needs GradishCore for the variant definitions, so the repo has to be
+        reachable. For a plain crucifix with no dependencies, use CrucifixGiver.
+
+================================================================================
+]]
+
+local Config = {
+	Url = "https://raw.githubusercontent.com/PenguinManiack/Crucifix/main/Crucifix.lua",
+
+	-- Your loader's own knobs.
+	Uses  = 1,
+	Range = 30,
+
+	AutoEquip = true,
+	Timeout   = 12,
+
+	Keys = {
+		[Enum.KeyCode.One]   = false,       -- plain
+		[Enum.KeyCode.Two]   = "Corroded",
+		[Enum.KeyCode.Three] = "Crimson",
+		[Enum.KeyCode.Four]  = "Violet",
+		[Enum.KeyCode.Five]  = "Rainbow",
+	},
+
+	Debug = true,
+}
+
+local Core = loadstring(game:HttpGet(
+	"https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/GradishCore"
+))()
+
+local Players           = game:GetService("Players")
+local UserInputService  = game:GetService("UserInputService")
+local CollectionService = game:GetService("CollectionService")
+
+local LocalPlayer = Players.LocalPlayer
+
+local function log(format, ...)
+	if not Config.Debug then return end
+	print("[CrucifixAll] " .. format:format(...))
+end
+
+local function containers()
+	return { LocalPlayer:FindFirstChildOfClass("Backpack"), LocalPlayer.Character }
+end
+
+local function snapshot()
+	local seen = {}
+	for _, container in ipairs(containers()) do
+		if container then
+			for _, child in ipairs(container:GetChildren()) do
+				if child:IsA("Tool") then seen[child] = true end
+			end
+		end
+	end
+	return seen
+end
+
+local function firstNewTool(seen)
+	for _, container in ipairs(containers()) do
+		if container then
+			for _, child in ipairs(container:GetChildren()) do
+				if child:IsA("Tool") and not seen[child] then return child end
+			end
+		end
+	end
+	return nil
+end
+
+local function existingCrucifix()
+	for _, container in ipairs(containers()) do
+		if container then
+			for _, child in ipairs(container:GetChildren()) do
+				if child:IsA("Tool") and child.Name == "Crucifix" then return child end
+			end
+		end
+	end
+	return nil
+end
+
+---====== GIVING ======---
+
+local busy = false
+
+local function give(variant)
+	if busy then
+		log("still fetching the last one")
+		return
+	end
+	busy = true
+
+	local character = LocalPlayer.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+
+	if not humanoid or humanoid.Health <= 0 then
+		log("no living character")
+		busy = false
+		return
+	end
+
+	-- Never leave two lying around.
+	local old = existingCrucifix()
+	if old then pcall(function() old:Destroy() end) end
+
+	local before = snapshot()
+
+	log("fetching (%s)", variant or "plain")
+	_G.Uses  = Config.Uses
+	_G.Range = Config.Range
+
+	local ok, err = pcall(function()
+		loadstring(game:HttpGet(Config.Url))()
+	end)
+
+	if not ok then
+		warn("[CrucifixAll] the loader errored: " .. tostring(err))
+		busy = false
+		return
+	end
+
+	local deadline = os.clock() + Config.Timeout
+	local tool
+	while os.clock() < deadline do
+		tool = firstNewTool(before)
+		if tool then break end
+		task.wait(0.15)
+	end
+
+	-- The loader may refuse a second one in the same session.
+	tool = tool or existingCrucifix()
+
+	if not tool then
+		warn("[CrucifixAll] the loader produced no tool within " .. Config.Timeout .. "s")
+		busy = false
+		return
+	end
+
+	tool.Name = "Crucifix"   -- the spawner matches this exact name
+	pcall(function() CollectionService:AddTag(tool, "Crucifix") end)
+
+	if variant then
+		Core.MakeVariant(tool, variant)
+
+		local definition = Core.CrucifixVariants[variant]
+		if definition then
+			if definition.Beats == "*" then
+				log("%s -- beats EVERY entity", variant)
+			elseif type(definition.Beats) == "table" then
+				log("%s -- beats %s", variant, table.concat(definition.Beats, ", "))
+			end
+		end
+	end
+
+	if Config.AutoEquip and tool.Parent ~= character then
+		pcall(function() humanoid:EquipTool(tool) end)
+
+		-- The spawner only checks Character:FindFirstChildOfClass("Tool"), so
+		-- one sitting in the backpack is invisible to it.
+		if tool.Parent ~= character then
+			pcall(function() tool.Parent = character end)
+		end
+	end
+
+	log("in hand: %s", tostring(tool.Parent == character))
+	busy = false
+end
+
+---====== INPUT ======---
+
+local connections = {}
+
+table.insert(connections, UserInputService.InputBegan:Connect(function(input, processed)
+	if processed then return end
+
+	local variant = Config.Keys[input.KeyCode]
+	if variant == nil then return end
+
+	task.spawn(give, variant or nil)
+end))
+
+if getgenv then
+	local previous = getgenv().__CrucifixAllCleanup
+	if type(previous) == "function" then pcall(previous) end
+
+	getgenv().__CrucifixAllCleanup = function()
+		for _, connection in ipairs(connections) do
+			pcall(function() connection:Disconnect() end)
+		end
+		table.clear(connections)
+	end
+end
+
+print("")
+log("ready:")
+log("  1  plain")
+log("  2  Corroded  green    Rose Hell cannot resist it")
+log("  3  Crimson   red      Retter, Mischievous Light")
+log("  4  Violet    violet   Yeller, Rude")
+log("  5  Rainbow   cycling  beats everything, awards the dev badge")
