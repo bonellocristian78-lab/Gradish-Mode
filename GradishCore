@@ -1609,8 +1609,7 @@ local function runLoader()
 	local seen = {}
 	collectTools(seen)
 
-	print(("[Gradish/Crucifix] running the model loader (Uses=%s, Range=%s)")
-		:format(tostring(settings.Uses), tostring(settings.Range)))
+	logAlways("Crucifix", "running the model loader (Uses=%s, Range=%s)", tostring(settings.Uses), tostring(settings.Range))
 
 	local ok, err = pcall(function()
 		_G.Uses  = settings.Uses
@@ -1639,7 +1638,7 @@ local function runLoader()
 		if container then
 			for _, child in ipairs(container:GetChildren()) do
 				if child:IsA("Tool") and child.Name == "Crucifix" then
-					print("[Gradish/Crucifix] no new tool, reusing the one already here")
+					logAlways("Crucifix", "no new tool, reusing the one already here")
 					return child
 				end
 			end
@@ -1719,7 +1718,7 @@ function Crucifix:Watch(tool)
 
 		self.current = nil
 		self.spent += 1
-		print(("[Gradish/Crucifix] used (%d spent)"):format(self.spent))
+		logAlways("Crucifix", "used (%d spent)", self.spent)
 	end)
 end
 
@@ -1760,7 +1759,7 @@ function Crucifix:Give(reason, equip)
 		end
 	end
 
-	print(("[Gradish/Crucifix] given via %s (%s)"):format(self.source, reason or "manual"))
+	logAlways("Crucifix", "given via %s (%s)", self.source, reason or "manual")
 	return tool
 end
 
@@ -2251,18 +2250,30 @@ function DeathLight:Watch()
 		-- DOORS paints these as the screen animates in, so one pass at the
 		-- wrong moment gets overwritten. Keep repainting for a second.
 		task.spawn(function()
-			-- First pass is logged in full so a wrong colour can be traced to
-			-- the object that kept it. The rest just hold the line.
+			--[[ Repaint for as long as the screen is up, not for a fixed
+			     window.
+
+			     Three seconds was not enough and the reason is the order DOORS
+			     builds the screen in: the hint text arrives LAST, so late
+			     passes caught it and it stayed painted, while the moon and the
+			     figure were written again after the window closed and went
+			     back to default. That is exactly what the screenshots showed
+			     -- red text, default light.
+
+			     So it holds until the screen goes away, with a generous cap so
+			     a stuck screen cannot leave this spinning forever. ]]
 			local painted = paintDeathScreen(screen, palette, true)
 
-			-- Three seconds: DOORS keeps writing these as the screen animates
-			-- in, and one second was not covering it.
-			for _ = 1, 60 do
+			local deadline = os.clock() + (palette.HoldFor or 45)
+			local passes = 0
+
+			while screen.Visible and os.clock() < deadline do
 				paintDeathScreen(screen, palette, false)
-				task.wait(0.05)
+				passes += 1
+				task.wait(0.1)
 			end
 
-			logAlways("DeathLight", "held the repaint for 3s, %d object(s) on the first pass", painted)
+			logAlways("DeathLight", "held for %d pass(es), %d object(s) on the first", passes, painted)
 		end)
 	end)
 
@@ -2338,7 +2349,7 @@ local function recolourRitual(model, colour)
 		end)
 	end
 
-	print(("[Gradish/Crucifix] ritual recoloured, %d object(s)"):format(count))
+	logAlways("Crucifix", "ritual recoloured, %d object(s)", count)
 end
 
 function Crucifix:WatchRitual()
@@ -2829,48 +2840,71 @@ local function findSpawnPile(prompt)
 	return pile, container
 end
 
--- A stand-in crucifix: the real tool's Handle if we have one, otherwise two
--- planks. Purely decorative -- the Tool you actually receive is separate.
-local function buildVisual(tool)
-	if tool then
-		local handle = tool:FindFirstChild("Handle")
-		if handle and handle:IsA("BasePart") then
-			local clone = handle:Clone()
+--[[ What to show in the drawer, per item.
 
-			-- Strip anything that would move, emit or make noise in a drawer.
-			for _, descendant in ipairs(clone:GetDescendants()) do
-				if descendant:IsA("BodyMover") or descendant:IsA("Sound")
-					or descendant:IsA("Weld") or descendant:IsA("WeldConstraint")
-				then
-					descendant:Destroy()
-				elseif descendant:IsA("ParticleEmitter") then
-					descendant.Enabled = false
-				end
-			end
-
-			return clone
-		end
-	end
-
-	local part = Instance.new("Part")
-	part.Size     = Vector3.new(0.18, 1.1, 0.18)
-	part.Color    = Color3.fromRGB(92, 64, 42)
-	part.Material = Enum.Material.Wood
-
-	local bar = part:Clone()
-	bar.Size   = Vector3.new(0.6, 0.18, 0.18)
-	bar.Parent = part
-
+     It used to build a crucifix whatever the roll produced -- the log caught
+     it: "there is vitamins in this one", and a crucifix was placed. Each entry
+     now draws itself, and anything without a builder shows nothing rather
+     than lying about what is in there. ]]
+local function decorate(part, colour, material)
+	part.Color         = colour
+	part.Material      = material or Enum.Material.SmoothPlastic
+	part.Anchored      = true
+	part.CanCollide    = false
+	part.CanQuery      = false
+	part.CanTouch      = false
+	part.CastShadow    = false
+	part.Massless      = true
+	part.TopSurface    = Enum.SurfaceType.Smooth
+	part.BottomSurface = Enum.SurfaceType.Smooth
 	return part
+end
+
+local ITEM_VISUALS = {
+	Bandage = function()
+		local part = Instance.new("Part")
+		part.Size = Vector3.new(0.5, 0.22, 0.42)
+		return decorate(part, Color3.fromRGB(240, 235, 220))
+	end,
+
+	Glowstick = function()
+		local part = Instance.new("Part")
+		part.Size = Vector3.new(0.9, 0.16, 0.16)
+		decorate(part, Color3.fromRGB(120, 255, 160), Enum.Material.Neon)
+		part.Transparency = 0.15
+		return part
+	end,
+
+	Vitamins = function()
+		local part = Instance.new("Part")
+		part.Size = Vector3.new(0.34, 0.5, 0.34)
+		return decorate(part, Color3.fromRGB(255, 180, 60))
+	end,
+}
+
+-- The crucifixes all share a shape and differ only in colour.
+local function crucifixVisual(colour)
+	local shaft = Instance.new("Part")
+	shaft.Name = "GradishCrucifixLoot"
+	shaft.Size = Vector3.new(0.14, 0.95, 0.14)
+	decorate(shaft, colour, Enum.Material.Wood)
+
+	local bar = Instance.new("Part")
+	bar.Name = "Bar"
+	bar.Size = Vector3.new(0.5, 0.14, 0.14)
+	decorate(bar, colour, Enum.Material.Wood)
+
+	return shaft, bar
 end
 
 function Crucifix:ShowInDrawer(prompt, tool, settings, entry)
 	settings = settings or {}
 	if settings.Enabled == false then return end
+	if not entry then return end
 
 	local pile, container = findSpawnPile(prompt)
 	if not pile then
-		print("[Gradish/Crucifix] no SpawnPile on that drawer, showing nothing")
+		logAlways("Crucifix", "no SpawnPile on %s, showing nothing", prompt:GetFullName())
 		return
 	end
 
@@ -2879,36 +2913,57 @@ function Crucifix:ShowInDrawer(prompt, tool, settings, entry)
 		if anchorPart:IsA("BasePart") then return anchorPart.CFrame end
 		return anchorPart:GetPivot()
 	end)
-	if not ok or not anchor then return end
-
-	local visual = buildVisual(tool)
-	visual.Name         = "GradishCrucifixLoot"
-	visual.Anchored     = true
-	visual.CanCollide   = false
-	visual.CanQuery     = false
-	visual.CanTouch     = false
-	visual.Massless     = true
-	visual.CFrame       = anchor * CFrame.Angles(0, 0, math.rad(90))
-	visual.Parent       = pile
-
-	-- A corroded crucifix glows green in the drawer, so you can tell before
-	-- you pick it up that this one is the rare one.
-	local colour = settings.Color or Color3.fromRGB(255, 238, 170)
-	if entry and entry.Corroded then
-		colour = Color3.fromRGB(110, 220, 90)
+	if not ok or not anchor then
+		logAlways("Crucifix", "no anchor inside %s", pile:GetFullName())
+		return
 	end
 
+	--[[ The right shape for the thing you actually found. A crucifix for
+	     everything was the bug the log caught. ]]
+	local parts = {}
+	local colour = settings.Color or Color3.fromRGB(255, 238, 170)
+
+	if entry.FromLoader then
+		local variant = entry.Variant and Core.CrucifixVariants[entry.Variant]
+		local woodColour = (variant and variant.Color) or Color3.fromRGB(150, 110, 70)
+		if entry.Variant == "Rainbow" then woodColour = Color3.fromRGB(255, 255, 255) end
+
+		local shaft, bar = crucifixVisual(woodColour)
+		shaft.CFrame = anchor * CFrame.new(0, 0.25, 0)
+		bar.CFrame   = shaft.CFrame * CFrame.new(0, 0.2, 0)
+		parts = { shaft, bar }
+
+		if variant then colour = variant.Color or colour end
+
+	elseif ITEM_VISUALS[entry.Key] then
+		local part = ITEM_VISUALS[entry.Key]()
+		part.Name = "GradishLoot"
+		part.CFrame = anchor * CFrame.new(0, 0.2, 0)
+		parts = { part }
+		colour = part.Color
+
+	else
+		logAlways("Crucifix", "no drawer visual for %s, showing nothing", entry.Key)
+		return
+	end
+
+	for _, part in ipairs(parts) do
+		part.Parent = pile
+	end
+
+	-- Highlight adorns one thing, so the pieces go under a Model.
+	local holder = parts[1]
+
 	local highlight = Instance.new("Highlight")
-	highlight.Name                = "GradishCrucifixGlow"
+	highlight.Name                = "GradishLootGlow"
 	highlight.FillColor           = colour
 	highlight.FillTransparency    = settings.FillTransparency or 0.25
 	highlight.OutlineColor        = colour
 	highlight.OutlineTransparency = 0
 	highlight.DepthMode           = Enum.HighlightDepthMode.AlwaysOnTop
-	highlight.Adornee             = visual
-	highlight.Parent              = visual
+	highlight.Adornee             = holder
+	highlight.Parent              = holder
 
-	-- The whole drawer glows too, so you can spot it across the room.
 	local drawerGlow
 	if settings.GlowDrawer and container then
 		drawerGlow = Instance.new("Highlight")
@@ -2922,19 +2977,21 @@ function Crucifix:ShowInDrawer(prompt, tool, settings, entry)
 		drawerGlow.Parent              = container
 	end
 
-	print(("[Gradish/Crucifix] placed in %s"):format(pile:GetFullName()))
+	logAlways("Crucifix", "placed %s (%d part(s)) at %s",
+		entry.Key, #parts, pile:GetFullName())
 
-	-- A slow pulse, so it reads as something rather than a lit prop.
 	task.spawn(function()
 		local deadline = os.clock() + (settings.Duration or 10)
 
-		while os.clock() < deadline and visual.Parent do
+		while os.clock() < deadline and holder.Parent do
 			local wave = 0.15 + 0.2 * math.abs(math.sin(os.clock() * 2))
 			pcall(function() highlight.FillTransparency = wave end)
 			task.wait(0.05)
 		end
 
-		pcall(function() visual:Destroy() end)
+		for _, part in ipairs(parts) do
+			pcall(function() part:Destroy() end)
+		end
 		if drawerGlow then pcall(function() drawerGlow:Destroy() end) end
 	end)
 end
@@ -2961,8 +3018,7 @@ function Crucifix:EnableDrawers(settings)
 		if player ~= LocalPlayer then return end
 
 		if debugMode then
-			print(("[Gradish/Crucifix] you opened: %s  (ObjectText=%q ActionText=%q)")
-				:format(prompt:GetFullName(), tostring(prompt.ObjectText), tostring(prompt.ActionText)))
+			logAlways("Crucifix", "you opened: %s  (ObjectText=%q ActionText=%q)", prompt:GetFullName(), tostring(prompt.ObjectText), tostring(prompt.ActionText))
 		end
 
 		if self.foundInDrawers >= maxPerRun then return end
@@ -2985,15 +3041,14 @@ function Crucifix:EnableDrawers(settings)
 
 		if debugMode then
 			local hasLoot, what = drawerStillHasLoot(prompt)
-			print(("[Gradish/Crucifix] search %d, odds %.1f%%, clutter: %s")
-				:format(searches, odds * 100, hasLoot and what or tostring(hasLoot)))
+			logAlways("Crucifix", "search %d, odds %.1f%%, clutter: %s", searches, odds * 100, hasLoot and what or tostring(hasLoot))
 		end
 
 		if not self.forceNext and math.random() > odds then return end
 		self.forceNext = false
 
 		self.foundInDrawers += 1
-		print("[Gradish/Crucifix] there is something in this one")
+		logAlways("Crucifix", "there is something in this one")
 
 		task.wait(settings.Delay or 0.35) -- let the drawer finish opening
 
@@ -3039,15 +3094,13 @@ function Crucifix:EnableDrawers(settings)
 
 			self.forceNext = true
 			self.foundInDrawers = 0  -- lift the per-run cap for the test
-			print("[Gradish/Crucifix] forced: the NEXT drawer you open has one")
+			logAlways("Crucifix", "forced: the NEXT drawer you open has one")
 		end)
 
-		print(("[Gradish/Crucifix] press %s to force the next drawer")
-			:format(settings.ForceKey.Name))
+		logAlways("Crucifix", "press %s to force the next drawer", settings.ForceKey.Name)
 	end
 
-	print(("[Gradish/Crucifix] drawer search armed (from %d%%, +%.1f%% each, room %d onward, %d per run)")
-		:format(math.floor(base * 100 + 0.5), ramp * 100, minRoom, maxPerRun))
+	logAlways("Crucifix", "drawer search armed (from %d%%, +%.1f%% each, room %d onward, %d per run)", math.floor(base * 100 + 0.5), ramp * 100, minRoom, maxPerRun)
 end
 
 ---====== RED SEEK ======---
@@ -3148,8 +3201,7 @@ local function paintModel(model, colour, strip, settings)
 		if ok then painted += 1 end
 	end
 
-	print(("[Gradish/RedSeek] %s: %d descendant(s), %d BasePart(s), highlight=%s")
-		:format(model.Name, painted, parts, tostring(settings.UseHighlight ~= false)))
+	logAlways("RedSeek", "%s: %d descendant(s), %d BasePart(s), highlight=%s", model.Name, painted, parts, tostring(settings.UseHighlight ~= false))
 end
 
 function RedSeek:Track(model)
@@ -3160,7 +3212,7 @@ function RedSeek:Track(model)
 	local colour   = settings.Color
 	local strip    = settings.StripTextures
 
-	print(("[Gradish/RedSeek] painting %s at %s"):format(model.Name, model:GetFullName()))
+	logAlways("RedSeek", "painting %s at %s", model.Name, model:GetFullName())
 	paintModel(model, colour, strip, settings)
 
 	-- The chase model builds itself up over a second or two, so anything that
@@ -3193,11 +3245,11 @@ function RedSeek:Track(model)
 			task.wait(settings.DeathGrace or 1.5)
 
 			if isPlayerDead() then
-				print("[Gradish/RedSeek] he got you")
+				logAlways("RedSeek", "he got you")
 				return
 			end
 
-			print("[Gradish/RedSeek] you made it out")
+			logAlways("RedSeek", "you made it out")
 			Achievements:Award(redSeekAchievement())
 		end)
 	end)
@@ -3264,7 +3316,7 @@ function RedSeek:Enable(settings)
 
 	self:Scan()
 
-	print(("[Gradish/RedSeek] armed for: %s"):format(table.concat(self.settings.Models, ", ")))
+	logAlways("RedSeek", "armed for: %s", table.concat(self.settings.Models, ", "))
 end
 
 ---====== SPAWNER ======---
