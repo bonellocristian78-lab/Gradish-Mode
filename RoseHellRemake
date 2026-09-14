@@ -60,6 +60,34 @@ Core:Spawn({
 		Reversed = true,
 	},
 
+	--[[ THE CRUCIFIX BARELY WORKS ON HER.
+
+	     85% of attempts simply fail -- the ritual plays its failure sound and
+	     she carries on. The spawner reads Crucifixion.Resist once, when the
+	     ritual starts, so the roll happens at spawn rather than when you raise
+	     it: she has already decided before you try.
+
+	     4% of the time it comes up corroded instead. The ritual runs sick
+	     green rather than the usual blue, and it works. That is the only way
+	     she goes down to a crucifix, and it has its own achievement. ]]
+	Crucifixion = {
+		Enabled      = true,
+		Type         = "Guiding",
+		Range        = 40,
+		Break        = true,
+		ResistChance = 0.85,
+	},
+
+	Corroded = {
+		Chance      = 0.04,
+		Color       = Color3.fromRGB(86, 214, 92),
+		Achievement = "Corroded",
+	},
+
+	-- Any colour you like for the banish ritual, not just the two the spawner
+	-- knows. Left unset here so the normal ritual stays the usual blue.
+	-- CrucifixColor = Color3.fromRGB(255, 80, 120),
+
 	-- Achievement wording lives in AchievementConfig, so all four of
 	-- this entity's badges are edited in one place with everyone else's.
 })

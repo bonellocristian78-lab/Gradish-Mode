@@ -813,6 +813,16 @@ local function startCrucifixionWatch(session)
 		session.stats.crucifixUsed = true
 		log(session.name, "crucifix ritual started")
 
+		--[[ Hand the ritual watcher the colour for THIS banish before the
+		     Repentance model lands in workspace. Core.Crucifix rather than the
+		     local, because the crucifix module is defined further down the
+		     file and is not in scope here -- but it exists by the time this
+		     ever runs. ]]
+		if Core.Crucifix then
+			Core.Crucifix.pendingColour = session.ritualColour or session.profile.CrucifixColor
+			Core.Crucifix:WatchRitual()
+		end
+
 		task.spawn(function()
 			local deadline = os.clock() + (session.profile.CrucifixTimeout or 12)
 
@@ -833,6 +843,24 @@ local function startCrucifixionWatch(session)
 
 			if session.achievements.Crucify then
 				Achievements:Award(session.achievements.Crucify)
+			end
+
+			-- The rare one. Only reachable on a corroded roll, so it is its
+			-- own award rather than a variant of the usual banish.
+			if session.corroded then
+				local key = (session.profile.Corroded or {}).Achievement or "Corroded"
+				local entry = (session.achievements or {})[key]
+
+				if type(entry) ~= "table" then
+					local data = AchievementConfig:Get()
+					entry = (((data.Entities or {})[session.name] or {})[key])
+				end
+
+				if type(entry) == "table" then
+					Achievements:Award(entry)
+				else
+					log(session.name, "corroded banish, but no %q achievement configured", key)
+				end
 			end
 
 			--[[ A banish does not go through Despawn().
@@ -1250,6 +1278,100 @@ end
      always is eventually, and neither outcome feels arbitrary. MinRoom also
      keeps it out of the opening rooms entirely, where a crucifix would trivial-
      ise everything that comes next. ]]
+---====== RITUAL COLOUR ======---
+--[[ The spawner only knows two banish colours:
+
+         Storage.CrucifixTypes = {
+             guiding = { Color = (137, 207, 255) },   -- blue
+             curious = { Color = (255, 227, 137) },   -- yellow
+         }
+
+     That table is a local inside the spawner, so it cannot be added to from
+     out here. But the ritual clones its Repentance model into workspace and
+     THEN colours it, so waiting for that model to appear and recolouring it
+     afterwards gets any colour you like, without touching the spawner at all.
+
+     The spawner tints everything carrying the GiveMeColor tag. We use the
+     same set where we can reach it, and fall back to every light, beam and
+     emitter in the model. ]]
+
+Crucifix.pendingColour  = nil   -- set by whoever is being banished right now
+Crucifix.ritualWatching = false
+
+local function taggedForColour(model)
+	-- Vynixu's utilities inject QueryDescendants, and the spawner itself uses
+	-- exactly this selector, so try it first.
+	local ok, result = pcall(function()
+		return model:QueryDescendants(".GiveMeColor")
+	end)
+	if ok and type(result) == "table" and #result > 0 then
+		return result
+	end
+
+	-- Otherwise the tag directly.
+	local tagged = {}
+	pcall(function()
+		for _, instance in ipairs(CollectionService:GetTagged("GiveMeColor")) do
+			if instance:IsDescendantOf(model) then
+				table.insert(tagged, instance)
+			end
+		end
+	end)
+	if #tagged > 0 then return tagged end
+
+	-- Last resort: everything that emits light in the model.
+	local fallback = {}
+	for _, descendant in ipairs(model:GetDescendants()) do
+		if descendant:IsA("Light") or descendant:IsA("Beam")
+			or descendant:IsA("ParticleEmitter")
+		then
+			table.insert(fallback, descendant)
+		end
+	end
+	return fallback
+end
+
+local function recolourRitual(model, colour)
+	local targets = taggedForColour(model)
+	local count = 0
+
+	for _, instance in ipairs(targets) do
+		pcall(function()
+			if instance:IsA("Light") or instance:IsA("BasePart") then
+				instance.Color = colour
+				count += 1
+			elseif instance:IsA("ParticleEmitter") or instance:IsA("Beam") then
+				instance.Color = ColorSequence.new(colour)
+				count += 1
+			end
+		end)
+	end
+
+	print(("[Gradish/Crucifix] ritual recoloured, %d object(s)"):format(count))
+end
+
+function Crucifix:WatchRitual()
+	if self.ritualWatching then return end
+	self.ritualWatching = true
+
+	Workspace.ChildAdded:Connect(function(child)
+		if child.Name ~= "Repentance" then return end
+
+		local colour = self.pendingColour
+		if not colour then return end
+		self.pendingColour = nil
+
+		-- Let the spawner finish applying its own colour first, then override.
+		task.spawn(function()
+			for _ = 1, 4 do
+				task.wait(0.1)
+				if not child.Parent then return end
+				recolourRitual(child, colour)
+			end
+		end)
+	end)
+end
+
 ---====== SHOWING IT IN THE DRAWER ======---
 --[[ Without this, finding a crucifix is a line in the console and a tool that
      quietly appears in your backpack. You can easily search the drawer that
@@ -1924,6 +2046,32 @@ function Core:Spawn(profile, passIndex, carriedStats)
 		local factor = 1 + (math.random() * 2 - 1) * variance
 		entity.Config.Movement.Speed *= factor
 		log(profile.Name, "arriving %+.0f%% off its usual pace", (factor - 1) * 100)
+	end
+
+	--[[ RESIST, AND THE CORRODED EXCEPTION
+
+	     Some entities shrug the crucifix off. The spawner supports that with
+	     Crucifixion.Resist, but it reads the flag once, at the moment the
+	     ritual begins, so the decision has to be made now rather than when you
+	     raise the crucifix.
+
+	     Rose Hell uses this: nearly every attempt on her fails. Rarely, the
+	     roll comes up corroded instead -- the ritual runs in a sick green
+	     rather than the usual blue, and it works. That is the only way she
+	     ever goes down to a crucifix, and it has its own achievement. ]]
+	local crucifixion = profile.Crucifixion or {}
+	local corroded = profile.Corroded
+
+	if corroded and math.random() < (corroded.Chance or 0) then
+		session.corroded     = true
+		session.ritualColour = corroded.Color or Color3.fromRGB(90, 220, 90)
+		entity.Config.Crucifixion.Resist = false
+
+		log(profile.Name, "the crucifix is CORRODED this time -- it will work")
+
+	elseif crucifixion.ResistChance and math.random() < crucifixion.ResistChance then
+		entity.Config.Crucifixion.Resist = true
+		log(profile.Name, "will resist the crucifix this time")
 	end
 
 	local function hook(name, fn)

@@ -87,6 +87,15 @@ return {
 				Desc       = "She never laid a petal on you",
 				Reason     = "Survive Rose Hell without being hit",
 			},
+			--[[ Only reachable on a corroded roll -- about a 4% chance, on top
+			     of her normally resisting the crucifix entirely. ]]
+			Corroded = {
+				Identifier = "What Just Hapen",
+				Title      = "What Just Hapen",
+				Desc       = "Crucify Rose Hell with a Corroded Crucifix",
+				Reason     = "The crucifix should not have worked on her",
+			},
+
 			Crucify = {
 				Identifier = "Dry Roses",
 				Title      = "Dry Roses",
