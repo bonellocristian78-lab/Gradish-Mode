@@ -1,0 +1,230 @@
+--[[
+================================================================================
+
+        D E A T H   L I G H T   P R O B E
+
+        Finds out how DOORS draws the thing that appears when you die and tells
+        you what killed you, so a custom one can be built on facts instead of
+        guesses.
+
+        Run it, then die once. It writes everything to
+
+            <executor>/workspace/gradish_deathlight.txt
+
+        which is a file I can read directly -- no copying console output.
+
+        WHAT IT IS LOOKING FOR AND WHY
+        ------------------------------
+        The Entity Spawner ends a death like this:
+
+            firesignal(Remotes.DeathHint.OnClientEvent, config.Death.Hints, colour)
+
+        where `colour` is a plain string, resolved by matching Death.Type
+        against the children of Main_Game.Health.Music -- Yellow, Blue, Glitch
+        and Rush. So the spawner's side is just a name.
+
+        What that name then MEANS is DOORS' own code, and that is the part
+        nobody has read. Registering a new Sound called "Mischievous" in
+        Health.Music makes the name resolve, but if the death screen picks its
+        picture from somewhere else keyed on the same name, a new sound alone
+        gets you silence and a default face.
+
+        So this dumps three things:
+
+          1. The whole MainUI.Death tree, with every image, colour and text
+             property, before you die.
+          2. Health.Music and anything near it that is keyed by those four
+             names.
+          3. The live DeathHint event: what arguments actually arrive, and what
+             changes in the tree in the second after they do.
+
+        Between them that says exactly which properties a custom death light
+        would have to set, and whether it is possible at all.
+
+================================================================================
+]]
+
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+local OUT = "gradish_deathlight.txt"
+local lines = {}
+
+local function put(text)
+	table.insert(lines, text)
+	print("[DeathProbe] " .. text)
+end
+
+local function flush()
+	pcall(function()
+		if writefile then
+			writefile(OUT, table.concat(lines, "\n") .. "\n")
+		end
+	end)
+end
+
+---====== DUMPING ======---
+
+-- Properties worth knowing about for something that draws a character on a
+-- death screen. Read defensively: most will not exist on most classes.
+local INTERESTING = {
+	"Image", "ImageColor3", "ImageTransparency", "Texture",
+	"Color", "Color3", "BackgroundColor3", "TextColor3",
+	"Text", "Visible", "Enabled", "SoundId", "Value",
+	"FillColor", "OutlineColor", "Brightness",
+}
+
+local function describe(instance, indent)
+	local bits = {}
+
+	for _, property in ipairs(INTERESTING) do
+		local ok, value = pcall(function() return instance[property] end)
+		if ok and value ~= nil then
+			local text = tostring(value)
+			if text ~= "" and text ~= "nil" then
+				-- Skip the noise: pure white, fully opaque, empty strings.
+				if not (property == "BackgroundColor3" and text == "1, 1, 1") then
+					table.insert(bits, ("%s=%s"):format(property, text))
+				end
+			end
+		end
+	end
+
+	put(("%s%s <%s>%s"):format(
+		string.rep("  ", indent),
+		instance.Name,
+		instance.ClassName,
+		#bits > 0 and ("   " .. table.concat(bits, "  ")) or ""
+	))
+end
+
+local function dumpTree(root, indent, depth)
+	if not root or indent > depth then return end
+
+	for _, child in ipairs(root:GetChildren()) do
+		describe(child, indent)
+		dumpTree(child, indent + 1, depth)
+	end
+end
+
+---====== THE THREE DUMPS ======---
+
+put("=== DEATH LIGHT PROBE ===")
+put("")
+
+local gui = LocalPlayer:WaitForChild("PlayerGui", 10)
+local mainUI = gui and gui:FindFirstChild("MainUI")
+
+if not mainUI then
+	put("NO MainUI -- are you actually in a run?")
+	flush()
+	return
+end
+
+------------------------------------------------------------------ 1. the tree
+put("--- MainUI children (top level) ---")
+for _, child in ipairs(mainUI:GetChildren()) do
+	describe(child, 1)
+end
+put("")
+
+local death = mainUI:FindFirstChild("Death")
+if death then
+	put(("--- MainUI.Death <%s>, full tree ---"):format(death.ClassName))
+	describe(death, 0)
+	dumpTree(death, 1, 6)
+else
+	put("--- no MainUI.Death ---")
+	-- Cast wider: anything that looks like a death screen.
+	put("searching MainUI for anything death-shaped:")
+	for _, descendant in ipairs(mainUI:GetDescendants()) do
+		local name = descendant.Name:lower()
+		if name:find("death") or name:find("hint") or name:find("guiding")
+			or name:find("curious") or name:find("respawn")
+		then
+			put("  " .. descendant:GetFullName() .. " <" .. descendant.ClassName .. ">")
+		end
+	end
+end
+put("")
+
+------------------------------------------------------- 2. the four known names
+local initiator = mainUI:FindFirstChild("Initiator")
+local mainGame = initiator and initiator:FindFirstChild("Main_Game")
+local health = mainGame and mainGame:FindFirstChild("Health")
+local music = health and health:FindFirstChild("Music")
+
+if music then
+	put(("--- Health.Music <%s>, full tree ---"):format(music.ClassName))
+	dumpTree(music, 1, 3)
+else
+	put("--- no Health.Music ---")
+end
+put("")
+
+-- Anything ELSE keyed by those same four names is the likely home of the
+-- picture, which is the whole question.
+put("--- other objects named Yellow / Blue / Glitch / Rush anywhere in MainUI ---")
+local wanted = { Yellow = true, Blue = true, Glitch = true, Rush = true }
+local seen = 0
+for _, descendant in ipairs(mainUI:GetDescendants()) do
+	if wanted[descendant.Name] and not descendant:IsDescendantOf(music or mainUI) then
+		describe(descendant, 1)
+		seen += 1
+		if seen > 40 then
+			put("  ... stopping at 40")
+			break
+		end
+	end
+end
+if seen == 0 then put("  none found outside Health.Music") end
+put("")
+
+------------------------------------------------------------- 3. the live event
+local remotes = game:GetService("ReplicatedStorage"):FindFirstChild("RemotesFolder")
+local hint = remotes and remotes:FindFirstChild("DeathHint")
+
+if hint then
+	put(("--- DeathHint is a %s, watching it ---"):format(hint.ClassName))
+
+	if hint:IsA("RemoteEvent") then
+		hint.OnClientEvent:Connect(function(...)
+			local args = { ... }
+			put("")
+			put("*** DEATHHINT FIRED ***")
+
+			for index, value in ipairs(args) do
+				if type(value) == "table" then
+					put(("  arg %d: table"):format(index))
+					for k, v in pairs(value) do
+						put(("      [%s] = %s"):format(tostring(k), tostring(v)))
+					end
+				else
+					put(("  arg %d: %s (%s)"):format(index, tostring(value), type(value)))
+				end
+			end
+
+			-- What the tree looks like a moment after it arrives.
+			task.delay(1, function()
+				put("")
+				put("--- MainUI.Death one second after the event ---")
+				local d = mainUI:FindFirstChild("Death")
+				if d then
+					describe(d, 0)
+					dumpTree(d, 1, 6)
+				else
+					put("  still no MainUI.Death")
+				end
+				flush()
+				put("written to " .. OUT)
+			end)
+		end)
+	end
+else
+	put("--- no ReplicatedStorage.RemotesFolder.DeathHint ---")
+end
+
+flush()
+put("")
+put("Baseline written to " .. OUT .. ". Now go and die once, and it")
+put("will append what the death screen actually does.")

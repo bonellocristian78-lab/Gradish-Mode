@@ -1,0 +1,264 @@
+if game.Workspace:FindFirstChild("SeekMovingNewClone") then return end
+
+local Core = loadstring(game:HttpGet(
+	"https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/GradishCore"
+))()
+
+--[[
+================================================================================
+
+        M I S C H I E V O U S   L I G H T
+
+        Retter's shape, inverted.
+
+        Retter is the one you cannot outrun -- 330 studs of reach, so the closet
+        is not optional, and he announces himself by smothering the lights. This
+        one has exactly the same rules and does the opposite with them: it walks
+        toward you flooding every bulb ahead of it with its own pale colour.
+
+        That inversion is the whole joke. Everything the mod has taught you says
+        the corridor going dark is the warning. Here the corridor going BRIGHT
+        is the warning, and the brightest room is the one you have to be hiding
+        in.
+
+        It kills with its own death light -- not one of the game's four. See
+        RegisterDeathType in GradishCore and the call in MainScript.
+
+        WHY THE MODEL NEEDS UNPACKING FIRST
+        ----------------------------------
+        MischievousLight.rbxm is not an entity, it is a distribution package:
+        alongside the lamp it contains a ScreenGui, a LocalScript, a Script, a
+        RemoteEvent and a death screen made of Frames and TextLabels.
+
+        Handing that to Spawner:Create would pathfind the whole bundle through
+        the map and drag a death-screen GUI into workspace with it, which is
+        exactly the UI this mod does not have. So the package is loaded here,
+        the world objects are lifted out into a clean Model, and THAT is passed
+        as the asset -- the spawner accepts an Instance as well as a URL.
+
+================================================================================
+]]
+
+local PACKAGE = "https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/MischievousLight.rbxm"
+
+---====== UNPACKING ======---
+
+local function loadPackage(url)
+	if type(LoadCustomInstance) == "function" then
+		local ok, result = pcall(LoadCustomInstance, url)
+		if ok and typeof(result) == "Instance" then return result end
+	end
+
+	if not (getcustomasset and writefile and isfile and delfile) then
+		warn("[Gradish/MischievousLight] this executor has no getcustomasset")
+		return nil
+	end
+
+	local fileName = "mischievous_package.txt"
+
+	local ok, result = pcall(function()
+		writefile(fileName, game:HttpGet(url))
+		return game:GetObjects(getcustomasset(fileName, true))[1]
+	end)
+
+	pcall(function()
+		if isfile(fileName) then delfile(fileName) end
+	end)
+
+	if not ok then
+		warn("[Gradish/MischievousLight] package load failed: " .. tostring(result))
+		return nil
+	end
+
+	return result
+end
+
+-- Everything that belongs in the world, and nothing that belongs on a screen.
+local WORLD = {
+	BasePart = true, MeshPart = true, Part = true,
+}
+
+local function isWorldObject(instance)
+	return instance:IsA("BasePart")
+		or instance:IsA("Light")
+		or instance:IsA("ParticleEmitter")
+		or instance:IsA("Beam")
+		or instance:IsA("Attachment")
+		or instance:IsA("Sound")
+		or instance:IsA("SpecialMesh")
+		or instance:IsA("Decal")
+		or instance:IsA("Texture")
+		or instance:IsA("WeldConstraint")
+		or instance:IsA("Weld")
+end
+
+--[[ Lifts the lamp out of the package.
+
+     Parts are collected first and reparented afterwards: moving instances
+     while iterating GetDescendants is how you end up silently skipping half
+     of them. Children ride along with their parent part, so lights, emitters
+     and attachments do not need collecting separately. ]]
+local function extractEntity(package)
+	local model = Instance.new("Model")
+	model.Name = "Mischievous Light"
+
+	local parts = {}
+	for _, descendant in ipairs(package:GetDescendants()) do
+		if descendant:IsA("BasePart") then
+			-- Skip anything living under the GUI or the script plumbing.
+			local inGui = descendant:FindFirstAncestorWhichIsA("ScreenGui") ~= nil
+			if not inGui then
+				table.insert(parts, descendant)
+			end
+		end
+	end
+
+	if #parts == 0 then
+		warn("[Gradish/MischievousLight] no parts in the package")
+		model:Destroy()
+		return nil
+	end
+
+	local main
+	for _, part in ipairs(parts) do
+		-- Only move the top-level ones; anything welded under another part
+		-- travels with it.
+		if not part:FindFirstAncestorWhichIsA("BasePart") then
+			part.Parent = model
+		end
+		if part.Name == "MainPart" then main = part end
+	end
+
+	-- Anything the extraction missed that is still a part goes in too.
+	for _, part in ipairs(parts) do
+		if not part:IsDescendantOf(model) and not part:FindFirstAncestorWhichIsA("BasePart") then
+			part.Parent = model
+		end
+	end
+
+	main = main or model:FindFirstChildWhichIsA("BasePart")
+	if not main then
+		warn("[Gradish/MischievousLight] no part to use as the primary")
+		model:Destroy()
+		return nil
+	end
+
+	model.PrimaryPart = main
+
+	-- Strip anything that could draw on screen or run on its own. The package
+	-- ships a death screen and its own scripts; neither is wanted.
+	for _, descendant in ipairs(model:GetDescendants()) do
+		if not isWorldObject(descendant) then
+			pcall(function() descendant:Destroy() end)
+		end
+	end
+
+	-- Its own music would fight the death light's music.
+	for _, descendant in ipairs(model:GetDescendants()) do
+		if descendant:IsA("Sound") then
+			descendant.Playing = false
+			descendant.PlayOnRemove = false
+		end
+	end
+
+	pcall(function() package:Destroy() end)
+
+	local count = #model:GetDescendants()
+	print(("[Gradish/MischievousLight] unpacked: %d object(s), primary %s")
+		:format(count, main.Name))
+
+	return model
+end
+
+---====== SPAWN ======---
+
+local package = loadPackage(PACKAGE)
+if not package then return end
+
+local model = extractEntity(package)
+if not model then return end
+
+Core:Spawn({
+	Name = "Mischievous Light",
+
+	-- An Instance, not a URL. The spawner accepts either, and the package had
+	-- to be cleaned before it could be used.
+	Asset = model,
+
+	HeightOffset = 4,
+
+	--[[ Retter's numbers, deliberately. The point is that it plays by rules
+	     you already know and inverts the signal that tells you to use them. ]]
+	Speed       = 80,
+	Delay       = 0,
+	Damage      = 125,
+	DamageRange = 330,
+
+	Variance = 0.06,
+
+	Earthquake = false,
+
+	Lights = {
+		-- It does not shatter them. It needs them working.
+		Flicker         = true,
+		FlickerDuration = 2,
+		Shatter         = false,
+		Repair          = true,
+	},
+
+	CameraShake = {
+		Enabled = true,
+		Range   = 200,
+		Values  = { 12, 18, 0.4, 1.5 },
+	},
+
+	-- Its own light, registered at startup. Not one of the game's four.
+	DeathType = "Mischievous",
+
+	DeathHints = {
+		"Oh.",
+		"You died to the Mischievous Light.",
+		"Everything else in here warns you by putting the lights OUT.",
+		"That one warns you by turning them up. Hide when it gets bright.",
+	},
+
+	---====== MECHANICS ======---
+
+	--[[ THE INVERSION.
+
+	     Retter uses BrightnessBoost 0.8 -- he is smothering the corridor. This
+	     uses 1.9, flooding it. Same mechanic, opposite reading, and no new code
+	     to make it happen: the tell system already multiplies brightness by the
+	     original, so a number above 1 is all it takes.
+
+	     Reach is long because you should see it coming several rooms out. A
+	     thing that looks like help should never be a jumpscare. ]]
+	Tell = {
+		Color           = Color3.fromRGB(196, 232, 255),
+		Falloff         = true,
+		Reach           = 7,
+		FadeIn          = 2.2,   -- slow, like a lamp warming up
+		FadeOut         = 1.6,
+		BrightnessBoost = 1.9,
+		-- Wins the light back from any other entity's tell that is still
+		-- running when this one leaves. See the restore in GradishCore.
+		Priority        = 10,
+	},
+
+	--[[ 330 studs of reach means hiding is not optional, so the closet check
+	     matters as much as it does on Retter: it stops outside and waits, and
+	     it cannot hurt you while it is stopped. Longer than Retter's, because
+	     a thing pretending to be helpful should feel patient rather than
+	     frustrated. ]]
+	ClosetCheck = {
+		Enabled  = true,
+		Range    = 30,
+		PauseFor = 3.2,
+		Chance   = 0.8,
+		Cooldown = 12,
+	},
+
+	CrucifixColor = Color3.fromRGB(196, 232, 255),
+
+	-- Achievement wording lives in AchievementConfig.
+})
