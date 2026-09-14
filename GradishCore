@@ -1144,11 +1144,51 @@ local DRAWER_HINTS = {
 	"chest", "desk", "shelf", "bin", "nightstand", "locker",
 }
 
-local function looksLikeFurniture(prompt, hints)
-	local text = ((prompt.ObjectText or "") .. " " .. (prompt.ActionText or "")):lower()
+--[[ THIS IS NO LONGER A GUESS.
 
+     Read straight out of a place dump of the game. Every drawer in DOORS is
+     built the same way:
+
+         Dresser / Drawer / Table        <Model>
+           DrawerContainer               <Model>
+             Event                       <BindableEvent>
+             Constraint                  <PrismaticConstraint>
+             Main                        <MeshPart>   (Open / Close sounds)
+             Knobs                       <MeshPart>
+               ActivateEventPrompt       <ProximityPrompt>
+             LootHolder                  <Part>
+               SpawnPile                 <Part>   (Paper, Pencil, Plywood)
+
+     The prompt is called ActivateEventPrompt, it carries ActionText "Open" and
+     ObjectText "Drawer", and it sits inside Knobs -- which is why it was not
+     visible in a screenshot of DrawerContainer's direct children, and why I
+     spent a while unsure whether drawers used prompts at all. They do.
+
+     Counts in that dump: Drawer x20, Dresser x12, Table x2.
+
+     So the match is now three exact checks, with the old fuzzy word list kept
+     only as a last resort in case a room variant is built differently. ]]
+local function looksLikeFurniture(prompt, hints)
+	-- 1. The prompt's own name, straight from the game.
+	if prompt.Name == "ActivateEventPrompt" then return true end
+
+	-- 2. What it says on screen. Every drawer prompt reads "Open Drawer".
+	if prompt.ObjectText == "Drawer" then return true end
+
+	-- 3. Its container. Knobs sits inside DrawerContainer in every case.
 	local node = prompt
 	local depth = 0
+	while node and depth < 4 do
+		if node.Name == "DrawerContainer" then return true end
+		node = node.Parent
+		depth += 1
+	end
+
+	-- 4. Fallback: the original word matching, for anything unexpected.
+	local text = ((prompt.ObjectText or "") .. " " .. (prompt.ActionText or "")):lower()
+
+	node = prompt
+	depth = 0
 	while node and depth < 6 do
 		local name = node.Name:lower()
 		for _, hint in ipairs(hints) do
@@ -1158,6 +1198,42 @@ local function looksLikeFurniture(prompt, hints)
 		end
 		node = node.Parent
 		depth += 1
+	end
+
+	return false
+end
+
+--[[ Whether this drawer still has its clutter in it.
+
+     LootHolder is always present and always has a SpawnPile, so "empty
+     LootHolder" was the wrong test -- I had guessed it before reading the
+     dump. The item, when there is one, is a mesh inside SpawnPile alongside
+     the fixed ItemSpawn and weld objects. ]]
+local FURNITURE_FIXTURES = {
+	ItemSpawn = true, ManualWeld = true, Weld = true,
+	Container = true, HoldAttach = true, Attachment = true,
+}
+
+local function drawerStillHasLoot(prompt)
+	local node = prompt
+	local depth = 0
+	local container
+
+	while node and depth < 4 do
+		if node.Name == "DrawerContainer" then container = node break end
+		node = node.Parent
+		depth += 1
+	end
+	if not container then return nil end
+
+	local holder = container:FindFirstChild("LootHolder")
+	local pile = holder and holder:FindFirstChild("SpawnPile")
+	if not pile then return nil end
+
+	for _, child in ipairs(pile:GetChildren()) do
+		if not FURNITURE_FIXTURES[child.Name] then
+			return true, child.Name
+		end
 	end
 
 	return false
@@ -1215,7 +1291,9 @@ function Crucifix:EnableDrawers(settings)
 		searches += 1
 
 		if debugMode then
-			print(("[Gradish/Crucifix] search %d, odds were %.1f%%"):format(searches, odds * 100))
+			local hasLoot, what = drawerStillHasLoot(prompt)
+			print(("[Gradish/Crucifix] search %d, odds %.1f%%, clutter: %s")
+				:format(searches, odds * 100, hasLoot and what or tostring(hasLoot)))
 		end
 
 		if math.random() > odds then return end

@@ -10,14 +10,20 @@
 
         HOW IT FINDS FURNITURE
         ----------------------
-        It hooks ProximityPromptService.PromptTriggered rather than hunting
-        for specific models, so it does not need to know what DOORS calls its
-        drawers: whatever you just opened, it sees.
+        It hooks ProximityPromptService.PromptTriggered, and the matching is no
+        longer guesswork -- it was read out of a place dump of the game:
 
-        The NAME MATCHING is a guess, and an honest one. If your drawers are
-        called something not in the list below, nothing will ever spawn. Set
-        Debug = true, open a drawer, and the console prints its real full path
-        -- add that word to Hints and you are done.
+            Dresser / Drawer / Table      <Model>
+              DrawerContainer             <Model>
+                Knobs                     <MeshPart>
+                  ActivateEventPrompt     <ProximityPrompt>   ActionText "Open"
+                LootHolder > SpawnPile                        ObjectText "Drawer"
+
+        The prompt sits inside Knobs, which is why it does not show up in a
+        screenshot of DrawerContainer's children and why this went unconfirmed
+        for so long. Drawer x20, Dresser x12, Table x2 in that dump.
+
+        Hints below are now only a last-resort fallback.
 ]]
 
 local Core = loadstring(game:HttpGet(
@@ -53,14 +59,15 @@ Core.Crucifix:EnableDrawers({
 	-- Wait for the drawer to finish opening before it appears.
 	Delay = 0.35,
 
-	-- Turn this on to print the full path of everything you open, then read
-	-- the real furniture names off the console.
+	-- Prints every prompt you trigger, the odds of each roll, and whether the
+	-- drawer still had its clutter in it.
 	Debug = false,
 
-	-- Words matched against the prompt and its parents, case-insensitive.
+	-- Fallback only. The exact checks above catch every drawer in the dump;
+	-- these exist in case a room variant is built some other way.
 	Hints = {
 		"drawer", "dresser", "wardrobe", "cabinet", "closet",
-		"chest", "desk", "shelf", "bin", "nightstand", "locker",
+		"chest", "desk", "shelf", "bin", "nightstand", "locker", "table",
 	},
 
 	-- Set true to let ANY prompt roll, ignoring the names entirely. Blunt,
