@@ -391,6 +391,22 @@ local function kill(reason)
 
 	     Awarding it here rather than writing stats.died onto the entity that
 	     triggered him: that entity did not kill you either. ]]
+	--[[ Rude never goes through the spawner's DamagePlayer either, so without
+	     this DOORS shows "Died to Unknown" with no hint text -- the same thing
+	     the acid was doing. ]]
+	safe("death hints", function()
+		Core.FireDeathHints({
+			Name      = "Rude",
+			DeathType = "Glitch",
+			DeathHints = {
+				"Ah.",
+				"You died to Rude.",
+				"He does not chase. He stands in your room and waits.",
+				"While he is there, hiding and opening drawers both kill you.",
+			},
+		})
+	end)
+
 	safe("death badge", function()
 		local data = Core.AchievementConfig and Core.AchievementConfig:Get() or {}
 		local entry = ((data.Entities or {})["Rude"] or {}).Death

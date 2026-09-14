@@ -63,11 +63,18 @@ Core:Spawn({
 	     into full of the stuff. ]]
 	Acid = {
 		Enabled    = true,
-		Interval   = 0.45,  -- a drop this often while he is moving
-		Radius     = 4.5,   -- studs of burn around each puddle
+		--[[ Retuned after a real death. The log showed ten burns in a row
+		     taking 65 HP to zero in about six seconds, because he lingers in
+		     your room and the floor you are standing on is already his. That
+		     is not a hazard, it is a cutscene.
+
+		     5 every second is ~5 HP/s: crossing a puddle costs you, standing
+		     in one still kills, and you have time to get out. ]]
+		Interval   = 0.5,   -- a drop this often while he is moving
+		Radius     = 3.5,   -- studs of burn around each puddle
 		Lifetime   = 14,    -- and it stays this long after he has gone
-		Damage     = 7,
-		TickRate   = 0.6,   -- so standing in it costs ~12 HP a second
+		Damage     = 5,
+		TickRate   = 1.0,
 		MaxPuddles = 40,
 		Color      = Color3.fromRGB(120, 230, 70),
 	},

@@ -1273,6 +1273,10 @@ local function startAcidTrail(session)
 								Core.DeathLight:Arm(session.profile.DeathLight)
 							end)
 						end
+
+						-- Or DOORS says "Died to Unknown": this kill never
+						-- went through the spawner's DamagePlayer.
+						pcall(function() fireDeathHints(session.profile) end)
 						safe(session.name, "acid death", function() finishSession(session) end)
 					end
 
@@ -1310,6 +1314,9 @@ local function setupEscalation(session)
 end
 
 local function escalate(session)
+	-- The log showed it still escalating after the visit had ended.
+	if not session.active or session.stats.died then return end
+
 	local settings = session.profile.Escalate
 	local state    = session.escalation
 	local stack    = session.speed
@@ -2064,6 +2071,62 @@ Core.DeathLights = {
 	},
 }
 
+--[[ Fires the death hints the way the spawner does.
+
+     The spawner owns this normally: its DamagePlayer sets your health and, at
+     zero, waits for the death screen and fires DeathHint with the entity's
+     hints and its colour name.
+
+     Anything that kills you WITHOUT going through DamagePlayer -- the acid,
+     Rude -- skips all of that, and DOORS falls back to "Died to Unknown" with
+     no hint text. That is what happened: the log shows ten acid burns down to
+     zero, and the death screen had nothing to say.
+
+     So those paths call this instead. Same two arguments, same order, read out
+     of the spawner source. ]]
+local function fireDeathHints(profile)
+	if not profile then return end
+
+	local hints = profile.DeathHints
+	if type(hints) ~= "table" or #hints == 0 then return end
+
+	if not firesignal then
+		logAlways("Death", "this executor has no firesignal, DOORS will say Unknown")
+		return
+	end
+
+	task.spawn(function()
+		local ok, err = pcall(function()
+			local gui = LocalPlayer:WaitForChild("PlayerGui", 5)
+			local mainUI = gui and gui:WaitForChild("MainUI", 5)
+			local screen = mainUI and mainUI:FindFirstChild("Death")
+			if not screen then return end
+
+			-- The spawner waits for the screen before firing. So do we, or the
+			-- hint arrives before anything is listening.
+			if not screen.Visible then
+				screen:GetPropertyChangedSignal("Visible"):Wait()
+			end
+
+			local remotes = ReplicatedStorage:FindFirstChild("RemotesFolder")
+			local hint = remotes and remotes:FindFirstChild("DeathHint")
+			if not hint then return end
+
+			-- Must be a name DOORS knows. DeathLight repaints it afterwards.
+			local colour = profile.DeathType or "Blue"
+
+			firesignal(hint.OnClientEvent, hints, colour)
+			logAlways("Death", "hints fired for %s (%s)", tostring(profile.Name), colour)
+		end)
+
+		if not ok then
+			logAlways("Death", "could not fire hints: %s", tostring(err))
+		end
+	end)
+end
+
+Core.FireDeathHints = fireDeathHints
+
 local DeathLight = {
 	pending  = nil,
 	watching = false,
@@ -2086,8 +2149,15 @@ local function paintDeathScreen(screen, palette)
 
 	-- Swap the character picture as well, if this light has one. Resolved
 	-- through the same ImagesA manager the badges use.
+	--[[ OFF unless a palette explicitly asks for it.
+
+	     Hodler.Label.Label is the light's FIGURE -- the character that leans
+	     into frame and talks to you. Swapping it for a symbol replaces that
+	     character with a logo, which is not what a death light is. Tinting it
+	     keeps the figure and gives it the entity's colour, which is what the
+	     screenshot shows working. ]]
 	local picture
-	if palette.Image then
+	if palette.Image and palette.ReplaceFigure then
 		picture = Core.Images:Resolve(palette.Image)
 	end
 
