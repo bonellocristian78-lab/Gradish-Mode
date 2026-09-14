@@ -1267,6 +1267,12 @@ local function startAcidTrail(session)
 					if humanoid.Health <= 0 and not session.stats.died then
 						session.stats.died = true
 						log(session.name, "the acid finished you")
+
+						if session.profile.DeathLight then
+							pcall(function()
+								Core.DeathLight:Arm(session.profile.DeathLight)
+							end)
+						end
 						safe(session.name, "acid death", function() finishSession(session) end)
 					end
 
@@ -1957,6 +1963,168 @@ function Core.RegisterDeathType(name, soundId, endSoundId, copyFrom)
 
 	logAlways("Core", "could not register death type %q: %s", name, tostring(result))
 	return false
+end
+
+---====== CUSTOM DEATH LIGHT ======---
+--[[ The thing that appears when you die and tells you what killed you.
+
+     Probed from the live game rather than guessed. MainUI.Death is an
+     ImageLabel, and underneath it:
+
+         Death              ImageLabel   the whole screen, ImageColor3 tints it
+           Hodler
+             Label          ImageLabel   the light character
+               Label        ImageLabel   its colour lives HERE
+             GlitchLabel                 the Glitch variant of the same
+           Static           ImageLabel   the grain over everything
+             Static
+           HelpfulDialog    TextLabel    the hint text. TextColor3 was
+                                         0.62, 0.94, 1 -- guiding-light blue
+           GlitchDialog
+
+     The spawner ends a death by firing DeathHint with a colour NAME, and the
+     probe caught it: arg 2 was the string "Blue". DOORS' own code then paints
+     those objects.
+
+     WHY THIS OVERRIDES RATHER THAN REGISTERING A NEW NAME.
+
+     Health.Music is an ordinary folder, so adding a Sound called "Mischievous"
+     makes the spawner's lookup succeed -- but what DOORS does with an
+     unrecognised name afterwards is its own code, which nobody has read. It
+     might fall back, it might do nothing. So the name stays one of the four it
+     definitely knows, DOORS renders its screen normally, and the colours are
+     repainted on top a frame later. Guaranteed to work, because the only
+     assumption is that those objects exist, and the probe shows they do.
+
+     Repainted repeatedly for a second because the screen animates in and
+     DOORS writes those properties as it does. ]]
+
+Core.DeathLights = {
+	-- name -> what to paint. Add your own.
+	Mischievous = {
+		Light  = Color3.fromRGB(196, 232, 255),  -- the character itself
+		Dialog = Color3.fromRGB(196, 232, 255),  -- the hint text
+		Screen = Color3.fromRGB(180, 210, 235),  -- overall tint
+		Static = Color3.fromRGB(70, 110, 140),   -- the grain
+	},
+
+	Corroded = {
+		Light  = Color3.fromRGB(120, 230, 70),
+		Dialog = Color3.fromRGB(150, 240, 110),
+		Screen = Color3.fromRGB(110, 190, 90),
+		Static = Color3.fromRGB(40, 90, 30),
+	},
+
+	Rose = {
+		Light  = Color3.fromRGB(254, 110, 140),
+		Dialog = Color3.fromRGB(255, 160, 180),
+		Screen = Color3.fromRGB(255, 120, 150),
+		Static = Color3.fromRGB(120, 20, 45),
+	},
+}
+
+local DeathLight = {
+	pending  = nil,
+	watching = false,
+}
+
+Core.DeathLight = DeathLight
+
+local function paintDeathScreen(screen, palette)
+	local painted = 0
+
+	local function paint(instance, property, colour)
+		if not instance or not colour then return end
+		pcall(function()
+			instance[property] = colour
+			painted += 1
+		end)
+	end
+
+	paint(screen, "ImageColor3", palette.Screen)
+
+	local holder = screen:FindFirstChild("Hodler")
+	if holder then
+		-- The colour lives on the INNER Label, not the outer one.
+		local label = holder:FindFirstChild("Label")
+		if label then
+			paint(label, "ImageColor3", palette.Light)
+			paint(label:FindFirstChild("Label"), "ImageColor3", palette.Light)
+		end
+
+		local glitch = holder:FindFirstChild("GlitchLabel")
+		if glitch then
+			paint(glitch, "ImageColor3", palette.Light)
+			paint(glitch:FindFirstChild("Label"), "ImageColor3", palette.Light)
+		end
+	end
+
+	local static = screen:FindFirstChild("Static")
+	if static then
+		paint(static, "ImageColor3", palette.Static)
+		paint(static:FindFirstChild("Static"), "ImageColor3", palette.Static)
+	end
+
+	local glitchStatic = screen:FindFirstChild("GlitchStatic")
+	if glitchStatic then
+		paint(glitchStatic, "ImageColor3", palette.Static)
+		paint(glitchStatic:FindFirstChild("Static"), "ImageColor3", palette.Static)
+	end
+
+	paint(screen:FindFirstChild("HelpfulDialog"), "TextColor3", palette.Dialog)
+	paint(screen:FindFirstChild("GlitchDialog"),  "TextColor3", palette.Dialog)
+
+	return painted
+end
+
+-- Called by an entity as it kills you, so the screen knows whose light to be.
+function DeathLight:Arm(nameOrPalette)
+	local palette = nameOrPalette
+
+	if type(nameOrPalette) == "string" then
+		palette = Core.DeathLights[nameOrPalette]
+		if not palette then
+			logAlways("DeathLight", "no death light called %q", nameOrPalette)
+			return
+		end
+	end
+
+	if type(palette) ~= "table" then return end
+
+	self.pending = palette
+	self:Watch()
+end
+
+function DeathLight:Watch()
+	if self.watching then return end
+
+	local gui = LocalPlayer:FindFirstChild("PlayerGui")
+	local mainUI = gui and gui:FindFirstChild("MainUI")
+	local screen = mainUI and mainUI:FindFirstChild("Death")
+	if not screen then return end
+
+	self.watching = true
+
+	screen:GetPropertyChangedSignal("Visible"):Connect(function()
+		if not screen.Visible then return end
+
+		local palette = self.pending
+		if not palette then return end
+		self.pending = nil
+
+		-- DOORS paints these as the screen animates in, so one pass at the
+		-- wrong moment gets overwritten. Keep repainting for a second.
+		task.spawn(function()
+			local painted = 0
+			for _ = 1, 20 do
+				painted = paintDeathScreen(screen, palette)
+				task.wait(0.05)
+			end
+			logAlways("DeathLight", "repainted the death screen, %d object(s)", painted)
+		end)
+	end)
+
+	logAlways("DeathLight", "watching the death screen")
 end
 
 ---====== RITUAL COLOUR ======---
@@ -3249,6 +3417,14 @@ function Core:Spawn(profile, passIndex, carriedStats)
 		if newHealth <= 0 then
 			stats.died = true
 			log(session.name, "killed the player")
+
+			-- Whose light appears on the death screen. Armed before the
+			-- screen exists, because the spawner fires DeathHint immediately.
+			if profile.DeathLight then
+				safe(session.name, "arm death light", function()
+					Core.DeathLight:Arm(profile.DeathLight)
+				end)
+			end
 			-- Award now: the entity may keep running long after you drop.
 			finish(session)
 		else
@@ -3303,6 +3479,13 @@ end
 if getgenv then
 	getgenv().GradishCore = Core
 end
+
+-- Hook the death screen now rather than at the first kill: it has to be
+-- listening before the screen ever becomes visible.
+task.spawn(function()
+	task.wait(3)
+	pcall(function() DeathLight:Watch() end)
+end)
 
 print(("[Gradish] core %s loaded"):format(Core.Version))
 

@@ -30,7 +30,11 @@ Core:Spawn({
 
 	-- One of Yellow, Blue, Glitch, Static, Rush -- the real list, read
 	-- from the game rather than the spawner's two-entry table.
-	DeathType = "Yellow",
+	--[[ The screen stays one of the four names DOORS definitely knows, so it
+	     renders normally, and the Mischievous Light is painted over the top a
+	     frame later. See CUSTOM DEATH LIGHT in GradishCore. ]]
+	DeathType  = "Blue",
+	DeathLight = "Mischievous",
 
 	DeathHints = {
 		"You died to Retter",

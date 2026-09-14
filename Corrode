@@ -40,6 +40,7 @@ Core:Spawn({
 	-- One of Yellow, Blue, Glitch, Static, Rush -- the real list, read
 	-- from the game rather than the spawner's two-entry table.
 	DeathType = "Glitch",
+	DeathLight = "Corroded",
 
 	DeathHints = {
 		"Oh dear.",
