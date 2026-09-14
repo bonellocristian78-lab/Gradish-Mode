@@ -172,7 +172,7 @@ return {
 			Title      = "I Have No Fear In them",
 			Desc       = "Somebody left it in a drawer, and now it is yours",
 			Reason     = "Find a crucifix hidden in the furniture",
-			Image      = "",
+			Image      = "133730823956278",
 		},
 
 		-- Lived through a Seek chase while Red Mode had hold of him.
@@ -181,7 +181,7 @@ return {
 			Title      = "You Survived Red Seek",
 			Desc       = "He was redder than usual and you outran him anyway",
 			Reason     = "Survive a Seek chase in Gradish mode",
-			Image      = "",
+			Image      = "125903737977969",
 		},
 	},
 }
