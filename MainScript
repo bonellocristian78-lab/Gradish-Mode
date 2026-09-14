@@ -82,6 +82,7 @@ local generators = {
 	Rose    = { first = 12, gapMin = 5,  gapMax = 10, rng = Random.new(seed + 22) },
 	Yeller  = { first = 30, gapMin = 12, gapMax = 19, rng = Random.new(seed + 33) },
 	Rebound = { first = 8,  gapMin = 12, gapMax = 19, rng = Random.new(seed + 44) },
+	Corrode = { first = 20, gapMin = 14, gapMax = 22, rng = Random.new(seed + 66) },
 }
 
 -- Rooms already claimed by some entity, so two do not land together by
@@ -114,9 +115,10 @@ local Rettersp  = buildSchedule(generators.Retter)
 local rosesp    = buildSchedule(generators.Rose)
 local yellersp  = buildSchedule(generators.Yeller)
 local reboundsp = buildSchedule(generators.Rebound)
+local corrodesp = buildSchedule(generators.Corrode)
 
-warn(("[Gradish] schedule for seed %s -- Retter %d, Rose %d, Yeller %d, Rebound %d")
-	:format(tostring(seed), #Rettersp, #rosesp, #yellersp, #reboundsp))
+warn(("[Gradish] schedule for seed %s -- Retter %d, Rose %d, Yeller %d, Rebound %d, Corrode %d")
+	:format(tostring(seed), #Rettersp, #rosesp, #yellersp, #reboundsp, #corrodesp))
 
 require(game.Players.LocalPlayer.PlayerGui.MainUI.Initiator.Main_Game).caption("Loaded",true)
 warn("Loaded")
@@ -174,6 +176,12 @@ if table.find(reboundsp, lastroom.Value) then
 		task.spawn(function()
 			task.wait(r3:NextInteger(5, 12))
 	loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/Rebounddd"))()
+		end)
+	end
+	if table.find(corrodesp, lastroom.Value) then
+		task.spawn(function()
+			task.wait(r3:NextInteger(4, 10))
+			loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/Corrode"))()
 		end)
 	end
 end)

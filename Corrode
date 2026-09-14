@@ -1,0 +1,102 @@
+if game.Workspace:FindFirstChild("SeekMovingNewClone") then return end
+
+local Core = loadstring(game:HttpGet(
+	"https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/GradishCore"
+))()
+
+Core:Spawn({
+	Name  = "Corrode",
+	Asset = "https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/corrodeV3butmadebyMyFriend.rbxm",
+
+	--[[ Slow on purpose.
+
+	     Corrode is the only entity in the mod you are meant to be able to
+	     outwalk. The threat is not that he catches you -- it is what he leaves
+	     on the floor while you are getting past him. Make him fast and the
+	     acid never matters, because you are running anyway. ]]
+	Speed       = 70,
+	Delay       = 3,
+	Damage      = 35,
+	DamageRange = 22,
+
+	Rebounds     = { 1, 2 },
+	ReboundType  = "Ambush",
+	ReboundDelay = 1.5,
+
+	Variance = 0.06,
+
+	Lights = {
+		Flicker         = true,
+		FlickerDuration = 2,
+		Shatter         = false,
+	},
+
+	CameraShake = {
+		Enabled = true,
+		Range   = 60,
+		Values  = { 25, 30, 0.2, 1 },
+	},
+
+	DeathHints = {
+		"Oh dear.",
+		"You died to Corrode.",
+		"He is slow. What he spits is not -- and it stays on the floor",
+		"long after he has gone. Watch where you walk.",
+	},
+
+	---====== MECHANICS ======---
+
+	--[[ THE ACID.
+
+	     The first mechanic in the mod that outlives the entity that made it.
+	     Everything else stops mattering when the thing despawns; a room
+	     Corrode walked through is still dangerous fourteen seconds later.
+
+	     That changes the shape of the encounter. With every other entity the
+	     answer is "get past it and you are fine". Here getting past him leaves
+	     you with the route back closed, and the room you were about to retreat
+	     into full of the stuff. ]]
+	Acid = {
+		Enabled    = true,
+		Interval   = 0.45,  -- a drop this often while he is moving
+		Radius     = 4.5,   -- studs of burn around each puddle
+		Lifetime   = 14,    -- and it stays this long after he has gone
+		Damage     = 7,
+		TickRate   = 0.6,   -- so standing in it costs ~12 HP a second
+		MaxPuddles = 40,
+		Color      = Color3.fromRGB(120, 230, 70),
+	},
+
+	Tell = {
+		Color           = Color3.fromRGB(150, 220, 60),
+		Falloff         = true,
+		Reach           = 5,
+		FadeIn          = 1.2,
+		FadeOut         = 1,
+		BrightnessBoost = 0.9,
+	},
+
+	-- He is slow, so lingering in your room is genuinely threatening: you
+	-- cannot simply wait him out while the floor fills up.
+	Linger = {
+		Enabled     = true,
+		Duration    = { 3, 5 },
+		SpeedFactor = 0.02,
+		Chance      = 0.5,
+		Cooldown    = 8,
+		MaxPerVisit = 2,
+	},
+
+	Escalate = {
+		SpeedPerRebound    = 0.1,
+		RangePerRebound    = 3,
+		MaxSpeedMultiplier = 1.5,
+	},
+
+	--[[ The crucifix corrodes in his presence, which is where Rose Hell's rare
+	     green ritual comes from. On him it is the normal outcome rather than
+	     the exception, so his banish always runs that sick green. ]]
+	CrucifixColor = Color3.fromRGB(120, 230, 70),
+
+	-- Achievement wording lives in AchievementConfig.
+})

@@ -165,6 +165,36 @@ return {
 		--[[ Rude does not go through Spawner:Create -- he stands still and
 		     changes the rules instead of walking a path -- but his badges live
 		     here with everyone else's. ]]
+		["Corrode"] = {
+			-- PLACEHOLDER: your Yeller decal, reused so it is not blank.
+			Image = "rbxassetid://120554381732238",
+
+			Survive = {
+				Identifier = "Corrosion",
+				Title      = "Survived Corrode",
+				Desc       = "Slow, but the floor remembers him",
+				Reason     = "Survive Corrode without burning",
+			},
+			Death = {
+				Identifier = "Corrode Victim",
+				Title      = "Dissolved",
+				Desc       = "It was not him that got you, it was the floor",
+				Reason     = "Die to Corrode",
+			},
+			Untouched = {
+				Identifier = "Corrode Clean",
+				Title      = "Dry Feet",
+				Desc       = "Through the whole room and not one burn",
+				Reason     = "Survive Corrode without stepping in acid",
+			},
+			Crucify = {
+				Identifier = "Neutralised",
+				Title      = "Neutralised",
+				Desc       = "Successfully crucify Corrode",
+				Reason     = "Does not count towards progression",
+			},
+		},
+
 		["Rude"] = {
 			-- PLACEHOLDER IMAGE. This is your Rebound decal, reused so the
 			-- popup is not blank. I cannot upload decals to Roblox, that needs

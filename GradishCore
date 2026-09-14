@@ -101,19 +101,84 @@ local Core = {
 	Granted = {},
 }
 
+---====== DISK LOG ======---
+--[[ Everything printed also goes to a file in the executor's workspace
+     folder. The Roblox console cannot be read from outside the game, but a
+     file on disk can, so this is what makes "send me the console output"
+     unnecessary -- the log is just there afterwards.
+
+     Written with appendfile where the executor has it, falling back to
+     read-modify-write, and silently doing nothing if neither exists. ]]
+
+local LOG_FILE = "gradish_log.txt"
+local logBuffer = {}
+local logFlushQueued = false
+
+local function flushLog()
+	logFlushQueued = false
+	if #logBuffer == 0 then return end
+
+	local chunk = table.concat(logBuffer, "\n") .. "\n"
+	table.clear(logBuffer)
+
+	pcall(function()
+		if appendfile then
+			appendfile(LOG_FILE, chunk)
+		elseif writefile and isfile and readfile then
+			local existing = isfile(LOG_FILE) and readfile(LOG_FILE) or ""
+			writefile(LOG_FILE, existing .. chunk)
+		end
+	end)
+end
+
+-- Batched, because a writefile per print would stutter the game.
+local function toDisk(line)
+	table.insert(logBuffer, line)
+
+	if not logFlushQueued then
+		logFlushQueued = true
+		task.delay(1, flushLog)
+	end
+end
+
+pcall(function()
+	if writefile then
+		writefile(LOG_FILE, ("[Gradish] session started %s\n"):format(os.date("%Y-%m-%d %H:%M:%S")))
+	end
+end)
+
+Core.LogFile = LOG_FILE
+Core.FlushLog = flushLog
+
 ---====== UTIL ======---
 
 local function log(name, format, ...)
+	local line = ("[Gradish/%s] "):format(name) .. format:format(...)
+	toDisk(line)
+
 	if not Core.Debug then return end
-	print(("[Gradish/%s] "):format(name) .. format:format(...))
+	print(line)
 end
+
+-- For warnings, which must reach the disk even with Debug off.
+local function logAlways(name, format, ...)
+	local line = ("[Gradish/%s] "):format(name) .. format:format(...)
+	toDisk(line)
+	print(line)
+end
+
+Core.Log = logAlways
 
 -- Runs fn, reports failure, never lets it escape. A broken cosmetic must not
 -- be able to stop an entity from moving.
 local function safe(name, label, fn, ...)
 	local ok, err = pcall(fn, ...)
 	if not ok then
-		warn(("[Gradish/%s] %s failed: %s"):format(name, label, tostring(err)))
+		-- Failures go to the disk log too, or the one line that explains a
+		-- broken run is the one line nobody can send me.
+		local line = ("[Gradish/%s] %s FAILED: %s"):format(name, label, tostring(err))
+		toDisk(line)
+		warn(line)
 	end
 	return ok
 end
@@ -733,6 +798,159 @@ end
 local function isPlayersRoom(room)
 	if not room then return false end
 	return tonumber(room.Name) == currentRoomNumber()
+end
+
+---====== MECHANIC: ACID TRAIL ======---
+--[[ It spits as it goes, and what lands stays.
+
+     This is the first mechanic here that outlives the entity. Every other one
+     ends when the thing despawns; acid does not. A room Corrode passed through
+     is still dangerous a quarter of a minute later, so the route you were
+     about to take back is closed and you have to think about the floor, which
+     no other Gradish entity has ever made you do.
+
+     Puddles are placed by raycasting down from the entity, so they land on
+     whatever the floor actually is rather than at a guessed height. Damage is
+     applied the way the spawner applies its own -- a direct write to
+     Humanoid.Health -- so it behaves consistently with everything else. ]]
+
+local function startAcidTrail(session)
+	local settings = session.profile.Acid
+	if not settings or not settings.Enabled then return end
+
+	local interval   = settings.Interval or 0.4
+	local radius     = settings.Radius or 4.5
+	local lifetime   = settings.Lifetime or 14
+	local damage     = settings.Damage or 7
+	local tickRate   = settings.TickRate or 0.6
+	local maxPuddles = settings.MaxPuddles or 40
+	local colour     = settings.Color or Color3.fromRGB(120, 230, 70)
+
+	local puddles = {}
+	local lastDrop = 0
+	local lastHurt = 0
+	local lastPosition = nil
+
+	local function makePuddle(at)
+		-- Oldest first, so a long chase does not fill the map with parts.
+		if #puddles >= maxPuddles then
+			local oldest = table.remove(puddles, 1)
+			if oldest then pcall(function() oldest:Destroy() end) end
+		end
+
+		local puddle = Instance.new("Part")
+		puddle.Name         = "GradishAcid"
+		puddle.Shape        = Enum.PartType.Cylinder
+		puddle.Size         = Vector3.new(0.25, radius * 2, radius * 2)
+		puddle.CFrame       = CFrame.new(at) * CFrame.Angles(0, 0, math.rad(90))
+		puddle.Anchored     = true
+		puddle.CanCollide   = false
+		puddle.CanQuery     = false
+		puddle.CanTouch     = false
+		puddle.CastShadow   = false
+		puddle.Material     = Enum.Material.Neon
+		puddle.Color        = colour
+		puddle.Transparency = 0.35
+		puddle.Parent       = Workspace
+
+		local light = Instance.new("PointLight")
+		light.Color      = colour
+		light.Brightness = 1.4
+		light.Range      = radius * 2
+		light.Parent     = puddle
+
+		local fumes = Instance.new("ParticleEmitter")
+		fumes.Color        = ColorSequence.new(colour)
+		fumes.Size         = NumberSequence.new(0.6, 1.4)
+		fumes.Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 1),
+			NumberSequenceKeypoint.new(0.3, 0.75),
+			NumberSequenceKeypoint.new(1, 1),
+		})
+		fumes.Lifetime      = NumberRange.new(1.5, 3)
+		fumes.Rate          = 8
+		fumes.Speed         = NumberRange.new(0.5, 1.5)
+		fumes.SpreadAngle   = Vector2.new(30, 30)
+		fumes.LightEmission = 0.5
+		fumes.Parent        = puddle
+
+		table.insert(puddles, puddle)
+		session.janitor:Give(puddle)
+
+		-- Boils away rather than blinking out.
+		task.delay(lifetime - 2, function()
+			if not puddle.Parent then return end
+			tween(puddle, 2, { Transparency = 1 })
+			pcall(function() fumes.Rate = 0 end)
+
+			task.delay(2.1, function()
+				local index = table.find(puddles, puddle)
+				if index then table.remove(puddles, index) end
+				pcall(function() puddle:Destroy() end)
+			end)
+		end)
+
+		return puddle
+	end
+
+	session.janitor:Give(RunService.Heartbeat:Connect(function()
+		local model = session.entity and session.entity.Model
+		local root  = getRoot()
+		if not model or not model.Parent or not root then return end
+
+		local now = os.clock()
+
+		---------------------------------------------------------- spitting
+		if session.active and now - lastDrop >= interval then
+			local ok, pivot = pcall(function() return model:GetPivot().Position end)
+
+			if ok and pivot then
+				-- Only drip while it is actually moving. A paused or
+				-- lingering entity should not pool acid under itself.
+				local moved = lastPosition == nil or (pivot - lastPosition).Magnitude > 1
+				lastPosition = pivot
+
+				if moved and not model:GetAttribute("Paused") then
+					lastDrop = now
+
+					local params = RaycastParams.new()
+					params.FilterType = Enum.RaycastFilterType.Exclude
+					params.FilterDescendantsInstances = { model, getCharacter() }
+
+					local hit = Workspace:Raycast(pivot, Vector3.new(0, -60, 0), params)
+					if hit then
+						safe(session.name, "acid drop", makePuddle, hit.Position + Vector3.new(0, 0.15, 0))
+					end
+				end
+			end
+		end
+
+		---------------------------------------------------------- burning
+		-- The puddles keep hurting after it has gone. That is the point.
+		if now - lastHurt >= tickRate then
+			lastHurt = now
+
+			local humanoid = getHumanoid()
+			if humanoid and humanoid.Health > 0 then
+				for _, puddle in ipairs(puddles) do
+					if puddle.Parent then
+						local flat = Vector3.new(puddle.Position.X, root.Position.Y, puddle.Position.Z)
+
+						if (flat - root.Position).Magnitude <= radius then
+							humanoid.Health = math.max(humanoid.Health - damage, 0)
+							session.stats.acidTicks = (session.stats.acidTicks or 0) + 1
+
+							log(session.name, "acid burn, %d HP left", math.floor(humanoid.Health))
+							break -- one burn per tick, not one per puddle
+						end
+					end
+				end
+			end
+		end
+	end))
+
+	log(session.name, "acid trail online (%.1fs interval, %d damage every %.1fs, %ds lifetime)",
+		interval, damage, tickRate, lifetime)
 end
 
 ---====== MECHANIC: ESCALATION ======---
@@ -1924,6 +2142,7 @@ local function newStats()
 		rebounds         = 0,
 		closetChecks     = 0,
 		lingers          = 0,
+		acidTicks        = 0,
 		lowestHealth     = 100,
 		died             = false,
 		crucifixUsed     = false,
@@ -1940,9 +2159,9 @@ local function finish(session)
 	local stats = session.stats
 	local list  = session.achievements
 
-	log(session.name, "visit over | %s | %d hit(s) | %d rebound(s) | %d closet check(s) | %d linger(s)",
+	log(session.name, "visit over | %s | %d hit(s) | %d rebound(s) | %d closet check(s) | %d linger(s) | %d acid burn(s)",
 		stats.died and "DIED" or (stats.crucifixBanished and "BANISHED" or "SURVIVED"),
-		stats.hits, stats.rebounds, stats.closetChecks, stats.lingers)
+		stats.hits, stats.rebounds, stats.closetChecks, stats.lingers, stats.acidTicks or 0)
 
 	if stats.died or isPlayerDead() then
 		if list.Death then Achievements:Award(list.Death) end
@@ -2095,6 +2314,7 @@ function Core:Spawn(profile, passIndex, carriedStats)
 		safe(session.name, "tell",        startTell, session)
 		safe(session.name, "closet check",startClosetCheck, session)
 		safe(session.name, "linger",      startLinger, session)
+		safe(session.name, "acid trail", startAcidTrail, session)
 		safe(session.name, "escalation",  setupEscalation, session)
 		safe(session.name, "crucifix watch", startCrucifixionWatch, session)
 
