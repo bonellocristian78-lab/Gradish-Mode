@@ -1844,6 +1844,72 @@ local LOOT_TABLE = {
 	},
 }
 
+--[[ Turns an ordinary crucifix into the corroded one.
+
+     GREEN IS THE HARD PART. The real crucifix Handle is a MeshPart with a
+     TextureID, and setting Color on a textured MeshPart does nothing you can
+     see -- the same thing that had Seek coming out black. So the green comes
+     from a Highlight, which tints through textures and meshes, with the plain
+     Color set underneath as a backup for the hand-built fallback handle.
+
+     Marked with an attribute rather than renamed: the spawner matches on the
+     name "Crucifix" exactly, so renaming it would stop it working at all. ]]
+local CORRODED_GREEN = Color3.fromRGB(96, 214, 84)
+
+function Core.MakeCorroded(tool, colour)
+	if not tool then return nil end
+
+	colour = colour or CORRODED_GREEN
+
+	tool:SetAttribute("Corroded", true)
+	tool.ToolTip = "It has gone green"
+
+	local handle = tool:FindFirstChild("Handle") or tool:FindFirstChildWhichIsA("BasePart")
+	if not handle then
+		logAlways("Loot", "corroded crucifix has no handle to tint")
+		return tool
+	end
+
+	-- The part that actually makes it green.
+	pcall(function()
+		local highlight = Instance.new("Highlight")
+		highlight.Name                = "CorrodedTint"
+		highlight.FillColor           = colour
+		highlight.FillTransparency    = 0.4
+		highlight.OutlineColor        = colour
+		highlight.OutlineTransparency = 0.15
+		highlight.DepthMode           = Enum.HighlightDepthMode.Occluded
+		highlight.Adornee             = handle
+		highlight.Parent              = handle
+	end)
+
+	-- Backups, for the hand-built handle which has no texture to fight.
+	pcall(function() handle.Color = colour end)
+
+	for _, descendant in ipairs(tool:GetDescendants()) do
+		pcall(function()
+			if descendant:IsA("ParticleEmitter") or descendant:IsA("Beam") then
+				descendant.Color = ColorSequence.new(colour)
+			elseif descendant:IsA("Light") then
+				descendant.Color = colour
+			end
+		end)
+	end
+
+	-- A faint glow of its own, so it reads as wrong in a dark corridor.
+	pcall(function()
+		local light = Instance.new("PointLight")
+		light.Name       = "CorrodedGlow"
+		light.Color      = colour
+		light.Brightness = 1.2
+		light.Range      = 10
+		light.Parent     = handle
+	end)
+
+	logAlways("Loot", "that crucifix is CORRODED -- Rose Hell cannot resist it")
+	return tool
+end
+
 function Loot:Pick(settings)
 	local pool = {}
 	local total = 0
@@ -1880,19 +1946,7 @@ function Loot:Grant(entry, equip)
 		local tool = Core.Crucifix:Give("found in furniture", equip)
 
 		if tool and entry.Corroded then
-			-- Marked rather than renamed: the spawner matches on the name
-			-- "Crucifix", so renaming it would stop it working entirely.
-			tool:SetAttribute("Corroded", true)
-			tool.ToolTip = "It has gone green"
-
-			local handle = tool:FindFirstChild("Handle")
-			if handle and handle:IsA("BasePart") then
-				pcall(function()
-					handle.Color = Color3.fromRGB(110, 200, 90)
-				end)
-			end
-
-			logAlways("Loot", "that crucifix is CORRODED -- Rose Hell cannot resist it")
+			Core.MakeCorroded(tool)
 		end
 
 		return tool

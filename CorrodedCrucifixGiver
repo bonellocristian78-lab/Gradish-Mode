@@ -1,0 +1,237 @@
+--[[
+================================================================================
+
+        C O R R O D E D   C R U C I F I X   G I V E R
+
+        Press H and you get the green one, straight into your hand.
+
+        WHAT MAKES IT DIFFERENT FROM AN ORDINARY CRUCIFIX
+        -------------------------------------------------
+        Rose Hell resists a normal crucifix 85% of the time. She cannot resist
+        this one at all. Banishing her with it awards "What Just Hapen", which
+        is otherwise a roughly 4% accident.
+
+        It is the same Tool underneath -- the spawner matches on the exact name
+        "Crucifix", so this one is NOT renamed. What marks it is an attribute,
+        Corroded = true, which GradishCore watches for.
+
+        WHY GREEN IS NOT JUST handle.Color = green
+        ------------------------------------------
+        The real crucifix Handle is a MeshPart with a TextureID, and setting
+        Color on a textured MeshPart does nothing visible. That is the same
+        thing that had Seek coming out black no matter what colour was set.
+
+        So the green comes from a Highlight, which tints through textures and
+        meshes, plus a PointLight so it reads as wrong in a dark corridor. The
+        plain Color is set underneath as a backup for the hand-built fallback
+        handle, which has no texture to fight.
+
+        STANDALONE. Does not load GradishCore, does not need the repo to be
+        reachable, and can be pasted on its own.
+
+================================================================================
+]]
+
+local Config = {
+	Url = "https://raw.githubusercontent.com/PenguinManiack/Crucifix/main/Crucifix.lua",
+
+	-- Your loader's own knobs, unchanged.
+	Uses  = 1,
+	Range = 30,
+
+	Keybind     = Enum.KeyCode.H,
+	GiveOnStart = true,
+	AutoEquip   = true,
+
+	Color   = Color3.fromRGB(96, 214, 84),
+	Timeout = 12,
+	Debug   = true,
+}
+
+local Players           = game:GetService("Players")
+local UserInputService  = game:GetService("UserInputService")
+local CollectionService = game:GetService("CollectionService")
+
+local LocalPlayer = Players.LocalPlayer
+
+local function log(format, ...)
+	if not Config.Debug then return end
+	print("[CorrodedCrucifix] " .. format:format(...))
+end
+
+local function containers()
+	return { LocalPlayer:FindFirstChildOfClass("Backpack"), LocalPlayer.Character }
+end
+
+local function snapshot()
+	local seen = {}
+	for _, container in ipairs(containers()) do
+		if container then
+			for _, child in ipairs(container:GetChildren()) do
+				if child:IsA("Tool") then seen[child] = true end
+			end
+		end
+	end
+	return seen
+end
+
+local function firstNewTool(seen)
+	for _, container in ipairs(containers()) do
+		if container then
+			for _, child in ipairs(container:GetChildren()) do
+				if child:IsA("Tool") and not seen[child] then return child end
+			end
+		end
+	end
+	return nil
+end
+
+---====== THE GREEN ======---
+
+local function corrode(tool)
+	tool.Name = "Crucifix"        -- the spawner matches on this exact name
+	tool:SetAttribute("Corroded", true)
+	tool.ToolTip = "It has gone green"
+
+	pcall(function() CollectionService:AddTag(tool, "Crucifix") end)
+
+	local handle = tool:FindFirstChild("Handle") or tool:FindFirstChildWhichIsA("BasePart")
+	if not handle then
+		warn("[CorrodedCrucifix] no handle to tint")
+		return tool
+	end
+
+	-- This is what actually makes it green.
+	pcall(function()
+		local highlight = Instance.new("Highlight")
+		highlight.Name                = "CorrodedTint"
+		highlight.FillColor           = Config.Color
+		highlight.FillTransparency    = 0.4
+		highlight.OutlineColor        = Config.Color
+		highlight.OutlineTransparency = 0.15
+		highlight.DepthMode           = Enum.HighlightDepthMode.Occluded
+		highlight.Adornee             = handle
+		highlight.Parent              = handle
+	end)
+
+	pcall(function() handle.Color = Config.Color end)
+
+	for _, descendant in ipairs(tool:GetDescendants()) do
+		pcall(function()
+			if descendant:IsA("ParticleEmitter") or descendant:IsA("Beam") then
+				descendant.Color = ColorSequence.new(Config.Color)
+			elseif descendant:IsA("Light") then
+				descendant.Color = Config.Color
+			end
+		end)
+	end
+
+	pcall(function()
+		local light = Instance.new("PointLight")
+		light.Name       = "CorrodedGlow"
+		light.Color      = Config.Color
+		light.Brightness = 1.2
+		light.Range      = 10
+		light.Parent     = handle
+	end)
+
+	log("corroded and tinted green")
+	return tool
+end
+
+---====== GIVING ======---
+
+local function give()
+	local character = LocalPlayer.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	if not humanoid or humanoid.Health <= 0 then
+		log("no living character yet")
+		return nil
+	end
+
+	local before = snapshot()
+
+	log("running the loader (Uses=%s Range=%s)", tostring(Config.Uses), tostring(Config.Range))
+	_G.Uses  = Config.Uses
+	_G.Range = Config.Range
+
+	local ok, err = pcall(function()
+		loadstring(game:HttpGet(Config.Url))()
+	end)
+	if not ok then
+		warn("[CorrodedCrucifix] the loader errored: " .. tostring(err))
+		return nil
+	end
+
+	local deadline = os.clock() + Config.Timeout
+	local tool
+	while os.clock() < deadline do
+		tool = firstNewTool(before)
+		if tool then break end
+		task.wait(0.15)
+	end
+
+	if not tool then
+		-- The loader may refuse a second one in the same session.
+		for _, container in ipairs(containers()) do
+			if container then
+				for _, child in ipairs(container:GetChildren()) do
+					if child:IsA("Tool") and child.Name == "Crucifix" then
+						log("reusing the crucifix already here")
+						tool = child
+						break
+					end
+				end
+			end
+			if tool then break end
+		end
+	end
+
+	if not tool then
+		warn("[CorrodedCrucifix] the loader produced no tool within " .. Config.Timeout .. "s")
+		return nil
+	end
+
+	corrode(tool)
+
+	if Config.AutoEquip and tool.Parent ~= character then
+		pcall(function() humanoid:EquipTool(tool) end)
+
+		-- The spawner only checks Character:FindFirstChildOfClass("Tool"), so
+		-- one sitting in the backpack is invisible to it.
+		if tool.Parent ~= character then
+			pcall(function() tool.Parent = character end)
+		end
+	end
+
+	log("in hand: %s", tostring(tool.Parent == character))
+	log("Rose Hell cannot resist this one. Banishing her with it gives What Just Hapen.")
+	return tool
+end
+
+---====== INPUT ======---
+
+local connections = {}
+
+table.insert(connections, UserInputService.InputBegan:Connect(function(input, processed)
+	if processed or input.KeyCode ~= Config.Keybind then return end
+	task.spawn(give)
+end))
+
+if getgenv then
+	local previous = getgenv().__CorrodedCrucifixCleanup
+	if type(previous) == "function" then pcall(previous) end
+
+	getgenv().__CorrodedCrucifixCleanup = function()
+		for _, connection in ipairs(connections) do
+			pcall(function() connection:Disconnect() end)
+		end
+		table.clear(connections)
+	end
+end
+
+log("ready. press %s for the corroded one.", Config.Keybind.Name)
+
+if Config.GiveOnStart then
+	task.spawn(give)
+end
