@@ -451,8 +451,12 @@ Core.Images = Images
 function Images:Prefetch()
 	local keys = {
 		"Retter", "Rose Hell", "Yeller", "Rebound", "Corrode", "Rude",
-		"Silence", "Speedster Purpleist", "Blue Hell",
-		"mischievous", "corroded", "violet", "silence", "bluehell",
+		"Silence", "Speedster Purpleist", "Blue Hell", "Mischievous Light",
+		-- The death-light symbols. Silence and Blue Hell are not here: their
+		-- lights now share the entity key above rather than a lowercase file
+		-- of their own, so listing them again would fetch the same picture
+		-- twice.
+		"mischievous", "corroded", "violet",
 	}
 
 	task.spawn(function()
@@ -2290,16 +2294,27 @@ Core.DeathLights = {
 
 	--[[ He arrives in a blackout, so his light is the only pale thing on a
 	     black screen rather than a colour over it. ]]
+	--[[ Image is "Silence", capital S, and that matters.
+
+	     It was "silence". There is no ImagesA/silence -- the file is
+	     ImagesA/Silence -- and raw.githubusercontent.com is case-sensitive, so
+	     the fetch 404'd and his death screen got no picture at all. That was
+	     the "prefetched 12 of 14" in the report with no explanation attached.
+
+	     Using the badge's own key rather than a second lowercase one also
+	     means both share a single download and a single cache entry, which is
+	     what the comment in ImagesA/Silence always claimed was happening. ]]
 	Silence = {
-		Image  = "silence",
+		Image  = "Silence",
 		Light  = Color3.fromRGB(236, 236, 240),
 		Dialog = Color3.fromRGB(210, 210, 220),
 		Screen = Color3.fromRGB(120, 120, 130),
 		Static = Color3.fromRGB(20, 20, 24),
 	},
 
+	-- Capital B and H, for the same reason as Silence above.
 	BlueHell = {
-		Image  = "bluehell",
+		Image  = "BlueHell",
 		Light  = Color3.fromRGB(96, 200, 255),
 		Dialog = Color3.fromRGB(150, 220, 255),
 		Screen = Color3.fromRGB(90, 170, 230),

@@ -259,7 +259,14 @@ return {
 
 		--[[ Uses its own death light, registered at startup rather than being
 		     one of the game's four. See RegisterDeathType in GradishCore. ]]
-		["MischievousLight"] = {
+		--[[ The key must be the entity's Name EXACTLY, spaces and all.
+
+		     This block was keyed "MischievousLight" while the profile calls
+		     itself "Mischievous Light", so the lookup missed and the whole
+		     block was dead: no image, and four badges generated from the bare
+		     name instead of the wording below. GradishCheck listed both
+		     spellings side by side, which is what gave it away. ]]
+		["Mischievous Light"] = {
 			Image = "rbxassetid://76906701950679",
 
 			Survive   = "Walked Away From The Light | It was never trying to help",
