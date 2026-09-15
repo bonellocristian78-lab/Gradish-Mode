@@ -7,30 +7,52 @@
         the mod is actually going to do -- before you go looking for an entity
         to test it on.
 
-        It answers the question that has cost the most time in this project:
-        "I put the image in, why is the badge showing something else?" There
-        are five places an image can come from and they override each other in
-        a fixed order. This prints the winner for every badge, by name, and
-        says where it came from.
+        WHY VERSION ONE WAS NOT GOOD ENOUGH
+        -----------------------------------
+        The first run of this script printed "Everything checks out" on a repo
+        that had four real defects, all of them visible in its own output. It
+        listed the Mischievous Light's badges under two different spellings,
+        one line after the other, and called it fine. It reported
+        "prefetched 12 of 14" without saying which two. It marked a blank
+        image as [ok] because an empty string is truthy in Lua.
 
-        It also catches the things that fail silently:
+        A checker that can print a clean verdict over a broken repo is worse
+        than no checker, because you stop looking. So the rule here now is:
+        every section counts its own problems, and the verdict is computed from
+        those counts after everything has finished -- including the background
+        image prefetch, which the old version raced.
 
-          - two badges sharing one Identifier. The save file stores
-            identifiers, so the second badge is marked owned the moment the
-            first is granted and its popup never appears again. Nothing warns
-            you; it just quietly stops working after the first run.
+        WHAT IT CATCHES THAT NOTHING ELSE DOES
+        --------------------------------------
+        It reads the entity SCRIPTS, not just the config, and cross-checks the
+        three lists that have to agree:
 
-          - a model URL that 404s. The entity script loads, the spawner gets
-            nothing, and you get an empty corridor with no error.
+          - the Name inside each entity profile
+          - the keys of AchievementConfig.Entities
+          - Core.EntityNames
 
-          - an ImagesA file that returns a number where a string was meant, or
-            a URL the executor cannot download.
+        A config block keyed "MischievousLight" for a profile that calls itself
+        "Mischievous Light" is dead: no image, and four badges generated from
+        the bare name instead of your wording. Nothing in the game says so.
+        This does.
 
-          - a badge switched off that you thought was on.
+        It also catches:
+
+          - two badges sharing an Identifier. The save file is keyed on
+            Identifier, so the second is marked owned the moment the first is
+            granted and its popup never appears again.
+          - a DeathLight name no palette answers to, and a palette nothing
+            arms. That is how the entity the death-light system was named
+            after ended up without one.
+          - a DeathType that is not one of the four the game ships.
+          - two entities given the same badge picture.
+          - an image that resolves to an empty string.
+          - an AchievementConfig with a syntax error, which otherwise reports
+            as a healthy byte count.
+          - which image keys the prefetch actually failed on.
 
         Nothing here changes anything. It reads, it reports, and it stops.
-        Everything printed also lands in gradish_log.txt, so you can read the
-        result outside the game instead of screenshotting the console.
+        Everything printed also lands in gradish_log.txt.
 
             loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/GradishCheck"))()
 
@@ -71,19 +93,56 @@ local function good(format, ...)
 	line("  [ok] " .. format, ...)
 end
 
----====== IS ANYTHING REACHABLE AT ALL ======---
+local function note(format, ...)
+	line("       " .. format, ...)
+end
+
+local function blank(value)
+	return value == nil or value == "" or tostring(value):match("^%s*$") ~= nil
+end
+
+---====== FETCHING ======---
+
+local fetched = {}
+
+local function fetch(url)
+	if fetched[url] ~= nil then
+		local hit = fetched[url]
+		return hit.ok, hit.body
+	end
+
+	local ok, body = pcall(game.HttpGet, game, url)
+
+	if not ok then
+		fetched[url] = { ok = false, body = tostring(body) }
+		return false, tostring(body)
+	end
+
+	if type(body) ~= "string" or #body == 0 then
+		fetched[url] = { ok = false, body = "empty" }
+		return false, "empty"
+	end
+
+	--[[ GitHub serves a 404 with the plain body "404: Not Found", and some
+	     executors hand that back as a success rather than raising. Match the
+	     whole thing rather than the first three characters -- a Lua file whose
+	     first line happens to start with 404 is not a missing file. ]]
+	if body == "404: Not Found" or body:match("^404: Not Found%s*$") then
+		fetched[url] = { ok = false, body = "404" }
+		return false, "404"
+	end
+
+	fetched[url] = { ok = true, body = body }
+	return true, body
+end
 
 local function reachable(url)
-	local ok, body = pcall(game.HttpGet, game, url)
-	if not ok then return false, tostring(body) end
-	if type(body) ~= "string" or #body == 0 then return false, "empty" end
-
-	-- GitHub serves a plain "404: Not Found" body with a 404 status, and some
-	-- executors hand that back as a success rather than raising.
-	if body:sub(1, 3) == "404" then return false, "404" end
-
+	local ok, body = fetch(url)
+	if not ok then return false, body end
 	return true, #body
 end
+
+---====== THE REPOSITORY ======---
 
 head("THE REPOSITORY")
 
@@ -95,18 +154,36 @@ do
 		bad("GradishCore is NOT reachable (%s) -- nothing will work", tostring(size))
 	end
 
-	local configOk, configSize = reachable(BASE .. "AchievementConfig")
-	if configOk then
-		good("AchievementConfig reachable, %d bytes", configSize)
+	--[[ Byte count is not health. The old version printed the size of
+	     AchievementConfig and called it [ok], which it would also have done
+	     for a file with a syntax error in it -- and a config that will not
+	     compile silently falls back to generated wording for every badge in
+	     the mod. Compile it. ]]
+	local configOk, body = fetch(BASE .. "AchievementConfig")
+
+	if not configOk then
+		warn("AchievementConfig unreachable (%s)", tostring(body))
+		note("Every badge falls back to its generated wording. Nothing breaks,")
+		note("but none of your edits are being used.")
 	else
-		warn("AchievementConfig unreachable (%s) -- every badge falls back to its", tostring(configSize))
-		line("       generated wording, which still works but ignores your edits")
+		local compiled, err = loadstring(body)
+
+		if not compiled then
+			bad("AchievementConfig does NOT compile: %s", tostring(err))
+			note("Every badge in the mod is using generated wording right now.")
+		else
+			local ranOk, result = pcall(compiled)
+
+			if not ranOk or type(result) ~= "table" then
+				bad("AchievementConfig compiles but does not return a table (%s)", tostring(result))
+			else
+				good("AchievementConfig compiles and returns a table, %d bytes", #body)
+			end
+		end
 	end
 end
 
 ---====== THE EXECUTOR ======---
---[[ Half the "it does not work on my executor" reports come down to one of
-     these four functions being missing. Better to say so by name. ]]
 
 head("YOUR EXECUTOR")
 
@@ -127,35 +204,170 @@ do
 	end
 
 	if not getcustomasset then
-		line("       Without getcustomasset only plain Roblox asset IDs can be used")
-		line("       for badge art. Put IDs in ImagesA and everything still works.")
+		note("Without getcustomasset only plain Roblox asset IDs can be used for")
+		note("badge art. Put IDs in AchievementConfig and everything still works.")
 	end
 end
 
----====== THE MODELS ======---
+---====== THE ENTITY SCRIPTS ======---
+--[[ The heart of it. Every other section reads the config; this one reads the
+     entities themselves and checks that the three lists agree. ]]
 
-head("ENTITY MODELS")
+head("ENTITY SCRIPTS")
+
+local profiles = {}
 
 do
-	local models = {
-		{ entity = "Retter",              file = "retterbetter.rbxm" },
-		{ entity = "Rose Hell",           file = "roseHell.rbxm" },
-		{ entity = "Yeller",              file = "Yeller.rbxm" },
-		{ entity = "Rebound",             file = "ReboundGradishVer.rbxm" },
-		{ entity = "Corrode",             file = "corrodeV3butmadebyMyFriend.rbxm" },
-		{ entity = "Rude",                file = "Rude.rbxm" },
-		{ entity = "Silence",             file = "Silence.rbxm" },
-		{ entity = "Speedster Purpleist", file = "SpeedsterPurpleist.rbxm" },
-		{ entity = "Blue Hell",           file = "BlueHell.rbxm" },
-		{ entity = "Mischievous Light",   file = "MischievousLight.rbxm" },
+	local scripts = {
+		{ file = "RetterV2",           model = "retterbetter.rbxm" },
+		{ file = "RoseHellRemake",     model = "roseHell.rbxm" },
+		{ file = "Yeller",             model = "Yeller.rbxm" },
+		{ file = "Rebounddd",          model = "ReboundGradishVer.rbxm" },
+		{ file = "Corrode",            model = "corrodeV3butmadebyMyFriend.rbxm" },
+		{ file = "Rude",               model = "Rude.rbxm" },
+		{ file = "Silence",            model = "Silence.rbxm" },
+		{ file = "SpeedsterPurpleist", model = "SpeedsterPurpleist.rbxm" },
+		{ file = "BlueHell",           model = "BlueHell.rbxm" },
+		{ file = "MischievousLight",   model = "MischievousLight.rbxm" },
 	}
 
-	for _, model in ipairs(models) do
-		local ok, size = reachable(BASE .. model.file)
-		if ok then
-			good("%-20s %s (%d KB)", model.entity, model.file, math.floor(size / 1024))
+	for _, entry in ipairs(scripts) do
+		local ok, body = fetch(BASE .. entry.file)
+
+		if not ok then
+			bad("%s does not load (%s)", entry.file, tostring(body))
 		else
-			bad("%-20s %s is MISSING (%s)", model.entity, model.file, tostring(size))
+			-- The first Name = "..." in the file is the profile's, because the
+			-- profile is the first table in every one of these scripts.
+			local name = body:match('Name%s*=%s*"([^"]+)"')
+			local deathType = body:match('DeathType%s*=%s*"([^"]+)"')
+			local deathLight = body:match('DeathLight%s*=%s*"([^"]+)"')
+
+			local modelOk, modelSize = reachable(BASE .. entry.model)
+
+			profiles[#profiles + 1] = {
+				file = entry.file, name = name,
+				deathType = deathType, deathLight = deathLight,
+			}
+
+			if not name then
+				bad("%s -- could not find its Name field", entry.file)
+			elseif modelOk then
+				good("%-20s %-16s %s (%d KB)", name, entry.file, entry.model,
+					math.floor(modelSize / 1024))
+			else
+				bad("%-20s %s is MISSING (%s)", name, entry.model, tostring(modelSize))
+			end
+		end
+	end
+end
+
+---====== DO THE THREE LISTS AGREE ======---
+
+head("NAMES")
+
+do
+	local byName = {}
+	for _, profile in ipairs(profiles) do
+		if profile.name then byName[profile.name] = profile end
+	end
+
+	local data = Core.AchievementConfig:Get()
+	local mismatches = 0
+
+	-- A config block whose key is not any entity's Name is dead weight: the
+	-- lookup misses and the entity uses generated wording instead.
+	for key in pairs(data.Entities or {}) do
+		if not byName[key] then
+			mismatches += 1
+			bad("AchievementConfig has a block for %q and no entity is called that", key)
+
+			-- Name the near miss, because it is almost always spacing or case.
+			local squashed = key:lower():gsub("[^%w]", "")
+			for name in pairs(byName) do
+				if name:lower():gsub("[^%w]", "") == squashed then
+					note("Did you mean %q? That block is currently doing nothing:", name)
+					note("no image, and its badges are generated from the bare name.")
+				end
+			end
+		end
+	end
+
+	local known = {}
+	for _, name in ipairs(Core.EntityNames) do known[name] = true end
+
+	for name in pairs(byName) do
+		if not known[name] then
+			warn("%q is not in Core.EntityNames, so the checker and the dev", name)
+			note("console will not walk it")
+		end
+	end
+
+	for _, name in ipairs(Core.EntityNames) do
+		if not byName[name] then
+			warn("Core.EntityNames lists %q and no entity script is called that", name)
+		end
+	end
+
+	if mismatches == 0 then
+		good("every AchievementConfig block matches an entity Name")
+	end
+end
+
+---====== DEATH ======---
+
+head("DEATH SCREENS")
+
+do
+	Core.DiscoverDeathTypes()
+
+	local validType = {}
+	for _, name in ipairs(Core.DeathTypes) do validType[name] = true end
+	line("  death types the game has: %s", table.concat(Core.DeathTypes, ", "))
+
+	local lights = {}
+	for key in pairs(Core.DeathLights or {}) do table.insert(lights, key) end
+	table.sort(lights)
+	line("  death lights defined:     %s", table.concat(lights, ", "))
+	line("")
+
+	local armed = {}
+
+	for _, profile in ipairs(profiles) do
+		if profile.name then
+			--[[ DeathType picks the SOUND, DeathLight picks the COLOURS, and
+			     nothing infers one from the other. An entity with a DeathType
+			     and no DeathLight gets DOORS' default screen -- which is how
+			     the Mischievous Light ended up without the red palette named
+			     after it. ]]
+			if profile.deathLight then
+				armed[profile.deathLight] = true
+
+				if not (Core.DeathLights or {})[profile.deathLight] then
+					bad("%s arms a death light called %q and no palette answers to that",
+						profile.name, profile.deathLight)
+				end
+			elseif profile.deathType then
+				warn("%s sets DeathType = %q but no DeathLight, so it gets DOORS'",
+					profile.name, profile.deathType)
+				note("default screen. DeathType is the sound; DeathLight is the colours.")
+			end
+
+			-- Registered types are added at runtime, so only flag a type that
+			-- is neither shipped nor registered by anything.
+			if profile.deathType and not validType[profile.deathType] then
+				warn("%s uses DeathType = %q, which is not one of: %s",
+					profile.name, profile.deathType, table.concat(Core.DeathTypes, ", "))
+				note("That is fine ONLY if something calls Core.RegisterDeathType(%q, ...)",
+					profile.deathType)
+				note("before it spawns. Otherwise the screen falls back to the default.")
+			end
+		end
+	end
+
+	for _, key in ipairs(lights) do
+		if not armed[key] then
+			warn("the %q palette exists and no entity arms it", key)
 		end
 	end
 end
@@ -174,34 +386,109 @@ do
 	line("     4. AchievementConfig.DefaultImage")
 	line("")
 
+	local usedBy = {}
+
 	for _, name in ipairs(Core.EntityNames) do
 		local key = (name:gsub("[^%w]", ""))
 		local block = (data.Entities or {})[name] or {}
 
-		local fromFile = Core.Images:Resolve(name, true)  -- blocking: we want the answer
+		-- Blocking, so the answer is the real one rather than a cache miss.
+		local fromFile = Core.Images:Resolve(name, true)
 		local inline   = block.Image
 
 		local winner, where
 
-		if inline then
-			winner, where = inline, "AchievementConfig.Entities[\"" .. name .. "\"].Image"
-		elseif fromFile then
+		--[[ blank() rather than truthiness. DefaultImage = "" is an empty
+		     STRING, which is truthy in Lua, so the old version happily
+		     selected it, printed [ok], and showed an arrow with nothing after
+		     it. An empty image is worse than no image: the popup tries to load
+		     "" as a texture and draws an empty square. ]]
+		if not blank(inline) then
+			winner, where = inline, ('AchievementConfig.Entities["%s"].Image'):format(name)
+		elseif not blank(fromFile) then
 			winner, where = fromFile, "ImagesA/" .. key
-		elseif data.DefaultImage then
+		elseif not blank(data.DefaultImage) then
 			winner, where = data.DefaultImage, "DefaultImage"
 		end
 
 		if winner then
 			good("%-20s %s", name, where)
-			line("       -> %s", tostring(winner))
+			note("-> %s", tostring(winner))
 
-			if inline and fromFile then
-				line("       (ImagesA/%s exists but the inline ID above wins)", key)
+			usedBy[winner] = usedBy[winner] or {}
+			table.insert(usedBy[winner], name)
+
+			if not blank(inline) and not blank(fromFile) then
+				note("(ImagesA/%s exists but the inline ID above wins)", key)
+			end
+
+			local image = tostring(winner)
+			if not (image:match("^rbxassetid://%d+$") or image:match("^rbxasset://")
+				or image:match("^http") or image:match("^rbxtemp://"))
+			then
+				warn("   that does not look like an asset id or a url")
 			end
 		else
-			warn("%-20s no image anywhere -- the popup uses the DOORS default", name)
-			line("       add ImagesA/%s containing:  return \"rbxassetid://YOURID\"", key)
+			warn("%-20s no image anywhere -- the popup uses the DOORS icon", name)
+			note("add ImagesA/%s containing:  return \"rbxassetid://YOURID\"", key)
 		end
+	end
+
+	--[[ Two entities on one picture is nearly always a paste that went one
+	     block too far, and it is invisible in play: both popups look right on
+	     their own, and you only notice when you see them side by side. ]]
+	for image, names in pairs(usedBy) do
+		if #names > 1 then
+			line("")
+			warn("these %d entities share one badge picture:", #names)
+			for _, name in ipairs(names) do note("%s", name) end
+			note("-> %s", tostring(image))
+			note("If that was not deliberate, delete the Image line from all but")
+			note("one of their blocks and each falls back to its own ImagesA file.")
+		end
+	end
+end
+
+---====== THE IMAGE PREFETCH ======---
+--[[ The old version printed its verdict while Prefetch was still running in
+     the background, so "prefetched 12 of 14" arrived AFTER "Everything checks
+     out" and named neither of the two that failed. ]]
+
+head("IMAGE FILES")
+
+do
+	local keys = {}
+	for _, name in ipairs(Core.EntityNames) do table.insert(keys, name) end
+	for _, palette in pairs(Core.DeathLights or {}) do
+		if palette.Image then table.insert(keys, palette.Image) end
+	end
+
+	local missing = {}
+
+	for _, name in ipairs(keys) do
+		local key = (tostring(name):gsub("[^%w]", ""))
+		local ok = fetch(BASE .. "ImagesA/" .. key)
+
+		if not ok then
+			missing[key] = true
+		end
+	end
+
+	local names = {}
+	for key in pairs(missing) do table.insert(names, key) end
+	table.sort(names)
+
+	if #names == 0 then
+		good("every key the mod asks for has a file in ImagesA")
+	else
+		line("  These keys have no ImagesA file. raw.githubusercontent.com is")
+		line("  CASE-SENSITIVE, so ImagesA/silence is not ImagesA/Silence:")
+		for _, key in ipairs(names) do
+			warn("ImagesA/%s", key)
+		end
+		note("An entity falls back to its AchievementConfig Image, which is")
+		note("usually fine. A death-light key falling back has nothing to fall")
+		note("back TO.")
 	end
 end
 
@@ -220,24 +507,26 @@ do
 	line("  %d badge(s) would be awarded by the current config.", #badges)
 	line("")
 
-	-- Duplicate identifiers: the failure that looks like "it worked once".
+	--[[ Duplicate identifiers, from the UN-deduped list.
+
+	     The old version built this table from Core.AllAchievements(), which
+	     removes duplicates by Identifier before returning -- so the check
+	     could not fire, by construction. It is the raw list now. ]]
 	local byIdentifier = {}
-	for _, badge in ipairs(badges) do
+	for _, badge in ipairs(Core.AllAchievements(true)) do
 		byIdentifier[badge.id] = byIdentifier[badge.id] or {}
 		table.insert(byIdentifier[badge.id], badge.from)
 	end
 
 	for identifier, owners in pairs(byIdentifier) do
 		if #owners > 1 then
-			bad("two badges share the identifier %q:", identifier)
-			for _, owner in ipairs(owners) do
-				line("         %s", owner)
-			end
-			line("       Only the first will ever show. Identifiers are the save key.")
+			bad("%d badges share the identifier %q:", #owners, identifier)
+			for _, owner in ipairs(owners) do note("  %s", owner) end
+			note("Only the first will ever show. The save file is keyed on")
+			note("Identifier, so granting one marks the others owned.")
 		end
 	end
 
-	-- And what is switched off.
 	for _, name in ipairs(Core.EntityNames) do
 		local block = (data.Entities or {})[name]
 
@@ -255,43 +544,25 @@ do
 	end
 
 	line("")
+
+	local library = Core.Achievements:Load()
+	local owned = 0
+
 	for _, badge in ipairs(badges) do
-		local owned = false
+		local isOwned = false
 		pcall(function()
-			local library = Core.Achievements:Load()
-			owned = library and library:CheckOwned(badge.id) or false
+			isOwned = library and library:CheckOwned(badge.id) or false
 		end)
+		if isOwned then owned += 1 end
 
-		line("  %s %-34s %s", owned and "[owned]" or "[     ]", badge.id, badge.from)
-
-		if badge.entry.Image then
-			-- A blank or malformed image is worse than none: the popup tries to
-			-- load it as a texture and shows an empty square.
-			local image = tostring(badge.entry.Image)
-			if not (image:match("^rbxassetid://%d+$") or image:match("^rbxasset://")
-				or image:match("^http") or image:match("^rbxtemp://")) then
-				warn("   its image does not look like an asset: %s", image)
-			end
-		end
+		line("  %s %-34s %s", isOwned and "[owned]" or "[     ]", badge.id, badge.from)
 	end
 
 	line("")
-	line("  [owned] means the popup will NOT show again. Wipe them with")
-	line("  GradishDev: F3 then 2.")
-end
-
----====== DEATH ======---
-
-head("DEATH SCREENS")
-
-do
-	Core.DiscoverDeathTypes()
-	line("  death types available: %s", table.concat(Core.DeathTypes, ", "))
-
-	local lights = {}
-	for key in pairs(Core.DeathLights or {}) do table.insert(lights, key) end
-	table.sort(lights)
-	line("  death lights defined:  %s", table.concat(lights, ", "))
+	if owned > 0 then
+		line("  %d of %d are [owned], and an owned badge NEVER shows its popup", owned, #badges)
+		line("  again. Wipe them with GradishDev: F3 then 2.")
+	end
 end
 
 ---====== CRUCIFIXES ======---
@@ -299,12 +570,27 @@ end
 head("CRUCIFIXES")
 
 do
+	local byName = {}
+	for _, profile in ipairs(profiles) do
+		if profile.name then byName[profile.name] = true end
+	end
+
 	for key, variant in pairs(Core.CrucifixVariants) do
 		local beats = variant.Beats == "*" and "EVERYTHING"
 			or table.concat(variant.Beats or {}, ", ")
 
 		good("%-10s beats %s", key, beats)
-		if variant.Note then line("       %s", variant.Note) end
+		if variant.Note then note("%s", variant.Note) end
+
+		-- A Beats entry that matches no entity Name can never fire, and it
+		-- looks completely correct sitting in the table.
+		if type(variant.Beats) == "table" then
+			for _, name in ipairs(variant.Beats) do
+				if not byName[name] then
+					warn("   %s claims to beat %q and no entity is called that", key, name)
+				end
+			end
+		end
 	end
 
 	local ok, size = reachable(Core.Crucifix.Loader.Url)
@@ -312,11 +598,15 @@ do
 		good("the crucifix loader is reachable (%d bytes)", size)
 	else
 		bad("the crucifix loader is NOT reachable (%s)", tostring(size))
-		line("       No crucifix can be given or found until that URL works.")
+		note("No crucifix can be given or found until that URL works.")
 	end
 end
 
 ---====== VERDICT ======---
+--[[ Computed here, after every section has counted. The old version printed a
+     verdict and then let the background prefetch log its failures underneath
+     it, which is how "Everything checks out" ended up directly above
+     "prefetched 12 of 14". ]]
 
 line("")
 line(("="):rep(62))
@@ -327,6 +617,7 @@ elseif problems == 0 then
 	line("  No problems. %d thing(s) worth a look, marked [!].", warnings)
 else
 	line("  %d PROBLEM(S) marked [X], and %d warning(s) marked [!].", problems, warnings)
+	line("  A [X] means something in the mod is not doing what it says it does.")
 end
 
 line("  This whole report is also in gradish_log.txt.")

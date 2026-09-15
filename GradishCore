@@ -797,7 +797,14 @@ Core.EntityNames = {
      -- it is the real list, not a description of the config file. Entities
      named in AchievementConfig that are not in EntityNames are included too,
      so a badge you added for something of your own still shows up. ]]
-function Core.AllAchievements()
+--[[ keepDuplicates: return every badge even when two share an Identifier.
+
+     The checker needs the un-deduped list, because a shared Identifier IS the
+     bug it is looking for -- the save file is keyed on Identifier, so the
+     second badge is marked owned the moment the first is granted and its popup
+     never appears again. Deduping before the check meant the check could never
+     fire. Everything else wants the deduped list. ]]
+function Core.AllAchievements(keepDuplicates)
 	local data = AchievementConfig:Get()
 	local seen, out = {}, {}
 
@@ -807,7 +814,9 @@ function Core.AllAchievements()
 
 	for name in pairs(names) do
 		for slot, entry in pairs(buildAchievements({ Name = name })) do
-			if type(entry) == "table" and entry.Identifier and not seen[entry.Identifier] then
+			if type(entry) == "table" and entry.Identifier
+				and (keepDuplicates or not seen[entry.Identifier])
+			then
 				seen[entry.Identifier] = true
 				table.insert(out, {
 					id = entry.Identifier, from = name .. "." .. slot, entry = entry,
@@ -817,7 +826,9 @@ function Core.AllAchievements()
 	end
 
 	for key, entry in pairs(data.Special or {}) do
-		if type(entry) == "table" and entry.Identifier and not seen[entry.Identifier] then
+		if type(entry) == "table" and entry.Identifier
+			and (keepDuplicates or not seen[entry.Identifier])
+		then
 			seen[entry.Identifier] = true
 			table.insert(out, {
 				id = entry.Identifier, from = "Special." .. key, entry = entry,
@@ -1454,6 +1465,15 @@ local function startAcidTrail(session)
 				if (flat - root.Position).Magnitude <= radius then
 					humanoid.Health = math.max(humanoid.Health - damage, 0)
 					session.stats.acidTicks = (session.stats.acidTicks or 0) + 1
+
+					--[[ A burn is a hit.
+
+					     The acid does not go through DamagePlayer, so it never
+					     touched stats.hits -- and stats.hits == 0 is the whole
+					     test for the Untouched badge. You could be burned from
+					     65 down to 5 and still be handed "Corrode Clean",
+					     which is meant to mean nothing touched you. ]]
+					session.stats.hits += 1
 					log(session.name, "acid burn, %d HP left", math.floor(humanoid.Health))
 
 					--[[ The acid can finish you after Corrode has gone. It has
@@ -1685,17 +1705,43 @@ local function startCrucifixionWatch(session)
 		     rainbow crucifix set it too, and banishing anything with any
 		     coloured crucifix awarded that entity's corroded badge -- a badge
 		     whose whole point is that it is rare. ]]
-		if not session.active or session.crucifixVariant then return end
+		if not session.active then return end
+
+		local config = session.entity and session.entity.Config
+		if not config or not config.Crucifixion then return end
+
+		--[[ Remember what the profile actually asked for, once.
+
+		     Resist has to be restorable, because this now follows the tool in
+		     your hand rather than latching the first time it sees one. It used
+		     to latch: pick the rainbow crucifix up, put it away again, and the
+		     entity stayed unable to resist for the rest of its visit. ]]
+		if session.originalResist == nil then
+			session.originalResist = config.Crucifixion.Resist or false
+		end
 
 		local character = getCharacter()
 		local held = character and character:FindFirstChildOfClass("Tool")
-		if not held then return end
+		local beats, key, variant = false, nil, nil
 
-		local beats, key, variant = Core.CrucifixBeats(held, session.name)
-		if not beats then return end
+		if held then
+			beats, key, variant = Core.CrucifixBeats(held, session.name)
+		end
 
-		local config = session.entity and session.entity.Config
-		if not config then return end
+		if not beats then
+			-- Not holding one that beats this entity: put its own rules back.
+			if session.crucifixVariant then
+				config.Crucifixion.Resist = session.originalResist
+				session.crucifixVariant = nil
+				session.rainbowRitual   = false
+				session.ritualColour    = nil
+				if not session.corrodedByRoll then session.corroded = false end
+				log(session.name, "the crucifix is away -- its own rules are back")
+			end
+			return
+		end
+
+		if session.crucifixVariant == key then return end
 
 		if config.Crucifixion.Resist then
 			config.Crucifixion.Resist = false
@@ -3899,7 +3945,9 @@ function Core:Spawn(profile, passIndex, carriedStats)
 	local corroded = profile.Corroded
 
 	if corroded and math.random() < (corroded.Chance or 0) then
-		session.corroded     = true
+		session.corroded       = true
+		-- The roll, not the tool. Putting a crucifix away must not undo it.
+		session.corrodedByRoll = true
 		session.ritualColour = corroded.Color or Color3.fromRGB(90, 220, 90)
 		entity.Config.Crucifixion.Resist = false
 
@@ -4007,6 +4055,19 @@ function Core:Spawn(profile, passIndex, carriedStats)
 
 		local stats = session.stats
 
+		--[[ Sent away by Core.Dismiss rather than by the game.
+
+		     This has to be checked before everything below it, because the two
+		     branches that follow -- another pass, and the encore -- return
+		     BEFORE finish() is reached. So marking the session finished is not
+		     enough on its own: Rebound has Passes = 3 and Rose Hell has a 25%
+		     encore, and both would come straight back two rooms later as a
+		     brand new session that awards its badges normally. ]]
+		if session.dismissed then
+			log(session.name, "dismissed -- no badge, no pass, no encore")
+			return
+		end
+
 		-- A banished or lethal entity does not come back.
 		if stats.died or stats.crucifixBanished then
 			finish(session)
@@ -4096,6 +4157,45 @@ end
      rather than walking a path, so he never goes through Core:Spawn and never
      gets a session -- but his achievements still belong in the same queue, or
      two popups land on the same frame and eat each other. ]]
+--[[ Take an entity out of the world without it counting as anything.
+
+     The dev console needs this and there was no way to express it. Calling
+     entity:Despawn() directly runs the ordinary end-of-visit path, which
+     awards Survive and, if you were never hit, Untouched -- and those are
+     written to DOORS_Custom_Achievements.json with Remember = true, so the
+     popup you were trying to test is now marked owned and will never show
+     again. A cleanup key that silently spends the two hardest badges in the
+     mod is worse than no cleanup key.
+
+     finished stops finish(); dismissed stops the pass and encore branches,
+     which return before finish() is ever reached. ]]
+function Core.Dismiss(name)
+	local session = Core.Active[name]
+	if not session then return false end
+
+	session.finished  = true
+	session.dismissed = true
+
+	local entity = session.entity
+	if not entity then
+		unregister(session)
+		return true
+	end
+
+	local ok = pcall(function() entity:Despawn() end)
+
+	if not ok then
+		-- Despawn can throw if the model is already gone. Tidy up by hand so
+		-- the registry does not keep a dead entity forever.
+		session.active = false
+		unregister(session)
+		pcall(function() session.janitor:Clean() end)
+	end
+
+	logAlways("Core", "%s dismissed", name)
+	return true
+end
+
 function Core.AwardAchievement(entry)
 	Achievements:Award(entry)
 end

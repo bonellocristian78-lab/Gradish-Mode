@@ -112,17 +112,52 @@ local SILENCE = 4           -- minimum five rooms between encounters
 local DROUGHT = 15          -- and never more than fifteen without one
 local OVERLAP_CHANCE = 0.05 -- landing exactly together is still allowed
 
-local generators = {
-	-- Fixed order, so the same seed always resolves ties the same way.
-	{ key = "Retter",  first = 15, gapMin = 6,  gapMax = 11, rng = Random.new(seed + 11) },
-	{ key = "Rose",    first = 12, gapMin = 5,  gapMax = 10, rng = Random.new(seed + 22) },
-	{ key = "Yeller",  first = 30, gapMin = 12, gapMax = 19, rng = Random.new(seed + 33) },
-	{ key = "Rebound", first = 8,  gapMin = 12, gapMax = 19, rng = Random.new(seed + 44) },
-	{ key = "Corrode", first = 20, gapMin = 14, gapMax = 22, rng = Random.new(seed + 66) },
-	{ key = "Silence", first = 25, gapMin = 18, gapMax = 28, rng = Random.new(seed + 77) },
-	{ key = "Speedster", first = 32, gapMin = 16, gapMax = 26, rng = Random.new(seed + 88) },
-	{ key = "BlueHell", first = 18, gapMin = 13, gapMax = 21, rng = Random.new(seed + 99) },
+--[[ EVERY SCHEDULED ENTITY, IN ONE TABLE.
+
+     This used to be four lists that all had to agree: the generators here, the
+     schedules table, the counts table, and eight near-identical branches in the
+     room handler at the bottom. Nine places to edit to add one entity, and the
+     Mischievous Light was in EVERY other list in the mod -- Core.EntityNames,
+     Prefetch, AchievementConfig, GradishCheck, GradishDev, the crucifix that
+     beats it, the README -- and in none of these four. So it could never spawn
+     in a normal run, and three of its badges were unreachable without anybody
+     writing a line of broken code.
+
+     Now it is one row. Everything below derives from this.
+
+         key     internal name, only used to key the schedule
+         file    the script to load from the repo
+         first   earliest room it will consider
+         gapMin  never closer together than this
+         gapMax  and never further apart
+         offset  its own seed, so changing one entity does not reshuffle the
+                 others. Must be unique -- 55 belongs to overlapRng.
+         wait    seconds after you enter the room before it arrives
+
+     Order is fixed: it is the deterministic tiebreak when two entities want the
+     same room. Append rather than insert, or every existing seed changes. ]]
+local ENTITIES = {
+	{ key = "Retter",      file = "RetterV2",           first = 15, gapMin = 6,  gapMax = 11, offset = 11,  wait = { 5, 15 } },
+	{ key = "Rose",        file = "RoseHellRemake",     first = 12, gapMin = 5,  gapMax = 10, offset = 22,  wait = { 2, 12 } },
+	{ key = "Yeller",      file = "Yeller",             first = 30, gapMin = 12, gapMax = 19, offset = 33,  wait = { 18, 23 } },
+	{ key = "Rebound",     file = "Rebounddd",          first = 8,  gapMin = 12, gapMax = 19, offset = 44,  wait = { 5, 12 } },
+	{ key = "Corrode",     file = "Corrode",            first = 20, gapMin = 14, gapMax = 22, offset = 66,  wait = { 4, 10 } },
+	{ key = "Silence",     file = "Silence",            first = 25, gapMin = 18, gapMax = 28, offset = 77,  wait = { 3, 8 } },
+	{ key = "Speedster",   file = "SpeedsterPurpleist", first = 32, gapMin = 16, gapMax = 26, offset = 88,  wait = { 5, 12 } },
+	{ key = "BlueHell",    file = "BlueHell",           first = 18, gapMin = 13, gapMax = 21, offset = 99,  wait = { 2, 10 } },
+	{ key = "Mischievous", file = "MischievousLight",   first = 22, gapMin = 15, gapMax = 24, offset = 111, wait = { 4, 12 } },
 }
+
+local generators = {}
+for _, entity in ipairs(ENTITIES) do
+	table.insert(generators, {
+		key    = entity.key,
+		first  = entity.first,
+		gapMin = entity.gapMin,
+		gapMax = entity.gapMax,
+		rng    = Random.new(seed + entity.offset),
+	})
+end
 
 local overlapRng = Random.new(seed + 55)
 
@@ -154,10 +189,11 @@ table.sort(candidates, function(a, b)
 	return a.order < b.order
 end)
 
-local schedules = { Retter = {}, Rose = {}, Yeller = {}, Rebound = {}, Corrode = {},
-                    Silence = {}, Speedster = {}, BlueHell = {} }
-local counts    = { Retter = 0,  Rose = 0,  Yeller = 0,  Rebound = 0,  Corrode = 0,
-                    Silence = 0,  Speedster = 0,  BlueHell = 0 }
+local schedules, counts = {}, {}
+for _, entity in ipairs(ENTITIES) do
+	schedules[entity.key] = {}
+	counts[entity.key]    = 0
+end
 local lastAccepted = -math.huge
 local rejected = 0
 
@@ -227,18 +263,18 @@ for _, list in pairs(schedules) do
 	table.sort(list)
 end
 
-local Rettersp  = schedules.Retter
-local rosesp    = schedules.Rose
-local yellersp  = schedules.Yeller
-local reboundsp = schedules.Rebound
-local corrodesp = schedules.Corrode
-local silencesp = schedules.Silence
-local speedsp   = schedules.Speedster
-local bluesp    = schedules.BlueHell
+-- What the seed produced, named entity by entity so a run that felt wrong can
+-- be read back afterwards instead of guessed at.
+local summary, total = {}, 0
+for _, entity in ipairs(ENTITIES) do
+	local rooms = schedules[entity.key]
+	total += #rooms
+	table.insert(summary, ("%s %d"):format(entity.key, #rooms))
+end
 
-warn(("[Gradish] seed %s | Retter %d, Rose %d, Yeller %d, Rebound %d, Corrode %d, Silence %d, Speedster %d, BlueHell %d | %d dropped | %d-%d rooms apart")
-	:format(tostring(seed), #Rettersp, #rosesp, #yellersp, #reboundsp, #corrodesp,
-		#silencesp, #speedsp, #bluesp, rejected, SILENCE + 1, DROUGHT))
+warn(("[Gradish] seed %s | %s | %d encounters, %d dropped | %d-%d rooms apart")
+	:format(tostring(seed), table.concat(summary, ", "), total, rejected,
+		SILENCE + 1, DROUGHT))
 
 require(game.Players.LocalPlayer.PlayerGui.MainUI.Initiator.Main_Game).caption("Loaded",true)
 warn("Loaded")
@@ -287,53 +323,22 @@ require(game.Players.LocalPlayer.PlayerGui.MainUI.Initiator.Main_Game).caption("
 task.wait(1)
 require(game.Players.LocalPlayer.PlayerGui.MainUI.Initiator.Main_Game).caption(captions[r3:NextInteger(1, #captions)],true)
 
+--[[ One branch per entity, built from ENTITIES rather than written out.
+
+     The eight hand-written copies this replaces were identical apart from the
+     list name, the URL and the wait range -- which is exactly the shape that
+     lets an entity go missing without anything looking wrong. ]]
 lastroom.changed:connect(function()
-	if table.find(Rettersp, lastroom.Value) then
-		task.spawn(function()
-			task.wait(r3:NextInteger(5, 15))
-			loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/RetterV2"))()
-		end)
-	end
-	if table.find(rosesp, lastroom.Value) then
-		task.spawn(function()
-			task.wait(r3:NextInteger(2, 12))
-	loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/RoseHellRemake"))()
-		end)
-	end
-if table.find(yellersp, lastroom.Value) then
-		task.spawn(function()
-			task.wait(r3:NextInteger(18, 23))
-	loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/Yeller"))()
-		end)
-	end
-if table.find(reboundsp, lastroom.Value) then
-		task.spawn(function()
-			task.wait(r3:NextInteger(5, 12))
-	loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/Rebounddd"))()
-		end)
-	end
-	if table.find(corrodesp, lastroom.Value) then
-		task.spawn(function()
-			task.wait(r3:NextInteger(4, 10))
-			loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/Corrode"))()
-		end)
-	end
-	if table.find(silencesp, lastroom.Value) then
-		task.spawn(function()
-			task.wait(r3:NextInteger(3, 8))
-			loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/Silence"))()
-		end)
-	end
-	if table.find(speedsp, lastroom.Value) then
-		task.spawn(function()
-			task.wait(r3:NextInteger(5, 12))
-			loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/SpeedsterPurpleist"))()
-		end)
-	end
-	if table.find(bluesp, lastroom.Value) then
-		task.spawn(function()
-			task.wait(r3:NextInteger(2, 10))
-			loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/BlueHell"))()
-		end)
+	local room = lastroom.Value
+
+	for _, entity in ipairs(ENTITIES) do
+		if table.find(schedules[entity.key], room) then
+			task.spawn(function()
+				task.wait(r3:NextInteger(entity.wait[1], entity.wait[2]))
+				loadstring(game:HttpGet(
+					"https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/" .. entity.file
+				))()
+			end)
+		end
 	end
 end)

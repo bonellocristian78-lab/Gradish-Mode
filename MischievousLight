@@ -178,6 +178,22 @@ if not package then return end
 local model = extractEntity(package)
 if not model then return end
 
+--[[ Register its death sound HERE, not only in MainScript.
+
+     MainScript calls Core.RegisterDeathType("Mischievous", ...) at startup,
+     which is fine for a full run -- but this entity is also a documented
+     standalone loadstring, and GradishDev summons it too. On both of those
+     routes MainScript never runs, so the name did not exist, the spawner's
+     Health.Music lookup found nothing, and the death screen fell back to
+     DOORS' default.
+
+     RegisterDeathType is pcall-wrapped and returns harmlessly if the name is
+     already there, so calling it twice in a full run costs nothing. ]]
+if Core.RegisterDeathType then
+	pcall(Core.RegisterDeathType, "Mischievous",
+		"rbxassetid://111734134961936", nil, "Blue")
+end
+
 Core:Spawn({
 	Name = "Mischievous Light",
 
@@ -212,8 +228,22 @@ Core:Spawn({
 		Values  = { 12, 18, 0.4, 1.5 },
 	},
 
-	-- Its own light, registered at startup. Not one of the game's four.
+	-- Its own sound, registered just above so this works standalone too.
 	DeathType = "Mischievous",
+
+	--[[ THE RED SCREEN, which this entity is named after and never had.
+
+	     DeathType picks the SOUND. DeathLight picks the COLOURS, and they are
+	     two different fields -- GradishCore only arms a palette when the
+	     profile carries DeathLight (there is no fallback that infers one from
+	     the type). This profile named its palette in the DeathType slot and
+	     left DeathLight empty, so Core.DeathLights.Mischievous -- the red one,
+	     the one the README calls this entity's own -- was armed by Retter and
+	     by nothing else.
+
+	     The entity the whole custom death-light system was built around was
+	     the one entity not using it. ]]
+	DeathLight = "Mischievous",
 
 	DeathHints = {
 		"Oh.",

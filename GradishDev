@@ -22,7 +22,7 @@
 
             F1   summon menu: prints the list, then press 1-9 or 0
             F2   crucifix menu: prints the list, then press 1-5
-            F3   badge menu: grant / revoke / wipe / list
+            F3   badge menu: list / wipe all / grant all / revoke all
             F4   dump everything to the log right now
             F5   despawn every Gradish entity currently out
             F6   toggle the mod's own debug logging
@@ -264,13 +264,38 @@ local function dump()
 	for _ in pairs(Core.Images and Core.Images.cache or {}) do cached += 1 end
 	say("images cached: %d", cached)
 
-	say("loot found this run: crucifix x%d", (Core.Crucifix and Core.Crucifix.foundInDrawers) or 0)
+	-- Every item the loot table has produced, not just crucifixes: the old
+	-- line said "crucifix x3" whether it was three crucifixes or three
+	-- vitamins.
+	local loot = {}
+	for key, count in pairs(Core.Loot and Core.Loot.found or {}) do
+		table.insert(loot, ("%s x%d"):format(key, count))
+	end
+
+	say("found in furniture: %s", #loot > 0 and table.concat(loot, ", ") or "nothing yet")
+	say("crucifixes: %d given, %d spent, %d from drawers",
+		(Core.Crucifix and Core.Crucifix.given) or 0,
+		(Core.Crucifix and Core.Crucifix.spent) or 0,
+		(Core.Crucifix and Core.Crucifix.foundInDrawers) or 0)
 	say("=======================================")
 end
 
 ---====== INPUT ======---
 
+--[[ An opened menu expires.
+
+     It used to stay armed forever, so pressing F1, deciding against it, and
+     pressing 3 twenty minutes later for something else summoned Yeller. Ten
+     seconds is long enough to read nine lines and short enough that a stale
+     menu cannot surprise you. ]]
 local menu = nil
+local menuUntil = 0
+local MENU_SECONDS = 10
+
+local function openMenu(name)
+	menu = name
+	menuUntil = os.clock() + MENU_SECONDS
+end
 
 local MENUS = {
 	entity = function(index)
@@ -301,21 +326,21 @@ table.insert(connections, UserInputService.InputBegan:Connect(function(input, pr
 	local code = input.KeyCode
 
 	if code == Enum.KeyCode.F1 then
-		menu = "entity"
+		openMenu("entity")
 		say("SUMMON -- press a number:")
 		for index, entry in ipairs(ENTITIES) do
 			say("   %d  %s", index, entry.key)
 		end
 
 	elseif code == Enum.KeyCode.F2 then
-		menu = "crucifix"
+		openMenu("crucifix")
 		say("CRUCIFIX -- press a number:")
 		for index, entry in ipairs(CRUCIFIXES) do
 			say("   %d  %s", index, entry.label)
 		end
 
 	elseif code == Enum.KeyCode.F3 then
-		menu = "badge"
+		openMenu("badge")
 		say("BADGES -- press a number:")
 		for index, entry in ipairs(BADGE_ACTIONS) do
 			say("   %d  %s", index, entry.label)
@@ -325,20 +350,46 @@ table.insert(connections, UserInputService.InputBegan:Connect(function(input, pr
 		dump()
 
 	elseif code == Enum.KeyCode.F5 then
+		--[[ Core.Dismiss, NOT entity:Despawn().
+
+		     Despawn runs the ordinary end-of-visit path, which awards Survive
+		     and -- if nothing had hit you -- Untouched, and writes both into
+		     DOORS_Custom_Achievements.json with Remember = true. So the key
+		     for clearing the field was quietly spending the two badges that
+		     are hardest to earn, and their popups would never appear again.
+
+		     It was worse than that for two entities. Rebound has three passes
+		     and Rose Hell has a 25% encore, and both of those branches return
+		     BEFORE the award path, so despawning them did not even clear the
+		     field: they came back two rooms later as a fresh session that
+		     awarded its badges on the way out anyway. ]]
 		local names = Core:ActiveNames()
+		local sent = 0
+
 		for _, name in ipairs(names) do
-			local session = Core.Active[name]
-			if session and session.entity then
-				pcall(function() session.entity:Despawn() end)
-			end
+			if Core.Dismiss(name) then sent += 1 end
 		end
-		say("despawned %d entity/entities", #names)
+
+		say("dismissed %d entity/entities -- no badges awarded", sent)
+
+		-- Rude is not in the registry: he is standalone and runs his own
+		-- placement, so the shared despawn cannot reach him.
+		if getgenv and type(getgenv().__GradishRudeLeave) == "function" then
+			pcall(getgenv().__GradishRudeLeave, "dev console")
+			say("and told Rude to leave")
+		end
 
 	elseif code == Enum.KeyCode.F6 then
 		Core.Debug = not Core.Debug
 		say("debug logging %s", Core.Debug and "ON" or "OFF")
 
 	elseif NUMBER_KEYS[code] and menu then
+		if os.clock() > menuUntil then
+			menu = nil
+			say("that menu expired -- press F1, F2 or F3 again")
+			return
+		end
+
 		local chosen = menu
 		menu = nil
 		MENUS[chosen](NUMBER_KEYS[code])

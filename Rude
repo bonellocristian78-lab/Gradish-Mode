@@ -118,6 +118,28 @@ local Core = loadstring(game:HttpGet(
 
 ---====== UTIL ======---
 
+--[[ HIS BADGES, BUILT THE SAME WAY EVERYONE ELSE'S ARE.
+
+     He used to read AchievementConfig by hand -- `data.Entities["Rude"].Death`
+     and so on -- and hand the raw table straight to Award. Two things were
+     wrong with that, and both were invisible from inside the game.
+
+     The entity block's Image is attached by buildAchievements and NOWHERE
+     else, so his badges arrived with no picture at all. GradishCheck happily
+     reported his image as configured, because it asks the config, and the
+     config does have one. It just never reached him.
+
+     And the four Enabled switches are checked inside build(). Reading the
+     config directly walks straight past all of them, so `Enabled = false` at
+     the top of AchievementConfig -- documented there as disabling EVERY badge
+     in the mod -- left Rude firing all three of his.
+
+     A nil slot here means "switched off". There is no fallback branch on
+     purpose: buildAchievements already generates name-derived wording when
+     the config is unreachable, so the only way a slot is nil is that someone
+     turned it off, and re-awarding it would defeat the switch. ]]
+local BADGES = Core.BuildAchievements and Core.BuildAchievements({ Name = "Rude" }) or {}
+
 local function log(format, ...)
 	if not Config.Debug then return end
 	print("[Gradish/Rude] " .. format:format(...))
@@ -408,19 +430,7 @@ local function kill(reason)
 	end)
 
 	safe("death badge", function()
-		local data = Core.AchievementConfig and Core.AchievementConfig:Get() or {}
-		local entry = ((data.Entities or {})["Rude"] or {}).Death
-
-		if type(entry) ~= "table" then
-			entry = {
-				Identifier = "Rude Victim",
-				Title      = "He Was Watching",
-				Desc       = "You did the thing that normally saves you",
-				Reason     = "Die to Rude",
-			}
-		end
-
-		Core.AwardAchievement(entry)
+		if BADGES.Death then Core.AwardAchievement(BADGES.Death) end
 	end)
 
 	safe("jumpscare sound", playSound, "Jumpscare", 1)
@@ -638,21 +648,7 @@ end
 Rude = {}
 
 function Rude.AwardBanish()
-	-- Pulled from AchievementConfig like every other badge, with a fallback
-	-- so a missing entry never silently loses the award.
-	local data = Core.AchievementConfig and Core.AchievementConfig:Get() or {}
-	local entry = ((data.Entities or {})["Rude"] or {}).Crucify
-
-	if type(entry) ~= "table" then
-		entry = {
-			Identifier = "Rude Banished",
-			Title      = "Told Him To Leave",
-			Desc       = "Successfully crucify Rude",
-			Reason     = "Does not count towards progression",
-		}
-	end
-
-	Core.AwardAchievement(entry)
+	if BADGES.Crucify then Core.AwardAchievement(BADGES.Crucify) end
 end
 
 function Rude.Leave(why)
@@ -680,19 +676,7 @@ function Rude.Leave(why)
 
 	-- Survived him, and he was not crucified: that is its own achievement.
 	if not State.banished and not isPlayerDead() and why ~= "killed the player" then
-		local data = Core.AchievementConfig and Core.AchievementConfig:Get() or {}
-		local entry = ((data.Entities or {})["Rude"] or {}).Survive
-
-		if type(entry) ~= "table" then
-			entry = {
-				Identifier = "Rude",
-				Title      = "Outstayed Rude",
-				Desc       = "He stood in your room and you did nothing wrong",
-				Reason     = "Survive Rude without hiding or opening a drawer",
-			}
-		end
-
-		Core.AwardAchievement(entry)
+		if BADGES.Survive then Core.AwardAchievement(BADGES.Survive) end
 	end
 end
 
@@ -791,12 +775,34 @@ end
 
 local seen = {}
 
+--[[ ONLY THE NEWEST COPY WATCHES.
+
+     The loop below is `while true` with no way out, and it lives in a
+     task.spawn holding a closure over THIS script's State. Reloading Rude --
+     running his loadstring again, or GradishDev F1 then 9 -- started a second
+     one without stopping the first, and the two could not see each other's
+     State.active. So both would fire, and he could arrive twice over.
+
+     The cleanup hook at the bottom of the file disconnects events, which does
+     nothing to a bare loop. A generation number in getgenv is what the loop
+     can actually check. ]]
+local GENERATION = 1
+if getgenv then
+	GENERATION = (getgenv().__GradishRudeGeneration or 0) + 1
+	getgenv().__GradishRudeGeneration = GENERATION
+end
+
 task.spawn(function()
 	log("watching for other entities (%.0f%% chance, %ds later)",
 		Config.TriggerChance * 100, Config.TriggerDelay)
 
 	while true do
 		task.wait(1)
+
+		if getgenv and getgenv().__GradishRudeGeneration ~= GENERATION then
+			log("a newer copy is running -- this watcher is standing down")
+			return
+		end
 
 		if not State.active and currentRoomNumber() >= Config.MinRoom then
 			for name in pairs(Core.Active) do
@@ -832,6 +838,17 @@ if getgenv then
 	getgenv().__GradishRudeCleanup = function()
 		pcall(function() Rude.Leave("script reloaded") end)
 		clearConnections()
+	end
+
+	--[[ A way for something else to send him away.
+
+	     He is not in Core.Active -- he runs his own placement rather than the
+	     entity spawner -- so the dev console's "despawn everything" key had no
+	     way to reach him at all. It could clear the field of the eight
+	     scheduled entities and leave the one whose rules stay armed: while he
+	     is in the room, hiding and opening a drawer both still kill you. ]]
+	getgenv().__GradishRudeLeave = function(why)
+		pcall(function() Rude.Leave(why or "asked to") end)
 	end
 end
 
