@@ -99,8 +99,18 @@ local ROOM_LAST = 99
      are now generated independently and resolved together in room order, so no
      entity gets priority from where it happens to sit in a table. ]]
 
-local SILENCE = 3          -- an encounter at 35 blocks 36, 37 and 38
-local OVERLAP_CHANCE = 0.06 -- but landing exactly ON 35 is still allowed
+--[[ Fewer encounters, and a guaranteed rhythm.
+
+     SILENCE 4 means an encounter at 35 blocks 36 through 39, so the next one
+     is at 40 at the earliest -- five rooms apart minimum.
+
+     DROUGHT is the other half, and it is new: without it, spacing alone can
+     leave twenty quiet rooms in a row on an unlucky seed, which reads as the
+     mod having stopped working. If fifteen rooms pass with nothing, the next
+     candidate is taken regardless of whose turn it was. ]]
+local SILENCE = 4           -- minimum five rooms between encounters
+local DROUGHT = 15          -- and never more than fifteen without one
+local OVERLAP_CHANCE = 0.05 -- landing exactly together is still allowed
 
 local generators = {
 	-- Fixed order, so the same seed always resolves ties the same way.
@@ -109,6 +119,9 @@ local generators = {
 	{ key = "Yeller",  first = 30, gapMin = 12, gapMax = 19, rng = Random.new(seed + 33) },
 	{ key = "Rebound", first = 8,  gapMin = 12, gapMax = 19, rng = Random.new(seed + 44) },
 	{ key = "Corrode", first = 20, gapMin = 14, gapMax = 22, rng = Random.new(seed + 66) },
+	{ key = "Silence", first = 25, gapMin = 18, gapMax = 28, rng = Random.new(seed + 77) },
+	{ key = "Speedster", first = 32, gapMin = 16, gapMax = 26, rng = Random.new(seed + 88) },
+	{ key = "BlueHell", first = 18, gapMin = 13, gapMax = 21, rng = Random.new(seed + 99) },
 }
 
 local overlapRng = Random.new(seed + 55)
@@ -141,8 +154,10 @@ table.sort(candidates, function(a, b)
 	return a.order < b.order
 end)
 
-local schedules = { Retter = {}, Rose = {}, Yeller = {}, Rebound = {}, Corrode = {} }
-local counts    = { Retter = 0,  Rose = 0,  Yeller = 0,  Rebound = 0,  Corrode = 0 }
+local schedules = { Retter = {}, Rose = {}, Yeller = {}, Rebound = {}, Corrode = {},
+                    Silence = {}, Speedster = {}, BlueHell = {} }
+local counts    = { Retter = 0,  Rose = 0,  Yeller = 0,  Rebound = 0,  Corrode = 0,
+                    Silence = 0,  Speedster = 0,  BlueHell = 0 }
 local lastAccepted = -math.huge
 local rejected = 0
 
@@ -168,7 +183,10 @@ local index = 1
 while index <= #candidates do
 	local entry = candidates[index]
 
-	if entry.room - lastAccepted <= SILENCE then
+	-- Fifteen quiet rooms is too many. Take this one whoever it belongs to.
+	local drought = entry.room - lastAccepted >= DROUGHT
+
+	if entry.room - lastAccepted <= SILENCE and not drought then
 		-- Exactly on top of an accepted encounter is the deliberate case.
 		if entry.room == lastAccepted and overlapRng:NextNumber() < OVERLAP_CHANCE then
 			table.insert(schedules[entry.key], entry.room)
@@ -214,9 +232,13 @@ local rosesp    = schedules.Rose
 local yellersp  = schedules.Yeller
 local reboundsp = schedules.Rebound
 local corrodesp = schedules.Corrode
+local silencesp = schedules.Silence
+local speedsp   = schedules.Speedster
+local bluesp    = schedules.BlueHell
 
-warn(("[Gradish] seed %s | Retter %d, Rose %d, Yeller %d, Rebound %d, Corrode %d | %d crowded candidate(s) dropped, minimum %d rooms apart")
-	:format(tostring(seed), #Rettersp, #rosesp, #yellersp, #reboundsp, #corrodesp, rejected, SILENCE + 1))
+warn(("[Gradish] seed %s | Retter %d, Rose %d, Yeller %d, Rebound %d, Corrode %d, Silence %d, Speedster %d, BlueHell %d | %d dropped | %d-%d rooms apart")
+	:format(tostring(seed), #Rettersp, #rosesp, #yellersp, #reboundsp, #corrodesp,
+		#silencesp, #speedsp, #bluesp, rejected, SILENCE + 1, DROUGHT))
 
 require(game.Players.LocalPlayer.PlayerGui.MainUI.Initiator.Main_Game).caption("Loaded",true)
 warn("Loaded")
@@ -294,6 +316,24 @@ if table.find(reboundsp, lastroom.Value) then
 		task.spawn(function()
 			task.wait(r3:NextInteger(4, 10))
 			loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/Corrode"))()
+		end)
+	end
+	if table.find(silencesp, lastroom.Value) then
+		task.spawn(function()
+			task.wait(r3:NextInteger(3, 8))
+			loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/Silence"))()
+		end)
+	end
+	if table.find(speedsp, lastroom.Value) then
+		task.spawn(function()
+			task.wait(r3:NextInteger(5, 12))
+			loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/SpeedsterPurpleist"))()
+		end)
+	end
+	if table.find(bluesp, lastroom.Value) then
+		task.spawn(function()
+			task.wait(r3:NextInteger(2, 10))
+			loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/BlueHell"))()
 		end)
 	end
 end)

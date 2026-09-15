@@ -1,0 +1,194 @@
+if game.Workspace:FindFirstChild("SeekMovingNewClone") then return end
+
+local Core = loadstring(game:HttpGet(
+	"https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/GradishCore"
+))()
+
+--[[
+================================================================================
+
+        B L U E   H E L L
+
+        Rose Hell's brother. Weaker than her, and not in a way that makes him
+        boring.
+
+        WHERE HE IS EASIER
+        ------------------
+        Slower. One fewer trick. And the crucifix WORKS on him -- which is the
+        real difference, because hers almost never does. She resists 85% of the
+        time and the only reliable answer is a corroded crucifix you had to find
+        in a drawer. He goes down to an ordinary one, first try, every time.
+
+        So they occupy opposite ends of the same idea: she is the one you cannot
+        banish, he is the one you can. Meeting him is where you learn what the
+        crucifix is supposed to feel like, which is what makes her refusal land
+        later.
+
+        WHERE HE IS NOT
+        ---------------
+        The cold. Her tell is a warning; his tell has a grip on you. Inside his
+        reach your walk speed drops the closer he gets, and it comes back as he
+        leaves. You are not slowed because a number said so -- you are slowed
+        because he is near, and the way out of it is distance.
+
+        That flips the usual answer. Every other entity in the mod is survived
+        by getting to a closet fast. Frostbite takes "fast" away and leaves you
+        deciding whether you can still make it.
+
+        The model ships named "Frostbite Remake new" rather than Blue Hell. The
+        spawner names the ENTITY from the profile, not from the model, so the
+        name here is what the achievements, the death cause and the registry
+        all use. The model keeping its own name is harmless.
+
+================================================================================
+]]
+
+local RunService = game:GetService("RunService")
+local Players    = game:GetService("Players")
+
+local LocalPlayer = Players.LocalPlayer
+
+--[[ THE COLD.
+
+     Applied as a multiplier off the walk speed he found, not as a fixed
+     number: DOORS changes your speed itself (sprinting, stamina), and writing
+     a raw value would fight it and win in the wrong direction. Restoring the
+     ratio means whatever else adjusted your speed still holds. ]]
+local Frost = {
+	base    = nil,
+	applied = 1,
+}
+
+local function chill(session)
+	local profile = session.profile
+	local settings = profile.Frost
+	if not settings or not settings.Enabled then return end
+
+	local reach   = settings.Reach or 55
+	local hardest = settings.Slowest or 0.55
+
+	session.janitor:Give(RunService.Heartbeat:Connect(function()
+		if not session.active then return end
+
+		local character = LocalPlayer.Character
+		local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+		local root = character and character:FindFirstChild("HumanoidRootPart")
+		local model = session.entity and session.entity.Model
+
+		if not humanoid or not root or not model or not model.Parent then return end
+
+		local ok, pivot = pcall(function() return model:GetPivot().Position end)
+		if not ok then return end
+
+		local distance = (pivot - root.Position).Magnitude
+		local closeness = math.clamp(1 - (distance / reach), 0, 1)
+
+		-- Undo the last chill before measuring, so it never compounds.
+		if Frost.applied ~= 1 and Frost.applied > 0 then
+			humanoid.WalkSpeed = humanoid.WalkSpeed / Frost.applied
+		end
+
+		local factor = 1 - (1 - hardest) * closeness
+		humanoid.WalkSpeed = humanoid.WalkSpeed * factor
+		Frost.applied = factor
+	end))
+
+	-- And give it back when he goes, whatever your speed is by then.
+	session.janitor:Give(function()
+		local character = LocalPlayer.Character
+		local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+
+		if humanoid and Frost.applied ~= 1 and Frost.applied > 0 then
+			pcall(function()
+				humanoid.WalkSpeed = humanoid.WalkSpeed / Frost.applied
+			end)
+		end
+
+		Frost.applied = 1
+	end)
+
+	print("[Gradish/Blue Hell] frost online -- you slow down as he closes")
+end
+
+Core:Spawn({
+	Name  = "Blue Hell",
+	Asset = "https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/BlueHell.rbxm",
+
+	-- Slower than her 100, and hits softer. Two hits, not three.
+	Speed  = 85,
+	Delay  = 2,
+	Damage = 45,
+	DamageRange = 28,
+
+	Rebounds     = { 1, 1 },
+	ReboundType  = "Ambush",
+
+	Variance = 0.05,
+
+	Lights = {
+		Flicker         = true,
+		FlickerDuration = 2,
+		Shatter         = false,
+	},
+
+	CameraShake = {
+		Enabled = true,
+		Range   = 90,
+		Values  = { 45, 60, 0.2, 1.2 },
+	},
+
+	DeathType  = "Blue",
+	DeathLight = "BlueHell",
+
+	DeathHints = {
+		"You died to Blue Hell.",
+		"Rose Hell's brother. He is the slower one.",
+		"But the closer he gets the slower YOU get, so leaving early matters",
+		"more than running fast. And unlike her, a crucifix actually works.",
+	},
+
+	---====== MECHANICS ======---
+
+	Tell = {
+		Color           = Color3.fromRGB(90, 180, 255),
+		Falloff         = true,
+		Reach           = 5,
+		FadeIn          = 1.4,
+		FadeOut         = 1,
+		BrightnessBoost = 1.1,
+	},
+
+	--[[ THE COLD. Handled by chill() above, not by the Core -- nothing else in
+	     the mod touches your walk speed, so it did not belong in there. ]]
+	Frost = {
+		Enabled = true,
+		Reach   = 55,    -- studs at which it starts biting
+		Slowest = 0.55,  -- and how slow you get right on top of him
+	},
+
+	--[[ THE CRUCIFIX WORKS. No ResistChance, no corroded exception.
+
+	     That is the point of him next to her: she is the one you cannot
+	     banish, he is the one you can. ]]
+	Crucifixion = {
+		Enabled = true,
+		Type    = "Guiding",
+		Range   = 40,
+		Resist  = false,
+		Break   = true,
+	},
+
+	CrucifixColor = Color3.fromRGB(90, 180, 255),
+
+	Escalate = {
+		SpeedPerRebound    = 0.12,
+		RangePerRebound    = 3,
+		MaxSpeedMultiplier = 1.3,
+	},
+
+	OnSpawned = function(session)
+		chill(session)
+	end,
+
+	-- Achievement wording lives in AchievementConfig.
+})

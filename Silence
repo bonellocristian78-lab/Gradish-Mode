@@ -1,0 +1,335 @@
+if game.Workspace:FindFirstChild("SeekMovingNewClone") then return end
+
+local Core = loadstring(game:HttpGet(
+	"https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/GradishCore"
+))()
+
+--[[
+================================================================================
+
+        S I L E N C E
+
+        The lights go out. Ten seconds of warning, in the game's own caption.
+        Then he comes through, stops in the room you are standing in for five
+        seconds, and leaves.
+
+        BE STILL, DON'T MOVE
+        --------------------
+        The warning is not decoration. During those ten seconds he is listening,
+        and every stud you walk is counted. Cross the threshold and he knows
+        which room you are in -- when he arrives he comes to YOU and kills you
+        rather than passing through.
+
+        Stand still and he passes. That is the whole encounter: a monster you
+        beat by doing nothing, in a game that has spent forty rooms teaching
+        you to run.
+
+        HOW THE BLACKOUT IS DONE WITHOUT UI
+        -----------------------------------
+        Lighting, not a black Frame over the screen. Brightness, Ambient,
+        OutdoorAmbient and ExposureCompensation are pushed down and restored
+        afterwards. It is the room going dark, not a rectangle being drawn on
+        you -- and it means the caption stays readable on top of it, which a
+        full-screen overlay would have fought with.
+
+        The caption itself is DOORS' own, the same call MainScript uses to
+        print "Loaded" at startup:
+
+            require(PlayerGui.MainUI.Initiator.Main_Game).caption(text, true)
+
+================================================================================
+]]
+
+local Config = {
+	Name  = "Silence",
+	Asset = "https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/Silence.rbxm",
+
+	--[[ THE WARNING ]]
+	WarningSeconds = 10,
+	WarningText    = "SILENCE ITS ARRIVING BE STILL DONT MOVE",
+
+	-- How far you may drift before he counts it as moving. Not zero: standing
+	-- still in Roblox still jitters a stud or two, and dying to physics would
+	-- be miserable.
+	MoveTolerance = 6,
+
+	--[[ THE BLACKOUT ]]
+	Blackout = {
+		Enabled    = true,
+		FadeIn     = 1.5,
+		FadeOut    = 2.5,
+		Brightness = 0,
+		Ambient    = Color3.fromRGB(0, 0, 0),
+		Exposure   = -1.2,
+	},
+
+	--[[ THE VISIT ]]
+	Speed          = 150,
+	LingerSeconds  = 5,    -- how long he stands in your room
+	RoomsAfter     = 1,    -- and how many more rooms before he goes
+
+	Debug = true,
+}
+
+---====== SERVICES ======---
+
+local Players           = game:GetService("Players")
+local RunService        = game:GetService("RunService")
+local TweenService      = game:GetService("TweenService")
+local Lighting          = game:GetService("Lighting")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace         = game:GetService("Workspace")
+
+local LocalPlayer = Players.LocalPlayer
+
+local function log(format, ...)
+	if not Config.Debug then return end
+	print("[Gradish/Silence] " .. format:format(...))
+end
+
+local function safe(label, fn, ...)
+	local ok, err = pcall(fn, ...)
+	if not ok then
+		warn(("[Gradish/Silence] %s failed: %s"):format(label, tostring(err)))
+	end
+	return ok
+end
+
+local function getRoot()
+	local character = LocalPlayer.Character
+	return character and character:FindFirstChild("HumanoidRootPart") or nil
+end
+
+local function currentRoomNumber()
+	local data = ReplicatedStorage:FindFirstChild("GameData")
+	local value = data and data:FindFirstChild("LatestRoom")
+	return value and tonumber(value.Value) or 0
+end
+
+---====== THE CAPTION ======---
+--[[ DOORS' own, not one of ours. The same module MainScript calls to print
+     "Loaded" and the credits, so it looks like part of the game because it
+     IS part of the game. ]]
+
+local function caption(text)
+	local ok = pcall(function()
+		local module = LocalPlayer.PlayerGui.MainUI.Initiator.Main_Game
+		require(module).caption(text, true)
+	end)
+
+	if not ok then
+		warn("[Gradish/Silence] could not reach the caption system")
+	end
+end
+
+---====== THE BLACKOUT ======---
+
+local lightingBefore = nil
+
+local function blackout()
+	if not Config.Blackout.Enabled then return end
+
+	lightingBefore = {
+		Brightness           = Lighting.Brightness,
+		Ambient              = Lighting.Ambient,
+		OutdoorAmbient       = Lighting.OutdoorAmbient,
+		ExposureCompensation = Lighting.ExposureCompensation,
+	}
+
+	local settings = Config.Blackout
+	local info = TweenInfo.new(settings.FadeIn, Enum.EasingStyle.Sine)
+
+	TweenService:Create(Lighting, info, {
+		Brightness           = settings.Brightness,
+		Ambient              = settings.Ambient,
+		OutdoorAmbient       = settings.Ambient,
+		ExposureCompensation = settings.Exposure,
+	}):Play()
+
+	log("lights out")
+end
+
+local function restoreLighting()
+	if not lightingBefore then return end
+
+	local info = TweenInfo.new(Config.Blackout.FadeOut, Enum.EasingStyle.Sine)
+	TweenService:Create(Lighting, info, lightingBefore):Play()
+
+	lightingBefore = nil
+	log("lights back")
+end
+
+---====== THE LISTENING ======---
+--[[ Ten seconds of counting how far you walked. The result decides whether he
+     passes through or comes for you, so it has to be measured, not guessed. ]]
+
+local State = {
+	moved      = false,
+	distance   = 0,
+	roomAtWarn = 0,
+}
+
+local function listen(seconds)
+	local root = getRoot()
+	if not root then return end
+
+	State.moved = false
+	State.distance = 0
+	State.roomAtWarn = currentRoomNumber()
+
+	local last = root.Position
+	local deadline = os.clock() + seconds
+
+	local connection
+	connection = RunService.Heartbeat:Connect(function()
+		local now = getRoot()
+		if not now then return end
+
+		State.distance += (now.Position - last).Magnitude
+		last = now.Position
+
+		if State.distance > Config.MoveTolerance and not State.moved then
+			State.moved = true
+			log("you moved -- %.0f studs. He heard that.", State.distance)
+		end
+	end)
+
+	while os.clock() < deadline do
+		task.wait(0.1)
+	end
+
+	pcall(function() connection:Disconnect() end)
+
+	log("listening over: %.0f studs walked, %s",
+		State.distance, State.moved and "HE HEARD YOU" or "you held still")
+end
+
+---====== THE VISIT ======---
+
+task.spawn(function()
+	safe("blackout", blackout)
+
+	caption(Config.WarningText)
+	log("warning given, %d seconds", Config.WarningSeconds)
+
+	-- Repeat it partway through: ten seconds is long enough to forget, and
+	-- reading it twice is the difference between knowing and guessing.
+	task.delay(Config.WarningSeconds * 0.55, function()
+		caption(Config.WarningText)
+	end)
+
+	listen(Config.WarningSeconds)
+
+	local hunting = State.moved
+
+	Core:Spawn({
+		Name  = Config.Name,
+		Asset = Config.Asset,
+
+		Speed = Config.Speed,
+		Delay = 0,
+
+		--[[ If he heard you, he kills the room. If he did not, his reach is
+		     small enough that standing anywhere sensible is survivable.
+
+		     This is the entire difference between the two outcomes, and it is
+		     decided before he ever appears. ]]
+		Damage      = hunting and 125 or 40,
+		DamageRange = hunting and 300 or 12,
+
+		Variance = 0.04,
+
+		Lights = {
+			Flicker         = true,
+			FlickerDuration = 3,
+			Shatter         = false,
+		},
+
+		CameraShake = {
+			Enabled = true,
+			Range   = 120,
+			Values  = { 20, 25, 0.3, 1.2 },
+		},
+
+		DeathType  = "Glitch",
+		DeathLight = "Silence",
+
+		DeathHints = hunting and {
+			"You died to Silence.",
+			"The warning said be still. You walked.",
+			"He spends those ten seconds listening for exactly that.",
+			"Next time, stop.",
+		} or {
+			"You died to Silence.",
+			"He passes through and stops for five seconds.",
+			"Do not move while the warning is up, and do not be in his way.",
+			"Good luck.",
+		},
+
+		---====== MECHANICS ======---
+
+		-- Black, and barely brighter than the blackout he arrived in.
+		Tell = {
+			Color           = Color3.fromRGB(28, 28, 34),
+			Falloff         = true,
+			Reach           = 6,
+			FadeIn          = 0.8,
+			FadeOut         = 2,
+			BrightnessBoost = 0.25,
+			Priority        = 20,
+		},
+
+		--[[ The five seconds in your room.
+
+		     Linger throttles his speed to a crawl rather than pausing him,
+		     which matters: a paused entity is skipped by the damage loop
+		     entirely, so pausing would make standing next to him safe. At 2%
+		     speed he is stopped for all practical purposes and still lethal. ]]
+		Linger = {
+			Enabled     = true,
+			Duration    = { Config.LingerSeconds, Config.LingerSeconds },
+			SpeedFactor = 0.02,
+			Chance      = 1,
+			Cooldown    = 999,   -- once per visit, in your room, and that is it
+			MaxPerVisit = 1,
+		},
+
+		-- The crucifix works normally on him. He is not the one you need it for.
+		Crucifixion = {
+			Enabled = true,
+			Type    = "Curious",
+			Range   = 40,
+			Break   = true,
+		},
+
+		CrucifixColor = Color3.fromRGB(60, 60, 70),
+
+		--[[ He leaves one room after yours rather than walking the whole map.
+
+		     The spawner despawns at the end of its route; this cuts it short.
+		     entity:Despawn() destroys the model AND fires OnDespawned, which is
+		     what the Core needs to hand out achievements and put the lights
+		     back -- a bare model:Destroy() would skip all of that. ]]
+		OnEnterRoom = function(session, room)
+			local number = tonumber(room.Name)
+			if not number then return end
+
+			if number >= State.roomAtWarn + Config.RoomsAfter + 1 then
+				log("one room past you -- going")
+				safe("despawn", function() session.entity:Despawn() end)
+			end
+		end,
+
+		OnDespawned = function()
+			safe("restore lighting", restoreLighting)
+		end,
+	})
+end)
+
+-- If anything above throws, the map must not be left pitch black.
+task.delay(Config.WarningSeconds + 90, function()
+	if lightingBefore then
+		log("failsafe: putting the lights back")
+		safe("failsafe restore", restoreLighting)
+	end
+end)

@@ -1,0 +1,124 @@
+if game.Workspace:FindFirstChild("SeekMovingNewClone") then return end
+
+local Core = loadstring(game:HttpGet(
+	"https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/GradishCore"
+))()
+
+--[[
+================================================================================
+
+        S P E E D S T E R   P U R P L E I S T
+
+        Rush's behaviour, a little slower than Rush, and the crucifix does not
+        save you.
+
+        THE CRUCIFIX FAILS -- AND YOU STILL LOSE IT
+        -------------------------------------------
+        There are two ways to make something uncrucifiable and they are not the
+        same, so this is a deliberate choice rather than a default.
+
+            Crucifixion.Enabled = false
+                The spawner never looks for a crucifix at all. Raising it does
+                nothing whatsoever -- no ritual, no sound, no reaction. It
+                reads as the crucifix being broken, not as him being immune.
+
+            Crucifixion.Resist = true          <-- this one
+                The spawner DOES detect it. Reading its source: it calls
+                tool:Destroy() and THEN runs the ritual. So the pentagram
+                appears, the failure sound plays, he shrugs it off and keeps
+                coming, and your crucifix is gone.
+
+        The second is the whole point of him. You spend the thing you were
+        saving, you watch it fail, and he is still there. Being immune is
+        boring; taking the crucifix with him is not.
+
+        SLOW ENOUGH TO OUTRUN, WHICH IS WHY HE NEEDS TO BE DANGEROUS
+        ------------------------------------------------------------
+        Yeller runs at 380 in this mod's numbers and is the fastest thing here.
+        Rush sits above what these profiles use; "slightly less than Rush" puts
+        him around 320 -- quicker than everything except Yeller, and still
+        beatable by a closet you already had open.
+
+        So the danger cannot be speed. It is reach: 45 studs of damage range
+        against Rose Hell's 30, which means a closet on the far wall is not far
+        enough, and the rebounds close in as they go.
+
+================================================================================
+]]
+
+Core:Spawn({
+	Name  = "Speedster Purpleist",
+	Asset = "https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/SpeedsterPurpleist.rbxm",
+
+	--[[ Rush's shape: fast, straight through, a short warning. ]]
+	Speed = 320,
+	Delay = 4,
+
+	Damage      = 125,
+	DamageRange = 45,   -- the thing that actually makes him dangerous
+
+	Rebounds     = { 2, 3 },
+	ReboundType  = "Ambush",
+	ReboundDelay = 0.5,
+
+	Variance = 0.05,
+
+	Lights = {
+		Flicker         = true,
+		FlickerDuration = 4,
+		Shatter         = true,
+	},
+
+	CameraShake = {
+		Enabled = true,
+		Range   = 400,
+		Values  = { 35, 45, 0.1, 0.4 },
+	},
+
+	DeathType  = "Rush",
+	DeathLight = "Violet",
+
+	DeathHints = {
+		"You died to Speedster Purpleist.",
+		"He is slower than he looks, and that is not the problem.",
+		"His reach is 45 studs. Being in the room is being in range.",
+		"And the crucifix does not work on him. Save it for something else.",
+	},
+
+	---====== MECHANICS ======---
+
+	Tell = {
+		Color           = Color3.fromRGB(190, 90, 255),
+		Falloff         = true,
+		Reach           = 6,
+		FadeIn          = 0.5,   -- he arrives fast, the warning has to as well
+		FadeOut         = 0.9,
+		BrightnessBoost = 1.4,
+	},
+
+	--[[ THE CRUCIFIX FAILS. See the note at the top -- Resist, not Enabled,
+	     because Resist takes the crucifix with it. ]]
+	Crucifixion = {
+		Enabled = true,
+		Type    = "Curious",
+		Range   = 40,
+		Resist  = true,
+		Break   = true,
+	},
+
+	CrucifixColor = Color3.fromRGB(190, 90, 255),
+
+	--[[ Each rebound adds reach rather than much speed.
+
+	     Speed escalation on something already at 320 just makes it
+	     unsurvivable; reach escalation makes the room smaller, which you can
+	     still answer by moving. Pass three covers 55 studs. ]]
+	Escalate = {
+		SpeedPerRebound    = 0.03,
+		RangePerRebound    = 5,
+		MaxSpeedMultiplier = 1.15,
+		MaxRange           = 55,
+	},
+
+	-- Achievement wording lives in AchievementConfig.
+})

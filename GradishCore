@@ -2062,6 +2062,24 @@ Core.DeathLights = {
 		Static = Color3.fromRGB(80, 30, 110),
 	},
 
+	--[[ He arrives in a blackout, so his light is the only pale thing on a
+	     black screen rather than a colour over it. ]]
+	Silence = {
+		Image  = "silence",
+		Light  = Color3.fromRGB(236, 236, 240),
+		Dialog = Color3.fromRGB(210, 210, 220),
+		Screen = Color3.fromRGB(120, 120, 130),
+		Static = Color3.fromRGB(20, 20, 24),
+	},
+
+	BlueHell = {
+		Image  = "bluehell",
+		Light  = Color3.fromRGB(96, 200, 255),
+		Dialog = Color3.fromRGB(150, 220, 255),
+		Screen = Color3.fromRGB(90, 170, 230),
+		Static = Color3.fromRGB(20, 60, 100),
+	},
+
 	Rose = {
 		Light  = Color3.fromRGB(254, 110, 140),
 		Dialog = Color3.fromRGB(255, 160, 180),
@@ -2438,32 +2456,14 @@ local LOOT_TABLE = {
 		Corroded   = true,
 	},
 
-	{
-		Key    = "VioletCrucifix",
-		Weight = 4,
-		Label  = "a violet crucifix",
-		FromLoader = true,
-		Variant    = "Violet",
-	},
+	--[[ Violet, Crimson and Rainbow are NOT in here on purpose.
 
-	{
-		Key    = "CrimsonCrucifix",
-		Weight = 4,
-		Label  = "a crimson crucifix",
-		FromLoader = true,
-		Variant    = "Crimson",
-	},
+	     They are developer crucifixes: one beats two named entities, one beats
+	     everything. Finding those in a drawer would quietly remove the reason
+	     the ordinary crucifix is worth looking for. They live in CrucifixAll
+	     instead, on keys 3, 4 and 5.
 
-	{
-		--[[ Should not be findable, and that is the joke. One per run at the
-		     very bottom of the weights. ]]
-		Key    = "RainbowCrucifix",
-		Weight = 1,
-		Label  = "something that should not be in a drawer",
-		FromLoader = true,
-		Variant    = "Rainbow",
-	},
-
+	     Only the plain one and the corroded one are findable. ]]
 	{
 		Key    = "Bandage",
 		Weight = 22,
@@ -3513,10 +3513,17 @@ function Core:Spawn(profile, passIndex, carriedStats)
 	assert(not isBlank(profile.Name),  "profile.Name is required")
 	assert(not isBlank(profile.Asset), "profile.Asset is required")
 
-	-- Their original guard: never spawn on top of Seek.
-	if Workspace:FindFirstChild("SeekMovingNewClone") then
-		log(profile.Name, "skipped, Seek is running")
-		return nil
+	--[[ Never spawn on top of one of the game's own.
+
+	     Seek was already guarded. Rush and Ambush were not, and they are the
+	     common case: a Gradish entity arriving mid-Rush gives you two things
+	     to outrun in a corridor built for one, which is not difficulty, it is
+	     just unfair. Their models carry these names while they are moving. ]]
+	for _, name in ipairs({ "SeekMovingNewClone", "RushMoving", "AmbushMoving" }) do
+		if Workspace:FindFirstChild(name) then
+			log(profile.Name, "skipped, %s is already out there", name)
+			return nil
+		end
 	end
 
 	local pass = passIndex or 1

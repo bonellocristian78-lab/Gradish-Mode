@@ -226,6 +226,29 @@ return {
 			Crucify   = "Put Out | Successfully crucify the Mischievous Light",
 		},
 
+		--[[ Beaten by standing still, which nothing else in the mod asks of
+		     you. Short form: "Title | Description". ]]
+		["Silence"] = {
+			Survive   = "Held Your Breath | Ten seconds of not moving, and he walked past",
+			Death     = "You Moved | The warning was not a suggestion",
+			Untouched = false,
+			Crucify   = "Quieted | Successfully crucify Silence",
+		},
+
+		["Speedster Purpleist"] = {
+			Survive   = "Outlasted The Speedster | Not fast. Just very hard to be away from",
+			Death     = "Caught In Purple | Forty-five studs is most of a room",
+			Untouched = "Never In Reach | Through every rebound and never once inside it",
+			Crucify   = false,  -- he cannot be crucified. That is the point of him.
+		},
+
+		["Blue Hell"] = {
+			Survive   = "Thawed Out | Her brother, and the slower one",
+			Death     = "Frozen | You were not slow. He made you slow",
+			Untouched = "Cold Blooded | He never laid a hand on you",
+			Crucify   = "Put On Ice | Successfully crucify Blue Hell",
+		},
+
 		["Rude"] = {
 			-- PLACEHOLDER IMAGE. This is your Rebound decal, reused so the
 			-- popup is not blank. I cannot upload decals to Roblox, that needs
