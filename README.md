@@ -1,185 +1,239 @@
-# Gradish mode
+# Gradish Mode
 
-Drop-in replacement for the repo. Upload everything here to
-`github.com/bonellocristian78-lab/Gradish-Mode`, `main` branch.
+Fanmade entity mod for DOORS. Client-side, run through an executor.
 
-**The repo must be public.** `game:HttpGet` has no way to authenticate, so a
-private repo returns 404 to the executor exactly as it does to a browser that
-is not logged in, and nothing loads.
+---
 
-Note the capital M in `Gradish-Mode`. `raw.githubusercontent.com` is
-case-sensitive, so a URL written with the old lowercase `Gradish-mode` will 404
-against this repo.
-
-## Read this first: one file is renamed
-
-`Main script.` → **`MainScript`**
-
-The old name ended in a dot, which is why GitHub could not handle it. Windows
-strips trailing dots too, so `zip`, `Compress-Archive` and Python's `open()` all
-refused to see that file. It is gone; **delete the old one from the repo** and
-update whatever loadstring you use to run the mod:
+## The only loadstring most people need
 
 ```lua
 loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/MainScript"))()
 ```
 
-Nothing else referenced it, so that is the only change on your side.
+That is the mod. It loads the engine, rolls a schedule from the game seed, hides
+crucifixes in the furniture, paints Seek red, and spawns entities as you walk.
+Everything below is either a piece it loads for you, or a tool for building the
+mod rather than playing it.
+
+---
+
+## Every loadstring
+
+### Play
+
+| What | Loadstring |
+|---|---|
+| **The mod** | `.../MainScript` |
+
+### Build (tools — not for players)
+
+| What | Key | Loadstring |
+|---|---|---|
+| **Dev console** | F1–F6 | `.../GradishDev` |
+| **Config checker** | — | `.../GradishCheck` |
+| Every crucifix | 1–5 | `.../CrucifixAll` |
+| Plain crucifix | K | `.../CrucifixGiver` |
+| Corroded crucifix | H | `.../CorrodedCrucifixGiver` |
+| Drawer test | J / H / K | `.../CrucifixTest` |
+| Death-screen probe | — | `.../DeathLightProbe` |
+
+### Single entities (summon one, ignore the schedule)
+
+| Entity | Loadstring |
+|---|---|
+| Retter | `.../RetterV2` |
+| Rose Hell | `.../RoseHellRemake` |
+| Yeller | `.../Yeller` |
+| Rebound | `.../Rebounddd` |
+| Corrode | `.../Corrode` |
+| Rude | `.../Rude` |
+| Silence | `.../Silence` |
+| Speedster Purpleist | `.../SpeedsterPurpleist` |
+| Blue Hell | `.../BlueHell` |
+| Mischievous Light | `.../MischievousLight` |
+| Red Seek | `.../RedSeek` |
+| Crucifixes in drawers | `.../CrucifixSpawner` |
+
+`...` is `https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main`
+every time. In full, one of them looks like this:
+
+```lua
+loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/GradishDev"))()
+```
+
+**Do not run `GradishDev` and `CrucifixAll` together.** They both listen on the
+number keys and you will get a crucifix you did not ask for every time you pick
+something from a menu. `GradishDev` does everything `CrucifixAll` does, on F2.
+
+---
+
+## GradishDev — the console
+
+No UI. It prints to the Roblox console and to `gradish_log.txt`, which is a real
+file in your executor's workspace folder, so you can read it after the run
+instead of screenshotting.
+
+| Key | What |
+|---|---|
+| **F1** | summon menu — prints the ten entities, press 1–9 or 0 |
+| **F2** | crucifix menu — plain, Corroded, Crimson, Violet, Rainbow |
+| **F3** | badges — list / wipe all / grant all / revoke all |
+| **F4** | dump the live state: room, seed, what is spawned, your health, what you are holding |
+| **F5** | despawn every Gradish entity currently out |
+| **F6** | toggle the mod's own logging |
+
+Two steps on purpose: the F-key prints the list, the number picks from it. One
+key per entity would need twenty bindings and would fight DOORS' own controls.
+
+**F3 → 2 (wipe) is the one that matters.** A badge you already own is remembered
+in `DOORS_Custom_Achievements.json`, and an owned badge never shows its popup
+again. Without wiping you get exactly one look at each badge, ever — which is
+most of why the badges have been so hard to check.
+
+Summoning runs the entity's real script, so what arrives is what the schedule
+would have given you: same profile, same mechanics, same achievements. There is
+no separate "test" path that could behave differently from the real one.
+
+---
+
+## GradishCheck — what is actually configured
+
+Run it once, read the report. It changes nothing.
+
+It answers the question that has cost the most time here: *I put the image in,
+why is the badge showing something else?* There are five places a badge image
+can come from and they override each other in a fixed order. GradishCheck prints
+the winner for every badge, by name, and says where it came from.
+
+It also catches what fails silently:
+
+- **Two badges sharing an `Identifier`.** The save file stores identifiers, so
+  the second badge is marked owned the moment the first is granted and its popup
+  never appears again. Nothing warns you — it just stops working after one run.
+- **A model URL that 404s.** The entity script loads fine, the spawner gets
+  nothing, and you walk an empty corridor with no error.
+- **Missing executor functions.** No `getcustomasset` means URL images cannot
+  work at all, and it says so by name instead of leaving you guessing.
+- **Badges switched off** that you thought were on.
+
+---
+
+## Badge images
+
+Five places, and the **first one with something in it wins**:
+
+1. `Image` on the badge itself, in `AchievementConfig`
+2. `Image` on the entity block, in `AchievementConfig` ← what you normally use
+3. `ImagesA/<EntityName>` — the file manager
+4. `DefaultImage` at the top of `AchievementConfig`
+5. nothing, and the popup uses the DOORS icon
+
+An ID typed into `AchievementConfig` beats `ImagesA`. It used to be the other way
+round, which meant pasting an ID did nothing whenever an `ImagesA` file existed.
+
+`ImagesA` is for anything you would rather keep out of the config file. One line:
+
+```lua
+return "rbxassetid://133397789900538"
+return "https://raw.githubusercontent.com/you/repo/main/rose.png"
+return "myimages/rose.png"
+```
+
+It works out which of the three it is. A URL is downloaded once and handed to
+`getcustomasset`; a file path is read straight off your machine and never leaves
+it.
+
+## Switching badges off
+
+Three levels, in `AchievementConfig`:
+
+```lua
+Enabled = false                            -- nothing in the mod is ever awarded
+["Retter"] = { Enabled = false }           -- that entity awards nothing
+["Retter"] = { Untouched = false }         -- just that one badge
+```
+
+A badge switched off is never built, so it never reaches the queue and never
+writes to the save file. Turning it back on later leaves it as unearned as it was
+before.
+
+---
+
+## The crucifixes
+
+| Variant | Colour | Beats | Where |
+|---|---|---|---|
+| plain | — | whatever does not resist | drawers |
+| Corroded | green | **Rose Hell** | drawers |
+| Crimson | red | Retter, Mischievous Light | `GradishDev` F2 |
+| Violet | violet | Yeller, Rude | `GradishDev` F2 |
+| **Rainbow** | cycling | **everything** | `GradishDev` F2 |
+
+Only the plain one and the corroded one are findable in the game. The other
+three are deliberately kept out of the drawers — the rainbow one beats every
+entity in the mod, so finding it would end any encounter it was used on.
+
+Banishing anything with the rainbow crucifix awards **You tried the dev
+crucifix**, which is the point of it existing.
+
+Rose Hell resists an ordinary crucifix 85% of the time. The corroded one is the
+answer, and it has to be found. Her brother Blue Hell goes down to an ordinary
+crucifix first try, every time — which is where you learn what the crucifix is
+supposed to feel like, so that her refusing it later lands.
+
+---
+
+## The entities
+
+| Entity | The idea |
+|---|---|
+| **Retter** | Rush's behaviour, but you cannot outrun him — you hide |
+| **Rose Hell** | Resists the crucifix 85% of the time. Find the green one |
+| **Yeller** | Loud |
+| **Rebound** | Comes back |
+| **Corrode** | Slow. Leaves acid that outlives him — the floor is the threat |
+| **Rude** | Standalone. Does not use the shared engine |
+| **Silence** | Blackout, ten seconds of warning. **Stand still and he cannot touch you** |
+| **Speedster Purpleist** | Fast |
+| **Blue Hell** | Rose Hell's brother. The closer he gets, the slower *you* get |
+| **Mischievous Light** | The red death light |
+
+---
+
+## How the schedule works
+
+Rolled from the game seed, so the same seed gives the same run.
+
+- at least one entity every **15** rooms
+- never more often than one every **5**
+- nothing spawns while `RushMoving` or `AmbushMoving` is in the workspace —
+  the game's own entities get right of way
+- entities that have not appeared yet win ties, so a run does not repeat the
+  same three
+
+Over 400 simulated seeds: no spacing violations, about 12 encounters per run.
+
+---
+
+## Requirements
+
+- **The repo must stay public.** `game:HttpGet` cannot authenticate, so a private
+  repo returns 404 to the executor exactly as it does to a logged-out browser.
+  Public means readable, not writable — nobody but you can change anything here.
+- Note the capital **M** in `Gradish-Mode`. `raw.githubusercontent.com` is
+  case-sensitive and the old lowercase spelling 404s.
+- After you push, give it a few minutes. `raw.githubusercontent.com` sends
+  `Cache-Control: max-age=300`, so an executor can load the previous version of a
+  file for up to five minutes.
 
 ## Files
 
-| File | Status |
+| File | What it is |
 |---|---|
-| `GradishCore` | the engine, everything loads it |
-| `AchievementConfig` | **new** — every achievement's wording, in one place |
-| `RedSeek` | **new** — paints Seek red, awards surviving him |
-| `CrucifixSpawner` | hides a crucifix in the furniture |
-| `CrucifixGiver` | press K for one, for testing |
-| `MainScript` | renamed; loads CrucifixSpawner and RedSeek |
-| `RetterV2` `RoseHellRemake` `Yeller` `Rebounddd` | entity profiles |
-| `*.rbxm` | unchanged |
-| `Retter` `Rose-Hell` | unchanged old versions, nothing loads them |
-
-## Editing achievements
-
-All of it is in `AchievementConfig` now. The entity scripts no longer carry any
-wording — change a title there and it applies everywhere.
-
-```lua
-["Yeller"] = {
-    Image = "rbxassetid://120554381732238",
-    Survive = { Identifier = ..., Title = ..., Desc = ..., Reason = ... },
-    Death = { ... }, Untouched = { ... }, Crucify = { ... },
-},
-```
-
-Set any of the four to `false` to switch it off. An entity with no block here
-still gets all four, generated from its name. If the file is unreachable the
-mod keeps working on generated names rather than failing.
-
-**Careful with `Identifier`.** It is the save key. Changing it makes a brand new
-achievement, and anyone who earned the old one keeps both.
-
-## The two new badges
-
-**I Have No Fear In them** — found a crucifix while rummaging through furniture.
-
-**You Survived Red Seek** — lived through a Seek chase. It watches
-`SeekMovingNewClone` and fires when the model leaves the workspace, but only
-after checking you are actually alive: that model is removed whether you escaped
-or were caught. There is a 1.5s grace before the check, because on a catch the
-model can vanish a frame before your health reaches zero, and without the wait
-you would get awarded a survival for dying.
-
-## Red Seek
-
-`SeekMovingNewClone` and `Eye` both get painted.
-
-Setting `part.Color` is not enough on its own. A part wearing a
-`SurfaceAppearance`, or a MeshPart with a `TextureID`, draws its texture and
-ignores the colour completely — most of Seek would have stayed his normal
-colour. `StripTextures` removes them so the red actually lands. It only touches
-the local clone that gets thrown away when the chase ends. Set it to `false` in
-`RedSeek` if you would rather keep the textures.
-
-The chase model also streams its parts in rather than arriving whole, so
-`DescendantAdded` keeps painting whatever shows up late.
-
-## Percentages, retuned
-
-**Crucifix in furniture** was a flat 12% per drawer, which was wrong in both
-directions: you open dozens of drawers in a run, so you nearly always found one
-in the first few rooms, and an unlucky run could still come up empty after fifty.
-
-Now it climbs. 4% on the first drawer, +1.2% for every one that came up empty,
-capped at 40%, and nothing at all before room 10. Persistent searching always
-pays off eventually; early searching rarely does. Roughly half of runs have one
-by the tenth drawer searched.
-
-**Yeller's lingering** was a guaranteed stop with a 5s cooldown, which with up to
-eight rebounds turned a chase into a siege. Now 70% chance, three times per visit
-maximum.
-
-## The bug that mattered
-
-Escalation and lingering both owned the entity's speed, and they fought.
-
-Both wrote absolute numbers. A rebound starting mid-linger called `escalate()`,
-which overwrote the throttle — so Yeller shot off at full speed while he was
-supposed to be standing still in your room. Then the linger finished and restored
-the number it had saved before the rebound, wiping the escalation with it.
-
-Neither writes the speed any more. Each owns a multiplier and the value is always
-`base * escalation * linger`, recomputed whenever either changes.
-
-## Mechanics
-
-None of these draw anything on screen.
-
-**Yeller stops in your room** for 2-3 seconds, then goes back to rebounding. By
-dropping to 2% speed, not by pausing — a paused entity cannot damage you at all,
-so pausing would have made stopping in your room *safer* than passing through it.
-At 2% speed every damage check is still live.
-
-**Retter checks your closet.** His reach is 330 studs so hiding was never
-optional and the encounter was binary. Now he stops outside and waits. He truly
-cannot hurt you while stopped, so the only thing that can go wrong is your nerve:
-step out to look and he hears you and starts moving again.
-
-**Yeller escalates.** Each rebound adds 6% speed and two studs of reach, capped
-at 1.6x. Counting the first pass no longer tells you about the eighth.
-
-**Rose Hell has an encore.** A quarter of the time she comes back the other way
-after the corridor has gone quiet.
-
-**Rebound runs three passes**, each 15% faster than the last.
-
-**Light tells restore.** The old scripts tinted rooms and never put them back, so
-the corridor stayed pink after Rose Hell died and Rebound's blue stacked on top.
-Originals are recorded and returned, staggered so the colour drains out instead
-of snapping off, and strongest in the room you are in so it reads as light coming
-from somewhere.
-
-**Speed variance.** Five or six percent either way on every spawn.
-
-## If nothing spawns in drawers
-
-The furniture matching is a guess. It hooks `ProximityPromptService.PromptTriggered`
-so it sees everything you open, but then checks the name against a word list and
-I could not inspect the live game to confirm what DOORS calls its drawers.
-
-Set `Debug = true` in `CrucifixSpawner` and open one. The console prints its real
-full path, and the odds of each roll. Add the word to `Hints`, or set
-`AnyPrompt = true` to let everything roll while you work it out.
-
-## About the crucifix model
-
-It comes from your `PenguinManiack/Crucifix` loader, the only source with the
-right in-hand model, icon and animations. That script is MoonSec V3 obfuscated —
-134KB, every string encrypted, no readable asset IDs. This cannot sandbox it and
-does not pretend to. What it does: sets its knobs first (`Range = 0`, so the
-Entity Spawner keeps ownership of crucifixion), runs it **once per session**
-instead of once per crucifix, and owns the tool afterwards.
-
-## Three things from the spawner source
-
-Also written into `GradishCore`'s header so they do not get lost again.
-
-1. **`entity:Run(true)` deep-copies the entity, config included, and runs the
-   copy.** Anything you change afterwards is ignored. The engine uses
-   `Run(false)` — without it, escalation and lingering would silently do nothing.
-
-2. **`Movement.Speed` is not the number you wrote.** `Create()` rewrites it as
-   `65 / 100 * yourSpeed`. Multiply it; assigning a raw number fires the entity
-   across the map.
-
-3. **The model attribute `Running` is set true on run and never reset.**
-   Re-running one entity object is a silent no-op, which is why each extra pass
-   builds a fresh entity.
-
-## Not tested in game
-
-Structure is verified on every file — blocks balanced, brackets balanced, no
-unterminated strings or comments. None of it has been run; that needs a real
-DOORS session. Expect to tune the drawer `Hints`, and check that Yeller's linger
-feels right.
+| `GradishCore` | the engine — every other script loads it |
+| `MainScript` | the entry point, the schedule |
+| `AchievementConfig` | every badge's wording, images and on/off switches |
+| `GradishDev` | the console |
+| `GradishCheck` | the config report |
+| `ImagesA/` | one file per entity saying where its picture comes from |
+| `*.rbxm` | the models |
