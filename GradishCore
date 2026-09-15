@@ -318,7 +318,46 @@ function Achievements:Drain()
 				end)
 			end
 
+			toDisk(("[Gradish] achievement: %s  (Image %s)")
+				:format(tostring(entry.Title), entry.Image and tostring(entry.Image) or "NONE"))
 			print("[Gradish] achievement: " .. tostring(entry.Title))
+
+			--[[ Does the popup actually USE our Image?
+
+			     The library hands the whole table to DOORS' own
+			     AchievementUnlock module. That is their code, and nobody has
+			     read it -- it may honour Image, ignore it, or want a format we
+			     are not giving it. Rather than guess again, look at what
+			     appeared and write down what its ImageLabels ended up showing.
+
+			     If the log says our custom asset, the picture is reaching the
+			     popup. If it says something else, DOORS is overriding us and
+			     no amount of fixing the image manager will help. ]]
+			task.delay(0.7, function()
+				pcall(function()
+					local gui = LocalPlayer:FindFirstChild("PlayerGui")
+					local popup = gui and gui:FindFirstChild("AchievementUnlock", true)
+
+					if not popup then
+						toDisk("[Gradish] no AchievementUnlock found in PlayerGui to inspect")
+						return
+					end
+
+					local seen = 0
+					for _, descendant in ipairs(popup:GetDescendants()) do
+						if descendant:IsA("ImageLabel") and descendant.Image ~= "" then
+							seen += 1
+							toDisk(("[Gradish]    popup image: %s = %s")
+								:format(descendant.Name, descendant.Image))
+						end
+					end
+
+					if seen == 0 then
+						toDisk("[Gradish]    the popup shows no image at all")
+					end
+				end)
+			end)
+
 			task.wait(2.6) -- let each popup finish before the next one starts
 		end
 

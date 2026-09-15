@@ -222,6 +222,13 @@ task.spawn(function()
 
 	local hunting = State.moved
 
+	if hunting then
+		caption("HE HEARD YOU")
+		log("HUNTING -- 300 stud reach, he is coming for you")
+	else
+		log("you held still -- he cannot touch you this visit")
+	end
+
 	Core:Spawn({
 		Name  = Config.Name,
 		Asset = Config.Asset,
@@ -229,13 +236,18 @@ task.spawn(function()
 		Speed = Config.Speed,
 		Delay = 0,
 
-		--[[ If he heard you, he kills the room. If he did not, his reach is
-		     small enough that standing anywhere sensible is survivable.
+		--[[ Stand still and he CANNOT touch you. Not "probably will not".
 
-		     This is the entire difference between the two outcomes, and it is
-		     decided before he ever appears. ]]
-		Damage      = hunting and 125 or 40,
-		DamageRange = hunting and 300 or 12,
+		     This was wrong and it is the bug you hit: holding still still left
+		     him at 40 damage over 12 studs, and he spends five seconds
+		     standing in your room, so twelve studs is wherever you are. The
+		     promise was "be still and he passes" and the code did not keep it.
+
+		     Range 0 is the spawner's own off switch -- its damage check reads
+		     `damage.Range > 0`, so zero means the check never runs at all,
+		     rather than running and happening to miss. ]]
+		Damage      = hunting and 125 or 0,
+		DamageRange = hunting and 300 or 0,
 
 		Variance = 0.04,
 
