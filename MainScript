@@ -32,7 +32,7 @@ end
 game.SoundService.AmbientReverb = Enum.ReverbType.Cave
 
 warn("Loading")
-_G.ver = 1.1
+_G.ver = 2.0Beta
 
 
 local seed = game.ReplicatedStorage.GameData.GameSeed.Value
@@ -281,9 +281,9 @@ lastroom.changed:wait()
 
 require(game.Players.LocalPlayer.PlayerGui.MainUI.Initiator.Main_Game).caption("Gradish mode ".. _G.ver .." activated",true)
 task.wait(3)
-require(game.Players.LocalPlayer.PlayerGui.MainUI.Initiator.Main_Game).caption("Made by mmsauce21 and Kardin purple. Main script scripts credits go to localplayer",true)
+require(game.Players.LocalPlayer.PlayerGui.MainUI.Initiator.Main_Game).caption("Made by mmsauce21 and Kardin purple. Main script scripts credits go to KardinPurple and LocalPlayer",true)
 task.wait(2)
-require(game.Players.LocalPlayer.PlayerGui.MainUI.Initiator.Main_Game).caption("Any mode thats not made by mmsauce21 or kardin purple but haas the name Gradish in it thats not ours you got the wrong one",true)
+require(game.Players.LocalPlayer.PlayerGui.MainUI.Initiator.Main_Game).caption("Any mode thats not made by mmsauce21 or kardin purple but has the name Gradish in it thats not ours you got the wrong one",true)
 task.wait(1)
 require(game.Players.LocalPlayer.PlayerGui.MainUI.Initiator.Main_Game).caption(captions[r3:NextInteger(1, #captions)],true)
 
