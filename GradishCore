@@ -284,9 +284,26 @@ local Achievements = {
 	draining = false,
 }
 
+--[[ Only latch on SUCCESS.
+
+     It used to set self.loaded = true before the fetch, so a single failed
+     HttpGet -- a network blip, a GitHub hiccup, a rate limit -- left library
+     nil for the rest of the run and every achievement after it was dropped in
+     silence. One warn at startup and then nothing, which is indistinguishable
+     from achievements simply not working.
+
+     Now a failure leaves it unloaded so the next award tries again, with a
+     short backoff so a genuinely unreachable GitHub is not hammered once per
+     badge. ]]
 function Achievements:Load()
-	if self.loaded then return self.library end
-	self.loaded = true
+	if self.library then return self.library end
+
+	-- Do not retry more than once every few seconds.
+	if self.nextAttempt and os.clock() < self.nextAttempt then
+		return nil
+	end
+
+	self.attempts = (self.attempts or 0) + 1
 
 	local ok, result = pcall(function()
 		return loadstring(game:HttpGet(
@@ -296,11 +313,15 @@ function Achievements:Load()
 
 	if ok and result then
 		self.library = result
-	else
-		warn("[Gradish] could not load the achievements library: " .. tostring(result))
+		logAlways("Achievements", "library loaded on attempt %d", self.attempts)
+		return self.library
 	end
 
-	return self.library
+	self.nextAttempt = os.clock() + 5
+	logAlways("Achievements", "library fetch failed (attempt %d), will retry: %s",
+		self.attempts, tostring(result))
+
+	return nil
 end
 
 function Achievements:Drain()
@@ -316,6 +337,18 @@ function Achievements:Drain()
 				pcall(function()
 					library:Grant(entry, { CheckOwned = false, Remember = true })
 				end)
+			else
+				--[[ Put it BACK rather than dropping it.
+
+				     Before, a missing library meant the award was quietly
+				     thrown away and the queue moved on -- the badge was gone
+				     even though the run had earned it. It now returns to the
+				     front and the drain waits for the retry window. ]]
+				table.insert(self.queue, 1, entry)
+				logAlways("Achievements", "no library yet, %s is waiting", tostring(entry.Title))
+
+				task.wait(5)
+				continue
 			end
 
 			toDisk(("[Gradish] achievement: %s  (Image %s)")
@@ -404,6 +437,28 @@ local Images = {
 
 Core.Images = Images
 
+--[[ Warm the cache before anything needs it.
+
+     Every entity name plus the death light keys, fetched once in the
+     background at startup. After this every Resolve during a spawn is a table
+     lookup rather than a download. ]]
+function Images:Prefetch()
+	local keys = {
+		"Retter", "Rose Hell", "Yeller", "Rebound", "Corrode", "Rude",
+		"Silence", "Speedster Purpleist", "Blue Hell",
+		"mischievous", "corroded", "violet", "silence", "bluehell",
+	}
+
+	task.spawn(function()
+		local got = 0
+		for _, key in ipairs(keys) do
+			if self:Resolve(key, true) then got += 1 end
+			task.wait(0.15)  -- do not open fourteen sockets at once
+		end
+		logAlways("Images", "prefetched %d of %d", got, #keys)
+	end)
+end
+
 -- "Rose Hell" -> "RoseHell", so the filename is predictable.
 local function imageKey(name)
 	return (tostring(name):gsub("[^%w]", ""))
@@ -449,13 +504,37 @@ local function detectSource(value)
 	return "file"
 end
 
-function Images:Resolve(name)
+--[[ Never block the caller.
+
+     This used to run an HttpGet, a writefile and a getcustomasset inline, and
+     it is called from buildAchievements, which runs inside Core:Spawn. So
+     creating an entity stopped dead waiting on GitHub -- three images meant
+     three round trips before the thing could appear in the corridor.
+
+     A cache miss now starts the fetch in the background and returns nil for
+     now. Prefetch() warms everything at startup, so by the time any entity
+     spawns the answer is already sitting in the cache. ]]
+function Images:Resolve(name, blocking)
 	local key = imageKey(name)
 	if key == "" then return nil end
 
 	local cached = self.cache[key]
 	if cached ~= nil then
 		return cached ~= false and cached or nil
+	end
+
+	if not blocking then
+		if not self.fetching then self.fetching = {} end
+
+		if not self.fetching[key] then
+			self.fetching[key] = true
+			task.spawn(function()
+				self:Resolve(name, true)
+				self.fetching[key] = nil
+			end)
+		end
+
+		return nil
 	end
 
 	local ok, definition = pcall(function()
@@ -3853,6 +3932,11 @@ end
 task.spawn(function()
 	task.wait(3)
 	pcall(function() DeathLight:Watch() end)
+end)
+
+task.spawn(function()
+	task.wait(1)
+	pcall(function() Images:Prefetch() end)
 end)
 
 print(("[Gradish] core %s loaded"):format(Core.Version))
