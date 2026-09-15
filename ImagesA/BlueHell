@@ -1,2 +1,2 @@
--- Drawn fresh with real alpha. Fetched once and cached on disk.
-return "https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/ImagesA/png/bluehell.png"
+-- Same picture the badge uses, so the death light and the badge match.
+return "https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/ImagesA/png/bluehell_user.png"

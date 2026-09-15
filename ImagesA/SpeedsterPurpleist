@@ -1,2 +1,6 @@
--- Drawn fresh with real alpha. Fetched once and cached on disk.
-return "https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/ImagesA/png/violet.png"
+--[[ SpeedsterPurpleist badge.
+
+     Your image, trimmed and enlarged to 1024. Background left alone for the
+     same reason as Blue Hell -- the purple energy IS the picture. ]]
+
+return "https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/ImagesA/png/speedster_user.png"
