@@ -21,15 +21,35 @@
             Desc         the line under the title
             Reason       the hint shown for one you do not own yet
 
-        Image is per entity and applies to all four of that entity's
-        achievements unless one overrides it. Better still: drop a file in
-        ImagesA/ named after the entity, containing one line:
+        WHERE THE PICTURE COMES FROM
+        ----------------------------
+        Five places, and the FIRST one that has something wins:
+
+            1. Image on the badge itself       (one badge only)
+            2. Image on the entity block       <- what you normally use
+            3. ImagesA/<EntityName>            (the file manager)
+            4. DefaultImage at the top of this file
+            5. nothing, and the popup uses the DOORS icon
+
+        Note the order. An ID typed in this file beats ImagesA. It used to be
+        the other way round, which meant pasting an ID here did nothing
+        whenever an ImagesA file existed -- so "I put the ID in" and "the badge
+        shows something else" were both true at once, with nothing on screen
+        to explain it. Typing the ID here is now the direct answer it looks
+        like it should be.
+
+        ImagesA is still there for anything you would rather keep out of this
+        file. One line per entity:
 
             return "rbxassetid://133397789900538"
             return "https://raw.githubusercontent.com/you/repo/main/rose.png"
             return "myimages/rose.png"
 
-        It works out which of the three it is. ImagesA wins over Image here.
+        It works out which of the three it is on its own.
+
+        Not sure which one a badge is actually using? Run GradishCheck. It
+        prints the winner for every badge, by name, and says where it came
+        from.
 
         SHORT FORM. A badge can be one string instead of a four-field table:
 
@@ -44,13 +64,34 @@
         "Corrode"), and changing an Identifier orphans a badge somebody has
         already earned.
 
-        To switch one off entirely, set it to false:
-            Untouched = false,
+        SWITCHING BADGES OFF
+        --------------------
+        Three levels, from the widest to the narrowest:
+
+            Enabled = false             at the top of this file -- nothing is
+                                        ever awarded, by anything
+            ["Retter"] = { Enabled = false }
+                                        that entity awards nothing
+            ["Retter"] = { Untouched = false }
+                                        just that one badge is off
+
+        A badge switched off is not awarded quietly in the background -- it is
+        never built at all, so it never reaches the queue and never writes to
+        the save file. Turning it back on later leaves it exactly as unearned
+        as it was before.
+
+        Careful with the top one: Enabled = false disables EVERY badge in the
+        mod, including the shared ones under Special.
 
 ================================================================================
 ]]
 
 return {
+	--[[ The master switch. false means no badge in the entire mod is ever
+	     awarded -- useful while you are testing something else and do not want
+	     a popup every forty seconds. ]]
+	Enabled = true,
+
 	-- Used when an entity block has no Image of its own. Blank means the
 	-- popup falls back to its own default icon.
 	DefaultImage = "",
@@ -58,6 +99,7 @@ return {
 	Entities = {
 
 		["Retter"] = {
+			-- Enabled = false,   -- uncomment to switch off all four of his
 			Image = "rbxassetid://94856612573782",
 
 			Survive = {

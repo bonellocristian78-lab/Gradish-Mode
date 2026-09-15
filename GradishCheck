@@ -1,0 +1,335 @@
+--[[
+================================================================================
+
+        G R A D I S H   C H E C K
+
+        Run this once and it tells you, badge by badge and file by file, what
+        the mod is actually going to do -- before you go looking for an entity
+        to test it on.
+
+        It answers the question that has cost the most time in this project:
+        "I put the image in, why is the badge showing something else?" There
+        are five places an image can come from and they override each other in
+        a fixed order. This prints the winner for every badge, by name, and
+        says where it came from.
+
+        It also catches the things that fail silently:
+
+          - two badges sharing one Identifier. The save file stores
+            identifiers, so the second badge is marked owned the moment the
+            first is granted and its popup never appears again. Nothing warns
+            you; it just quietly stops working after the first run.
+
+          - a model URL that 404s. The entity script loads, the spawner gets
+            nothing, and you get an empty corridor with no error.
+
+          - an ImagesA file that returns a number where a string was meant, or
+            a URL the executor cannot download.
+
+          - a badge switched off that you thought was on.
+
+        Nothing here changes anything. It reads, it reports, and it stops.
+        Everything printed also lands in gradish_log.txt, so you can read the
+        result outside the game instead of screenshotting the console.
+
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/GradishCheck"))()
+
+================================================================================
+]]
+
+local Core = loadstring(game:HttpGet(
+	"https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/GradishCore"
+))()
+
+local BASE = "https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/"
+
+local problems = 0
+local warnings = 0
+
+local function line(format, ...)
+	local text = select("#", ...) > 0 and format:format(...) or format
+	print(text)
+	pcall(Core.Log, "Check", "%s", text)
+end
+
+local function head(title)
+	line("")
+	line("== %s " .. ("="):rep(math.max(0, 58 - #title)), title)
+end
+
+local function bad(format, ...)
+	problems += 1
+	line("  [X] " .. format, ...)
+end
+
+local function warn(format, ...)
+	warnings += 1
+	line("  [!] " .. format, ...)
+end
+
+local function good(format, ...)
+	line("  [ok] " .. format, ...)
+end
+
+---====== IS ANYTHING REACHABLE AT ALL ======---
+
+local function reachable(url)
+	local ok, body = pcall(game.HttpGet, game, url)
+	if not ok then return false, tostring(body) end
+	if type(body) ~= "string" or #body == 0 then return false, "empty" end
+
+	-- GitHub serves a plain "404: Not Found" body with a 404 status, and some
+	-- executors hand that back as a success rather than raising.
+	if body:sub(1, 3) == "404" then return false, "404" end
+
+	return true, #body
+end
+
+head("THE REPOSITORY")
+
+do
+	local ok, size = reachable(BASE .. "GradishCore")
+	if ok then
+		good("GradishCore reachable, %d bytes", size)
+	else
+		bad("GradishCore is NOT reachable (%s) -- nothing will work", tostring(size))
+	end
+
+	local configOk, configSize = reachable(BASE .. "AchievementConfig")
+	if configOk then
+		good("AchievementConfig reachable, %d bytes", configSize)
+	else
+		warn("AchievementConfig unreachable (%s) -- every badge falls back to its", tostring(configSize))
+		line("       generated wording, which still works but ignores your edits")
+	end
+end
+
+---====== THE EXECUTOR ======---
+--[[ Half the "it does not work on my executor" reports come down to one of
+     these four functions being missing. Better to say so by name. ]]
+
+head("YOUR EXECUTOR")
+
+do
+	local needed = {
+		{ name = "writefile",      fn = writefile,      why = "the disk log, and url images" },
+		{ name = "readfile",       fn = readfile,       why = "reading which badges you own" },
+		{ name = "getcustomasset", fn = getcustomasset, why = "url and local-file images" },
+		{ name = "isfile",         fn = isfile,         why = "not re-downloading images" },
+	}
+
+	for _, item in ipairs(needed) do
+		if item.fn then
+			good("%s", item.name)
+		else
+			warn("no %s -- affects: %s", item.name, item.why)
+		end
+	end
+
+	if not getcustomasset then
+		line("       Without getcustomasset only plain Roblox asset IDs can be used")
+		line("       for badge art. Put IDs in ImagesA and everything still works.")
+	end
+end
+
+---====== THE MODELS ======---
+
+head("ENTITY MODELS")
+
+do
+	local models = {
+		{ entity = "Retter",              file = "retterbetter.rbxm" },
+		{ entity = "Rose Hell",           file = "roseHell.rbxm" },
+		{ entity = "Yeller",              file = "Yeller.rbxm" },
+		{ entity = "Rebound",             file = "ReboundGradishVer.rbxm" },
+		{ entity = "Corrode",             file = "corrodeV3butmadebyMyFriend.rbxm" },
+		{ entity = "Rude",                file = "Rude.rbxm" },
+		{ entity = "Silence",             file = "Silence.rbxm" },
+		{ entity = "Speedster Purpleist", file = "SpeedsterPurpleist.rbxm" },
+		{ entity = "Blue Hell",           file = "BlueHell.rbxm" },
+		{ entity = "Mischievous Light",   file = "MischievousLight.rbxm" },
+	}
+
+	for _, model in ipairs(models) do
+		local ok, size = reachable(BASE .. model.file)
+		if ok then
+			good("%-20s %s (%d KB)", model.entity, model.file, math.floor(size / 1024))
+		else
+			bad("%-20s %s is MISSING (%s)", model.entity, model.file, tostring(size))
+		end
+	end
+end
+
+---====== THE IMAGES ======---
+
+head("BADGE ART")
+
+do
+	local data = Core.AchievementConfig:Get()
+
+	line("  Priority, highest first:")
+	line("     1. Image written on the badge itself in AchievementConfig")
+	line("     2. Image written on the entity block in AchievementConfig")
+	line("     3. ImagesA/<EntityName>   (the file manager)")
+	line("     4. AchievementConfig.DefaultImage")
+	line("")
+
+	for _, name in ipairs(Core.EntityNames) do
+		local key = (name:gsub("[^%w]", ""))
+		local block = (data.Entities or {})[name] or {}
+
+		local fromFile = Core.Images:Resolve(name, true)  -- blocking: we want the answer
+		local inline   = block.Image
+
+		local winner, where
+
+		if inline then
+			winner, where = inline, "AchievementConfig.Entities[\"" .. name .. "\"].Image"
+		elseif fromFile then
+			winner, where = fromFile, "ImagesA/" .. key
+		elseif data.DefaultImage then
+			winner, where = data.DefaultImage, "DefaultImage"
+		end
+
+		if winner then
+			good("%-20s %s", name, where)
+			line("       -> %s", tostring(winner))
+
+			if inline and fromFile then
+				line("       (ImagesA/%s exists but the inline ID above wins)", key)
+			end
+		else
+			warn("%-20s no image anywhere -- the popup uses the DOORS default", name)
+			line("       add ImagesA/%s containing:  return \"rbxassetid://YOURID\"", key)
+		end
+	end
+end
+
+---====== THE BADGES ======---
+
+head("BADGES")
+
+do
+	local data = Core.AchievementConfig:Get()
+
+	if data.Enabled == false then
+		bad("AchievementConfig.Enabled = false -- NO badge will ever be awarded")
+	end
+
+	local badges = Core.AllAchievements()
+	line("  %d badge(s) would be awarded by the current config.", #badges)
+	line("")
+
+	-- Duplicate identifiers: the failure that looks like "it worked once".
+	local byIdentifier = {}
+	for _, badge in ipairs(badges) do
+		byIdentifier[badge.id] = byIdentifier[badge.id] or {}
+		table.insert(byIdentifier[badge.id], badge.from)
+	end
+
+	for identifier, owners in pairs(byIdentifier) do
+		if #owners > 1 then
+			bad("two badges share the identifier %q:", identifier)
+			for _, owner in ipairs(owners) do
+				line("         %s", owner)
+			end
+			line("       Only the first will ever show. Identifiers are the save key.")
+		end
+	end
+
+	-- And what is switched off.
+	for _, name in ipairs(Core.EntityNames) do
+		local block = (data.Entities or {})[name]
+
+		if type(block) == "table" then
+			if block.Enabled == false then
+				line("  [off] %s -- every badge disabled", name)
+			else
+				for _, slot in ipairs({ "Survive", "Death", "Untouched", "Crucify" }) do
+					if block[slot] == false then
+						line("  [off] %s.%s", name, slot)
+					end
+				end
+			end
+		end
+	end
+
+	line("")
+	for _, badge in ipairs(badges) do
+		local owned = false
+		pcall(function()
+			local library = Core.Achievements:Load()
+			owned = library and library:CheckOwned(badge.id) or false
+		end)
+
+		line("  %s %-34s %s", owned and "[owned]" or "[     ]", badge.id, badge.from)
+
+		if badge.entry.Image then
+			-- A blank or malformed image is worse than none: the popup tries to
+			-- load it as a texture and shows an empty square.
+			local image = tostring(badge.entry.Image)
+			if not (image:match("^rbxassetid://%d+$") or image:match("^rbxasset://")
+				or image:match("^http") or image:match("^rbxtemp://")) then
+				warn("   its image does not look like an asset: %s", image)
+			end
+		end
+	end
+
+	line("")
+	line("  [owned] means the popup will NOT show again. Wipe them with")
+	line("  GradishDev: F3 then 2.")
+end
+
+---====== DEATH ======---
+
+head("DEATH SCREENS")
+
+do
+	Core.DiscoverDeathTypes()
+	line("  death types available: %s", table.concat(Core.DeathTypes, ", "))
+
+	local lights = {}
+	for key in pairs(Core.DeathLights or {}) do table.insert(lights, key) end
+	table.sort(lights)
+	line("  death lights defined:  %s", table.concat(lights, ", "))
+end
+
+---====== CRUCIFIXES ======---
+
+head("CRUCIFIXES")
+
+do
+	for key, variant in pairs(Core.CrucifixVariants) do
+		local beats = variant.Beats == "*" and "EVERYTHING"
+			or table.concat(variant.Beats or {}, ", ")
+
+		good("%-10s beats %s", key, beats)
+		if variant.Note then line("       %s", variant.Note) end
+	end
+
+	local ok, size = reachable(Core.Crucifix.Loader.Url)
+	if ok then
+		good("the crucifix loader is reachable (%d bytes)", size)
+	else
+		bad("the crucifix loader is NOT reachable (%s)", tostring(size))
+		line("       No crucifix can be given or found until that URL works.")
+	end
+end
+
+---====== VERDICT ======---
+
+line("")
+line(("="):rep(62))
+
+if problems == 0 and warnings == 0 then
+	line("  Everything checks out.")
+elseif problems == 0 then
+	line("  No problems. %d thing(s) worth a look, marked [!].", warnings)
+else
+	line("  %d PROBLEM(S) marked [X], and %d warning(s) marked [!].", problems, warnings)
+end
+
+line("  This whole report is also in gradish_log.txt.")
+line(("="):rep(62))
+
+pcall(Core.FlushLog)

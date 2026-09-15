@@ -1,0 +1,364 @@
+--[[
+================================================================================
+
+        G R A D I S H   D E V
+
+        A console for building the mod, driven entirely by keys. No UI, because
+        you have said no UI eight times, and none is needed: everything it has
+        to say goes to the Roblox console AND to gradish_log.txt, which is a
+        file on disk that can be read from outside the game.
+
+        WHY THIS EXISTS
+        ---------------
+        Every bug in this mod so far has cost the same loop: run the mod, walk
+        until the schedule happens to spawn the right entity, hope the 4% loot
+        roll lands, die, screenshot, describe it. That loop is the reason
+        things like the acid never outliving Corrode survived several rounds of
+        "it is fixed now" -- nobody could reach them on demand.
+
+        This removes the walking and the hoping. Summon any entity where you
+        stand. Hand yourself any crucifix. Grant, revoke or wipe any badge.
+        Dump the state of everything to the log.
+
+            F1   summon menu: prints the list, then press 1-9 or 0
+            F2   crucifix menu: prints the list, then press 1-5
+            F3   badge menu: grant / revoke / wipe / list
+            F4   dump everything to the log right now
+            F5   despawn every Gradish entity currently out
+            F6   toggle the mod's own debug logging
+
+        Keys are read as a two step: the menu key prints the options, the
+        number key chooses. That is deliberate -- a single key per entity would
+        need twenty bindings and would fight DOORS' own controls.
+
+================================================================================
+]]
+
+local Core = loadstring(game:HttpGet(
+	"https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/GradishCore"
+))()
+
+local BASE = "https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/"
+
+local Players          = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace        = game:GetService("Workspace")
+
+local LocalPlayer = Players.LocalPlayer
+
+local function say(format, ...)
+	local line = "[GradishDev] " .. format:format(...)
+	print(line)
+	-- Core.Log mirrors to gradish_log.txt, which is readable from outside.
+	if Core.Log then pcall(Core.Log, "Dev", format, ...) end
+end
+
+---====== WHAT CAN BE SUMMONED ======---
+
+local ENTITIES = {
+	{ key = "Retter",              file = "RetterV2" },
+	{ key = "Rose Hell",           file = "RoseHellRemake" },
+	{ key = "Yeller",              file = "Yeller" },
+	{ key = "Rebound",             file = "Rebounddd" },
+	{ key = "Corrode",             file = "Corrode" },
+	{ key = "Silence",             file = "Silence" },
+	{ key = "Speedster Purpleist", file = "SpeedsterPurpleist" },
+	{ key = "Blue Hell",           file = "BlueHell" },
+	{ key = "Rude",                file = "Rude" },
+	{ key = "Mischievous Light",   file = "MischievousLight" },
+}
+
+local CRUCIFIXES = {
+	{ key = false,      label = "plain" },
+	{ key = "Corroded", label = "Corroded  green   -- Rose Hell cannot resist" },
+	{ key = "Crimson",  label = "Crimson   red     -- Retter, Mischievous Light" },
+	{ key = "Violet",   label = "Violet    violet  -- Yeller, Rude" },
+	{ key = "Rainbow",  label = "Rainbow   cycling -- beats EVERYTHING" },
+}
+
+local BADGE_ACTIONS = {
+	{ label = "list everything you own" },
+	{ label = "wipe ALL owned badges" },
+	{ label = "grant every badge in AchievementConfig" },
+	{ label = "revoke every badge in AchievementConfig" },
+}
+
+---====== SUMMONING ======---
+
+local function summon(entry)
+	--[[ Loading the entity script directly runs its own Core:Spawn, which
+	     means it arrives exactly as the schedule would have delivered it --
+	     same profile, same mechanics, same achievements. Nothing here is a
+	     special "test" path that could behave differently from the real one. ]]
+	say("summoning %s", entry.key)
+
+	task.spawn(function()
+		local ok, err = pcall(function()
+			loadstring(game:HttpGet(BASE .. entry.file))()
+		end)
+
+		if not ok then
+			say("%s failed to load: %s", entry.file, tostring(err))
+		end
+	end)
+end
+
+---====== CRUCIFIXES ======---
+
+local function giveCrucifix(variant)
+	say("fetching %s crucifix", variant or "plain")
+
+	task.spawn(function()
+		local tool = Core.Crucifix:Give("dev console", true)
+		if not tool then
+			say("the loader produced no tool")
+			return
+		end
+
+		if variant then
+			Core.MakeVariant(tool, variant)
+		end
+
+		local character = LocalPlayer.Character
+		say("in hand: %s", tostring(tool.Parent == character))
+	end)
+end
+
+---====== BADGES ======---
+
+--[[ The Core answers this, not us.
+
+     An earlier version of this file walked AchievementConfig itself and
+     derived identifiers by hand. That is the same logic buildAchievements
+     already contains, written twice -- and the copy would have been wrong the
+     moment short form, the Enabled switches or a default changed. Core
+     exports the real thing now. ]]
+local function allConfiguredBadges()
+	return Core.AllAchievements()
+end
+
+local function library()
+	--[[ The Core's copy, not a second one.
+
+	     Loading the library again here would give this console its own
+	     instance with its own view of what you own, and the two would drift
+	     apart the first time one of them wrote the file. Core.Achievements
+	     already owns the fetch, the retry backoff and the granted set. ]]
+	local achievements = Core.Achievements
+	local lib = achievements and achievements:Load()
+
+	if not lib then
+		say("the achievements library is not loaded yet -- try again in a moment")
+	end
+
+	return lib, achievements
+end
+
+local function ownedList()
+	local owned = {}
+	pcall(function()
+		owned = game:GetService("HttpService"):JSONDecode(readfile("DOORS_Custom_Achievements.json"))
+	end)
+	return owned
+end
+
+local function badgeAction(index)
+	local lib, achievements = library()
+	if not lib then return end
+
+	if index == 1 then
+		local owned = ownedList()
+		local configured = allConfiguredBadges()
+
+		say("you own %d of %d configured badge(s):", #owned, #configured)
+		for _, id in ipairs(owned) do
+			say("   [x] %s", id)
+		end
+
+		for _, badge in ipairs(configured) do
+			if not table.find(owned, badge.id) then
+				say("   [ ] %s   (%s)", badge.id, badge.from)
+			end
+		end
+
+	elseif index == 2 then
+		--[[ Wiping is the one that makes testing possible at all: a badge you
+		     already own is remembered, so its popup is suppressed on every run
+		     afterwards. Without this you get exactly one look at each. ]]
+		local owned = ownedList()
+
+		for _, id in ipairs(owned) do
+			pcall(function() lib:Revoke(id) end)
+			Core.Granted[id] = nil
+		end
+
+		say("wiped %d badge(s) -- their popups will show again", #owned)
+
+	elseif index == 3 then
+		local badges = allConfiguredBadges()
+		local queued = 0
+
+		for _, badge in ipairs(badges) do
+			-- Through the Core's queue, so the popups are spaced out and the
+			-- image manager resolves each picture exactly as it would during a
+			-- real run. Granting them any other way would test a path the game
+			-- never takes.
+			Core.Granted[badge.id] = nil
+			achievements:Award(badge.entry)
+			queued += 1
+		end
+
+		say("queued %d badge(s); the Core shows them one at a time", queued)
+
+	elseif index == 4 then
+		local badges = allConfiguredBadges()
+		for _, badge in ipairs(badges) do
+			pcall(function() lib:Revoke(badge.id) end)
+			Core.Granted[badge.id] = nil
+		end
+		say("revoked %d configured badge(s)", #badges)
+	end
+end
+
+---====== STATE DUMP ======---
+
+local function dump()
+	say("================ STATE ================")
+
+	local data = ReplicatedStorage:FindFirstChild("GameData")
+	local room = data and data:FindFirstChild("LatestRoom")
+	local seed = data and data:FindFirstChild("GameSeed")
+
+	say("room %s | seed %s", room and tostring(room.Value) or "?", seed and tostring(seed.Value) or "?")
+
+	local live = Core:ActiveNames()
+	say("entities out: %s", #live > 0 and table.concat(live, ", ") or "none")
+
+	-- The game's own, which block our spawns.
+	for _, name in ipairs({ "RushMoving", "AmbushMoving", "SeekMovingNewClone" }) do
+		if Workspace:FindFirstChild(name) then
+			say("BLOCKED BY: %s is in the workspace", name)
+		end
+	end
+
+	local character = LocalPlayer.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	if humanoid then
+		say("health %d/%d | walkspeed %.1f | hiding %s",
+			math.floor(humanoid.Health), math.floor(humanoid.MaxHealth),
+			humanoid.WalkSpeed, tostring(character:GetAttribute("Hiding")))
+	end
+
+	local held = character and character:FindFirstChildOfClass("Tool")
+	if held then
+		say("holding: %s (variant %s)", held.Name,
+			tostring(held:GetAttribute("CrucifixVariant") or "none"))
+	else
+		say("holding: nothing")
+	end
+
+	say("death types: %s", table.concat(Core.DeathTypes or {}, ", "))
+
+	local cached = 0
+	for _ in pairs(Core.Images and Core.Images.cache or {}) do cached += 1 end
+	say("images cached: %d", cached)
+
+	say("loot found this run: crucifix x%d", (Core.Crucifix and Core.Crucifix.foundInDrawers) or 0)
+	say("=======================================")
+end
+
+---====== INPUT ======---
+
+local menu = nil
+
+local MENUS = {
+	entity = function(index)
+		local entry = ENTITIES[index]
+		if entry then summon(entry) end
+	end,
+	crucifix = function(index)
+		local entry = CRUCIFIXES[index]
+		if entry then giveCrucifix(entry.key) end
+	end,
+	badge = function(index)
+		if BADGE_ACTIONS[index] then badgeAction(index) end
+	end,
+}
+
+local NUMBER_KEYS = {
+	[Enum.KeyCode.One] = 1, [Enum.KeyCode.Two] = 2, [Enum.KeyCode.Three] = 3,
+	[Enum.KeyCode.Four] = 4, [Enum.KeyCode.Five] = 5, [Enum.KeyCode.Six] = 6,
+	[Enum.KeyCode.Seven] = 7, [Enum.KeyCode.Eight] = 8, [Enum.KeyCode.Nine] = 9,
+	[Enum.KeyCode.Zero] = 10,   -- ten entities, and 0 is the one after 9
+}
+
+local connections = {}
+
+table.insert(connections, UserInputService.InputBegan:Connect(function(input, processed)
+	if processed then return end
+
+	local code = input.KeyCode
+
+	if code == Enum.KeyCode.F1 then
+		menu = "entity"
+		say("SUMMON -- press a number:")
+		for index, entry in ipairs(ENTITIES) do
+			say("   %d  %s", index, entry.key)
+		end
+
+	elseif code == Enum.KeyCode.F2 then
+		menu = "crucifix"
+		say("CRUCIFIX -- press a number:")
+		for index, entry in ipairs(CRUCIFIXES) do
+			say("   %d  %s", index, entry.label)
+		end
+
+	elseif code == Enum.KeyCode.F3 then
+		menu = "badge"
+		say("BADGES -- press a number:")
+		for index, entry in ipairs(BADGE_ACTIONS) do
+			say("   %d  %s", index, entry.label)
+		end
+
+	elseif code == Enum.KeyCode.F4 then
+		dump()
+
+	elseif code == Enum.KeyCode.F5 then
+		local names = Core:ActiveNames()
+		for _, name in ipairs(names) do
+			local session = Core.Active[name]
+			if session and session.entity then
+				pcall(function() session.entity:Despawn() end)
+			end
+		end
+		say("despawned %d entity/entities", #names)
+
+	elseif code == Enum.KeyCode.F6 then
+		Core.Debug = not Core.Debug
+		say("debug logging %s", Core.Debug and "ON" or "OFF")
+
+	elseif NUMBER_KEYS[code] and menu then
+		local chosen = menu
+		menu = nil
+		MENUS[chosen](NUMBER_KEYS[code])
+	end
+end))
+
+if getgenv then
+	local previous = getgenv().__GradishDevCleanup
+	if type(previous) == "function" then pcall(previous) end
+
+	getgenv().__GradishDevCleanup = function()
+		for _, connection in ipairs(connections) do
+			pcall(function() connection:Disconnect() end)
+		end
+		table.clear(connections)
+	end
+end
+
+print("")
+say("ready.")
+say("  F1 summon    F2 crucifix    F3 badges")
+say("  F4 dump      F5 despawn all F6 toggle logging")
+say("Everything printed here is also in gradish_log.txt.")

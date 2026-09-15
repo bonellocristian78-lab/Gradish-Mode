@@ -398,6 +398,12 @@ function Achievements:Drain()
 	end)
 end
 
+--[[ Exported so tools outside the Core can reach the same queue, the same
+     retry backoff and the same "already granted" set. GradishDev grants and
+     revokes through this rather than loading its own copy of the library,
+     which would have kept a second, disagreeing cache of what you own. ]]
+Core.Achievements = Achievements
+
 function Achievements:Award(entry)
 	if not entry or isBlank(entry.Identifier) then return end
 	if Core.Granted[entry.Identifier] then return end
@@ -665,13 +671,19 @@ local function buildAchievements(profile)
 	local data     = AchievementConfig:Get()
 	local fromFile = (data.Entities or {})[name] or {}
 	local inline   = profile.Achievements or {}
-	--[[ ImagesA wins. That folder is the whole point of the system: art is
-	     managed in the repo rather than pinned to a Roblox asset ID buried in
-	     a config file. A missing or broken ImagesA entry silently falls
-	     through to whatever was set inline, so nothing can stop a badge. ]]
-	local image = Images:Resolve(name)
-		or inline.Image
+	--[[ A plain asset ID written here WINS. This is back-to-front from how it
+	     was, on purpose.
+
+	     The URL manager had ImagesA take priority, which meant a decal ID typed
+	     into this file was silently ignored whenever an ImagesA entry existed
+	     -- so "I put the ID in" and "the badge shows something else" were both
+	     true at once, which is impossible to debug from the outside.
+
+	     Now: Image here beats everything. ImagesA is the fallback for entities
+	     that have no ID yet, and DefaultImage is the last resort. ]]
+	local image = inline.Image
 		or fromFile.Image
+		or Images:Resolve(name)
 		or data.DefaultImage
 
 	--[[ SHORT FORM.
@@ -699,7 +711,18 @@ local function buildAchievements(profile)
 		return { Title = title, Desc = desc }
 	end
 
+	--[[ Three levels of off switch, checked from the outside in:
+
+	         AchievementConfig.Enabled = false     nothing is ever awarded
+	         Entities["X"].Enabled = false         that entity awards nothing
+	         Entities["X"].Survive = false         just that one badge is off
+
+	     A disabled badge is not "awarded silently" -- it is never built, so it
+	     never reaches the queue and never writes to the save file. ]]
 	local function build(key, defaults)
+		if data.Enabled == false then return nil end
+		if fromFile.Enabled == false then return nil end
+		if inline.Enabled == false then return nil end
 		if inline[key] == false or fromFile[key] == false then return nil end
 
 		local fileEntry   = expand(fromFile[key])
@@ -749,6 +772,57 @@ local function buildAchievements(profile)
 			Reason     = "Does not count towards progression",
 		}),
 	}
+end
+
+--[[ Exported, because three different things want to ask "what would this
+     config actually produce?" and none of them should re-implement the
+     answer: the dev console, the config checker, and anything you write
+     later. Pass a whole profile, or just { Name = "Corrode" }. ]]
+Core.BuildAchievements = buildAchievements
+
+-- Every entity the mod ships, so the checker and the console can walk them
+-- without you having to keep a second list in your head.
+Core.EntityNames = {
+	"Retter", "Rose Hell", "Yeller", "Rebound", "Corrode", "Rude",
+	"Silence", "Speedster Purpleist", "Blue Hell", "Mischievous Light",
+}
+
+--[[ Every badge the current configuration would ever hand out, flattened.
+
+     Short form is expanded, defaults are filled in, disabled ones are absent
+     -- it is the real list, not a description of the config file. Entities
+     named in AchievementConfig that are not in EntityNames are included too,
+     so a badge you added for something of your own still shows up. ]]
+function Core.AllAchievements()
+	local data = AchievementConfig:Get()
+	local seen, out = {}, {}
+
+	local names = {}
+	for _, name in ipairs(Core.EntityNames) do names[name] = true end
+	for name in pairs(data.Entities or {}) do names[name] = true end
+
+	for name in pairs(names) do
+		for slot, entry in pairs(buildAchievements({ Name = name })) do
+			if type(entry) == "table" and entry.Identifier and not seen[entry.Identifier] then
+				seen[entry.Identifier] = true
+				table.insert(out, {
+					id = entry.Identifier, from = name .. "." .. slot, entry = entry,
+				})
+			end
+		end
+	end
+
+	for key, entry in pairs(data.Special or {}) do
+		if type(entry) == "table" and entry.Identifier and not seen[entry.Identifier] then
+			seen[entry.Identifier] = true
+			table.insert(out, {
+				id = entry.Identifier, from = "Special." .. key, entry = entry,
+			})
+		end
+	end
+
+	table.sort(out, function(a, b) return a.from < b.from end)
+	return out
 end
 
 -- The shared ones, with hardcoded fallbacks so they still fire if the config
@@ -1484,6 +1558,19 @@ local function startCrucifixionWatch(session)
 
 	local watching = false
 
+	--[[ Start listening for the Repentance model NOW, not when the ritual
+	     starts.
+
+	     It used to connect inside resolve(), which runs after BeingBanished
+	     has already flipped -- and the spawner clones Repentance into the
+	     workspace in the same breath. On a fast frame the model landed before
+	     the connection existed, ChildAdded never fired for it, and the ritual
+	     kept the spawner's blue. That is the "sometimes it works" the
+	     crucifix colours have had all along. The call is idempotent. ]]
+	if Core.Crucifix then
+		Core.Crucifix:WatchRitual()
+	end
+
 	local function resolve()
 		watching = true
 		session.stats.crucifixUsed = true
@@ -1495,8 +1582,15 @@ local function startCrucifixionWatch(session)
 		     file and is not in scope here -- but it exists by the time this
 		     ever runs. ]]
 		if Core.Crucifix then
-			Core.Crucifix.pendingColour = session.ritualColour or session.profile.CrucifixColor
+			Core.Crucifix.pendingColour  = session.ritualColour or session.profile.CrucifixColor
+			Core.Crucifix.pendingRainbow = session.rainbowRitual == true
 			Core.Crucifix:WatchRitual()
+
+			-- And if it beat us into the workspace anyway, catch it there.
+			local already = Workspace:FindFirstChild("Repentance")
+			if already then
+				Core.Crucifix:PaintRitual(already)
+			end
 		end
 
 		task.spawn(function()
@@ -1579,7 +1673,15 @@ local function startCrucifixionWatch(session)
 	     moment you raise it. Holding the green one turns her rare accident
 	     into a decision you made in a drawer ten rooms ago. ]]
 	session.janitor:Give(RunService.Heartbeat:Connect(function()
-		if not session.active or session.corroded then return end
+		--[[ Latch on the VARIANT, not on session.corroded.
+
+		     It used to latch on session.corroded, which is the flag that says
+		     "this was the rare green banish" and hands out the Corroded
+		     achievement further up. So picking up the crimson, violet or
+		     rainbow crucifix set it too, and banishing anything with any
+		     coloured crucifix awarded that entity's corroded badge -- a badge
+		     whose whole point is that it is rare. ]]
+		if not session.active or session.crucifixVariant then return end
 
 		local character = getCharacter()
 		local held = character and character:FindFirstChildOfClass("Tool")
@@ -1596,8 +1698,14 @@ local function startCrucifixionWatch(session)
 			log(session.name, "you are holding the %s one -- it cannot resist that", key)
 		end
 
-		session.corroded = true
 		session.crucifixVariant = key
+		session.rainbowRitual = variant.Rainbow == true
+
+		-- Only the green one counts as a corroded banish.
+		if key == "Corroded" then
+			session.corroded = true
+		end
+
 		session.ritualColour = variant.Color
 			or (session.profile.Corroded or {}).Color
 			or Color3.fromRGB(86, 214, 92)
@@ -2434,7 +2542,9 @@ end
      emitter in the model. ]]
 
 Crucifix.pendingColour  = nil   -- set by whoever is being banished right now
+Crucifix.pendingRainbow = false
 Crucifix.ritualWatching = false
+Crucifix.painting       = nil   -- the Repentance model being painted right now
 
 local function taggedForColour(model)
 	-- Vynixu's utilities inject QueryDescendants, and the spawner itself uses
@@ -2469,7 +2579,7 @@ local function taggedForColour(model)
 	return fallback
 end
 
-local function recolourRitual(model, colour)
+local function recolourRitual(model, colour, quiet)
 	local targets = taggedForColour(model)
 	local count = 0
 
@@ -2485,7 +2595,86 @@ local function recolourRitual(model, colour)
 		end)
 	end
 
-	logAlways("Crucifix", "ritual recoloured, %d object(s)", count)
+	if not quiet then
+		logAlways("Crucifix", "ritual recoloured, %d object(s)", count)
+	end
+end
+
+--[[ Paint one Repentance model, according to whatever is pending.
+
+     Split out of WatchRitual so the same code can run from the ChildAdded
+     event AND from a direct call, for the case where the model reached the
+     workspace before anyone was listening. Consumes the pending values, so
+     calling it twice for one ritual is harmless -- the second call finds
+     nothing to do and leaves. ]]
+function Crucifix:PaintRitual(model)
+	if not model or self.painting == model then return end
+
+	local colour  = self.pendingColour
+	local rainbow = self.pendingRainbow
+	self.pendingColour  = nil
+	self.pendingRainbow = false
+
+	if not colour and not rainbow then return end
+
+	self.painting = model
+
+	--[[ THE RAINBOW RITUAL.
+
+	     This was missing entirely and it is why the rainbow crucifix looked
+	     like an ordinary one: the variant carries no Color, so pendingColour
+	     was nil, so the watcher returned immediately and the spawner's own
+	     blue was left alone.
+
+	     A crucifix that beats every entity in the game should not produce the
+	     same pentagram as the one that beats none of them. This cycles the
+	     whole ritual through the hue wheel for as long as it lasts. ]]
+	if rainbow then
+		task.spawn(function()
+			--[[ The target list is resolved ONCE and reused.
+
+			     The first version called recolourRitual every tick, and that
+			     function walks the model's whole descendant tree to find what
+			     to paint. Twenty times a second for fourteen seconds is
+			     roughly three hundred full tree walks during the single most
+			     expensive moment in the game. The colours are identical; this
+			     just stops paying for them. ]]
+			local targets = taggedForColour(model)
+			local hue = 0
+			local deadline = os.clock() + 14   -- the ritual runs about 10s
+
+			while model.Parent and os.clock() < deadline do
+				hue = (hue + 0.02) % 1
+				local shade = Color3.fromHSV(hue, 0.9, 1)
+
+				for _, instance in ipairs(targets) do
+					pcall(function()
+						if instance:IsA("Light") or instance:IsA("BasePart") then
+							instance.Color = shade
+						elseif instance:IsA("ParticleEmitter") or instance:IsA("Beam") then
+							instance.Color = ColorSequence.new(shade)
+						end
+					end)
+				end
+
+				task.wait(0.05)
+			end
+
+			self.painting = nil
+			logAlways("Crucifix", "rainbow ritual finished (%d object(s))", #targets)
+		end)
+		return
+	end
+
+	-- Let the spawner finish applying its own colour first, then override.
+	task.spawn(function()
+		for _ = 1, 4 do
+			task.wait(0.1)
+			if not model.Parent then break end
+			recolourRitual(model, colour)
+		end
+		self.painting = nil
+	end)
 end
 
 function Crucifix:WatchRitual()
@@ -2494,20 +2683,10 @@ function Crucifix:WatchRitual()
 
 	Workspace.ChildAdded:Connect(function(child)
 		if child.Name ~= "Repentance" then return end
-
-		local colour = self.pendingColour
-		if not colour then return end
-		self.pendingColour = nil
-
-		-- Let the spawner finish applying its own colour first, then override.
-		task.spawn(function()
-			for _ = 1, 4 do
-				task.wait(0.1)
-				if not child.Parent then return end
-				recolourRitual(child, colour)
-			end
-		end)
+		self:PaintRitual(child)
 	end)
+
+	logAlways("Crucifix", "watching for the ritual")
 end
 
 ---====== LOOT ======---
