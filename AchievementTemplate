@@ -1,0 +1,143 @@
+--[[
+================================================================================
+
+        A C H I E V E M E N T   T E M P L A T E
+
+        Copy a block from here into AchievementConfig. Nothing loads this file;
+        it is here to be copied from.
+
+        Fastest version: add this inside Entities and you are done.
+
+            ["Your Entity"] = {
+                Image   = "rbxassetid://123456789",
+                Survive = "Title | Description",
+                Death   = "Title | Description",
+            },
+
+        The key must be the entity's Name EXACTLY, spaces and all.
+
+================================================================================
+]]
+
+return {
+
+	---====== 1. SHORT FORM -- use this one ======---
+	--[[ "Title | Description". Identifier and Reason are filled in for you. ]]
+
+	["Your Entity"] = {
+		Image = "rbxassetid://123456789",   -- all four badges use this
+
+		Survive   = "Walked Away | It did not get you",
+		Death     = "Caught | It got you",
+		Untouched = "Untouched | Not a scratch on you",
+		Crucify   = "Banished | You held up the crucifix",
+	},
+
+	---====== 2. FULL FORM -- when you need Reason or a per-badge image ======---
+
+	["Your Entity Two"] = {
+		Image = "rbxassetid://123456789",
+
+		Survive = {
+			Identifier = "Your Entity Two",        -- the SAVE KEY. See the warning below.
+			Title      = "Walked Away",            -- the headline in the popup
+			Desc       = "It did not get you",     -- the line under it
+			Reason     = "Survive an encounter",   -- the hint while you do not own it
+			Image      = "rbxassetid://999",       -- optional: overrides the block Image
+		},
+	},
+
+	---====== 3. THE FOUR SLOTS ======---
+	--[[ Every entity gets exactly these four, and nothing else awards them:
+
+	         Survive     you lived and it left
+	         Death       it killed you
+	         Untouched   you lived AND took zero damage
+	         Crucify     you banished it with a crucifix
+
+	     Leave one out and it is still generated from the entity's name. To
+	     switch it off, see 4. ]]
+
+	---====== 4. SWITCHING BADGES OFF ======---
+
+	["Your Entity Three"] = {
+		Enabled   = false,   -- this entity awards nothing at all
+		Untouched = false,   -- or just kill one slot
+	},
+
+	--[[ And at the very top of AchievementConfig, outside Entities:
+
+	         Enabled = false,    -- NOTHING in the whole mod is ever awarded
+
+	     A badge switched off is never built, so it never reaches the queue and
+	     never writes to the save file. Turning it back on later leaves it as
+	     unearned as it was before. ]]
+
+	---====== 5. THE PICTURE ======---
+	--[[ Five places. The FIRST one with something in it wins:
+
+	         1. Image on the badge itself          (one badge only)
+	         2. Image on the entity block          <- what you normally use
+	         3. ImagesA/<EntityName>               (the file manager)
+	         4. DefaultImage at the top of the config
+	         5. nothing, and the popup uses the DOORS icon
+
+	     An ID typed in the config BEATS ImagesA. If you would rather keep it
+	     out of the config, make a file ImagesA/YourEntity holding one line --
+	     it works out which of the three kinds it is on its own:
+
+	         return "rbxassetid://123456789"
+	         return "https://raw.githubusercontent.com/you/repo/main/x.png"
+	         return "myimages/x.png"
+
+	     Not sure which one a badge is really using? Run GradishCheck. It
+	     prints the winner for every badge and says where it came from. ]]
+
+	---====== 6. A SHARED BADGE, not tied to one entity ======---
+	--[[ These go under Special, not Entities, and something has to award them
+	     by hand -- they do not fire on their own. ]]
+
+	Special = {
+		YourThing = {
+			Identifier = "Your Thing",
+			Title      = "Your Thing",
+			Desc       = "What you did",
+			Reason     = "How to get it",
+			Image      = "rbxassetid://123456789",
+		},
+	},
+
+	---====== 7. AWARDING ONE FROM YOUR OWN SCRIPT ======---
+	--[[ Never build the table by hand -- that is the bug Rude had. The entity
+	     block's Image is attached by buildAchievements and nowhere else, and
+	     reading the config directly walks past all four Enabled switches.
+
+	         local BADGES = Core.BuildAchievements({ Name = "Your Entity" })
+
+	         if BADGES.Survive then
+	             Core.AwardAchievement(BADGES.Survive)
+	         end
+
+	     A nil slot means "switched off". Do not add a fallback that awards it
+	     anyway -- buildAchievements already generates wording from the name
+	     when the config is unreachable, so nil can only mean someone turned it
+	     off on purpose. ]]
+
+	---====== 8. THE ONE THING THAT WILL BITE YOU ======---
+	--[[ IDENTIFIER IS THE SAVE KEY.
+
+	     DOORS_Custom_Achievements.json stores identifiers, nothing else. So:
+
+	       - Two badges sharing an Identifier: granting the first marks the
+	         second owned, and the second's popup never appears. Nothing warns
+	         you. GradishCheck catches this.
+
+	       - Changing an Identifier makes it a NEW badge. Anyone who earned the
+	         old one keeps it AND can earn the new one. So once a badge has
+	         shipped, change the Title and the Desc freely -- never the
+	         Identifier.
+
+	       - An owned badge never shows its popup again. That is why you only
+	         ever see each one once. GradishDev F3 then 2 wipes them all so you
+	         can watch them again. ]]
+}
