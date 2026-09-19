@@ -1,0 +1,26 @@
+--[[
+        B A D G E   T E M P L A T E
+
+        Run it, the badge appears. That is the whole script.
+        Change the five lines in BADGE and nothing else.
+]]
+
+local BADGE = {
+	Identifier = "My Badge",              -- the save key. Must be unique. Never change it later.
+	Title      = "My Badge",              -- the headline
+	Desc       = "What you did",          -- the line under it
+	Reason     = "How you got it",        -- the small hint line
+	Image      = "rbxassetid://123456789" -- the picture
+}
+
+-- Remember = true  -> saved, so it only ever pops ONCE
+-- Remember = false -> never saved, so it pops every single time you run this
+local REMEMBER = false
+
+local Achievements = loadstring(game:HttpGet(
+	"https://raw.githubusercontent.com/RegularVynixu/DOORS-Custom-Achievements/main/init.luau"
+))()
+
+Achievements:Grant(BADGE, { CheckOwned = false, Remember = REMEMBER })
+
+print("[Badge] " .. BADGE.Title)
