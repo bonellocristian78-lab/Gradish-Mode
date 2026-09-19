@@ -7,9 +7,9 @@
 
 local BADGE = {
 	Identifier = "My Badge",              -- the save key. Must be unique. Never change it later.
-	Title      = "My Badge",              -- the headline
+	Title      = "Infinite Key Detected",              -- the headline
 	Desc       = "What you did",          -- the line under it
-	Reason     = "How you got it",        -- the small hint line
+	Reason     = "You are the favorite one of Rhyan57",        -- the small hint line
 	Image      = "rbxassetid://123456789" -- the picture
 }
 
