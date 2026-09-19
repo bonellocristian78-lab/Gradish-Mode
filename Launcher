@@ -1,0 +1,93 @@
+--[[
+================================================================================
+
+        L A U N C H E R
+
+        Runs more than one script from one loadstring.
+
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/Launcher"))()
+
+        Add or remove lines in SCRIPTS below. That is the only part to edit.
+
+        WHY NOT JUST PASTE TWO LINES
+        ----------------------------
+        Two bare loadstrings run one after the other, and if the first one
+        errors the second never runs at all -- the whole paste dies on the
+        first failure, usually with a red line that does not say which URL it
+        came from. Worse, a script that never returns (a menu with its own
+        loop, a wait for something that never arrives) blocks everything after
+        it forever.
+
+        Here each one gets its own thread and its own pcall, so:
+          - one failing does not stop the others
+          - one hanging does not stop the others
+          - you are told BY NAME which one broke, and why
+
+================================================================================
+]]
+
+local SCRIPTS = {
+	{
+		name = "Badge",
+		url  = "https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/BadgeTemplate",
+	},
+	{
+		name = "msdoors",
+		url  = "https://www.msdoors.xyz/script",
+	},
+}
+
+--[[ Seconds between starting one and starting the next. Not zero: two scripts
+     that both build a UI or both hook the same event on the same frame can
+     trip over each other, and half a second costs nothing. ]]
+local STAGGER = 0.5
+
+---=============================================================---
+
+local function run(entry)
+	local ok, body = pcall(game.HttpGet, game, entry.url)
+
+	if not ok then
+		warn(("[Launcher] %s -- could not download: %s"):format(entry.name, tostring(body)))
+		return
+	end
+
+	if type(body) ~= "string" or #body == 0 then
+		warn(("[Launcher] %s -- the URL returned nothing"):format(entry.name))
+		return
+	end
+
+	-- GitHub serves a 404 as a normal body with a 404 status, and some
+	-- executors hand that back as a success rather than raising.
+	if body:match("^404") then
+		warn(("[Launcher] %s -- 404, that URL does not exist"):format(entry.name))
+		return
+	end
+
+	-- Compile separately from running it, so a syntax error in their code is
+	-- not reported as if your loader had crashed.
+	local chunk, err = loadstring(body)
+
+	if not chunk then
+		warn(("[Launcher] %s -- will not compile: %s"):format(entry.name, tostring(err)))
+		return
+	end
+
+	local ranOk, runErr = pcall(chunk)
+
+	if ranOk then
+		print(("[Launcher] %s ok"):format(entry.name))
+	else
+		warn(("[Launcher] %s -- errored while running: %s"):format(entry.name, tostring(runErr)))
+	end
+end
+
+for index, entry in ipairs(SCRIPTS) do
+	task.spawn(run, entry)
+
+	if index < #SCRIPTS then
+		task.wait(STAGGER)
+	end
+end
+
+print(("[Launcher] started %d script(s)"):format(#SCRIPTS))
