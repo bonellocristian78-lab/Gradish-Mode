@@ -1,0 +1,209 @@
+--[[
+================================================================================
+
+        C R U C I F I X   —   E   O N L Y
+
+        Your crucifix loader, with every key it binds replaced by one: E.
+
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/CrucifixE"))()
+
+        HOW THE KEY IS ACTUALLY CHANGED
+        -------------------------------
+        Crucifix.lua is MoonSec V3 obfuscated -- one line, 137 KB, every string
+        encrypted. There is no _G option for the key and no way to read which
+        key it uses without running it, so it cannot be edited or configured.
+
+        So it is not edited. Instead:
+
+            1. list every InputBegan connection that exists BEFORE loading it
+            2. load it
+            3. list them again -- anything new is the loader's
+            4. disable exactly those, and nothing else
+            5. bind E ourselves
+
+        Snapshotting first is what makes this safe. Disabling every InputBegan
+        connection would also kill DOORS' own controls -- sprint, interact,
+        inventory, the door prompts -- and you would be stuck in a corridor
+        holding a crucifix you cannot use. Only the connections that appeared
+        between step 1 and step 3 are touched.
+
+        This needs getconnections, which most executors have. If yours does
+        not, the script says so and still binds E; the loader's original key
+        just keeps working alongside it.
+
+================================================================================
+]]
+
+---====== YOUR SETTINGS ======---
+
+_G.Uses       = 414141414141
+_G.Range      = 30
+_G.OnAnything = true
+_G.Fail       = false
+_G.Variant    = "Electric"
+
+local KEY = Enum.KeyCode.E
+
+local LOADER = "https://raw.githubusercontent.com/PenguinManiack/Crucifix/main/Crucifix.lua"
+
+---====== SERVICES ======---
+
+local Players           = game:GetService("Players")
+local UserInputService  = game:GetService("UserInputService")
+
+local LocalPlayer = Players.LocalPlayer
+
+local function log(format, ...)
+	print("[CrucifixE] " .. format:format(...))
+end
+
+---====== 1. WHAT IS LISTENING BEFORE WE START ======---
+
+local before = {}
+local canStripKeys = typeof(getconnections) == "function"
+
+if canStripKeys then
+	local ok = pcall(function()
+		for _, connection in ipairs(getconnections(UserInputService.InputBegan)) do
+			before[connection] = true
+		end
+	end)
+
+	if not ok then
+		canStripKeys = false
+	end
+end
+
+if canStripKeys then
+	log("%d input listener(s) already running -- those stay untouched", (function()
+		local count = 0
+		for _ in pairs(before) do count += 1 end
+		return count
+	end)())
+else
+	log("your executor has no getconnections, so the loader's own key cannot be")
+	log("removed. E will work; whatever key it uses will keep working too.")
+end
+
+---====== 2. LOAD IT ======---
+
+local ok, err = pcall(function()
+	loadstring(game:HttpGet(LOADER))()
+end)
+
+if not ok then
+	warn("[CrucifixE] the crucifix loader failed: " .. tostring(err))
+	return
+end
+
+log("loader ran")
+
+---====== 3. TAKE ITS KEYS AWAY ======---
+--[[ Give it a moment first. The loader builds its tool and binds its input a
+     frame or two after it returns, so checking immediately would find nothing
+     new and leave its key live. ]]
+
+task.wait(0.5)
+
+if canStripKeys then
+	local removed = 0
+
+	pcall(function()
+		for _, connection in ipairs(getconnections(UserInputService.InputBegan)) do
+			if not before[connection] then
+				-- Disable, not Disconnect: reversible, and it does not upset a
+				-- script that later checks whether its own connection is alive.
+				pcall(function() connection:Disable() end)
+				removed += 1
+			end
+		end
+	end)
+
+	if removed > 0 then
+		log("removed %d keybind(s) the loader had added", removed)
+	else
+		log("the loader added no keybinds of its own")
+	end
+end
+
+---====== 4. E ======---
+
+local function findCrucifix()
+	local character = LocalPlayer.Character
+	local backpack  = LocalPlayer:FindFirstChildOfClass("Backpack")
+
+	-- In your hand already.
+	if character then
+		for _, child in ipairs(character:GetChildren()) do
+			if child:IsA("Tool") then return child, true end
+		end
+	end
+
+	-- Otherwise in the bag. Prefer one that is actually named for it, but take
+	-- any tool rather than nothing -- the loader does not always name it the
+	-- same way, and an unnamed tool in an empty backpack is obviously it.
+	local fallback
+
+	if backpack then
+		for _, child in ipairs(backpack:GetChildren()) do
+			if child:IsA("Tool") then
+				if child.Name:lower():find("cruc") then return child, false end
+				fallback = fallback or child
+			end
+		end
+	end
+
+	return fallback, false
+end
+
+local busy = false
+
+local function useIt()
+	if busy then return end
+	busy = true
+
+	local tool, equipped = findCrucifix()
+
+	if not tool then
+		log("no crucifix to use")
+		busy = false
+		return
+	end
+
+	local character = LocalPlayer.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+
+	if not equipped and humanoid then
+		pcall(function() humanoid:EquipTool(tool) end)
+		-- EquipTool is not instant; the tool has to reach the character before
+		-- Activate does anything.
+		task.wait(0.15)
+	end
+
+	pcall(function() tool:Activate() end)
+	log("used %s", tool.Name)
+
+	task.wait(0.4)   -- so holding E down is not twenty activations
+	busy = false
+end
+
+local connection = UserInputService.InputBegan:Connect(function(input, processed)
+	if processed then return end
+	if input.KeyCode ~= KEY then return end
+	task.spawn(useIt)
+end)
+
+--[[ Running this script twice would otherwise leave two E listeners and use
+     the crucifix twice per press. ]]
+if getgenv then
+	local previous = getgenv().__CrucifixECleanup
+	if type(previous) == "function" then pcall(previous) end
+
+	getgenv().__CrucifixECleanup = function()
+		pcall(function() connection:Disconnect() end)
+	end
+end
+
+print("")
+log("ready -- press E")
+log("uses %s | range %s | variant %s", tostring(_G.Uses), tostring(_G.Range), tostring(_G.Variant))
