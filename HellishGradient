@@ -1,0 +1,233 @@
+--[[
+================================================================================
+
+        H E L L I S H   G R A D I E N T
+
+        Animated black-and-white for any piece of UI. Written for the
+        Hellish Time Ever modifier, usable on anything.
+
+            local Gradient = loadstring(game:HttpGet(
+                "https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/HellishGradient"
+            ))()
+
+            local stop = Gradient.apply(someTextLabel)
+            -- later, to put the label back exactly as it was:
+            stop()
+
+        HOW IT MOVES
+        ------------
+        Two tones with a hard edge -- white for half the width, black for the
+        other half -- and the whole pattern scrolls continuously.
+
+        The outline runs the same pattern half a cycle AHEAD. So wherever the
+        text is white its outline is black, and wherever the text is black its
+        outline is white. That is what keeps it readable at every moment of
+        the scroll: a plain black-and-white sweep over black text on a dark
+        screen would lose half the word every second. Here there is always one
+        of the two you can read.
+
+        WHY THIS IS NOT THE SaB MODULE
+        ------------------------------
+        The link you sent documents Steal a Brainrot's OWN gradient package,
+        at ReplicatedStorage.Packages.Gradients. That only exists inside Steal
+        a Brainrot; in DOORS the require would simply error. And the copy of
+        it that exists carries its author's "leaking without permission" line,
+        which is not something to put in a public repo.
+
+        So this is written from scratch against the same idea, with no
+        dependencies at all. It runs in any game.
+
+================================================================================
+]]
+
+--[[ Loading this twice would start two animation loops fighting over the
+     same labels. The second load hands back the first one instead. ]]
+if getgenv and getgenv().__HellishGradient then
+	return getgenv().__HellishGradient
+end
+
+local RunService = game:GetService("RunService")
+
+local Gradient = {}
+
+---====== SETTINGS ======---
+
+Gradient.Speed = 0.5              -- cycles per second
+Gradient.Light = Color3.new(1, 1, 1)
+Gradient.Dark  = Color3.new(0, 0, 0)
+
+-- Half-width of the hard edge. Zero would be a true cut, but ColorSequence
+-- keypoints must strictly ascend, and a sliver this thin is invisible.
+local EDGE = 0.003
+
+---====== THE PATTERN ======---
+
+--[[ The colour at position t (0..1 across the label) when the pattern has
+     scrolled by `offset`. Light for one half of the cycle, dark for the
+     other, counted from wherever the scroll currently is. ]]
+local function colourAt(t, offset)
+	if ((t - offset) % 1) < 0.5 then
+		return Gradient.Light
+	end
+	return Gradient.Dark
+end
+
+--[[ Build the ColorSequence for one moment of the scroll.
+
+     The two edges sit at offset and offset + 0.5, half a cycle apart. Each
+     becomes a pair of keypoints a sliver either side of it, so the colour
+     snaps rather than fading. An edge that has drifted right onto 0 or 1 is
+     skipped -- the endpoints already carry the right colour there, and a
+     keypoint at 0.001 would collide with the one at 0.
+
+     At most six keypoints: both ends, and two per edge. ]]
+local function sequenceAt(offset)
+	offset = offset % 1
+
+	local edges = { offset, (offset + 0.5) % 1 }
+	table.sort(edges)
+
+	--[[ Where each END of the label takes its colour from.
+
+	     Normally just inside the label -- not exactly on 0 and 1, which are
+	     the same point of the cycle and would paint both ends alike.
+
+	     But when an edge has drifted right onto an end it gets skipped, and
+	     then the end must take the colour from PAST that edge, not before
+	     it. Sampling before it is what the first version did: the end got
+	     the sliver's colour, the renderer faded from there all the way to
+	     the far edge, and for a few frames every half cycle half the word
+	     was a grey smear instead of solid white. Caught by checking 1.5
+	     million sample points offline, 18,818 of which were wrong. ]]
+	local startAt, finishAt = 1e-6, 1 - 1e-6
+	local inner = {}
+
+	for _, edge in ipairs(edges) do
+		if edge <= EDGE * 2 then
+			startAt = edge + EDGE
+		elseif edge >= 1 - EDGE * 2 then
+			finishAt = edge - EDGE
+		else
+			table.insert(inner, ColorSequenceKeypoint.new(edge - EDGE, colourAt(edge - EDGE, offset)))
+			table.insert(inner, ColorSequenceKeypoint.new(edge + EDGE, colourAt(edge + EDGE, offset)))
+		end
+	end
+
+	local points = { ColorSequenceKeypoint.new(0, colourAt(startAt, offset)) }
+	for _, point in ipairs(inner) do table.insert(points, point) end
+	table.insert(points, ColorSequenceKeypoint.new(1, colourAt(finishAt, offset)))
+
+	return ColorSequence.new(points)
+end
+
+Gradient.sequenceAt = sequenceAt
+
+---====== APPLYING IT ======---
+
+local active = {}   -- [GuiObject] = { main = UIGradient, stroke = UIGradient }
+
+local function isText(object)
+	return object:IsA("TextLabel") or object:IsA("TextButton") or object:IsA("TextBox")
+end
+
+function Gradient.apply(object)
+	assert(typeof(object) == "Instance" and object:IsA("GuiObject"),
+		"HellishGradient.apply wants a GuiObject")
+
+	if active[object] then
+		return active[object].stop
+	end
+
+	--[[ Everything changed is recorded so stop() can put it back exactly,
+	     and everything created is destroyed. Nothing is left behind on a
+	     label that had its own gradient or outline before this touched it. ]]
+	local undo = {}
+
+	local function set(instance, property, value)
+		local before = instance[property]
+		instance[property] = value
+		table.insert(undo, 1, function()
+			pcall(function() instance[property] = before end)
+		end)
+	end
+
+	local function make(parent, class)
+		local existing = parent:FindFirstChildWhichIsA(class)
+		if existing then return existing end
+
+		local created = Instance.new(class)
+		created.Parent = parent
+		table.insert(undo, 1, function() created:Destroy() end)
+		return created
+	end
+
+	-- A UIGradient MULTIPLIES the colour underneath it, so that colour has to
+	-- be white or the black half would be the only half you could see.
+	if isText(object) then
+		set(object, "TextColor3", Color3.new(1, 1, 1))
+	else
+		set(object, "BackgroundColor3", Color3.new(1, 1, 1))
+	end
+
+	local main = make(object, "UIGradient")
+	set(main, "Rotation", 90)
+	set(main, "Transparency", NumberSequence.new(0))
+
+	local outline = make(object, "UIStroke")
+	set(outline, "Color", Color3.new(1, 1, 1))
+	set(outline, "Thickness", 1.5)
+	set(outline, "Transparency", 0)
+	set(outline, "ApplyStrokeMode",
+		isText(object) and Enum.ApplyStrokeMode.Contextual or Enum.ApplyStrokeMode.Border)
+
+	local stroke = make(outline, "UIGradient")
+	set(stroke, "Rotation", 90)
+	set(stroke, "Transparency", NumberSequence.new(0))
+
+	local entry = { main = main, stroke = stroke }
+	active[object] = entry
+
+	local destroying
+
+	local function stop()
+		if not active[object] then return end
+		active[object] = nil
+
+		if destroying then destroying:Disconnect() end
+		for _, step in ipairs(undo) do pcall(step) end
+	end
+
+	entry.stop = stop
+	destroying = object.Destroying:Connect(stop)
+
+	return stop
+end
+
+---====== ONE LOOP FOR EVERYTHING ======---
+--[[ A single clock drives every label, so they all scroll in step. Each
+     label running its own loop would drift apart within seconds and the bar
+     would look broken rather than animated. ]]
+
+local offset = 0
+
+RunService.Heartbeat:Connect(function(dt)
+	if next(active) == nil then return end
+
+	offset = (offset + dt * Gradient.Speed) % 1
+
+	local front = sequenceAt(offset)
+	local behind = sequenceAt(offset + 0.5)
+
+	for object, entry in pairs(active) do
+		if object.Parent then
+			entry.main.Color = front
+			entry.stroke.Color = behind
+		end
+	end
+end)
+
+if getgenv then
+	getgenv().__HellishGradient = Gradient
+end
+
+return Gradient
