@@ -1,0 +1,757 @@
+--[[
+================================================================================
+
+        D O O R S   D U M P
+
+        Run it INSIDE a DOORS run, IN ROOM 0 -- before you open the first
+        door. Nothing can hunt you there, and parts of this take a while.
+
+        It writes everything needed to understand the game into a NEW folder
+        in your executor's workspace, named with the date and time -- so it
+        can never overwrite an older dump, which is exactly how the last
+        DOORS dump got lost.
+
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/DoorsDump"))()
+
+        STAND STILL until the caption says it is done. The first 8 seconds are
+        the FPS measurement, then about 25 seconds of testing four graphics
+        levels. Walking into a new room would measure the room loading
+        instead of the game running.
+
+        The graphics test changes the level for THIS SERVER ONLY and puts it
+        back when it is finished. Nothing is saved.
+
+        WHAT IT WRITES
+        --------------
+            report.txt        FPS over 8 seconds (average, 1% and 5% low,
+                              stutters) and where each frame's time goes,
+                              memory by type, ping, your graphics settings,
+                              every Lighting property and effect, and a cost
+                              census of each room: parts, shadow casters,
+                              lights, shadowed lights, particles, highlights
+            graphics_sweep.txt  FPS, frame times and draw calls at graphics
+                              1, 4, 7 and 10 -- whether max graphics can
+                              ever run on this PC, measured instead of guessed
+            tree_*.txt        the instance tree of ReplicatedStorage, your
+                              PlayerGui (MainUI -- the modifiers bar lives
+                              there), PlayerScripts, Lighting and the rooms
+            modules/          the source of every client script the game has
+                              loaded, if your executor can decompile
+
+        The report is written FIRST, before the slow parts, so if decompiling
+        crashes the game you still keep the numbers.
+
+================================================================================
+]]
+
+local Players           = game:GetService("Players")
+local RunService        = game:GetService("RunService")
+local Lighting          = game:GetService("Lighting")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ReplicatedFirst   = game:GetService("ReplicatedFirst")
+local Stats             = game:GetService("Stats")
+local Workspace         = game:GetService("Workspace")
+
+local LocalPlayer = Players.LocalPlayer
+
+local SETTINGS = {
+	MeasureSeconds   = 8,
+	DecompileModules = true,
+	TreeDepth        = 14,
+	MaxTreeLines     = 80000,
+
+	-- A full saveinstance as well. Slow, and some executors crash on DOORS,
+	-- so it is off unless you turn it on.
+	SaveInstance     = false,
+}
+
+---====== WRITING FILES ======---
+
+if typeof(writefile) ~= "function" then
+	warn("[DoorsDump] your executor has no writefile -- nothing can be saved")
+	return
+end
+
+local ROOT = "DoorsDump_" .. os.date("%Y-%m-%d_%H-%M-%S")
+local hasFolders = typeof(makefolder) == "function"
+
+local function folderExists(path)
+	if typeof(isfolder) ~= "function" then return false end
+	local ok, yes = pcall(isfolder, path)
+	return ok and yes
+end
+
+local function ensureFolder(relative)
+	if not hasFolders then return end
+
+	local path = ROOT
+	if not folderExists(path) then pcall(makefolder, path) end
+
+	for part in relative:gmatch("[^/]+") do
+		path = path .. "/" .. part
+		if not folderExists(path) then pcall(makefolder, path) end
+	end
+end
+
+-- Without folder support everything goes flat, prefixed with the run name.
+local function fileName(relative)
+	if hasFolders then return ROOT .. "/" .. relative end
+	return ROOT .. "__" .. (relative:gsub("/", "__"))
+end
+
+local function write(relative, text)
+	ensureFolder(relative:match("^(.*)/[^/]+$") or "")
+
+	local ok, err = pcall(writefile, fileName(relative), text)
+	if not ok then
+		warn("[DoorsDump] could not write " .. relative .. ": " .. tostring(err))
+	end
+	return ok
+end
+
+---====== SAYING WHAT IS HAPPENING ======---
+
+local function caption(text)
+	print("[DoorsDump] " .. text)
+	pcall(function()
+		require(LocalPlayer.PlayerGui.MainUI.Initiator.Main_Game).caption(text, true)
+	end)
+end
+
+local report = {}
+
+local function line(format, ...)
+	if select("#", ...) > 0 then
+		format = format:format(...)
+	end
+	table.insert(report, format)
+end
+
+local function head(title)
+	line("")
+	line("== " .. title .. " " .. ("="):rep(math.max(0, 60 - #title)))
+end
+
+local function read(instance, property)
+	local ok, value = pcall(function() return instance[property] end)
+	if ok then return value end
+	return nil
+end
+
+---====== MEASURING ======---
+--[[ Frame times plus where the time goes. FrameTime is the whole frame;
+     RenderCPUFrameTime the part spent preparing the picture; HeartbeatTime
+     the game's own scripts; the draw calls are how many separate things the
+     GPU is asked to draw, and the shadow ones are the shadow passes alone.
+     If the frame is much longer than render + scripts, something else --
+     usually memory -- is the problem, and no graphics cut will fix it.
+
+     Each is read under pcall: not every Roblox build exposes all of them. ]]
+
+local STAT_PROPERTIES = {
+	"FrameTime", "RenderCPUFrameTime", "RenderGPUFrameTime", "HeartbeatTime",
+	"PhysicsStepTime", "SceneDrawcallCount", "ShadowsDrawcallCount", "SceneTriangleCount",
+}
+
+local function measure(seconds)
+	local deltas, sums, counts = {}, {}, {}
+
+	local connection = RunService.RenderStepped:Connect(function(dt)
+		deltas[#deltas + 1] = dt
+		for _, property in ipairs(STAT_PROPERTIES) do
+			local ok, value = pcall(function() return Stats[property] end)
+			if ok and type(value) == "number" then
+				sums[property] = (sums[property] or 0) + value
+				counts[property] = (counts[property] or 0) + 1
+			end
+		end
+	end)
+	task.wait(seconds)
+	connection:Disconnect()
+
+	local result = { frames = #deltas, stats = {} }
+
+	local total = 0
+	for _, dt in ipairs(deltas) do total += dt end
+	result.seconds = total
+	if #deltas == 0 or total <= 0 then return result end
+
+	local worstFirst = table.clone(deltas)
+	table.sort(worstFirst, function(a, b) return a > b end)
+
+	local function lowFps(fraction)
+		local count = math.max(1, math.floor(#worstFirst * fraction))
+		local slow = 0
+		for index = 1, count do slow += worstFirst[index] end
+		return count / slow
+	end
+
+	local stutters = 0
+	for _, dt in ipairs(deltas) do
+		if dt > 0.05 then stutters += 1 end
+	end
+
+	result.avg      = #deltas / total
+	result.low1     = lowFps(0.01)
+	result.low5     = lowFps(0.05)
+	result.worst    = worstFirst[1]
+	result.stutters = stutters
+
+	for property, sum in pairs(sums) do
+		result.stats[property] = sum / counts[property]
+	end
+
+	return result
+end
+
+local function statsLine(stats)
+	local function ms(property)
+		local value = stats[property]
+		return value and ("%.2f ms"):format(value * 1000) or "?"
+	end
+	local function n(property)
+		local value = stats[property]
+		return value and ("%.0f"):format(value) or "?"
+	end
+	return ("frame %s | render CPU %s | GPU %s | scripts %s | physics %s | draw calls %s (shadows %s) | triangles %s")
+		:format(ms("FrameTime"), ms("RenderCPUFrameTime"), ms("RenderGPUFrameTime"), ms("HeartbeatTime"),
+			ms("PhysicsStepTime"), n("SceneDrawcallCount"), n("ShadowsDrawcallCount"), n("SceneTriangleCount"))
+end
+
+local function inRoomZero()
+	local data = ReplicatedStorage:FindFirstChild("GameData")
+	local latest = data and data:FindFirstChild("LatestRoom")
+	return latest == nil or latest.Value == 0
+end
+
+local safeHere = inRoomZero()
+
+---====== 1. THE GAME ======---
+
+head("GAME")
+line("dumped         %s", os.date("%Y-%m-%d %H:%M:%S"))
+line("PlaceId        %s", tostring(game.PlaceId))
+line("PlaceVersion   %s", tostring(game.PlaceVersion))
+line("Players        %d", #Players:GetPlayers())
+
+do
+	local ok, name, version = pcall(function()
+		if typeof(identifyexecutor) == "function" then return identifyexecutor() end
+	end)
+	line("Executor       %s %s", ok and tostring(name or "?") or "?", ok and tostring(version or "") or "")
+
+	line("decompile      %s", typeof(decompile) == "function" and "yes" or "NO -- modules/ will be names only")
+	line("folders        %s", hasFolders and "yes" or "no -- files are written flat")
+end
+
+do
+	local data = ReplicatedStorage:FindFirstChild("GameData")
+	if data then
+		for _, value in ipairs(data:GetChildren()) do
+			if value:IsA("ValueBase") then
+				line("GameData.%-20s %s", value.Name, tostring(read(value, "Value")))
+			end
+		end
+	else
+		line("NO ReplicatedStorage.GameData -- this looks like the lobby.")
+		line("Run the dump inside a run, or the rooms and entities will be missing.")
+	end
+end
+
+---====== 2. HOW FAST IT ACTUALLY RUNS ======---
+
+caption(("DoorsDump: measuring FPS, stand still for %d seconds"):format(SETTINGS.MeasureSeconds))
+
+local current = measure(SETTINGS.MeasureSeconds)
+
+head("PERFORMANCE")
+do
+	if current.avg then
+		--[[ The 1% low is the average of the slowest 1% of frames, turned
+		     back into FPS. It is the number that matches what "laggy" FEELS
+		     like: a game can average 50 and still stutter badly. At low FPS
+		     1% is only a frame or two, so the 5% low is there as well. ]]
+		line("average FPS     %.1f   (%d frames in %.1f s)", current.avg, current.frames, current.seconds)
+		line("1%% low FPS      %.1f", current.low1)
+		line("5%% low FPS      %.1f", current.low5)
+		line("worst frame     %.0f ms", current.worst * 1000)
+		line("stutters        %d frames over 50 ms", current.stutters)
+		line("where it goes   %s", statsLine(current.stats))
+	else
+		line("no frames were measured")
+	end
+
+	line("physics FPS     %.1f", Workspace:GetRealPhysicsFPS())
+
+	local ok, ping = pcall(function()
+		return Stats.Network.ServerStatsItem["Data Ping"]:GetValueString()
+	end)
+	line("ping            %s", ok and tostring(ping) or "?")
+end
+
+head("MEMORY (MB)")
+do
+	line("total           %.0f", Stats:GetTotalMemoryUsageMb())
+
+	local tags = {}
+	for _, tag in ipairs(Enum.DeveloperMemoryTag:GetEnumItems()) do
+		local ok, mb = pcall(function() return Stats:GetMemoryUsageMbForTag(tag) end)
+		if ok and type(mb) == "number" and mb >= 1 then
+			table.insert(tags, { tag.Name, mb })
+		end
+	end
+
+	table.sort(tags, function(a, b) return a[2] > b[2] end)
+	for _, tag in ipairs(tags) do
+		line("  %-26s %7.0f", tag[1], tag[2])
+	end
+end
+
+---====== 3. YOUR SETTINGS ======---
+
+head("YOUR GRAPHICS SETTINGS")
+do
+	local settingsService = UserSettings():GetService("UserGameSettings")
+	for _, property in ipairs({ "SavedQualityLevel", "GraphicsQualityLevel", "MaxQualityEnabled", "FramerateCap", "Fullscreen" }) do
+		local value = read(settingsService, property)
+		line("%-24s %s", property, value ~= nil and tostring(value) or "(unreadable)")
+	end
+
+	local ok, quality = pcall(function() return settings().Rendering.QualityLevel end)
+	line("%-24s %s", "Rendering.QualityLevel", ok and tostring(quality) or "(unreadable)")
+
+	if typeof(getfpscap) == "function" then
+		local capOk, cap = pcall(getfpscap)
+		line("%-24s %s", "executor fps cap", capOk and tostring(cap) or "?")
+	end
+
+	local camera = Workspace.CurrentCamera
+	if camera then
+		line("%-24s %dx%d", "viewport", camera.ViewportSize.X, camera.ViewportSize.Y)
+	end
+end
+
+---====== 4. LIGHTING ======---
+
+head("LIGHTING")
+do
+	local properties = {
+		"Technology", "Brightness", "GlobalShadows", "ShadowSoftness",
+		"EnvironmentDiffuseScale", "EnvironmentSpecularScale",
+		"Ambient", "OutdoorAmbient", "ColorShift_Top", "ColorShift_Bottom",
+		"ExposureCompensation", "ClockTime", "FogStart", "FogEnd", "FogColor",
+	}
+	for _, property in ipairs(properties) do
+		local value = read(Lighting, property)
+		line("%-26s %s", property, value ~= nil and tostring(value) or "(unreadable)")
+	end
+
+	local effectProperties = {
+		"Enabled", "Intensity", "Size", "Threshold", "Spread", "Brightness",
+		"Contrast", "Saturation", "TintColor", "FarIntensity", "FocusDistance",
+		"InFocusRadius", "NearIntensity", "Density", "Offset", "Color",
+		"Decay", "Glare", "Haze",
+	}
+
+	local function describe(owner)
+		for _, child in ipairs(owner:GetChildren()) do
+			local parts = {}
+			for _, property in ipairs(effectProperties) do
+				local value = read(child, property)
+				if value ~= nil then
+					table.insert(parts, property .. "=" .. tostring(value))
+				end
+			end
+			line("  %s [%s]  %s", child.Name, child.ClassName, table.concat(parts, "  "))
+		end
+	end
+
+	line("")
+	line("under Lighting:")
+	describe(Lighting)
+
+	if Workspace.CurrentCamera then
+		line("")
+		line("under the Camera (effects can live here too):")
+		describe(Workspace.CurrentCamera)
+	end
+end
+
+---====== 5. WHAT EACH ROOM COSTS ======---
+
+local LIGHT_CLASSES = { PointLight = true, SpotLight = true, SurfaceLight = true }
+
+local function census(root)
+	local c = {
+		instances = 0, parts = 0, meshParts = 0, castShadow = 0, small2 = 0, small4 = 0,
+		lights = 0, shadowLights = 0, particles = 0, particleRate = 0,
+		beams = 0, trails = 0, decals = 0, textures = 0, surfaceAppearance = 0,
+		highlights = 0, sounds = 0, guis = 0,
+	}
+
+	for _, d in ipairs(root:GetDescendants()) do
+		c.instances += 1
+
+		-- The whole Workspace can be tens of thousands of instances; hand a
+		-- frame back now and then so the game does not freeze.
+		if c.instances % 4000 == 0 then task.wait() end
+
+		if d:IsA("BasePart") then
+			c.parts += 1
+			if d:IsA("MeshPart") then c.meshParts += 1 end
+			if d.CastShadow then
+				c.castShadow += 1
+				-- The same two sizes DoorsBoost cuts at: 2 studs in its
+				-- Quality preset, 4 in Smooth.
+				local longest = math.max(d.Size.X, d.Size.Y, d.Size.Z)
+				if longest < 2 then c.small2 += 1 end
+				if longest < 4 then c.small4 += 1 end
+			end
+		elseif LIGHT_CLASSES[d.ClassName] then
+			c.lights += 1
+			if d.Shadows then c.shadowLights += 1 end
+		elseif d:IsA("ParticleEmitter") then
+			c.particles += 1
+			c.particleRate += d.Rate
+		elseif d:IsA("Beam") then
+			c.beams += 1
+		elseif d:IsA("Trail") then
+			c.trails += 1
+		elseif d:IsA("Texture") then       -- before Decal: Texture IS a Decal
+			c.textures += 1
+		elseif d:IsA("Decal") then
+			c.decals += 1
+		elseif d:IsA("SurfaceAppearance") then
+			c.surfaceAppearance += 1
+		elseif d:IsA("Highlight") then
+			c.highlights += 1
+		elseif d:IsA("Sound") then
+			c.sounds += 1
+		elseif d:IsA("SurfaceGui") or d:IsA("BillboardGui") then
+			c.guis += 1
+		end
+	end
+
+	return c
+end
+
+local function censusLine(label, c)
+	line("%-24s inst %6d | parts %5d mesh %4d | casters %5d (<2: %4d, <4: %4d) | lights %3d shadowed %3d | particles %3d rate %5.0f | beams %3d trails %3d | decals %4d tex %4d | SA %3d | HL %2d | sounds %3d | guis %3d",
+		label, c.instances, c.parts, c.meshParts, c.castShadow, c.small2, c.small4,
+		c.lights, c.shadowLights, c.particles, c.particleRate, c.beams, c.trails,
+		c.decals, c.textures, c.surfaceAppearance, c.highlights, c.sounds, c.guis)
+end
+
+head("COST CENSUS")
+do
+	line("casters = parts that cast a shadow; <2 / <4 = of those, how many are under 2 / 4 studs")
+	line("shadowed = lights with Shadows on; HL = Highlights (each is an extra render pass)")
+	line("")
+
+	censusLine("WHOLE WORKSPACE", census(Workspace))
+	line("")
+
+	local rooms = Workspace:FindFirstChild("CurrentRooms")
+	if rooms then
+		local list = rooms:GetChildren()
+		table.sort(list, function(a, b)
+			return (tonumber(a.Name) or math.huge) < (tonumber(b.Name) or math.huge)
+		end)
+		for _, room in ipairs(list) do
+			censusLine("room " .. room.Name, census(room))
+		end
+	else
+		line("no Workspace.CurrentRooms")
+	end
+
+	line("")
+	line("other big things in Workspace:")
+	for _, child in ipairs(Workspace:GetChildren()) do
+		if child.Name ~= "CurrentRooms" and child ~= Workspace.CurrentCamera then
+			local c = census(child)
+			if c.instances >= 50 or c.lights > 0 or c.highlights > 0 then
+				censusLine(child.Name, c)
+			end
+		end
+	end
+end
+
+write("report.txt", table.concat(report, "\n"))
+caption("DoorsDump: report saved, now the instance trees")
+
+---====== 6. EVERY GRAPHICS LEVEL ======---
+--[[ The question that matters most: can this PC run max graphics at all?
+     Measured at four levels instead of guessed.
+
+     It sets settings().Rendering.QualityLevel -- the value the engine really
+     renders from, and one that is never saved -- and puts yours back after.
+     Writing the SAVED setting instead would not change the picture during a
+     game at all: the test would measure one level four times and report it
+     as four. Each row also records the level the engine reports afterwards,
+     so a level that did not take shows up as one.
+
+     Written after every level, so a crash at graphics 10 keeps the rows
+     before it. Only in room 0: it means standing still for half a minute. ]]
+
+local rendering = nil
+pcall(function() rendering = settings().Rendering end)
+
+local function renderLevelFor(level)
+	local maxLevel = 22
+	pcall(function() maxLevel = rendering:GetMaxQualityLevel() end)
+
+	local value = 1
+	if level > 1 then
+		value = math.floor((maxLevel - 1) * level / 10)
+		if value == 20 then value = 21 end
+	end
+
+	for _, item in ipairs(Enum.QualityLevel:GetEnumItems()) do
+		if item.Value == value then return item end
+	end
+	return nil
+end
+
+if not safeHere then
+	write("graphics_sweep.txt", "skipped: you were past room 0. Run the dump again in room 0 for this.")
+elseif not rendering then
+	write("graphics_sweep.txt", "skipped: this executor cannot reach settings().Rendering")
+else
+	local before = rendering.QualityLevel
+	local capText = "?"
+	if typeof(getfpscap) == "function" then
+		local ok, cap = pcall(getfpscap)
+		if ok then capText = tostring(cap) end
+	end
+
+	local rows = {
+		"your level before the test: " .. tostring(before),
+		"fps cap: " .. capText .. "   (at a cap of 60, FPS cannot read higher than 60)",
+		"",
+	}
+
+	for _, level in ipairs({ 1, 4, 7, 10 }) do
+		caption(("DoorsDump: stand still, testing graphics %d"):format(level))
+
+		local target = renderLevelFor(level)
+		local set = target ~= nil and pcall(function() rendering.QualityLevel = target end)
+		task.wait(2)
+
+		local result = measure(4)
+		table.insert(rows, ("graphics %2d  (%s, engine now %s)"):format(
+			level, set and "set" or "SET FAILED", tostring(rendering.QualityLevel)))
+
+		if result.avg then
+			table.insert(rows, ("    %5.1f FPS avg | 5%% low %5.1f | worst %4.0f ms | stutters %d"):format(
+				result.avg, result.low5, result.worst * 1000, result.stutters))
+			table.insert(rows, "    " .. statsLine(result.stats))
+		else
+			table.insert(rows, "    no frames measured")
+		end
+
+		write("graphics_sweep.txt", table.concat(rows, "\n"))
+	end
+
+	pcall(function() rendering.QualityLevel = before end)
+	table.insert(rows, "")
+	table.insert(rows, "your level was put back: " .. tostring(rendering.QualityLevel))
+	write("graphics_sweep.txt", table.concat(rows, "\n"))
+end
+
+---====== 7. INSTANCE TREES ======---
+
+local function attributesOf(instance)
+	local ok, attributes = pcall(function() return instance:GetAttributes() end)
+	if not ok or next(attributes) == nil then return "" end
+
+	local parts = {}
+	for key, value in pairs(attributes) do
+		table.insert(parts, key .. "=" .. tostring(value))
+	end
+	table.sort(parts)
+
+	local text = table.concat(parts, ", ")
+	if #text > 200 then text = text:sub(1, 200) .. "..." end
+	return "  {" .. text .. "}"
+end
+
+local function dumpTree(root, label, maxDepth)
+	if not root then return 0 end
+
+	local lines = {}
+	local truncated = false
+
+	local function walk(instance, depth)
+		if #lines >= SETTINGS.MaxTreeLines then
+			truncated = true
+			return
+		end
+
+		local extra = ""
+		if instance:IsA("ValueBase") then
+			local value = read(instance, "Value")
+			extra = " = " .. tostring(value)
+		end
+
+		table.insert(lines, ("  "):rep(depth) .. instance.Name .. "  [" .. instance.ClassName .. "]"
+			.. extra .. attributesOf(instance))
+
+		if #lines % 3000 == 0 then task.wait() end
+
+		local children = instance:GetChildren()
+		if depth < maxDepth then
+			for _, child in ipairs(children) do
+				walk(child, depth + 1)
+			end
+		elseif #children > 0 then
+			table.insert(lines, ("  "):rep(depth + 1) .. "... " .. #children .. " more below")
+		end
+	end
+
+	walk(root, 0)
+	if truncated then
+		table.insert(lines, "... TRUNCATED at " .. SETTINGS.MaxTreeLines .. " lines")
+	end
+
+	write("tree_" .. label .. ".txt", table.concat(lines, "\n"))
+	task.wait()
+	return #lines
+end
+
+do
+	local counts = {}
+	counts.ReplicatedStorage = dumpTree(ReplicatedStorage, "ReplicatedStorage", SETTINGS.TreeDepth)
+	counts.ReplicatedFirst   = dumpTree(ReplicatedFirst, "ReplicatedFirst", SETTINGS.TreeDepth)
+	counts.PlayerGui         = dumpTree(LocalPlayer:FindFirstChild("PlayerGui"), "PlayerGui", SETTINGS.TreeDepth)
+	counts.PlayerScripts     = dumpTree(LocalPlayer:FindFirstChild("PlayerScripts"), "PlayerScripts", SETTINGS.TreeDepth)
+	counts.Lighting          = dumpTree(Lighting, "Lighting", SETTINGS.TreeDepth)
+	counts.Character         = dumpTree(LocalPlayer.Character, "Character", 6)
+	counts.CurrentRooms      = dumpTree(Workspace:FindFirstChild("CurrentRooms"), "CurrentRooms", 5)
+
+	-- The rest of Workspace, shallow: entities that are out right now show up
+	-- here as top-level models, and that is where their names are.
+	local shallow = {}
+	for _, child in ipairs(Workspace:GetChildren()) do
+		table.insert(shallow, child.Name .. "  [" .. child.ClassName .. "]" .. attributesOf(child))
+	end
+	write("tree_Workspace_top.txt", table.concat(shallow, "\n"))
+
+	local summary = {}
+	for name, count in pairs(counts) do
+		table.insert(summary, name .. " " .. count)
+	end
+	print("[DoorsDump] tree lines: " .. table.concat(summary, ", "))
+end
+
+---====== 8. MODULE SOURCES ======---
+
+local function isEngineInternal(instance)
+	local ok, full = pcall(function() return instance:GetFullName() end)
+	if not ok then return false end
+	-- Roblox's own core scripts. The last non-DOORS dump was 22,000 of them,
+	-- and none of it is the game.
+	return full:match("^CoreGui") ~= nil or full:match("^CorePackages") ~= nil
+		or full:match("^RobloxReplicatedStorage") ~= nil
+end
+
+local function collectScripts()
+	local seen, list = {}, {}
+
+	local function add(instance)
+		if not instance or seen[instance] then return end
+		if not (instance:IsA("ModuleScript") or instance:IsA("LocalScript")) then return end
+		if isEngineInternal(instance) then return end
+		seen[instance] = true
+		table.insert(list, instance)
+	end
+
+	for _, root in ipairs({
+		ReplicatedStorage, ReplicatedFirst,
+		LocalPlayer:FindFirstChild("PlayerGui"), LocalPlayer:FindFirstChild("PlayerScripts"),
+		LocalPlayer.Character,
+	}) do
+		if root then
+			for _, d in ipairs(root:GetDescendants()) do add(d) end
+		end
+	end
+
+	--[[ Modules the game required and then un-parented. DOORS keeps some of
+	     its logic in modules that no longer sit anywhere in the tree, and
+	     this is the only way to reach those. ]]
+	if typeof(getloadedmodules) == "function" then
+		local ok, loaded = pcall(getloadedmodules)
+		if ok and type(loaded) == "table" then
+			for _, module in ipairs(loaded) do add(module) end
+		end
+	end
+
+	return list
+end
+
+do
+	local scripts = collectScripts()
+	local index = {}
+	local decompiled, failed = 0, 0
+	local canDecompile = SETTINGS.DecompileModules and typeof(decompile) == "function"
+
+	--[[ Decompiling can hold the game for a second per script on a native
+	     decompiler. Past room 0 that is a frozen player next to whatever is
+	     coming, so outside room 0 the scripts are only listed. ]]
+	if canDecompile and not safeHere then
+		canDecompile = false
+		caption("DoorsDump: scripts only listed -- run it again in room 0 to decompile them")
+	end
+
+	caption(("DoorsDump: %s %d scripts"):format(canDecompile and "decompiling" or "listing", #scripts))
+
+	for position, script in ipairs(scripts) do
+		local full = script:GetFullName()
+		local status = "listed"
+
+		if canDecompile then
+			local ok, source = pcall(decompile, script)
+
+			if ok and type(source) == "string" and #source > 0 then
+				-- Windows paths top out near 260 characters, and a DOORS
+				-- module path can be longer than that on its own.
+				local safe = full:gsub("[^%w%._%-]", "_")
+				if #safe > 120 then safe = safe:sub(1, 120) end
+
+				write(("modules/%04d_%s.lua"):format(position, safe),
+					"-- " .. script.ClassName .. "  " .. full .. "\n" .. source)
+				decompiled += 1
+				status = "ok"
+			else
+				failed += 1
+				status = "FAILED"
+			end
+
+			task.wait()   -- after every script, so one slow one never stacks on the next
+			if position % 50 == 0 then
+				caption(("DoorsDump: %d / %d scripts"):format(position, #scripts))
+			end
+		end
+
+		table.insert(index, ("%04d  %-7s %-12s %s"):format(position, status, script.ClassName, full))
+	end
+
+	write("modules/_index.txt", table.concat(index, "\n"))
+	print(("[DoorsDump] scripts: %d found, %d decompiled, %d failed"):format(#scripts, decompiled, failed))
+end
+
+---====== 9. OPTIONAL: THE WHOLE PLACE ======---
+
+if SETTINGS.SaveInstance and typeof(saveinstance) == "function" then
+	caption("DoorsDump: saveinstance, this takes a while")
+
+	local name = ROOT .. "_place"
+	-- Executors disagree on the signature, so try both.
+	local ok = pcall(saveinstance, { FileName = name })
+	if not ok then
+		ok = pcall(saveinstance, game, { FileName = name })
+	end
+	print("[DoorsDump] saveinstance " .. (ok and ("-> " .. name) or "failed"))
+end
+
+caption("DoorsDump done: " .. ROOT)
+print("[DoorsDump] everything is in your executor's workspace folder, in " .. ROOT)

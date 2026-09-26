@@ -1,0 +1,569 @@
+--[[
+================================================================================
+
+        D O O R S   B O O S T
+
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/DoorsBoost"))()
+
+            F7   the cuts off / on, then DOORS' caption tells you the FPS
+            F8   graphics test: finds the highest graphics level your PC
+                 really holds, and sets it. Press it in room 0.
+
+        No UI. Everything it has to say goes through DOORS' own caption.
+
+        MAX GRAPHICS, HONESTLY
+        ----------------------
+        You asked for a script that lets you play at max graphics. On this
+        laptop -- a Radeon 610M, which already lags at graphics 1 -- no script
+        can make level 10 smooth; forcing it would make DOORS slower than it
+        is now. So instead of guessing, F8 MEASURES it: it climbs from level 1
+        upwards, shows the FPS of each level in the caption, and stops at the
+        highest one that stays above TARGET_FPS. If that is 10, you get 10.
+
+        The level is changed for THIS SERVER ONLY. It is never saved, and it
+        resets by itself on the next teleport. An earlier version wrote the
+        saved setting instead -- which did not even change the picture, and
+        would have left you stuck at graphics 10 in every game afterwards.
+
+        WHAT THE CUTS DO
+        ----------------
+        Only work the GPU does that you cannot see:
+
+          - SHADOWS OF FAR LAMPS turn off, and come back as you walk up. A
+            lamp keeps its light either way. With a margin, so a lamp right on
+            the boundary does not flicker between the two.
+
+          - SHADOWS OF TINY OBJECTS -- books, papers, small decorations.
+
+          - DUST FAR AWAY runs at a fraction of its rate.
+
+          - FPS ABOVE 60. Your screen is 60 Hz and yours was set to 999. This
+            only does anything when the game would go above 60: on a 15 W
+            laptop those extra frames are just heat, and heat makes the chip
+            slow itself down.
+
+        Be aware: at graphics 1-3 Roblox does not draw real shadows at all,
+        so the two shadow cuts only matter at higher levels. At your current
+        level 1 the dust and the FPS cap are the only cuts that act. F7 shows
+        you the difference either way instead of promising one.
+
+        WHAT IT NEVER TOUCHES
+        ---------------------
+        Whether a light is ON, how BRIGHT it is, darkness, the lights Rush and
+        Ambush flicker, entities, your lighter or flashlight, anything on your
+        character, ColorCorrection or Blur (DOORS uses those for Halt, Seek and
+        damage), and whether any part is visible. It only works inside
+        Workspace.CurrentRooms, so nothing an entity carries is affected.
+
+        When DOORS changes something this script is managing, the script
+        takes DOORS' value as the new original -- turning the boost off always
+        gives back what the GAME wanted.
+
+================================================================================
+]]
+
+---====== SETTINGS ======---
+
+local PRESET = "Quality"
+
+local PRESETS = {
+	--[[ Keeps the look. ]]
+	Quality = {
+		ShadowRange   = 70,     -- studs: lamps further than this lose their shadow
+		ShadowSlack   = 20,     -- ...and get it back only when this much closer
+		SmallPropSize = 2,      -- studs, longest side
+		ParticleRange = 100,
+		ParticleFar   = 0.25,   -- far dust runs at 25%
+		PostEffects   = true,   -- keep bloom, sun rays, depth of field
+	},
+
+	--[[ More frames, still DOORS. Lights, darkness and every gameplay effect
+	     stay untouched; bloom, sun rays and depth of field go. ]]
+	Smooth = {
+		ShadowRange   = 35,
+		ShadowSlack   = 15,
+		SmallPropSize = 4,
+		ParticleRange = 50,
+		ParticleFar   = 0.1,
+		PostEffects   = false,
+	},
+}
+
+-- nil = keep your own level. 1..10 = force it, for this server only.
+local GRAPHICS     = nil
+local TARGET_FPS   = 40     -- what the F8 test needs a level to hold
+local FPS_CAP      = 60
+local TOGGLE_KEY   = Enum.KeyCode.F7
+local TEST_KEY     = Enum.KeyCode.F8
+local UPDATE_EVERY = 0.4
+
+---=====================================================================---
+
+local Players           = game:GetService("Players")
+local RunService        = game:GetService("RunService")
+local UserInputService  = game:GetService("UserInputService")
+local Lighting          = game:GetService("Lighting")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace         = game:GetService("Workspace")
+
+local LocalPlayer = Players.LocalPlayer
+local preset = PRESETS[PRESET] or PRESETS.Quality
+
+if getgenv and type(getgenv().__DoorsBoostCleanup) == "function" then
+	pcall(getgenv().__DoorsBoostCleanup)
+end
+
+local function caption(text)
+	print("[DoorsBoost] " .. text)
+	pcall(function()
+		require(LocalPlayer.PlayerGui.MainUI.Initiator.Main_Game).caption(text, true)
+	end)
+end
+
+local function round(x)
+	return math.floor(x + 0.5)
+end
+
+---====== REMEMBERING WHAT THE GAME WANTED ======---
+--[[ Every property this script changes is recorded first, so turning it off
+     puts back exactly what was there.
+
+     Our own writes are told apart from the game's by remembering the value
+     WE last wrote, not with a "we are writing" flag: DOORS may run with
+     deferred signals, where the change event fires after the write is over
+     and a flag would already be down -- every write of ours would then be
+     mistaken for DOORS', and turning the boost off would restore nothing.
+
+     Numbers are compared with a tolerance. Rate is stored as a 32-bit float,
+     so 0.1 * 13 does not read back as exactly the same number, and an exact
+     compare would take it for the game's -- then shrink it again next tick,
+     and again, down to zero. ]]
+
+local LIGHT_CLASSES  = { PointLight = true, SpotLight = true, SurfaceLight = true }
+local EFFECT_CLASSES = { BloomEffect = true, SunRaysEffect = true, DepthOfFieldEffect = true }
+
+local managed   = {}   -- [instance] = { original = {}, written = {}, connections = {} }
+local gameOwned = {}   -- effects DOORS has touched: never managed again
+local connections = {}
+
+local forget   -- defined below; the change handler needs it
+
+local function same(a, b)
+	if type(a) == "number" and type(b) == "number" then
+		return math.abs(a - b) <= 1e-3 * math.max(1, math.abs(b))
+	end
+	return a == b
+end
+
+local function remember(instance, property)
+	local entry = managed[instance]
+	if not entry then
+		entry = { original = {}, written = {}, connections = {} }
+		managed[instance] = entry
+	end
+
+	if entry.original[property] == nil then
+		entry.original[property] = instance[property]
+
+		entry.connections[property] = instance:GetPropertyChangedSignal(property):Connect(function()
+			local now = instance[property]
+			if same(now, entry.written[property]) then return end
+
+			entry.original[property] = now
+
+			--[[ An effect DOORS switches itself is handed back for good.
+
+			     Otherwise the game's LATER write -- switching it back off
+			     when its moment ends -- lands on the value we are already
+			     holding, fires no change event, and "original" stays ON. The
+			     next F7 would then switch on an effect DOORS had put away. ]]
+			if EFFECT_CLASSES[instance.ClassName] then
+				gameOwned[instance] = true
+				forget(instance)
+			end
+		end)
+	end
+
+	return entry
+end
+
+local function put(instance, property, value)
+	local entry = managed[instance]
+	if not entry then return end
+
+	entry.written[property] = value
+	if not same(instance[property], value) then
+		pcall(function() instance[property] = value end)
+	end
+end
+
+forget = function(instance)
+	local entry = managed[instance]
+	if not entry then return end
+
+	for _, connection in pairs(entry.connections) do
+		pcall(function() connection:Disconnect() end)
+	end
+	managed[instance] = nil
+end
+
+local function restoreAll()
+	for instance, entry in pairs(managed) do
+		for property, original in pairs(entry.original) do
+			put(instance, property, original)
+		end
+	end
+end
+
+---====== WHAT IS BEING WATCHED ======---
+
+local lights    = {}
+local emitters  = {}
+local smallOnes = {}
+
+local active = false
+
+local function worldPosition(instance)
+	local parent = instance.Parent
+	if not parent then return nil end
+	if parent:IsA("BasePart") then return parent.Position end
+	if parent:IsA("Attachment") then return parent.WorldPosition end
+	return nil
+end
+
+local function consider(instance)
+	if LIGHT_CLASSES[instance.ClassName] then
+		lights[instance] = true
+		remember(instance, "Shadows")
+
+	elseif instance:IsA("ParticleEmitter") then
+		emitters[instance] = true
+		remember(instance, "Rate")
+
+	elseif instance:IsA("BasePart") then
+		if instance.CastShadow then
+			local size = instance.Size
+			if math.max(size.X, size.Y, size.Z) < preset.SmallPropSize then
+				smallOnes[instance] = true
+				remember(instance, "CastShadow")
+				if active then put(instance, "CastShadow", false) end
+			end
+		end
+	end
+end
+
+--[[ Leaving the rooms: give the game's value back BEFORE letting go.
+
+     Just forgetting it was a bug. Anything that left CurrentRooms without
+     being destroyed -- an item picked up, a prop moved between models --
+     kept its boosted value, and if it came back the boosted value was read
+     as the "original": a shadow gone for good, or a dust emitter cut to 25%
+     of 25%, then 25% of that. ]]
+local function drop(instance)
+	local entry = managed[instance]
+	if entry then
+		for property, original in pairs(entry.original) do
+			put(instance, property, original)
+		end
+	end
+
+	lights[instance] = nil
+	emitters[instance] = nil
+	smallOnes[instance] = nil
+	forget(instance)
+end
+
+---====== THE WORK ======---
+
+local function tick()
+	local camera = Workspace.CurrentCamera
+	if not camera then return end
+	local eye = camera.CFrame.Position
+
+	for light in pairs(lights) do
+		local entry = managed[light]
+		if entry and light.Parent and entry.original.Shadows then
+			local position = worldPosition(light)
+
+			-- A light we cannot place is left exactly as the game has it.
+			if position then
+				local distance = (position - eye).Magnitude
+				local wasOn = entry.written.Shadows ~= false
+				local limit = wasOn and (preset.ShadowRange + preset.ShadowSlack) or preset.ShadowRange
+				put(light, "Shadows", distance <= limit)
+			end
+		end
+	end
+
+	for emitter in pairs(emitters) do
+		local entry = managed[emitter]
+		if entry and emitter.Parent then
+			local original = entry.original.Rate
+			local position = worldPosition(emitter)
+			if position then
+				local far = (position - eye).Magnitude > preset.ParticleRange
+				put(emitter, "Rate", far and original * preset.ParticleFar or original)
+			end
+		end
+	end
+
+	if not preset.PostEffects then
+		for _, owner in ipairs({ Lighting, camera }) do
+			for _, child in ipairs(owner:GetChildren()) do
+				if EFFECT_CLASSES[child.ClassName] and not gameOwned[child] then
+					remember(child, "Enabled")
+					put(child, "Enabled", false)
+				end
+			end
+		end
+	end
+end
+
+local function enable()
+	active = true
+	for part in pairs(smallOnes) do
+		put(part, "CastShadow", false)
+	end
+	pcall(tick)
+end
+
+--[[ F7 switches ONLY the cuts. The graphics level and the FPS cap stay put:
+     a comparison has to change exactly one thing, or it means nothing. ]]
+local function disable()
+	active = false
+	restoreAll()
+end
+
+---====== GRAPHICS, FOR THIS SERVER ONLY ======---
+--[[ settings().Rendering.QualityLevel is what the engine actually renders
+     from, and it is not saved: every new place resets it from your saved
+     setting. Roblox's own menu writes it with this same 1..10 mapping. ]]
+
+local rendering = nil
+pcall(function() rendering = settings().Rendering end)
+
+local renderBefore = nil
+
+local function renderLevelFor(level)
+	local maxLevel = 22
+	pcall(function() maxLevel = rendering:GetMaxQualityLevel() end)
+
+	local value
+	if level <= 1 then
+		value = 1
+	else
+		value = math.floor((maxLevel - 1) * level / 10)
+		if value == 20 then value = 21 end
+	end
+
+	for _, item in ipairs(Enum.QualityLevel:GetEnumItems()) do
+		if item.Value == value then return item end
+	end
+	return nil
+end
+
+local function setGraphics(level)
+	if not rendering then return false end
+	local item = renderLevelFor(level)
+	if not item then return false end
+
+	return (pcall(function()
+		if renderBefore == nil then renderBefore = rendering.QualityLevel end
+		rendering.QualityLevel = item
+	end))
+end
+
+local function restoreGraphics()
+	if renderBefore == nil or not rendering then return end
+	pcall(function() rendering.QualityLevel = renderBefore end)
+	renderBefore = nil
+end
+
+---====== MEASURING ======---
+
+local function sample(seconds)
+	local deltas = {}
+	local connection = RunService.RenderStepped:Connect(function(dt)
+		deltas[#deltas + 1] = dt
+	end)
+	task.wait(seconds)
+	connection:Disconnect()
+
+	local total = 0
+	for _, dt in ipairs(deltas) do total += dt end
+	if #deltas == 0 or total <= 0 then return 0, 0, 0 end
+
+	table.sort(deltas, function(a, b) return a > b end)
+
+	-- The slowest 5%, not 1%: at 30 FPS four seconds is 120 frames, and 1%
+	-- of that is a single frame -- one hitch from a room loading would
+	-- decide the whole result.
+	local count = math.max(1, math.floor(#deltas * 0.05))
+	local slow = 0
+	for index = 1, count do slow += deltas[index] end
+
+	return #deltas / total, count / slow, deltas[1]
+end
+
+--[[ Each F7 press starts a fresh measurement and makes any older one
+     stand down, so a caption never reports a mix of ON and OFF frames. ]]
+local measureToken = 0
+
+local function measure()
+	measureToken += 1
+	local token = measureToken
+	local state = active
+
+	task.spawn(function()
+		task.wait(1)
+		if token ~= measureToken then return end
+
+		local fps, _, worst = sample(3)
+		if token ~= measureToken or active ~= state then return end
+
+		caption(("DoorsBoost %s: %d FPS, worst frame %d ms"):format(
+			state and "ON" or "OFF", round(fps), round(worst * 1000)))
+	end)
+end
+
+---====== F8: THE GRAPHICS TEST ======---
+
+local testing = false
+
+local function inRoomZero()
+	local data = ReplicatedStorage:FindFirstChild("GameData")
+	local latest = data and data:FindFirstChild("LatestRoom")
+	return latest == nil or latest.Value == 0
+end
+
+local function graphicsTest()
+	if testing then return end
+
+	-- Standing still for up to a minute is only safe where nothing hunts you.
+	if not inRoomZero() then
+		caption("DoorsBoost: press F8 in room 0 -- nothing can reach you there while it tests")
+		return
+	end
+
+	if not rendering then
+		caption("DoorsBoost: this executor cannot change graphics")
+		return
+	end
+
+	testing = true
+	task.spawn(function()
+		caption("DoorsBoost: graphics test, stand still")
+		task.wait(2)
+
+		local best, bestFps = nil, 0
+
+		for level = 1, 10 do
+			if not setGraphics(level) then
+				caption("DoorsBoost: this executor cannot change graphics")
+				break
+			end
+
+			task.wait(1.5)   -- let the new level settle before counting
+			local fps, low = sample(4)
+			caption(("graphics %d: %d FPS, drops to %d"):format(level, round(fps), round(low)))
+
+			if fps < TARGET_FPS then break end
+			best, bestFps = level, fps
+		end
+
+		if best == 10 then
+			setGraphics(10)
+			caption(("DoorsBoost: your PC holds MAX graphics, %d FPS"):format(round(bestFps)))
+		elseif best then
+			setGraphics(best)
+			caption(("DoorsBoost: max graphics will not hold here. Set to %d, the highest above %d FPS"):format(best, TARGET_FPS))
+		else
+			restoreGraphics()
+			caption(("DoorsBoost: even graphics 1 is under %d FPS on this PC -- close Studio and Discord"):format(TARGET_FPS))
+		end
+
+		testing = false
+	end)
+end
+
+---====== START ======---
+
+local running = true
+local capBefore = nil
+
+local rooms = Workspace:FindFirstChild("CurrentRooms") or Workspace:WaitForChild("CurrentRooms", 20)
+
+if rooms then
+	for _, d in ipairs(rooms:GetDescendants()) do
+		consider(d)
+	end
+	table.insert(connections, rooms.DescendantAdded:Connect(consider))
+	table.insert(connections, rooms.DescendantRemoving:Connect(drop))
+else
+	caption("DoorsBoost: no rooms found -- are you in the lobby?")
+end
+
+local fpsStatus
+if typeof(setfpscap) == "function" then
+	if typeof(getfpscap) == "function" then
+		pcall(function() capBefore = getfpscap() end)
+	end
+	fpsStatus = pcall(setfpscap, FPS_CAP) and ("capped at " .. FPS_CAP) or "cap failed"
+else
+	fpsStatus = "cannot cap here -- set Maximum Frame Rate to 60 in Roblox's menu"
+end
+
+local graphicsStatus = "yours, unchanged"
+if GRAPHICS then
+	graphicsStatus = setGraphics(GRAPHICS) and ("set to " .. GRAPHICS .. " for this server") or "could not be changed"
+end
+
+enable()
+
+task.spawn(function()
+	while running do
+		if active then pcall(tick) end
+		task.wait(UPDATE_EVERY)
+	end
+end)
+
+table.insert(connections, UserInputService.InputBegan:Connect(function(input, processed)
+	if processed then return end
+
+	if input.KeyCode == TOGGLE_KEY then
+		if active then disable() else enable() end
+		measure()
+	elseif input.KeyCode == TEST_KEY then
+		graphicsTest()
+	end
+end))
+
+if getgenv then
+	getgenv().__DoorsBoostCleanup = function()
+		running = false
+		disable()
+		restoreGraphics()
+		if capBefore ~= nil and typeof(setfpscap) == "function" then
+			pcall(setfpscap, capBefore)
+		end
+		for _, connection in ipairs(connections) do
+			pcall(function() connection:Disconnect() end)
+		end
+		for instance in pairs(managed) do
+			forget(instance)
+		end
+	end
+end
+
+local function count(set)
+	local n = 0
+	for _ in pairs(set) do n += 1 end
+	return n
+end
+
+print(("[DoorsBoost] %s preset | graphics %s | fps %s"):format(PRESET, graphicsStatus, fpsStatus))
+print(("[DoorsBoost] watching %d lights, %d particle emitters, %d small shadow casters"):format(
+	count(lights), count(emitters), count(smallOnes)))
+
+caption(("DoorsBoost ON (%s) -- F7 compare, F8 graphics test in room 0"):format(PRESET))
+measure()
