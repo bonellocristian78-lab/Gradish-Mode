@@ -495,6 +495,10 @@ caption("DoorsDump: report saved, now the instance trees")
 
 local rendering = nil
 pcall(function() rendering = settings().Rendering end)
+if not rendering and typeof(getrenv) == "function" then
+	-- Nexomia could not reach settings() directly on the first dump.
+	pcall(function() rendering = getrenv().settings().Rendering end)
+end
 
 local function renderLevelFor(level)
 	local maxLevel = 22

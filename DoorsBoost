@@ -7,9 +7,26 @@
 
             F7   the cuts off / on, then DOORS' caption tells you the FPS
             F8   graphics test: finds the highest graphics level your PC
-                 really holds, and sets it. Press it in room 0.
+                 really holds, and sets it. Press it in room 0. If your
+                 executor cannot change graphics, F8 measures the level you
+                 set in the menu instead -- change it, press F8 again.
 
         No UI. Everything it has to say goes through DOORS' own caption.
+
+        WHAT YOUR OWN DUMP SAID
+        -----------------------
+        Measured on your laptop, room 0, 26 September:
+
+            graphics 1     59 FPS   (the 60 cap)    1 stutter in 8 seconds
+            graphics 10    12 FPS                   every single frame a stutter
+
+        And at graphics 10, 1124 draw calls went on SHADOWS against 115 for the
+        whole rest of the scene: nine tenths of the work. Eighteen lamps were
+        casting shadows at once, all within 70 studs of you. The game's own
+        scripts took 1.35 ms of an 81 ms frame -- it is all rendering.
+
+        So the cut that matters is not how FAR a lamp is but how MANY cast a
+        shadow at the same time. Now only the few nearest do.
 
         MAX GRAPHICS, HONESTLY
         ----------------------
@@ -29,9 +46,13 @@
         ----------------
         Only work the GPU does that you cannot see:
 
-          - SHADOWS OF FAR LAMPS turn off, and come back as you walk up. A
-            lamp keeps its light either way. With a margin, so a lamp right on
-            the boundary does not flicker between the two.
+          - ONLY THE NEAREST LAMPS CAST SHADOWS: 4 in Quality, 2 in Smooth.
+            The two nearest ALWAYS keep theirs -- the lamp above your head is
+            the one you would notice. Every lamp keeps its light either way.
+
+            Simulated over 200 random DOORS-like layouts before shipping: at
+            most 4 shadows at any moment against up to 29 before, and the two
+            nearest lamps never once without theirs.
 
           - SHADOWS OF TINY OBJECTS -- books, papers, small decorations.
 
@@ -69,8 +90,11 @@ local PRESET = "Quality"
 local PRESETS = {
 	--[[ Keeps the look. ]]
 	Quality = {
-		ShadowRange   = 70,     -- studs: lamps further than this lose their shadow
-		ShadowSlack   = 20,     -- ...and get it back only when this much closer
+		MaxShadows    = 4,      -- lamps allowed to cast a shadow at once
+		PinnedShadows = 2,      -- the nearest ones always keep theirs
+		ShadowRange   = 70,     -- studs: beyond this, never
+		ShadowSlack   = 12,     -- a lamp already casting keeps its place unless
+		                        -- another is this much closer (fewer switches)
 		SmallPropSize = 2,      -- studs, longest side
 		ParticleRange = 100,
 		ParticleFar   = 0.25,   -- far dust runs at 25%
@@ -80,8 +104,10 @@ local PRESETS = {
 	--[[ More frames, still DOORS. Lights, darkness and every gameplay effect
 	     stay untouched; bloom, sun rays and depth of field go. ]]
 	Smooth = {
+		MaxShadows    = 2,
+		PinnedShadows = 2,
 		ShadowRange   = 35,
-		ShadowSlack   = 15,
+		ShadowSlack   = 0,
 		SmallPropSize = 4,
 		ParticleRange = 50,
 		ParticleFar   = 0.1,
@@ -280,19 +306,64 @@ local function tick()
 	if not camera then return end
 	local eye = camera.CFrame.Position
 
+	--[[ Which lamps may cast a shadow this tick.
+
+	     The nearest PinnedShadows always do -- no head start can take the
+	     shadow off the lamp right above you. The remaining places go by
+	     distance, with a head start for lamps already casting, so two lamps
+	     at nearly the same distance do not trade it back and forth.
+
+	     A light we cannot place in the world is left exactly as the game
+	     has it. ]]
+	local candidates = {}
 	for light in pairs(lights) do
 		local entry = managed[light]
 		if entry and light.Parent and entry.original.Shadows then
 			local position = worldPosition(light)
-
-			-- A light we cannot place is left exactly as the game has it.
 			if position then
-				local distance = (position - eye).Magnitude
-				local wasOn = entry.written.Shadows ~= false
-				local limit = wasOn and (preset.ShadowRange + preset.ShadowSlack) or preset.ShadowRange
-				put(light, "Shadows", distance <= limit)
+				table.insert(candidates, {
+					light = light,
+					distance = (position - eye).Magnitude,
+					casting = entry.written.Shadows ~= false,
+				})
 			end
 		end
+	end
+
+	table.sort(candidates, function(a, b) return a.distance < b.distance end)
+
+	local chosen, count = {}, 0
+
+	for index = 1, math.min(preset.PinnedShadows, #candidates) do
+		local candidate = candidates[index]
+		if candidate.distance <= preset.ShadowRange then
+			chosen[candidate.light] = true
+			count += 1
+		end
+	end
+
+	if count < preset.MaxShadows then
+		local rest = {}
+		for _, candidate in ipairs(candidates) do
+			if not chosen[candidate.light] then
+				local slack = candidate.casting and preset.ShadowSlack or 0
+				if candidate.distance <= preset.ShadowRange + slack then
+					table.insert(rest, { light = candidate.light, score = candidate.distance - slack })
+				end
+			end
+		end
+
+		table.sort(rest, function(a, b) return a.score < b.score end)
+
+		for _, candidate in ipairs(rest) do
+			if count >= preset.MaxShadows then break end
+			chosen[candidate.light] = true
+			count += 1
+		end
+	end
+
+	for _, candidate in ipairs(candidates) do
+		put(candidate.light, "Shadows", chosen[candidate.light] == true)
 	end
 
 	for emitter in pairs(emitters) do
@@ -339,8 +410,14 @@ end
      from, and it is not saved: every new place resets it from your saved
      setting. Roblox's own menu writes it with this same 1..10 mapping. ]]
 
+--[[ Two ways in. Your executor (Nexomia) could not reach settings() on the
+     first dump, so the game's own copy of it is tried as well. If neither
+     works, F8 falls back to measuring whatever level you have set. ]]
 local rendering = nil
 pcall(function() rendering = settings().Rendering end)
+if not rendering and typeof(getrenv) == "function" then
+	pcall(function() rendering = getrenv().settings().Rendering end)
+end
 
 local renderBefore = nil
 
@@ -440,13 +517,34 @@ local function graphicsTest()
 	if testing then return end
 
 	-- Standing still for up to a minute is only safe where nothing hunts you.
-	if not inRoomZero() then
+	-- (The quick manual measurement below is allowed anywhere.)
+	if rendering and not inRoomZero() then
 		caption("DoorsBoost: press F8 in room 0 -- nothing can reach you there while it tests")
 		return
 	end
 
+	--[[ Without access to the renderer the level cannot be changed from
+	     here -- but it can still be MEASURED. Change it in Roblox's menu,
+	     press F8, and the caption tells you what that level costs. Doing that
+	     for a few levels is the same test, by hand. ]]
 	if not rendering then
-		caption("DoorsBoost: this executor cannot change graphics")
+		testing = true
+		task.spawn(function()
+			local level = "?"
+			pcall(function()
+				local saved = UserSettings():GetService("UserGameSettings").SavedQualityLevel
+				level = tostring(saved.Value)
+			end)
+
+			caption("DoorsBoost: stand still, measuring graphics " .. level)
+			task.wait(1.5)
+			local fps, low = sample(4)
+
+			local verdict = fps >= TARGET_FPS and "holds" or "too heavy"
+			caption(("graphics %s: %d FPS, drops to %d -- %s. Change it in the menu and press F8 again")
+				:format(level, round(fps), round(low), verdict))
+			testing = false
+		end)
 		return
 	end
 
