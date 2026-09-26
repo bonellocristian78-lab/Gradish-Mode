@@ -1,0 +1,452 @@
+--[[
+================================================================================
+
+        H E L L I S H   T I M E   E V E R
+
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/HellishTimeEver"))()
+
+            K   one random entity. Never the same one twice.
+            J   reset: every entity can come again, from speed 60.
+
+        Run it inside a DOORS run. It adds "Hellish Time Ever" to DOORS' own
+        modifier panel -- in black and white, moving -- next to any modifiers
+        you already picked.
+
+        WHY NO REPEATS
+        --------------
+        Spam K in a video and pure random gives you three Rushes in a row.
+        This is a bag, not dice: every entity is in it once, K pulls one out,
+        and it does not go back in until you press J. Eight presses, eight
+        different entities.
+
+        EACH ONE FASTER
+        ---------------
+        The first comes at speed 60 -- where 100 is Rush's normal pace -- and
+        every one after it is SPEED_STEP faster than the last. J starts the
+        climb again from 60.
+
+        WHERE THE ENTITIES COME FROM
+        ----------------------------
+        Nothing is inside this script. Each one is loaded when it is summoned:
+
+            Rush, Ambush     Vynixu's own models, from the Entity Spawner repo
+            A-60, A-120,     your models from Roblox Studio, exported to the
+            Scribble, Bash,  HTE/ folder of this repo with their sounds
+            Blitz
+            Honcho           Honcho.lua from this repo, which runs itself
+
+        HOW THE MODIFIER IS SHOWN
+        -------------------------
+        Built from DOORS' own panel, not an imitation of it. When a run starts
+        with modifiers, DOORS clones MainUI.Modifiers, adds one row per
+        modifier, writes "N MODIFIERS ACTIVATED" and slides it out after ten
+        seconds. This does the same thing, with the same pieces.
+
+        It does NOT add Hellish Time Ever to DOORS' modifier list itself.
+        DOORS reads every active modifier's knob bonus from its own table, and
+        a name that is not in that table would crash DOORS' own script.
+
+================================================================================
+]]
+
+---====== SETTINGS ======---
+
+local BASE_SPEED   = 60     -- the first entity. 100 = Rush's normal speed
+local SPEED_STEP   = 15     -- every entity after it is this much faster
+local MAX_SPEED    = 250
+local WARNING      = 2      -- seconds of flickering lights before it runs
+local PASS_SECONDS = nil    -- nil = it runs its whole route. A number = gone
+                            -- after that many seconds (Honcho decides for
+                            -- himself and ignores this)
+local ANNOUNCE     = false  -- true = the caption names each entity. Off, so
+                            -- a video keeps the surprise
+local BANNER_TIME  = 10     -- seconds the modifier panel stays, as in DOORS
+
+local SPAWN_KEY = Enum.KeyCode.K
+local RESET_KEY = Enum.KeyCode.J
+
+---====== WHERE THINGS ARE ======---
+
+local REPO     = "https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/"
+local VYNIXU   = "https://github.com/RegularVynixu/Utilities/raw/main/Doors/Entity%20Spawner/Assets/Entities/"
+local SPAWNER  = "https://raw.githubusercontent.com/RegularVynixu/DOORS-Entity-Spawner-V2/main/init.luau"
+local GRADIENT = REPO .. "HellishGradient"
+
+---====== THE ENTITIES ======---
+--[[ Death: "Guiding" is the blue death screen, "Curious" the yellow one.
+     Rebound: nil = passes once. ]]
+
+local ENTITIES = {
+	{
+		name  = "Rush",
+		asset = VYNIXU .. "Rush.rbxm",
+		death = "Guiding",
+		hints = { "You died to who you call Rush...", "The lights flicker before he comes.", "Get into a closet the moment they do." },
+	},
+	{
+		name    = "Ambush",
+		asset   = VYNIXU .. "Ambush.rbxm",
+		death   = "Guiding",
+		rebound = { Type = "Ambush", Min = 2, Max = 5, Delay = 2 },
+		hints   = { "You died to who you call Ambush...", "He does not pass only once.", "Stay hidden until he is really gone." },
+	},
+	{
+		name  = "A-60",
+		asset = REPO .. "HTE/A-60.rbxm",
+		death = "Curious",
+		hints = { "You died to A-60...", "Listen for the noise.", "When you hear it, hide. Fast." },
+	},
+	{
+		name  = "A-120",
+		asset = REPO .. "HTE/A-120.rbxm",
+		death = "Curious",
+		hints = { "You died to A-120...", "It is slower than it sounds.", "That is no reason to stay out in the open." },
+	},
+	{
+		name  = "Scribble",
+		asset = REPO .. "HTE/Scribble.rbxm",
+		death = "Guiding",
+		hints = { "You died to Scribble...", "Ink on the walls is not decoration.", "Hide when the pages start to fly." },
+	},
+	{
+		name  = "Bash",
+		asset = REPO .. "HTE/Bash.rbxm",
+		death = "Guiding",
+		hints = { "You died to Bash...", "The red light is the warning.", "A closet is the only answer." },
+	},
+	{
+		name    = "Blitz",
+		asset   = REPO .. "HTE/Blitz.rbxm",
+		death   = "Curious",
+		rebound = { Type = "Blitz", Min = 1, Max = 2, Delay = 2 },
+		blitz   = true,
+		hints   = { "You died to Blitz...", "It turns around.", "Coming out too early is exactly what it waits for." },
+	},
+	{
+		name   = "Honcho",
+		script = REPO .. "Honcho.lua",
+	},
+}
+
+---=====================================================================---
+
+local Players           = game:GetService("Players")
+local UserInputService  = game:GetService("UserInputService")
+local TweenService      = game:GetService("TweenService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace         = game:GetService("Workspace")
+
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui   = LocalPlayer:WaitForChild("PlayerGui")
+
+if not Workspace:FindFirstChild("CurrentRooms") then
+	warn("[Hellish Time Ever] run this inside a DOORS run, not in the lobby")
+	return
+end
+
+-- A second load replaces the first, instead of both answering every K.
+if getgenv and type(getgenv().__HellishTimeEverCleanup) == "function" then
+	pcall(getgenv().__HellishTimeEverCleanup)
+end
+
+local function caption(text)
+	print("[Hellish Time Ever] " .. text)
+	pcall(function()
+		require(PlayerGui.MainUI.Initiator.Main_Game).caption(text, true)
+	end)
+end
+
+local function fetch(url)
+	local ok, result = pcall(function()
+		return loadstring(game:HttpGet(url))()
+	end)
+	if not ok then
+		warn("[Hellish Time Ever] could not load " .. url .. ": " .. tostring(result))
+		return nil
+	end
+	return result
+end
+
+local Gradient = fetch(GRADIENT)
+local Spawner  = fetch(SPAWNER)
+
+if not Spawner then
+	caption("Hellish Time Ever could not load the entity spawner")
+	return
+end
+
+---====== THE MODIFIER PANEL ======---
+
+local banner = nil
+
+local function showModifier()
+	local MainUI = PlayerGui:FindFirstChild("MainUI")
+	local template = MainUI and MainUI:FindFirstChild("Modifiers")
+
+	if not template then
+		caption("Hellish Time Ever is active")
+		return
+	end
+
+	if banner then pcall(function() banner:Destroy() end) end
+
+	local panel = template:Clone()
+	panel.Name = "HellishTimeEverMods"
+	panel.Visible = true
+
+	-- Only what a modifier row needs. The penalty labels, the big-list
+	-- layout and the tip belong to DOORS' own modifiers.
+	for _, name in ipairs({ "Tip", "NotFloor", "NoRift", "NoProgress", "RawHeat", "BigList" }) do
+		local child = panel:FindFirstChild(name)
+		if child then child.Visible = false end
+	end
+
+	local rowTemplate = panel:FindFirstChild("Template")
+	local count = 0
+	local firstRow = rowTemplate and rowTemplate.LayoutOrder or 0
+
+	-- DOORS' own active modifiers first, exactly as DOORS lays them out.
+	local okMods, Modifiers = pcall(function()
+		return require(ReplicatedStorage:WaitForChild("Modifiers", 5))
+	end)
+
+	if okMods and Modifiers and rowTemplate then
+		pcall(function()
+			for _, id in ipairs(Modifiers.getMods(false)) do
+				local info = Modifiers.mods[id]
+				if info then
+					local row = rowTemplate:Clone()
+					row.Visible = true
+					row.Name = info.Name or id
+					row.LayoutOrder = info.Sort + Modifiers.categories[info.Category].sort * 1000
+					firstRow = math.min(firstRow, row.LayoutOrder)
+					row.Text = info.Title
+					row.BackgroundColor3 = info.Color
+					row.TextColor3 = info.Color
+					row.Parent = panel
+					count += 1
+				end
+			end
+
+			local knobs = Modifiers.getPercs()
+			local bonus = panel:FindFirstChild("KnobBonus")
+			if bonus and type(knobs) == "number" then
+				bonus.Text = (knobs < 0 and "-" or "+") .. math.abs(knobs) .. "%"
+			end
+		end)
+	end
+
+	-- Then ours, at the top.
+	if rowTemplate then
+		local row = rowTemplate:Clone()
+		row.Visible = true
+		row.Name = "HellishTimeEver"
+		--[[ First among the modifiers, but no higher. The panel's header --
+		     "N MODIFIERS ACTIVATED" -- sits in the same list, and its order
+		     is not something the dump recorded, so a huge negative number
+		     could put this row above the header. One less than the first
+		     real row cannot. ]]
+		row.LayoutOrder = firstRow - 1
+		row.Text = "Hellish Time Ever"
+		-- The gradient multiplies whatever colour is underneath, so both the
+		-- text and the fill start white.
+		row.BackgroundColor3 = Color3.new(1, 1, 1)
+		row.TextColor3 = Color3.new(1, 1, 1)
+		row.Parent = panel
+		count += 1
+
+		if Gradient then pcall(Gradient.apply, row) end
+	end
+
+	local desc = panel:FindFirstChild("Desc")
+	if desc then
+		desc.Text = count == 1 and "1 MODIFIER ACTIVATED" or (count .. " MODIFIERS ACTIVATED")
+	end
+
+	-- In from the right, where DOORS puts it, then back out the way it goes.
+	panel.Position = UDim2.new(1.3, 0, 0.5, 0)
+	panel.Parent = MainUI
+	banner = panel
+
+	TweenService:Create(panel, TweenInfo.new(0.8, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+		Position = UDim2.new(0.965, 0, 0.5, 0),
+	}):Play()
+
+	task.delay(BANNER_TIME, function()
+		if banner ~= panel or not panel.Parent then return end
+		TweenService:Create(panel, TweenInfo.new(1, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
+			Position = UDim2.new(1.3, 0, 0.5, 0),
+		}):Play()
+		task.wait(1)
+		pcall(function() panel:Destroy() end)
+	end)
+
+	-- The number next to the modifier icon at the top of the screen.
+	pcall(function()
+		local counter = PlayerGui.TopbarUI.Topbar.Modifiers
+		counter.Text = tostring(count)
+		counter.Visible = true
+	end)
+end
+
+---====== THE BAG ======---
+
+local rng = Random.new()
+local bag = {}
+local summoned = 0
+
+local function refill()
+	table.clear(bag)
+	for _, entry in ipairs(ENTITIES) do
+		table.insert(bag, entry)
+	end
+	summoned = 0
+end
+
+local function draw()
+	if #bag == 0 then return nil end
+	return table.remove(bag, rng:NextInteger(1, #bag))
+end
+
+---====== SUMMONING ======---
+
+--[[ Blitz turns around and changes voice when it does. The model carries both
+     voices -- Footsteps/PlaySound going forward, Footsteps1/PlaySound1 on
+     the way back -- and this swaps between them, the way Vynixu's own Blitz
+     example switches its sounds on rebound. ]]
+local function blitzVoice(entity)
+	entity:SetCallback("OnRebounding", function(startOfRebound)
+		local main = entity.Model and entity.Model.PrimaryPart
+		if not main then return end
+
+		local forward = { main:FindFirstChild("Footsteps"), main:FindFirstChild("PlaySound") }
+		local back    = { main:FindFirstChild("Footsteps1"), main:FindFirstChild("PlaySound1") }
+
+		for _, sound in ipairs(startOfRebound and forward or back) do
+			if sound then sound:Stop() end
+		end
+		for _, sound in ipairs(startOfRebound and back or forward) do
+			if sound then sound:Play() end
+		end
+	end)
+end
+
+local function summonModel(entry, speed)
+	local rebound = entry.rebound
+
+	local entity = Spawner:Create({
+		Entity = {
+			Name = entry.name,
+			Asset = entry.asset,
+			HeightOffset = 0,
+		},
+		Lights = {
+			Flicker = { Enabled = true, Duration = 1 },
+			Shatter = true,
+			Repair = false,
+		},
+		Earthquake = { Enabled = true },
+		CameraShake = {
+			Enabled = true,
+			Range = 100,
+			Values = { 1.5, 20, 0.1, 1 },
+		},
+		Movement = {
+			Speed = speed,
+			Delay = WARNING,
+			Reversed = false,
+		},
+		Rebounding = {
+			Enabled = rebound ~= nil,
+			Type = rebound and rebound.Type or "Ambush",
+			Min = rebound and rebound.Min or 1,
+			Max = rebound and rebound.Max or 1,
+			Delay = rebound and rebound.Delay or 2,
+		},
+		Damage = { Enabled = true, Range = 40, Amount = 125 },
+		Crucifixion = { Enabled = true, Range = 40, Resist = false, Break = true },
+		Death = {
+			Type = entry.death or "Guiding",
+			Hints = entry.hints or { "You died to " .. entry.name .. "..." },
+			Cause = entry.name,
+		},
+	})
+
+	if not entity then
+		caption("Hellish Time Ever: " .. entry.name .. " could not be loaded")
+		return
+	end
+
+	if entry.blitz then blitzVoice(entity) end
+
+	Spawner:Run(entity, false)
+
+	if PASS_SECONDS then
+		task.delay(PASS_SECONDS, function()
+			pcall(function() entity:Despawn() end)
+		end)
+	end
+end
+
+local function summonScript(entry, speed)
+	-- Honcho reads these once and clears them, so they cannot leak into the
+	-- next time someone runs him on his own.
+	_G.Speed = speed
+	_G.Delay = WARNING
+	fetch(entry.script)
+end
+
+local function summon()
+	local entry = draw()
+
+	if not entry then
+		caption("Every entity has come. Press J to start again")
+		return
+	end
+
+	local speed = math.min(BASE_SPEED + summoned * SPEED_STEP, MAX_SPEED)
+	summoned += 1
+
+	if ANNOUNCE then
+		caption(("%s -- speed %d"):format(entry.name, speed))
+	end
+	print(("[Hellish Time Ever] %s at speed %d (%d left in the bag)"):format(entry.name, speed, #bag))
+
+	task.spawn(function()
+		local ok, err = pcall(function()
+			if entry.script then
+				summonScript(entry, speed)
+			else
+				summonModel(entry, speed)
+			end
+		end)
+		if not ok then
+			warn("[Hellish Time Ever] " .. entry.name .. " failed: " .. tostring(err))
+		end
+	end)
+end
+
+---====== KEYS ======---
+
+refill()
+
+local connection = UserInputService.InputBegan:Connect(function(input, processed)
+	if processed then return end
+
+	if input.KeyCode == SPAWN_KEY then
+		summon()
+	elseif input.KeyCode == RESET_KEY then
+		refill()
+		caption("Hellish Time Ever: every entity is back, from speed " .. BASE_SPEED)
+	end
+end)
+
+if getgenv then
+	getgenv().__HellishTimeEverCleanup = function()
+		pcall(function() connection:Disconnect() end)
+		if banner then pcall(function() banner:Destroy() end) end
+	end
+end
+
+showModifier()
+print(("[Hellish Time Ever] active -- %d entities in the bag. K to summon, J to reset."):format(#bag))
