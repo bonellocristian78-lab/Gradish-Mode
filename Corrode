@@ -14,12 +14,12 @@ Core:Spawn({
 	     outwalk. The threat is not that he catches you -- it is what he leaves
 	     on the floor while you are getting past him. Make him fast and the
 	     acid never matters, because you are running anyway. ]]
-	Speed       = 70,
+	Speed       = 100,
 	Delay       = 3,
 	Damage      = 35,
 	DamageRange = 22,
 
-	Rebounds     = { 1, 2 },
+	Rebounds     = { 0, 0 },
 	ReboundType  = "Ambush",
 	ReboundDelay = 1.5,
 
