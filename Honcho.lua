@@ -7,13 +7,19 @@
 	  raycast sotto ogni nodo. Prima di partire fa sfarfallare le luci e tremare la camera, poi rompe
 	  le luci delle stanze dove passa. Con _G.Rebounds torna indietro come Ambush.
 	- Se sei a tiro, fuori da un nascondiglio e senza muri in mezzo, ti salta in faccia e muori.
-	- Se hai in mano il crocifisso di PenguinManiack: il rituale. Il crocifisso ti vola davanti, sotto
-	  di lui si apre il cerchio di DOORS, la luce lo stacca da terra, otto catene gli prendono mani,
-	  piedi e petto e lo tirano a strattoni dentro un buco al centro del cerchio mentre si divincola e
-	  perde centinaia di fogli; all'ultimo si aggrappa al bordo del buco, ma se lo portano giù lo
-	  stesso con il braccio alzato, poi esplode tutto.
+	- Se hai in mano un crocifisso: il rituale. Il crocifisso ti vola davanti, sotto di lui si apre
+	  il cerchio di DOORS, la luce lo stacca da terra, otto catene gli prendono mani, piedi e petto e
+	  lo tirano a strattoni dentro un buco al centro del cerchio mentre si divincola e perde
+	  centinaia di fogli; all'ultimo si aggrappa al bordo del buco, ma se lo portano giù lo stesso
+	  con il braccio alzato, poi esplode tutto.
+	- Il rituale (cerchio, catene, buco, colori) sta in CrucifixRitual, lo stesso del crocifisso
+	  standalone: qui c'è solo il corpo di Honcho, cioè pose, fogli e luci.
+	- Tre tipi di crocifisso, scelti con _G.CrucifixType: "Guiding" blu, "Curious" giallo, "Fail".
+	  Con Fail il cerchio diventa rosso, lui strappa le catene, spezza il crocifisso, ricade a terra e
+	  riparte: sei senza crocifisso e lui è ancora lì.
 	- Per il rituale Honcho ha un'animazione sua, fatta in Studio sul suo rig e scritta qui come pose:
-	  lo script la mette nei giunti frame per frame, quindi non va caricata e parte in DOORS.
+	  lo script la mette nei giunti frame per frame, quindi non va caricata e parte in DOORS. Quella
+	  del fail è anche in HonchoCrucifixFail.rbxmx, da aprire nell'Animation Editor.
 	- Texture, suono del crocifisso e animazioni sono asset di DOORS (LSPLASH): si caricano per ID,
 	  senza getcustomasset.
 
@@ -21,7 +27,7 @@
 	esegue lo script insieme a te lo vede partire nello stesso momento.
 
 	Uso
-		loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/Honcho"))()
+		loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/Honcho.lua"))()
 
 	Con le impostazioni: le righe _G vanno prima del loadstring (i nomi sono in IMPOSTAZIONI qui
 	sotto). Vengono lette e poi cancellate, così il loadstring da solo torna ai valori normali.
@@ -53,7 +59,8 @@ local DEFAULTS = {
 	KillRange    = 40,    -- da quanti stud ti prende
 	Rebounds     = 0,     -- 0 = come Rush; 1 o più = torna indietro altrettante volte come Ambush
 	Jumpscare    = true,  -- false = muori e basta
-	GiveCrucifix = true,  -- ti dà il crocifisso di PenguinManiack se non ne hai già uno
+	GiveCrucifix = true,  -- ti dà il crocifisso (modello di Penguin) se non ne hai già uno
+	CrucifixType = "Guiding", -- il crocifisso che ti dà: "Guiding" blu, "Curious" giallo o "Fail"
 	Papers       = 400,   -- quanti fogli perde quando lo esorcizzi
 	Badges       = true,
 	Sync         = false, -- true = parte alla prossima porta, nello stesso momento per chi lo esegue
@@ -84,30 +91,9 @@ local ANIMATION_IDS = {
 
 local SOUND_IDS = {
 	Scream     = 82613796053949,  -- "archives_honcho_cutscenelanding", LSPLASH
-	Slam       = 74149238738530,  -- "Ground Slam Impact Shockwave"
-	Crucifix   = 6555668806,      -- "usecrucifix", il suono vero del crocifisso di DOORS
-	Earthquake = 9114219876,      -- quello del terremoto dello spawner di Vynixu, pubblico
 }
 
--- Texture del rituale vero di DOORS, prese dal Repentance di Vynixu
-local TEXTURES = {
-	Circle  = { 11523868118, 11523868246, 11523868335, 11523868403 }, -- i quattro anelli del cerchio
-	Chain   = 11517174215,
-	Glow    = 6555900931,
-	Spark   = 4998425421,
-	Lines   = 11226108137,
-	Twinkle = 134531489,
-	Ball    = 12284064159,
-	Dust    = 18496232079,
-}
-
--- Le schegge del crocifisso di DOORS
-local SHARD_MESHES = {
-	6552335606, 6552335764, 6552335680, 6552335832,
-	6552335635, 6552335563, 6552335722, 6552335799,
-}
-
-local CRUCIFIX_URL     = "https://raw.githubusercontent.com/PenguinManiack/Crucifix/main/Crucifix.lua"
+local RITUAL_URL       = "https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/CrucifixRitual"
 local ACHIEVEMENTS_URL = "https://raw.githubusercontent.com/RegularVynixu/DOORS-Custom-Achievements/main/init.luau"
 
 local RUSH_SPEED       = 65   -- stud/s di Rush, cioè Speed = 100
@@ -121,10 +107,7 @@ local JUMPSCARE_TIME   = 1.3  -- secondi che ti resta in faccia prima che tu muo
 local JUMPSCARE_GAP    = 3.2  -- stud tra la camera e la sua faccia
 local LUNGE_TIME       = 0.18
 local MAX_PAPERS       = 1500 -- oltre, sui telefoni scatta
-
-local GUIDING = Color3.fromRGB(137, 207, 255) -- il blu della luce guida
-local WHITE   = Color3.new(1, 1, 1)
-local WOOD    = Color3.fromRGB(92, 64, 42)
+local FAIL_GRACE       = 1.5  -- dopo un crocifisso fallito, secondi prima che torni a cacciarti
 
 local DEATH = {
 	Cause  = "Honcho",
@@ -174,6 +157,10 @@ SETTINGS.Delay     = math.max(SETTINGS.Delay, 0)
 SETTINGS.KillRange = math.max(SETTINGS.KillRange, 0)
 SETTINGS.Rebounds  = math.max(math.floor(SETTINGS.Rebounds), 0)
 SETTINGS.Papers    = math.clamp(math.floor(SETTINGS.Papers), 0, MAX_PAPERS)
+if SETTINGS.CrucifixType ~= "Guiding" and SETTINGS.CrucifixType ~= "Curious" and SETTINGS.CrucifixType ~= "Fail" then
+	warn(("[Honcho] _G.CrucifixType %q sconosciuto, uso Guiding"):format(SETTINGS.CrucifixType))
+	SETTINGS.CrucifixType = "Guiding"
+end
 
 ---====== SERVIZI ======---
 
@@ -310,20 +297,6 @@ local function flashScreen(colour, startTransparency, duration)
 	task.delay(duration + 0.1, function()
 		gui:Destroy()
 	end)
-end
-
--- Un suono senza posizione, si sente uguale ovunque sei
-local function playSound(soundId, volume, speed, parent)
-	local sound = Instance.new("Sound")
-	sound.SoundId = "rbxassetid://" .. soundId
-	sound.Volume = volume
-	sound.PlaybackSpeed = speed or 1
-	sound.Parent = parent
-	sound:Play()
-	task.delay(15, function()
-		sound:Destroy()
-	end)
-	return sound
 end
 
 ---====== DOORS ======---
@@ -528,20 +501,42 @@ local function prepareModel()
 	return model
 end
 
+-- Il rituale del crocifisso è quello di CrucifixRitual, lo stesso del crocifisso standalone.
+-- Lo chiedono in due all'avvio (precaricamento e crocifisso): si scarica una volta sola
+local RitualModule = nil
+local ritualLoading = false
+
+local function ritualModule()
+	while ritualLoading do
+		task.wait(0.1)
+	end
+	if RitualModule then return RitualModule end
+
+	ritualLoading = true
+	local ok, result = pcall(function()
+		return loadstring(game:HttpGet(RITUAL_URL))()
+	end)
+	ritualLoading = false
+
+	if ok and type(result) == "table" then
+		RitualModule = result
+		if SETTINGS.Debug then
+			result.Debug = true
+		end
+	else
+		problem("CrucifixRitual non si è caricato, niente rituale: %s", tostring(result))
+	end
+	return RitualModule
+end
+
 -- Scarica prima texture e suoni del rituale, così quando serve appare tutto subito
 local function preloadRitual()
-	local ids = {}
-	for _, textureId in ipairs(TEXTURES.Circle) do
-		table.insert(ids, "rbxassetid://" .. textureId)
-	end
-	for _, key in ipairs({ "Chain", "Glow", "Spark", "Lines", "Twinkle", "Ball", "Dust" }) do
-		table.insert(ids, "rbxassetid://" .. TEXTURES[key])
-	end
-	for _, soundId in pairs(SOUND_IDS) do
-		table.insert(ids, "rbxassetid://" .. soundId)
+	local ritual = ritualModule()
+	if ritual then
+		ritual.Preload()
 	end
 	pcall(function()
-		ContentProvider:PreloadAsync(ids)
+		ContentProvider:PreloadAsync({ "rbxassetid://" .. SOUND_IDS.Scream })
 	end)
 	log("rituale precaricato")
 end
@@ -762,8 +757,14 @@ local PAPER_DRAG    = 2.2  -- con la gravità dà una caduta massima di circa 6 
 
 local papers = { list = {}, folder = nil, connection = nil }
 
+--[[ Solo i fogli in volo vanno nel BulkMoveTo. Prima ci andavano anche quelli già a terra, che
+     non si muovono più: con 400 fogli quasi tutti posati erano centinaia di spostamenti a vuoto
+     ogni frame. Le due liste si riusano invece di crearne due nuove a ogni frame. ]]
+local movingParts, movingCFrames = {}, {}
+
 local function updatePapers(deltaTime)
-	local parts, cframes = {}, {}
+	table.clear(movingParts)
+	table.clear(movingCFrames)
 	local list = papers.list
 
 	-- Al contrario, così togliere un foglio scambiandolo con l'ultimo non ne salta nessuno
@@ -784,11 +785,13 @@ local function updatePapers(deltaTime)
 				paper.angle += paper.spin * deltaTime
 
 				if paper.position.Y <= paper.floorY then
+					-- Posato: l'ultima volta che si muove
 					paper.landed = true
 					paper.position = Vector3.new(paper.position.X, paper.floorY, paper.position.Z)
-					paper.cframe = CFrame.new(paper.position) * CFrame.Angles(0, math.random() * math.pi * 2, 0)
+					paper.part.CFrame = CFrame.new(paper.position) * CFrame.Angles(0, math.random() * math.pi * 2, 0)
 				else
-					paper.cframe = CFrame.new(paper.position) * CFrame.fromAxisAngle(paper.axis, paper.angle)
+					table.insert(movingParts, paper.part)
+					table.insert(movingCFrames, CFrame.new(paper.position) * CFrame.fromAxisAngle(paper.axis, paper.angle))
 				end
 			end
 
@@ -796,13 +799,11 @@ local function updatePapers(deltaTime)
 			if remaining < 1 then
 				paper.part.Transparency = 1 - remaining
 			end
-			table.insert(parts, paper.part)
-			table.insert(cframes, paper.cframe)
 		end
 	end
 
-	if #parts > 0 then
-		workspace:BulkMoveTo(parts, cframes, Enum.BulkMoveMode.FireCFrameChanged)
+	if #movingParts > 0 then
+		workspace:BulkMoveTo(movingParts, movingCFrames, Enum.BulkMoveMode.FireCFrameChanged)
 	end
 
 	if #list == 0 and papers.connection then
@@ -829,7 +830,6 @@ local function spawnPaper(position, floorY, velocity, life)
 		part          = part,
 		position      = position,
 		velocity      = velocity,
-		cframe        = part.CFrame,
 		axis          = randomUnit(),
 		angle         = math.random() * math.pi * 2,
 		spin          = (math.random() * 2 - 1) * 7,
@@ -978,166 +978,6 @@ local function jumpscare(humanoid)
 	-- Resta in faccia mentre cadi, poi sparisce
 	task.wait(1)
 	finish("jumpscare")
-end
-
----====== VFX ======---
-
--- Il cilindro di Roblox ha l'asse su X: girato di 90 gradi sta in piedi
-local UPRIGHT = CFrame.Angles(0, 0, math.rad(90))
-
-local function sequence(points)
-	local keypoints = {}
-	for _, point in ipairs(points) do
-		table.insert(keypoints, NumberSequenceKeypoint.new(point[1], point[2]))
-	end
-	return NumberSequence.new(keypoints)
-end
-
-local function backIn(x)
-	return 2.70158 * x ^ 3 - 1.70158 * x ^ 2
-end
-
-local function makeEmitter(parent, textureId)
-	local emitter = Instance.new("ParticleEmitter")
-	emitter.Texture = "rbxassetid://" .. textureId
-	emitter.Color = ColorSequence.new(GUIDING)
-	emitter.LightEmission = 1
-	emitter.LightInfluence = 0
-	emitter.Rate = 0
-	emitter.Parent = parent
-	return emitter
-end
-
--- Un disco piatto con un'immagine di DOORS che brilla da sola: SurfaceGui che ignora la luce
-local function glowDisc(folder, name, center, diameter, textureId, colour, height)
-	local disc = newPart(name, Vector3.new(diameter, 0.02, diameter), CFrame.new(center + Vector3.new(0, height, 0)), colour, Enum.Material.SmoothPlastic, 1)
-	disc.Parent = folder
-
-	local gui = Instance.new("SurfaceGui")
-	gui.Face = Enum.NormalId.Top
-	gui.LightInfluence = 0
-	gui.Brightness = 4
-	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
-	gui.PixelsPerStud = 32
-	gui.Parent = disc
-
-	local image = Instance.new("ImageLabel")
-	image.BackgroundTransparency = 1
-	image.Size = UDim2.fromScale(1, 1)
-	image.Image = "rbxassetid://" .. textureId
-	image.ImageColor3 = colour
-	image.ImageTransparency = 1
-	image.Parent = gui
-
-	return disc, image
-end
-
--- Un anello di DOORS che si allarga sul pavimento e sparisce
-local function ringWave(folder, center, fromDiameter, toDiameter, duration, colour)
-	local disc, image = glowDisc(folder, "RingWave", center, fromDiameter, TEXTURES.Circle[1], colour, 0.2)
-	image.ImageTransparency = 0
-	tween(disc, duration, { Size = Vector3.new(toDiameter, 0.02, toDiameter) }, Enum.EasingStyle.Quart)
-	tween(image, duration, { ImageTransparency = 1 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-	task.delay(duration + 0.05, function()
-		disc:Destroy()
-	end)
-end
-
--- Una sfera di energia che si gonfia e svanisce
-local function sphereWave(folder, position, toSize, duration, colour)
-	local ball = newPart("SphereWave", Vector3.one, CFrame.new(position), colour, Enum.Material.ForceField, 0)
-	ball.Shape = Enum.PartType.Ball
-	ball.Parent = folder
-	tween(ball, duration, { Size = Vector3.one * toSize, Transparency = 1 }, Enum.EasingStyle.Quart)
-	task.delay(duration + 0.05, function()
-		ball:Destroy()
-	end)
-end
-
--- Una fiammata di scintille rotonde, quelle che DOORS usa quando il crocifisso esplode
-local function sparkBurst(parent, count, speed)
-	local burst = makeEmitter(parent, TEXTURES.Ball)
-	burst.Brightness = 3
-	burst.Lifetime = NumberRange.new(0.4, 1.8)
-	burst.Speed = NumberRange.new(speed * 0.3, speed)
-	burst.Drag = 3
-	burst.SpreadAngle = Vector2.new(180, 180)
-	burst.Size = sequence({ { 0, 0.7 }, { 0.12, 0.35 }, { 0.4, 0.1 }, { 1, 0 } })
-	burst.Transparency = sequence({ { 0, 0 }, { 0.9, 0 }, { 1, 1 } })
-	burst:Emit(count)
-	task.delay(2, function()
-		burst:Destroy()
-	end)
-end
-
--- Colore, contrasto e bloom solo sul tuo schermo, finché dura il rituale
-local function postEffects()
-	local camera = workspace.CurrentCamera
-	local grade = Instance.new("ColorCorrectionEffect")
-	grade.Name = "HonchoGrade"
-	grade.Parent = camera
-
-	local bloom = Instance.new("BloomEffect")
-	bloom.Name = "HonchoBloom"
-	bloom.Intensity = 0
-	bloom.Size = 30
-	bloom.Threshold = 2
-	bloom.Parent = camera
-
-	table.insert(cleanupTasks, function()
-		grade:Destroy()
-		bloom:Destroy()
-	end)
-	return grade, bloom
-end
-
--- Un calcio al campo visivo che torna piano. Se DOORS rimette il suo FOV ogni frame, non si vede
-local function fovPunch(amount, duration)
-	local camera = workspace.CurrentCamera
-	local base = camera.FieldOfView
-	local startedAt = os.clock()
-	local stepName = "HonchoFov" .. tostring(startedAt)
-
-	RunService:BindToRenderStep(stepName, Enum.RenderPriority.Last.Value, function()
-		local progress = (os.clock() - startedAt) / duration
-		if progress >= 1 then
-			camera.FieldOfView = base
-			RunService:UnbindFromRenderStep(stepName)
-			return
-		end
-		camera.FieldOfView = base + amount * (1 - progress) ^ 3
-	end)
-	table.insert(cleanupTasks, function()
-		pcall(function()
-			RunService:UnbindFromRenderStep(stepName)
-		end)
-		camera.FieldOfView = base
-	end)
-end
-
--- Il terremoto di Vynixu rifatto senza asset: polvere da tutti i soffitti vicini
-local function ceilingDust(center)
-	for _, ceiling in ipairs(CollectionService:GetTagged("PartCeiling")) do
-		if ceiling:IsA("BasePart") and (ceiling.Position - center).Magnitude < 90 then
-			local dust = makeEmitter(ceiling, TEXTURES.Dust)
-			dust.Color = ColorSequence.new(Color3.fromRGB(165, 160, 150))
-			dust.LightEmission = 0
-			dust.LightInfluence = 1
-			dust.EmissionDirection = Enum.NormalId.Bottom
-			dust.Acceleration = Vector3.new(0, -10, 0)
-			dust.Lifetime = NumberRange.new(1, 3)
-			dust.Speed = NumberRange.new(3, 12)
-			dust.SpreadAngle = Vector2.new(60, 60)
-			dust.Size = sequence({ { 0, 2.1 }, { 1, 1.3 } })
-			dust.Transparency = sequence({ { 0, 1 }, { 0.23, 0.86 }, { 0.8, 0.89 }, { 1, 1 } })
-			dust.RotSpeed = NumberRange.new(-35, 35)
-			dust.Rotation = NumberRange.new(-360, 360)
-			dust:Emit(math.clamp(math.floor(ceiling.Size.Magnitude * 0.07), 3, 15))
-			task.delay(4, function()
-				dust:Destroy()
-			end)
-		end
-	end
 end
 
 ---====== ANIMAZIONE DELL'ESORCISMO ======---
@@ -1676,6 +1516,158 @@ local POSE_SPECS = {
 	},
 }
 
+---- Le pose del FAIL: duplicate da quelle sopra e piegate verso la rabbia invece che la resa ----
+
+-- Si pianta: smette di scendere, busto dritto, gomiti piegati a tirare le catene verso di sé,
+-- testa bassa che guarda il crocifisso
+POSE_SPECS.Resist = {
+	Pelvis      = { 6, 0, 0, 0, 0.1, 0 },
+	LowerTorso  = { 6, 0, 0 },
+	MiddleTorso = { 4, 0, 0 },
+	UpperTorso  = { 2, 0, 0, 0, 0.1, 0 },
+	Neck        = { -8, 0, 0 },
+	Head        = { -18, 0, 0 },
+	R = {
+		Shoulder   = { -30, 0, -58 },
+		UpperArm   = { -8, 0, -5 },
+		UpperWrist = { 0, 75, 0 },
+		LowerWrist = { 0, 25, 0 },
+		Hand       = { 60, 0, -35 },
+		UpperLeg   = { 12, 0, 12 },
+		MiddleLeg  = { -22, 0, 0 },
+		LowerLeg   = { -18, 0, 0 },
+		Ankle      = { -30, 0, 0 },
+	},
+}
+
+-- Strappa: il braccio destro va su con la catena spezzata, il sinistro tira ancora giù, il busto
+-- si torce verso il braccio libero
+POSE_SPECS.Tear = {
+	Pelvis      = { 0, 12, -6 },
+	LowerTorso  = { 4, 10, -6 },
+	MiddleTorso = { 10, 14, -10 },
+	UpperTorso  = { 16, 18, -14, 0, 0.1, 0 },
+	Neck        = { 10, 12, -8 },
+	Head        = { 30, 20, -14 },
+	R = {
+		Shoulder   = { 10, 20, 72 },
+		UpperArm   = { 0, 10, 10 },
+		UpperWrist = { 0, 20, 0 },
+		LowerWrist = { 0, 10, 0 },
+		Hand       = { 0, 0, 30 },
+		UpperLeg   = { 30, 0, 10 },
+		MiddleLeg  = { -30, 0, 0 },
+		LowerLeg   = { -34, 0, 0 },
+		Ankle      = { -30, 0, 0 },
+	},
+	L = {
+		Shoulder   = { -40, 0, -70 },
+		UpperArm   = { -10, 0, -6 },
+		UpperWrist = { 0, 60, 0 },
+		LowerWrist = { 0, 20, 0 },
+		Hand       = { 55, 0, -30 },
+		UpperLeg   = { -10, 0, 8 },
+		MiddleLeg  = { -14, 0, 0 },
+		LowerLeg   = { -16, 0, 0 },
+		Ankle      = { -45, 0, 0 },
+	},
+}
+
+-- Libero: petto in fuori, braccia spalancate verso l'alto, testa rovesciata, gambe aperte
+POSE_SPECS.Roar = {
+	Pelvis      = { -4, 0, 0, 0, 0.2, 0 },
+	LowerTorso  = { 8, 0, 0 },
+	MiddleTorso = { 16, 0, 0 },
+	UpperTorso  = { 24, 0, 0, 0, 0.15, 0 },
+	Neck        = { 18, 0, 0 },
+	Head        = { 42, 0, 0 },
+	R = {
+		Shoulder   = { 5, -15, 45 },
+		UpperArm   = { 0, -10, 10 },
+		UpperWrist = { 0, 25, 0 },
+		LowerWrist = { 0, 10, 0 },
+		Hand       = { 0, 0, 35 },
+		UpperLeg   = { -8, 0, 22 },
+		MiddleLeg  = { -12, 0, 0 },
+		LowerLeg   = { -10, 0, 0 },
+		Ankle      = { -30, 0, 0 },
+	},
+}
+
+-- Ricade: ginocchia al petto, braccia ancora su per l'equilibrio
+POSE_SPECS.Drop = {
+	Pelvis      = { -6, 0, 0 },
+	LowerTorso  = { -6, 0, 0 },
+	MiddleTorso = { -4, 0, 0 },
+	UpperTorso  = { 0, 0, 0 },
+	Neck        = { 4, 0, 0 },
+	Head        = { 10, 0, 0 },
+	R = {
+		Shoulder   = { 0, -10, 20 },
+		UpperArm   = { 0, -5, 5 },
+		UpperWrist = { 0, 30, 0 },
+		LowerWrist = { 0, 10, 0 },
+		Hand       = { 0, 0, 20 },
+		UpperLeg   = { 55, 0, 10 },
+		MiddleLeg  = { -55, 0, 0 },
+		LowerLeg   = { -40, 0, 0 },
+		Ankle      = { -10, 0, 0 },
+	},
+}
+
+-- Atterra accovacciato: il peso giù, busto in avanti, una mano quasi a terra, testa su verso di te
+POSE_SPECS.Land = {
+	Pelvis      = { -10, 0, 0, 0, -0.9, 0.2 },
+	LowerTorso  = { -14, 0, 0 },
+	MiddleTorso = { -14, 0, 0 },
+	UpperTorso  = { -12, 0, 0 },
+	Neck        = { 14, 0, 0 },
+	Head        = { 26, 0, 0 },
+	R = {
+		Shoulder   = { -25, 0, -50 },
+		UpperArm   = { -10, 0, -6 },
+		UpperWrist = { 0, 35, 0 },
+		LowerWrist = { 0, 10, 0 },
+		Hand       = { 40, 0, -20 },
+		UpperLeg   = { 60, 0, 14 },
+		MiddleLeg  = { -65, 0, 0 },
+		LowerLeg   = { -35, 0, 0 },
+		Ankle      = { 20, 0, 0 },
+	},
+	L = {
+		Shoulder   = { 10, 0, -70 },
+		UpperArm   = { -6, 0, -4 },
+		UpperWrist = { 0, 20, 0 },
+		LowerWrist = { 0, 8, 0 },
+		Hand       = { 20, 0, -10 },
+		UpperLeg   = { 45, 0, 14 },
+		MiddleLeg  = { -55, 0, 0 },
+		LowerLeg   = { -30, 0, 0 },
+		Ankle      = { 15, 0, 0 },
+	},
+}
+
+-- Si rialza e ti guarda: spalle larghe, braccia aperte e basse, testa un po' china
+POSE_SPECS.Loom = {
+	Pelvis      = { 0, 0, 0 },
+	LowerTorso  = { -2, 0, 0 },
+	MiddleTorso = { -4, 0, 0 },
+	UpperTorso  = { -6, 0, 0, 0, 0.1, 0 },
+	Neck        = { -4, 0, 0 },
+	Head        = { -8, 0, 0 },
+	R = {
+		Shoulder   = { 0, 0, -68 },
+		UpperArm   = { 0, 0, -4 },
+		UpperWrist = { 0, 20, 0 },
+		LowerWrist = { 0, 8, 0 },
+		Hand       = { 10, 0, -10 },
+		UpperLeg   = { 2, 0, 8 },
+		MiddleLeg  = { -4, 0, 0 },
+		LowerLeg   = { -4, 0, 0 },
+		Ankle      = { -2, 0, 0 },
+	},
+}
+
 -- La stessa posa girata dall'altra parte: R e L si scambiano, il resto cambia verso
 local function mirrorSpec(spec)
 	local mirrored = { R = spec.L or spec.R, L = spec.R }
@@ -1688,6 +1680,7 @@ local function mirrorSpec(spec)
 end
 POSE_SPECS.StruggleB = mirrorSpec(POSE_SPECS.StruggleA)
 POSE_SPECS.FightB = mirrorSpec(POSE_SPECS.Fight)
+POSE_SPECS.TearB = mirrorSpec(POSE_SPECS.Tear)
 
 -- Da gradi a CFrame, con lo spostamento scalato come il modello
 local function compilePose(spec)
@@ -1756,6 +1749,50 @@ local BANISH_KEYS = {
 	{ 5.80, "Taken" },
 }
 
+--[[ Il copione del FAIL. Uguale fino al secondo strattone, poi va da un'altra parte: si pianta,
+     strappa le catene a coppie, si libera urlando, ricade, atterra accovacciato e si rialza.
+     I secondi sono quelli di Ritual.FailTimes in CrucifixRitual: gli strappi a 3.95, 4.22 e 4.48
+     sono i momenti in cui le catene saltano davvero. ]]
+local FAIL_KEYS = {
+	{ 0.00, "Start" },
+	{ 0.06, "Whiplash", "Out" },
+	{ 0.22, "Cower", "Out" },
+	{ 0.40, "Cower2", "InOut" },
+	{ 0.55, "Cower", "InOut" },
+	{ 0.80, "Limp", "InOut" },
+	{ 0.97, "Jerk", "Out" },
+	{ 1.10, "Seized", "Out" },
+	{ 1.28, "Scream", "InOut" },
+	{ 1.45, "StruggleA", "InOut" },
+	{ 1.60, "StruggleB", "InOut" },
+	{ 1.76, "StruggleC", "InOut" },
+	{ 1.90, "Spasm", "Out" },
+	{ 2.06, "StruggleA", "InOut" },
+	{ 2.22, "StruggleB", "InOut" },
+	{ 2.40, "Strain", "InOut" },
+	{ 2.50, "Strain" },
+	{ 2.56, "Yank", "Out" },       -- primo strattone
+	{ 2.80, "Fight", "InOut" },
+	{ 3.14, "FightB", "InOut" },
+	{ 3.30, "FightB" },
+	{ 3.36, "Yank", "Out" },       -- secondo: l'ultimo che gli riesce
+	{ 3.62, "Resist", "Out" },     -- si pianta e il cerchio diventa rosso
+	{ 3.88, "Resist", "InOut" },
+	{ 3.95, "Tear", "Out" },       -- strappa le catene della destra
+	{ 4.12, "Resist", "InOut" },
+	{ 4.22, "TearB", "Out" },      -- quelle della sinistra
+	{ 4.40, "Strain", "InOut" },
+	{ 4.48, "Tear", "Out" },       -- quelle del petto
+	{ 4.72, "Strain", "InOut" },
+	{ 4.90, "Roar", "Out" },       -- libero: saltano tutte
+	{ 5.25, "Roar", "InOut" },
+	{ 5.45, "Drop", "InOut" },     -- ricade
+	{ 5.62, "Land", "Out" },       -- atterra
+	{ 6.10, "Land", "InOut" },
+	{ 6.70, "Loom", "InOut" },     -- si rialza e ti guarda
+	{ 7.20, "Loom" },
+}
+
 -- Quanto arriva in ritardo ogni parte rispetto al bacino
 local JOINT_LAG = {
 	Pelvis = 0, LowerTorso = 0.01, MiddleTorso = 0.02, UpperTorso = 0.03, Neck = 0.05, Head = 0.07,
@@ -1769,8 +1806,15 @@ local function jointLag(name)
 	return JOINT_LAG[name] or JOINT_LAG[segment] or 0.04
 end
 
--- Quanto trema, secondo per secondo: poco quando è floscio, sempre di più mentre lo tirano giù
-local function trembleAt(elapsed)
+-- Quanto trema, secondo per secondo: poco quando è floscio, sempre di più mentre lo tirano giù.
+-- Nel fail trema di rabbia mentre strappa, poi quasi niente quando è di nuovo a terra
+local function trembleAt(elapsed, fail)
+	if fail and elapsed >= 3.36 then
+		if elapsed < 4.9 then return 1.7 end
+		if elapsed < 5.62 then return 2.1 end
+		if elapsed < 6.3 then return 0.6 end
+		return 0.15
+	end
 	if elapsed < 0.55 then return 0.7 end
 	if elapsed < 0.97 then return 0.35 end
 	if elapsed < 2.5 then return 1.1 end
@@ -1792,29 +1836,39 @@ local EASING = {
 }
 
 -- Le due pose tra cui sta una parte in quel momento, e a che punto è
-local function keyAt(time)
-	if time <= BANISH_KEYS[1][1] then
-		return BANISH_KEYS[1], BANISH_KEYS[1], 1
+local function keyAt(keys, time)
+	if time <= keys[1][1] then
+		return keys[1], keys[1], 1
 	end
-	for index = 2, #BANISH_KEYS do
-		local key = BANISH_KEYS[index]
+	for index = 2, #keys do
+		local key = keys[index]
 		if time < key[1] then
-			local previous = BANISH_KEYS[index - 1]
+			local previous = keys[index - 1]
 			local alpha = math.clamp((time - previous[1]) / (key[1] - previous[1]), 0, 1)
 			return previous, key, EASING[key[3] or "InOut"](alpha)
 		end
 	end
-	local last = BANISH_KEYS[#BANISH_KEYS]
+	local last = keys[#keys]
 	return last, last, 1
 end
 
-local function sampleBanish(poses, jointNames, lags, elapsed, into)
-	local intensity = trembleAt(elapsed)
+-- I giunti con lo stesso ritardo cercano la stessa chiave: una ricerca per ritardo, non per
+-- giunto. Tre tabelle riusate, niente di nuovo creato a ogni frame
+local cachedFrom, cachedTo, cachedAlpha = {}, {}, {}
+
+local function sampleBanish(poses, jointNames, lags, elapsed, into, fail)
+	local keys = if fail then FAIL_KEYS else BANISH_KEYS
+	local intensity = trembleAt(elapsed, fail)
+	table.clear(cachedFrom)
 	for index, name in ipairs(jointNames) do
-		local from, to, alpha = keyAt(elapsed - (lags[name] or 0))
+		local lag = lags[name] or 0
+		if not cachedFrom[lag] then
+			cachedFrom[lag], cachedTo[lag], cachedAlpha[lag] = keyAt(keys, elapsed - lag)
+		end
+		local from, to, alpha = cachedFrom[lag], cachedTo[lag], cachedAlpha[lag]
 		local cframe = (poses[from[2]][name] or CFrame.identity):Lerp(poses[to[2]][name] or CFrame.identity, alpha)
 		local amount = math.rad((TREMBLE_DEGREES[name] or 2.5) * intensity)
-		if GRIPPING_ARM[name] and elapsed > 4.9 and elapsed < 5.4 then
+		if not fail and GRIPPING_ARM[name] and elapsed > 4.9 and elapsed < 5.4 then
 			amount *= 0.25
 		end
 		cframe *= CFrame.Angles(
@@ -1825,8 +1879,10 @@ local function sampleBanish(poses, jointNames, lags, elapsed, into)
 		into[name] = cframe
 	end
 
-	-- La cravatta sventola, e mentre affonda vola in su
-	local lift = math.clamp((elapsed - 2.5) / 3, 0, 1) * 30
+	-- La cravatta sventola, e mentre affonda vola in su. Nel fail ricade quando lui atterra
+	local lift = if fail
+		then math.clamp((elapsed - 2.5) / 1, 0, 1) * 20 * (1 - math.clamp((elapsed - 5.3) / 0.6, 0, 1))
+		else math.clamp((elapsed - 2.5) / 3, 0, 1) * 30
 	for index, name in ipairs(TIE_SEGMENTS) do
 		if into[name] then
 			local wave = math.sin(elapsed * 16 - index * 0.9) * (8 + 7 * intensity)
@@ -1882,102 +1938,9 @@ local function stopTracks()
 end
 
 ---====== RITUALE DEL CROCIFISSO ======---
-
--- Il crocifisso di PenguinManiack esce dalla tua mano e diventa un modello che fluttua
-local function floatingCrucifix(tool, folder)
-	local handle = tool:FindFirstChild("Handle")
-	local startCFrame = if handle and handle:IsA("BasePart")
-		then handle.CFrame
-		else workspace.CurrentCamera.CFrame * CFrame.new(0.8, -0.8, -2)
-
-	tool.Archivable = true
-	local copy = tool:Clone()
-	-- Si consuma, come quello vero di DOORS
-	tool:Destroy()
-
-	local crucifix = Instance.new("Model")
-	crucifix.Name = "HonchoCrucifix"
-	if copy then
-		for _, child in ipairs(copy:GetChildren()) do
-			child.Parent = crucifix
-		end
-		copy:Destroy()
-	end
-
-	for _, descendant in ipairs(crucifix:GetDescendants()) do
-		if descendant:IsA("LuaSourceContainer") or descendant:IsA("TouchTransmitter") then
-			descendant:Destroy()
-		elseif descendant:IsA("BasePart") then
-			descendant.Anchored = true
-			descendant.CanCollide = false
-			descendant.CanTouch = false
-			descendant.CanQuery = false
-		end
-	end
-
-	local primary = crucifix:FindFirstChild("Handle") or crucifix:FindFirstChildWhichIsA("BasePart", true)
-	if not (primary and primary:IsA("BasePart")) then
-		-- Il tool non aveva parti: due assi di legno, come il buildCrucifix di GradishCore
-		crucifix:ClearAllChildren()
-		primary = newPart("Handle", Vector3.new(0.22, 1.7, 0.22), startCFrame, WOOD, Enum.Material.Wood, 0)
-		primary.Parent = crucifix
-		newPart("Crossbar", Vector3.new(0.95, 0.22, 0.22), startCFrame * CFrame.new(0, 0.42, 0), WOOD, Enum.Material.Wood, 0).Parent = crucifix
-	end
-
-	crucifix.PrimaryPart = primary :: BasePart
-	crucifix:PivotTo(startCFrame)
-	crucifix.Parent = folder
-	return crucifix, startCFrame
-end
-
--- Alla fine il crocifisso si spezza nelle schegge del crocifisso di DOORS, che cadono davvero
-local function shatterCrucifix(crucifix, folder)
-	local at = crucifix:GetPivot().Position
-	for _, descendant in ipairs(crucifix:GetDescendants()) do
-		if descendant:IsA("BasePart") then
-			descendant.Transparency = 1
-		end
-	end
-
-	for _, meshId in ipairs(SHARD_MESHES) do
-		local spin = CFrame.Angles(math.random() * 6.28, math.random() * 6.28, math.random() * 6.28)
-		local shard = newPart("Shard", Vector3.one * 0.3, CFrame.new(at + randomUnit() * 0.3) * spin, WOOD, Enum.Material.Wood, 0)
-		local mesh = Instance.new("SpecialMesh")
-		mesh.MeshType = Enum.MeshType.FileMesh
-		mesh.MeshId = "rbxassetid://" .. meshId
-		mesh.Parent = shard
-		shard.Anchored = false
-		shard.CanCollide = true
-		shard.Parent = folder
-		shard.AssemblyLinearVelocity = randomUnit() * 16 + Vector3.new(0, 12, 0)
-		shard.AssemblyAngularVelocity = randomUnit() * 25
-		task.delay(2.4, function()
-			tween(shard, 0.6, { Transparency = 1 })
-		end)
-	end
-end
-
--- Una catena di DOORS: la texture scorre come nel rituale vero
-local function chainBeam(parent, from, to)
-	local beam = Instance.new("Beam")
-	beam.Attachment0 = from
-	beam.Attachment1 = to
-	beam.Texture = "rbxassetid://" .. TEXTURES.Chain
-	beam.TextureMode = Enum.TextureMode.Static
-	beam.TextureLength = 1
-	beam.TextureSpeed = -2
-	beam.FaceCamera = true
-	beam.Width0 = 1.1 * SETTINGS.Size
-	beam.Width1 = 0.85 * SETTINGS.Size
-	beam.Brightness = 1
-	beam.LightEmission = 1
-	beam.LightInfluence = 0
-	beam.Color = ColorSequence.new(GUIDING)
-	beam.Transparency = NumberSequence.new(0)
-	beam.Segments = 1
-	beam.Parent = parent
-	return beam
-end
+--[[ Il cerchio, le catene, il buco, i colori e il fail sono in CrucifixRitual, lo stesso rituale
+     del crocifisso standalone. Qui c'è solo il corpo di Honcho: dove sta, che posa ha, i fogli
+     che perde e le luci che ha addosso. Il modulo lo chiama nei momenti giusti del copione. ]]
 
 -- La parte con quel nome: in questo modello anche i Motor6D si chiamano come la parte che muovono
 local function findPart(model, name)
@@ -1989,55 +1952,33 @@ local function findPart(model, name)
 	return nil
 end
 
-local function attachmentAt(parent, worldPosition)
-	local attachment = Instance.new("Attachment")
-	attachment.Position = parent.CFrame:PointToObjectSpace(worldPosition)
-	attachment.Parent = parent
-	return attachment
-end
-
--- Il buco al centro del cerchio dove lo tirano: un disco nero con un vortice e un bordo di luce.
--- Sotto il pavimento il pavimento stesso lo nasconde, il buco fa vedere dove sta andando
-local function openHole(folder, center)
-	local hole = newPart("Hole", Vector3.new(0.04, 0.1, 0.1), CFrame.new(center + Vector3.new(0, 0.14, 0)) * UPRIGHT, Color3.fromRGB(4, 6, 12), Enum.Material.SmoothPlastic, 0)
-	hole.Shape = Enum.PartType.Cylinder
-	hole.Parent = folder
-	local swirlDisc, swirl = glowDisc(folder, "HoleSwirl", center, 0.1, TEXTURES.Circle[3], Color3.fromRGB(40, 90, 160), 0.16)
-	local rimDisc, rim = glowDisc(folder, "HoleRim", center, 0.1, TEXTURES.Circle[1], WHITE, 0.18)
-	swirl.ImageTransparency = 0
-	rim.ImageTransparency = 0
-	return { hole = hole, swirlDisc = swirlDisc, rimDisc = rimDisc, swirl = swirl }
-end
-
-local function sizeHole(hole, diameter, duration, direction)
-	local style, way = Enum.EasingStyle.Back, direction or Enum.EasingDirection.Out
-	local size = math.max(diameter, 0.1)
-	tween(hole.hole, duration, { Size = Vector3.new(0.04, size, size) }, style, way)
-	tween(hole.swirlDisc, duration, { Size = Vector3.new(size * 1.05, 0.02, size * 1.05) }, style, way)
-	tween(hole.rimDisc, duration, { Size = Vector3.new(size * 1.3, 0.02, size * 1.3) }, style, way)
-end
-
--- Le luci e le particelle che il modello di DOORS ha già dentro, rifatte col blu della luce guida:
--- così sembra che si stia sgretolando in luce
+-- Le luci e le particelle che il modello di DOORS ha già dentro: il modulo le colora come il
+-- rituale. Si ricorda com'erano, perché dopo un fail Honcho resta vivo e deve tornare normale
 local BODY_EMITTERS = { Triangles = true, ZoomParticle = true, YellowParticle = true }
 
 local function bodyEffects(model)
-	local lights, emitters = {}, {}
+	local lights, emitters, saved = {}, {}, {}
 	for _, descendant in ipairs(model:GetDescendants()) do
 		if descendant:IsA("PointLight") then
-			descendant.Color = GUIDING
+			saved[descendant] = {
+				Color = descendant.Color, Brightness = descendant.Brightness,
+				Range = descendant.Range, Enabled = descendant.Enabled,
+			}
 			descendant.Brightness = 0
 			descendant.Range = 16 * SETTINGS.Size
 			descendant.Enabled = true
 			table.insert(lights, descendant)
 		elseif descendant:IsA("ParticleEmitter") and BODY_EMITTERS[descendant.Name] then
-			descendant.Color = ColorSequence.new(WHITE, GUIDING)
+			saved[descendant] = {
+				Color = descendant.Color, LightEmission = descendant.LightEmission,
+				LightInfluence = descendant.LightInfluence, Enabled = descendant.Enabled,
+			}
 			descendant.LightEmission = 1
 			descendant.LightInfluence = 0
 			table.insert(emitters, descendant)
 		end
 	end
-	return lights, emitters
+	return lights, emitters, saved
 end
 
 -- Le otto catene: da che punto del bordo del cerchio partono (in gradi attorno a lui: 0 alla sua
@@ -2052,73 +1993,10 @@ local CHAIN_TARGETS = {
 	{ part = "RightUpperWrist", angle = 5,    reach = 0.95, at = 1.44 },
 	{ part = "LeftUpperWrist",  angle = 175,  reach = 0.95, at = 1.50 },
 }
-local CHAIN_FLIGHT = 0.12
 
--- Gli strattoni: quando, fin dove lo tirano giù (0 in piedi, 1 sparito), quanto risale dopo e
--- quanto forte. All'ultimo si spezza la catena della mano destra e lui si aggrappa al bordo
-local JOLTS = {
-	{ time = 2.50, reach = 0.14, climb = 0.035, strength = 0.4 },
-	{ time = 3.30, reach = 0.33, climb = 0.035, strength = 0.55 },
-	{ time = 4.05, reach = 0.50, climb = 0.035, strength = 0.7 },
-	{ time = 4.75, reach = 0.64, climb = 0.01, strength = 0.85 },
-}
-local JOLT_TIME   = 0.16 -- quanto dura uno strattone
-local PLUNGE_AT   = 5.35 -- l'ultima tirata
-local SLAM_AT     = 5.8  -- il colpo finale, col suono del crocifisso
-local LIFT        = 2.2  -- quanto lo alza la luce, in stud per Size 1
-
--- Da 0 a 1: quanto è sprofondato a quel secondo del rituale
-local function sinkAt(elapsed)
-	local sunk = 0
-	for _, jolt in ipairs(JOLTS) do
-		if elapsed < jolt.time then break end
-		local pull = math.clamp((elapsed - jolt.time) / JOLT_TIME, 0, 1)
-		local climb = jolt.climb * math.clamp((elapsed - jolt.time - JOLT_TIME) / 0.5, 0, 1)
-		sunk = sunk + (jolt.reach - sunk) * (1 - (1 - pull) ^ 3) - climb
-	end
-	if elapsed >= PLUNGE_AT then
-		sunk += (1 - sunk) * backIn(math.clamp((elapsed - PLUNGE_AT) / (SLAM_AT - PLUNGE_AT), 0, 1))
-	end
-	return sunk
-end
-
--- Quanto lo tiene su la luce: si stacca da terra, le catene lo strattonano quando lo prendono, poi
--- lui tira verso l'alto
-local function liftAt(elapsed)
-	local rise = math.clamp((elapsed - 0.55) / 0.45, 0, 1)
-	local strain = math.clamp((elapsed - 1.3) / 1.2, 0, 1)
-	local jerk = math.sin(math.pi * math.clamp((elapsed - 1.1) / 0.25, 0, 1))
-	return (1.5 * (1 - (1 - rise) ^ 2) + 0.7 * (1 - math.cos(strain * math.pi)) / 2 - 0.45 * jerk) * SETTINGS.Size
-end
-
--- Appeso alle catene oscilla e si gira, così lo vedi anche di tre quarti; si ferma prima che si
--- aggrappi al bordo
-local function swayAt(elapsed)
-	local hold = math.clamp((elapsed - 1.1) / 0.4, 0, 1) * (1 - math.clamp((elapsed - 4.5) / 0.3, 0, 1))
-	local yaw = (math.sin(elapsed * 5.3) * 14 + math.sin(elapsed * 13.1 + 1) * 5) * hold
-	local side = math.sin(elapsed * 4.1) * 0.35 * hold * SETTINGS.Size
-	return CFrame.new(side, 0, 0) * CFrame.Angles(0, math.rad(yaw), 0)
-end
-
---[[ Il rituale dura circa 11 secondi e segue il suono vero del crocifisso di DOORS. La luce lo
-     colpisce e lo stacca da terra, otto catene partono dal bordo del cerchio e gli prendono mani,
-     piedi, braccia e petto; lui si divincola, poi le catene lo tirano giù a strattoni in un buco
-     che si apre al centro. All'ultimo strattone la catena della mano destra si spezza, lui si
-     aggrappa al bordo e prova a tirarsi fuori, poi l'ultima tirata se lo porta giù con il braccio
-     alzato; al colpo finale sparisce e scoppia tutto.
-     Un ciclo per frame muove crocifisso, cerchio, lui e i fogli; un altro, dopo l'Animator, mette
-     la sua posa nei Motor6D; il resto sono momenti fissi del copione qui sotto. ]]
-local function ritual(tool)
+-- Il corpo di Honcho, nella forma che CrucifixRitual si aspetta (vedi Ritual.Run)
+local function honchoBody(fail, failTimes)
 	local model = state.model
-	award("Encounter")
-	log("rituale del crocifisso")
-
-	local folder = Instance.new("Folder")
-	folder.Name = "HonchoRitual"
-	folder.Parent = workspace
-	table.insert(cleanupTasks, function()
-		folder:Destroy()
-	end)
 
 	-- Si ferma e si gira verso di te
 	setMoving(false)
@@ -2144,443 +2022,194 @@ local function ritual(tool)
 	local floorY = floorAt(state.position, state.position.Y - state.pivotHeight)
 	local center = Vector3.new(state.position.X, floorY, state.position.Z)
 	local radius = math.clamp(math.max(state.boxSize.X, state.boxSize.Z) / 2 + 4, 6, 16)
-	local diameter = radius * 2
-	-- Abbastanza giù da non vedere più neanche la mano alzata
-	local depth = state.pivotHeight + state.headHeight + (5 + LIFT) * SETTINGS.Size
+	local lights, emitters, saved = bodyEffects(model)
 
+	-- I fogli: un flusso mentre si divincola, un mucchio a ogni strattone, il resto alla fine
 	local total = SETTINGS.Papers
 	local streamBudget = math.floor(total * 0.4)
 	local geyserBudget = math.floor(total * 0.35)
 	local rainBudget = total - streamBudget - geyserBudget
-	local joltBurst = math.floor(total * 0.025) -- ogni strattone gliene strappa un mucchio in più
-
-	local startedAt = os.clock()
-	local function at(seconds)
-		local wait = startedAt + seconds - os.clock()
-		if wait > 0 then
-			task.wait(wait)
-		end
-	end
-
-	-- Cosa comanda i cicli per frame
-	local show = {
-		layers       = {},
-		layerSpeeds  = { 24, -38, 55, -14 }, -- gradi al secondo, ognuno per conto suo
-		guis         = {},
-		spinBoost    = 1,
-		pulse        = 0, -- il lampo di cerchio e catene a ogni strattone, che si spegne da solo
-		shudder      = 0, -- la scossa del corpo dopo uno strattone
-		swirl        = nil,
-		streamLeft   = streamBudget,
-		streamRate   = 0,
-		streamCarry  = 0,
-		crucifixSpin = 1.6,
-	}
-	local chains = {}
-	local lights, emitters = {}, {}
-
-	---- 0. IL COLPO: flash, calcio al FOV, camera, il suono vero del crocifisso ----
-	local grade, bloom = postEffects()
-	flashScreen(WHITE, 0.15, 0.35)
-	fovPunch(12, 0.6)
-	shake(7, 10, 0, 0.8)
-	playSound(SOUND_IDS.Crucifix, 1, 1, folder)
-	flickerRoom(playerRoom(), 2)
-	tween(grade, 0.4, { TintColor = Color3.fromRGB(205, 228, 255), Contrast = 0.25, Saturation = -0.35 })
-	tween(bloom, 0.4, { Intensity = 1.2, Threshold = 0.9 })
-
-	-- Lui diventa bianco per un attimo. Occluded: quando sprofonda il pavimento lo copre davvero
-	local glow = Instance.new("Highlight")
-	glow.DepthMode = Enum.HighlightDepthMode.Occluded
-	glow.FillColor = WHITE
-	glow.FillTransparency = 0
-	glow.OutlineColor = GUIDING
-	glow.OutlineTransparency = 0
-	glow.Parent = model
-	tween(glow, 0.35, { FillTransparency = 0.85 })
-
-	-- Il crocifisso ti lascia la mano e ti vola davanti, girando sempre più forte
-	local crucifix, fromCFrame = floatingCrucifix(tool, folder)
-	local crucifixPart = crucifix.PrimaryPart :: BasePart
-
-	local crucifixLight = Instance.new("PointLight")
-	crucifixLight.Color = GUIDING
-	crucifixLight.Brightness = 0
-	crucifixLight.Range = 16
-	crucifixLight.Parent = crucifixPart
-	tween(crucifixLight, 0.5, { Brightness = 4 })
-
-	local crucifixGlow = Instance.new("Highlight")
-	crucifixGlow.DepthMode = Enum.HighlightDepthMode.Occluded
-	crucifixGlow.FillColor = GUIDING
-	crucifixGlow.FillTransparency = 0.5
-	crucifixGlow.OutlineColor = WHITE
-	crucifixGlow.OutlineTransparency = 0
-	crucifixGlow.Parent = crucifix
-
-	local twinkles = makeEmitter(crucifixPart, TEXTURES.Twinkle)
-	twinkles.Rate = 25
-	twinkles.Lifetime = NumberRange.new(0.4, 1)
-	twinkles.SpreadAngle = Vector2.new(180, 180)
-	twinkles.Speed = NumberRange.new(1, 3)
-	twinkles.Size = sequence({ { 0, 0.5 }, { 0.3, 1.8 }, { 0.35, 0.45 }, { 1, 0.3 } })
-	twinkles.Transparency = sequence({ { 0, 0.3 }, { 1, 1 } })
-	twinkles.RotSpeed = NumberRange.new(-10, 10)
-
-	local floatAt = fromCFrame.Position + Vector3.new(0, 1.2, 0)
-	if playerRoot then
-		local toHoncho = flatUnit(state.position - playerRoot.Position) or Vector3.new(0, 0, -1)
-		floatAt = playerRoot.Position + toHoncho * 3 + Vector3.new(0, 1.8, 0)
-	end
-	sphereWave(folder, floatAt, 14, 0.6, WHITE)
-
-	local crucifixAngle = 0
-	table.insert(connections, RunService.RenderStepped:Connect(function(deltaTime)
-		local elapsed = os.clock() - startedAt
-
-		-- crocifisso
-		if crucifix.Parent then
-			crucifixAngle += show.crucifixSpin * deltaTime
-			local rise = 1 - (1 - math.clamp(elapsed / 0.6, 0, 1)) ^ 3
-			local position = fromCFrame.Position:Lerp(floatAt, rise) + Vector3.new(0, math.sin(elapsed * 2.2) * 0.15 * rise, 0)
-			crucifix:PivotTo(CFrame.new(position) * CFrame.Angles(0, crucifixAngle, 0) * fromCFrame.Rotation)
-		end
-
-		-- cerchio: gira, e a ogni strattone lampeggia
-		show.pulse = math.max(show.pulse - deltaTime * 2.5, 0)
-		for index, image in ipairs(show.layers) do
-			image.Rotation = (image.Rotation + show.layerSpeeds[index] * show.spinBoost * deltaTime) % 360
-		end
-		for _, gui in ipairs(show.guis) do
-			gui.Brightness = 4 + 10 * show.pulse
-		end
-		if show.swirl then
-			show.swirl.Rotation = (show.swirl.Rotation - 150 * show.spinBoost * deltaTime) % 360
-		end
-
-		-- lui: alzato dalla luce, tirato giù dalle catene, scosso a ogni strattone
-		if model.Parent then
-			state.position = basePosition + Vector3.new(0, liftAt(elapsed) - depth * sinkAt(elapsed), 0)
-			show.shudder = math.max(show.shudder - deltaTime * 2.5, 0)
-			local j = (0.04 + 0.3 * show.shudder) * SETTINGS.Size
-			render(CFrame.new((math.random() - 0.5) * j, (math.random() - 0.5) * j * 0.5, (math.random() - 0.5) * j) * swayAt(elapsed))
-
-			-- fogli che perde di continuo
-			if show.streamRate > 0 and show.streamLeft > 0 then
-				show.streamCarry += show.streamRate * deltaTime
-				local count = math.min(math.floor(show.streamCarry), show.streamLeft)
-				if count > 0 then
-					show.streamCarry -= count
-					show.streamLeft -= count
-					burstFromBody(count, floorY)
-				end
-			end
-		end
-	end))
-
-	-- La posa va nei giunti dopo l'Animator, altrimenti lui la rimette a zero
+	local joltBurst = math.floor(total * 0.025)
+	local streamEnd = if fail then failTimes.Break else 5.8
+	local streamLeft = streamBudget
+	local streamRate = math.max(streamBudget - joltBurst * 4, 0) / (streamEnd - 1)
+	local streamCarry = 0
+	local lastStream = 0
 	local frame = {}
-	table.insert(connections, RunService.PreSimulation:Connect(function()
-		if model.Parent then
-			applyPose(joints, sampleBanish(poses, jointNames, lags, os.clock() - startedAt, frame))
-		end
-	end))
 
-	---- 0.25 IL CERCHIO: i quattro anelli di DOORS si aprono sotto di lui ----
-	at(0.25)
-	local circleParts = {}
-	for index, textureId in ipairs(TEXTURES.Circle) do
-		local disc, image = glowDisc(folder, "CircleLayer", center, 0.2, textureId, GUIDING, 0.04 + index * 0.02)
-		image.Rotation = math.random(0, 359)
-		tween(disc, 0.8, { Size = Vector3.new(diameter, 0.02, diameter) }, Enum.EasingStyle.Back)
-		tween(image, 0.5, { ImageTransparency = 0 })
-		table.insert(show.layers, image)
-		table.insert(show.guis, image.Parent)
-		table.insert(circleParts, disc)
-		task.wait(0.06)
-	end
+	local honcho = {
+		Scale      = SETTINGS.Size,
+		Anchor     = center,
+		Radius     = radius,
+		-- Abbastanza giù da non vedere più neanche la mano alzata
+		Depth      = state.pivotHeight + state.headHeight + (5 + 2.2) * SETTINGS.Size,
+		Lights     = lights,
+		Emitters   = emitters,
+		-- Nel rituale riuscito all'ultimo strattone salta la catena della mano destra; nel fail
+		-- saltano a coppie: la destra, la sinistra, il petto, poi tutte
+		SnapFirst  = "RightHand",
+		SnapGroups = { { "RightHand", "RightUpperWrist" }, { "LeftHand", "LeftUpperWrist" }, { "UpperTorso" } },
+	}
 
-	local lamp = newPart("Lamp", Vector3.one * 0.2, CFrame.new(center + Vector3.new(0, 3, 0)), GUIDING, Enum.Material.SmoothPlastic, 1)
-	lamp.Parent = folder
-	local circleLight = Instance.new("PointLight")
-	circleLight.Color = GUIDING
-	circleLight.Brightness = 0
-	circleLight.Range = math.min(radius * 3.5, 60)
-	circleLight.Parent = lamp
-	tween(circleLight, 0.5, { Brightness = 5 })
-
-	-- Scintille e linee di luce che salgono dal cerchio, come nel rituale di DOORS
-	local emitterBase = newPart("CircleEmitters", Vector3.new(diameter * 0.9, 0.5, diameter * 0.9), CFrame.new(center + Vector3.new(0, 0.3, 0)), GUIDING, Enum.Material.SmoothPlastic, 1)
-	emitterBase.Parent = folder
-
-	local sparks = makeEmitter(emitterBase, TEXTURES.Spark)
-	sparks.Rate = 45
-	sparks.EmissionDirection = Enum.NormalId.Top
-	sparks.Lifetime = NumberRange.new(0.6, 2.2)
-	sparks.Speed = NumberRange.new(2, 9)
-	sparks.Acceleration = Vector3.new(0, 6, 0)
-	sparks.Drag = 1
-	sparks.SpreadAngle = Vector2.new(12, 12)
-	sparks.Size = sequence({ { 0, 1.4 }, { 1, 0.2 } })
-	sparks.Transparency = sequence({ { 0, 1 }, { 0.2, 0.25 }, { 1, 1 } })
-	sparks.RotSpeed = NumberRange.new(35, 100)
-
-	local lines = makeEmitter(emitterBase, TEXTURES.Lines)
-	lines.Rate = 35
-	lines.EmissionDirection = Enum.NormalId.Top
-	lines.Orientation = Enum.ParticleOrientation.VelocityParallel
-	lines.Lifetime = NumberRange.new(0.8, 1.2)
-	lines.Speed = NumberRange.new(4, 10)
-	lines.Acceleration = Vector3.new(0, 14, 0)
-	lines.Size = sequence({ { 0, 1.5 }, { 1, 1.3 } })
-	lines.Squash = sequence({ { 0, -1.2 }, { 1, 1 } })
-	lines.Transparency = sequence({ { 0, 1 }, { 0.5, 0.35 }, { 1, 1 } })
-
-	---- 0.55 LA LUCE LO SOLLEVA: un'onda dal cerchio e lui si stacca da terra ----
-	at(0.55)
-	ringWave(folder, center, diameter * 0.4, diameter * 1.8, 0.7, WHITE)
-	sparkBurst(emitterBase, 50, 26)
-	shake(4, 10, 0, 0.6)
-	glow.FillTransparency = 0.3
-	tween(glow, 0.4, { FillTransparency = 0.85 })
-
-	---- 0.95 LE CATENE: partono dal bordo del cerchio e gli prendono mani, piedi, braccia e petto ----
-	at(0.95)
-	local anchor = newPart("ChainAnchor", Vector3.one * 0.2, CFrame.new(center), GUIDING, Enum.Material.SmoothPlastic, 1)
-	anchor.Parent = folder
-
-	local function shootChain(spec)
-		local target = findPart(model, spec.part)
-		if not target then return end
-
-		local angle = math.rad(spec.angle)
-		local direction = state.rotation:VectorToWorldSpace(Vector3.new(math.cos(angle), 0, math.sin(angle)))
-		local origin = center + direction * radius * spec.reach + Vector3.new(0, 0.2, 0)
-		local from = attachmentAt(anchor, origin)
-		local tip = attachmentAt(anchor, origin)
-		local grip = Instance.new("Attachment")
-		grip.Name = "HonchoChainGrip"
-		grip.Position = (spec.offset or Vector3.zero) * SETTINGS.Size
-		grip.Parent = target
-
-		local chain = { part = spec.part, grip = grip, beam = chainBeam(folder, from, tip) }
-		table.insert(chains, chain)
-
-		-- La punta vola dal pavimento a lui, poi si aggancia alla parte e la segue in ogni posa
-		local shotAt = os.clock()
-		local flight
-		flight = RunService.Heartbeat:Connect(function()
-			if not (grip.Parent and target.Parent and chain.beam.Parent) then
-				flight:Disconnect()
-				return
-			end
-			local progress = math.clamp((os.clock() - shotAt) / CHAIN_FLIGHT, 0, 1)
-			local gripWorld = target.CFrame:PointToWorldSpace(grip.Position)
-			tip.Position = anchor.CFrame:PointToObjectSpace(origin:Lerp(gripWorld, progress * progress))
-			if progress >= 1 then
-				flight:Disconnect()
-				chain.beam.Attachment1 = grip
-				tip:Destroy()
-				sparkBurst(grip, 16, 14)
-				shake(1.5, 8, 0, 0.3)
-			end
-		end)
-		table.insert(connections, flight)
-	end
-
-	spawnSafe("catene", function()
+	function honcho.Chains()
+		local chains = {}
 		for _, spec in ipairs(CHAIN_TARGETS) do
-			at(spec.at)
-			if not model.Parent or state.finished then return end
-			shootChain(spec)
-		end
-	end)
-
-	---- 1.0 L'URLO: lo tengono, si divincola, comincia a sgretolarsi in luce e fogli ----
-	at(1.0)
-	pcall(function()
-		body.scream.PlaybackSpeed = 0.85
-		body.scream:Play()
-	end)
-	show.streamRate = (streamBudget - joltBurst * #JOLTS) / (SLAM_AT - 1)
-	TweenService:Create(glow, TweenInfo.new(0.22, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { FillTransparency = 0.45 }):Play()
-	lights, emitters = bodyEffects(model)
-	for _, light in ipairs(lights) do
-		tween(light, 0.4, { Brightness = 2 })
-	end
-	for _, emitter in ipairs(emitters) do
-		if emitter.Name == "Triangles" then
-			emitter.Enabled = true
-		end
-	end
-
-	---- 2.5 GIÙ, A STRATTONI: al centro si apre il buco e le catene lo tirano dentro ----
-	at(2.5)
-	playSound(SOUND_IDS.Earthquake, 0.9, 0.5, folder)
-	ceilingDust(center)
-	tween(bloom, 3.3, { Intensity = 2.2, Size = 40 })
-	tween(grade, 3.3, { Contrast = 0.45, Saturation = -0.5 })
-	tween(circleLight, 3.3, { Brightness = 9 })
-	for _, emitter in ipairs(emitters) do
-		emitter.Enabled = true
-	end
-	local hole = openHole(folder, center)
-	show.swirl = hole.swirl
-	local holeSize = math.clamp(state.boxSize.X * 0.6, 5, radius * 1.2)
-
-	spawnSafe("terremoto del rituale", function()
-		while os.clock() - startedAt < SLAM_AT and not state.finished do
-			local progress = math.clamp((os.clock() - startedAt - 2.5) / 3.3, 0, 1)
-			show.spinBoost = 1 + 3 * progress
-			show.crucifixSpin = 1.6 + 10 * progress
-			shake(1.5 + 3 * progress, 10, 0.1, 0.5)
-			task.wait(0.35)
-		end
-	end)
-
-	local function jolt(strength)
-		show.pulse = 1
-		show.shudder = 1
-		shake(3 + 5 * strength, 14, 0, 0.6)
-		fovPunch(3 + 5 * strength, 0.4)
-		playSound(SOUND_IDS.Slam, 0.4 + 0.6 * strength, 1.4 - 0.3 * strength, folder)
-		ringWave(folder, center, diameter * 0.2, diameter * (0.9 + 0.5 * strength), 0.6, WHITE)
-		sparkBurst(emitterBase, math.floor(20 + 40 * strength), 22)
-		for _, chain in ipairs(chains) do
-			if chain.beam.Parent then
-				chain.beam.Brightness = 5
-				tween(chain.beam, 0.35, { Brightness = 1 })
+			local part = findPart(model, spec.part)
+			if part then
+				table.insert(chains, {
+					part   = part,
+					name   = spec.part,
+					offset = (spec.offset or Vector3.zero) * SETTINGS.Size,
+					angle  = spec.angle,
+					reach  = spec.reach,
+					at     = spec.at,
+				})
 			end
 		end
-		for _, light in ipairs(lights) do
-			light.Brightness = 3 + 5 * strength
-			tween(light, 0.5, { Brightness = 2 + 2 * strength })
+		return chains
+	end
+
+	function honcho.Place(yOffset, offset)
+		state.position = basePosition + Vector3.new(0, yOffset, 0)
+		render(offset)
+	end
+
+	function honcho.Pose(elapsed, isFail)
+		applyPose(joints, sampleBanish(poses, jointNames, lags, elapsed, frame, isFail))
+	end
+
+	-- Il flusso di fogli esce a lotti ogni decimo di secondo, non un pezzetto per frame: il
+	-- conto del box del modello si fa dieci volte al secondo invece che a ogni frame
+	function honcho.Step(_, elapsed, deltaTime)
+		if elapsed < 1 or elapsed > streamEnd or streamLeft <= 0 then return end
+		streamCarry += streamRate * deltaTime
+		if elapsed - lastStream < 0.1 then return end
+		lastStream = elapsed
+
+		local count = math.min(math.floor(streamCarry), streamLeft)
+		if count > 0 then
+			streamCarry -= count
+			streamLeft -= count
+			burstFromBody(count, floorY)
 		end
-		local burst = math.min(show.streamLeft, joltBurst)
-		show.streamLeft -= burst
+	end
+
+	-- Ogni strattone gliene strappa un mucchio in più
+	function honcho.Jolt()
+		local burst = math.min(streamLeft, joltBurst)
+		streamLeft -= burst
 		burstFromBody(burst, floorY)
 	end
 
-	-- La catena si spezza vicino alla mano: la mano è libera e va verso la luce
-	local function snapChain(partName)
-		for _, chain in ipairs(chains) do
-			if chain.part == partName and chain.beam.Parent then
-				chain.beam:Destroy()
-				if chain.grip.Parent then
-					sparkBurst(chain.grip, 45, 26)
-				end
-				flashScreen(WHITE, 0.6, 0.25)
-				return
-			end
-		end
-	end
-
-	for index, step in ipairs(JOLTS) do
-		at(step.time)
-		if not model.Parent or state.finished then break end
-		sizeHole(hole, holeSize * (0.45 + 0.55 * index / #JOLTS), 0.3)
-		jolt(step.strength)
-		if index == #JOLTS then
-			snapChain("RightHand")
-		end
-	end
-
-	---- 5.35 L'ULTIMA TIRATA: il cerchio e lui si accendono al massimo ----
-	at(PLUNGE_AT)
-	shake(6, 16, 0.3, 0.4)
-	tween(circleLight, 0.45, { Brightness = 14 })
-	for _, light in ipairs(lights) do
-		tween(light, 0.45, { Brightness = 8 })
-	end
-
-	---- 5.8 IL COLPO FINALE: sparisce nel buco, e scoppia tutto ----
-	at(SLAM_AT)
-	show.streamRate = 0
-	if model.Parent then
-		model:Destroy()
-	end
-	geyser(geyserBudget + show.streamLeft, center, radius, floorY)
-	show.streamLeft = 0
-
-	playSound(SOUND_IDS.Slam, 2, 0.9, folder)
-	flashScreen(WHITE, 0.05, 1)
-	fovPunch(18, 0.8)
-	shake(12, 16, 0, 1.6)
-	sparkBurst(emitterBase, 220, 45)
-	sphereWave(folder, center + Vector3.new(0, 2, 0), radius * 3.2, 0.9, GUIDING)
-	for index = 0, 2 do
-		task.delay(index * 0.12, function()
-			ringWave(folder, center, diameter * 0.3, diameter * (3 - index * 0.6), 0.9, if index == 0 then WHITE else GUIDING)
+	function honcho.Scream(_, kind)
+		pcall(function()
+			body.scream.PlaybackSpeed = if kind == "roar" then 0.7 else 0.85
+			body.scream.Volume = if kind == "roar" then 3 else 2
+			body.scream:Play()
 		end)
 	end
-	sizeHole(hole, 0, 0.35, Enum.EasingDirection.In)
-	shatterRoom(playerRoom())
-	shatterCrucifix(crucifix, folder)
-	sparkBurst(crucifixPart, 60, 25)
-	tween(crucifixLight, 0.15, { Brightness = 12 })
-	for _, chain in ipairs(chains) do
-		chain.beam:Destroy()
-	end
-	tween(bloom, 0.08, { Intensity = 3.5 })
-	tween(circleLight, 0.08, { Brightness = 14 })
-	sparks.Enabled = false
-	lines.Enabled = false
-	award("Crucify")
-	if playerAlive() then
-		award("Survive")
-	end
 
-	---- 6.0 IL CERCHIO SI RICHIUDE su se stesso girando a tutta velocità ----
-	at(6.0)
-	show.spinBoost = 8
-	for index, disc in ipairs(circleParts) do
-		tween(disc, 0.6, { Size = Vector3.new(0.1, 0.02, 0.1) }, Enum.EasingStyle.Back, Enum.EasingDirection.In)
-		tween(show.layers[index], 0.6, { ImageTransparency = 1 })
-	end
-	tween(crucifixLight, 1, { Brightness = 0 })
-	tween(crucifixGlow, 1, { FillTransparency = 1, OutlineTransparency = 1 })
-	twinkles.Enabled = false
-	tween(bloom, 1.5, { Intensity = 1 })
-
-	---- 6.2 PIOGGIA DI FOGLI e braci che scendono piano ----
-	at(6.2)
-	tween(circleLight, 1.5, { Brightness = 0 })
-	local area = radius * 2.4
-	local embersBase = newPart("Embers", Vector3.new(area * 2, 0.5, area * 2), CFrame.new(center + Vector3.new(0, 11, 0)), GUIDING, Enum.Material.SmoothPlastic, 1)
-	embersBase.Parent = folder
-	local embers = makeEmitter(embersBase, TEXTURES.Spark)
-	embers.Rate = 30
-	embers.EmissionDirection = Enum.NormalId.Bottom
-	embers.Lifetime = NumberRange.new(3, 5)
-	embers.Speed = NumberRange.new(0.5, 1.5)
-	embers.Acceleration = Vector3.new(0, -1.5, 0)
-	embers.SpreadAngle = Vector2.new(40, 40)
-	embers.Size = sequence({ { 0, 0.45 }, { 1, 0 } })
-	embers.Transparency = sequence({ { 0, 1 }, { 0.1, 0.2 }, { 1, 1 } })
-	task.delay(2.5, function()
-		embers.Enabled = false
-	end)
-
-	local rainStart = os.clock()
-	local rained = 0
-	while rained < rainBudget and not state.finished do
-		RunService.Heartbeat:Wait()
-		local due = math.floor(rainBudget * math.clamp((os.clock() - rainStart) / 2.5, 0, 1))
-		for _ = rained + 1, due do
-			local angle = math.random() * math.pi * 2
-			local distance = math.sqrt(math.random()) * area
-			local origin = center + Vector3.new(math.cos(angle) * distance, 10 + math.random() * 4, math.sin(angle) * distance)
-			spawnPaper(origin, floorY, Vector3.new((math.random() - 0.5) * 2, -1 - math.random() * 2, (math.random() - 0.5) * 2), 6 + math.random() * 2)
+	-- Riuscito: al colpo finale sparisce nel buco e i fogli rimasti schizzano su
+	function honcho.Vanish()
+		if model.Parent then
+			model:Destroy()
 		end
-		rained = math.max(rained, due)
+		geyser(geyserBudget + streamLeft, center, radius, floorY)
+		streamLeft = 0
+		award("Crucify")
+		if playerAlive() then
+			award("Survive")
+		end
 	end
 
-	---- 8.7 Il mondo torna normale ----
-	at(8.7)
-	tween(grade, 2, { TintColor = WHITE, Contrast = 0, Saturation = 0 })
-	tween(bloom, 2, { Intensity = 0 })
-	task.wait(2.1)
-	finish("esorcizzato")
+	-- Poi una pioggia di fogli dall'alto
+	function honcho.After()
+		task.spawn(function()
+			local area = radius * 2.4
+			local rainStart = os.clock()
+			local rained = 0
+			while rained < rainBudget and not state.finished do
+				RunService.Heartbeat:Wait()
+				local due = math.floor(rainBudget * math.clamp((os.clock() - rainStart) / 2.5, 0, 1))
+				for _ = rained + 1, due do
+					local angle = math.random() * math.pi * 2
+					local distance = math.sqrt(math.random()) * area
+					local origin = center + Vector3.new(math.cos(angle) * distance, 10 + math.random() * 4, math.sin(angle) * distance)
+					spawnPaper(origin, floorY, Vector3.new((math.random() - 0.5) * 2, -1 - math.random() * 2, (math.random() - 0.5) * 2), 6 + math.random() * 2)
+				end
+				rained = math.max(rained, due)
+			end
+		end)
+	end
+
+	-- Fallito: quando si libera, nella rabbia gli volano via i fogli che gli restano
+	function honcho.BreakFree()
+		burstFromBody(streamLeft + math.floor(geyserBudget * 0.5), floorY)
+		streamLeft = 0
+	end
+
+	-- Di nuovo a terra e di nuovo lui: luci, particelle e giunti come prima del rituale
+	function honcho.Recover()
+		for instance, properties in pairs(saved) do
+			if instance.Parent then
+				for property, value in pairs(properties) do
+					pcall(function()
+						instance[property] = value
+					end)
+				end
+			end
+		end
+		pcall(function()
+			body.scream.PlaybackSpeed = 1
+			body.scream.Volume = 2
+		end)
+		applyPose(joints, {})
+		state.position = basePosition
+		render()
+	end
+
+	return honcho
+end
+
+--[[ Il rituale. Riuscito: Honcho finisce nel buco, come prima. Fallito: si libera, ricade e dopo
+     FAIL_GRACE secondi torna a cacciarti, e il crocifisso non ce l'hai più. ]]
+local function ritual(tool)
+	award("Encounter")
+	log("rituale del crocifisso")
+
+	local Ritual = ritualModule()
+	if not Ritual then
+		-- Senza il modulo il crocifisso non fa niente, e non va riprovato a ogni frame
+		state.noRitual = true
+		state.paused = false
+		state.watching = true
+		return
+	end
+
+	local _, fail = Ritual.Outcome(tool, false)
+	local result = Ritual.Run({
+		Model = state.model,
+		Tool  = tool,
+		Body  = honchoBody(fail, Ritual.FailTimes),
+		Alive = function()
+			return not state.finished
+		end,
+	})
+
+	if result == "Banished" then
+		finish("esorcizzato")
+	elseif result == "Failed" then
+		log("il crocifisso si è spezzato: riparte")
+		state.paused = false
+		if state.running then
+			setMoving(true)
+		end
+		task.delay(FAIL_GRACE, function()
+			if not state.finished then
+				state.watching = true
+			end
+		end)
+	end
 end
 
 ---====== IL GIOCATORE ======---
@@ -2589,12 +2218,24 @@ local sightParams = RaycastParams.new()
 sightParams.FilterType = Enum.RaycastFilterType.Exclude
 sightParams.RespectCanCollide = true
 
+--[[ I nascondigli si leggono quando cambiano, non a ogni frame: prima GetTagged costruiva una
+     lista nuova di tutti gli armadi della partita 60 volte al secondo. ]]
+local hidingSpots = CollectionService:GetTagged("HidingSpot")
+local function refreshHidingSpots()
+	hidingSpots = CollectionService:GetTagged("HidingSpot")
+end
+table.insert(connections, CollectionService:GetInstanceAddedSignal("HidingSpot"):Connect(refreshHidingSpots))
+table.insert(connections, CollectionService:GetInstanceRemovedSignal("HidingSpot"):Connect(refreshHidingSpots))
+
+local sightIgnore = {}
+
 local function canSee(origin, target, character)
 	-- Come nello spawner di Vynixu: armadi e letti non bloccano la vista, devi esserci dentro
-	local ignore = CollectionService:GetTagged("HidingSpot")
-	table.insert(ignore, character)
-	table.insert(ignore, state.model)
-	sightParams.FilterDescendantsInstances = ignore
+	table.clear(sightIgnore)
+	table.move(hidingSpots, 1, #hidingSpots, 1, sightIgnore)
+	table.insert(sightIgnore, character)
+	table.insert(sightIgnore, state.model)
+	sightParams.FilterDescendantsInstances = sightIgnore
 	return workspace:Raycast(origin, target - origin, sightParams) == nil
 end
 
@@ -2635,8 +2276,8 @@ local function watchPlayer()
 		award("Encounter")
 	end
 
-	-- Il crocifisso conta prima del danno: se lo hai in mano quando arriva, ti salva
-	local crucifix = heldCrucifix(character)
+	-- Il crocifisso conta prima del danno: se lo hai in mano quando arriva, ti salva (se regge)
+	local crucifix = not state.noRitual and heldCrucifix(character)
 	if crucifix and distance <= CRUCIFIX_RANGE then
 		state.paused = true
 		state.watching = false
@@ -2796,73 +2437,27 @@ local function main()
 	finish("percorso finito")
 end
 
----====== CROCIFISSO DI PENGUINMANIACK ======---
+---====== IL CROCIFISSO ======---
 
-local function listTools()
-	local tools = {}
-	local containers = { LocalPlayer:FindFirstChildOfClass("Backpack"), LocalPlayer.Character }
-	for index = 1, 2 do
-		local container = containers[index]
+--[[ Il crocifisso di CrucifixRitual: il modello di Penguin, si consuma al primo utilizzo, e il
+     suo tipo (_G.CrucifixType) decide il colore del rituale e se regge. ]]
+local function giveCrucifix()
+	for _, container in ipairs({ LocalPlayer:FindFirstChildOfClass("Backpack"), LocalPlayer.Character }) do
 		if container then
 			for _, child in ipairs(container:GetChildren()) do
-				if child:IsA("Tool") then
-					table.insert(tools, child)
+				-- Ne hai già uno: va bene anche quello vero di DOORS
+				if child:IsA("Tool") and (child.Name == "Crucifix" or CollectionService:HasTag(child, "Crucifix")) then
+					log("hai già un crocifisso")
+					return
 				end
 			end
 		end
 	end
-	return tools
-end
 
--- Come il tuo CrucifixGiver: esegue il loader di PenguinManiack e sistema il tool che crea
-local function giveCrucifix()
-	local before = {}
-	for _, tool in ipairs(listTools()) do
-		-- Ne hai già uno: va bene anche quello vero di DOORS
-		if tool.Name == "Crucifix" or CollectionService:HasTag(tool, "Crucifix") then
-			log("hai già un crocifisso")
-			return
-		end
-		before[tool] = true
+	local Ritual = ritualModule()
+	if Ritual and Ritual.Give(SETTINGS.CrucifixType, false) then
+		log("crocifisso %s nello zaino: tienilo in mano quando arriva", SETTINGS.CrucifixType)
 	end
-
-	_G.Uses = 1
-	_G.Range = 30
-	-- Se un altro script l'ha lasciato a true, il suo crocifisso vale su qualsiasi cosa
-	_G.OnAnything = nil
-
-	local ok, err = pcall(function()
-		loadstring(game:HttpGet(CRUCIFIX_URL))()
-	end)
-	if not ok then
-		problem("il crocifisso di PenguinManiack non si è caricato: %s", tostring(err))
-		return
-	end
-
-	-- Il loader può creare il tool qualche frame dopo
-	local tool
-	local deadline = os.clock() + 12
-	repeat
-		for _, candidate in ipairs(listTools()) do
-			if not before[candidate] then
-				tool = candidate
-				break
-			end
-		end
-		if not tool then
-			task.wait(0.15)
-		end
-	until tool or os.clock() > deadline
-
-	if not tool then
-		problem("il loader del crocifisso non ha dato nessun tool")
-		return
-	end
-
-	-- Honcho riconosce un Tool in mano che si chiama o ha il tag "Crucifix"
-	tool.Name = "Crucifix"
-	CollectionService:AddTag(tool, "Crucifix")
-	log("crocifisso nello zaino: tienilo in mano quando arriva")
 end
 
 ---====== AVVIO ======---

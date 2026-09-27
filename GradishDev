@@ -20,7 +20,7 @@
         stand. Hand yourself any crucifix. Grant, revoke or wipe any badge.
         Dump the state of everything to the log.
 
-            F1   summon menu: prints the list, then press 1-9 or 0
+            F1   summon menu: prints the list, then press 1-9, 0 or -
             F2   crucifix menu: prints the list, then press 1-5
             F3   badge menu: list / wipe all / grant all / revoke all
             F4   dump everything to the log right now
@@ -67,6 +67,7 @@ local ENTITIES = {
 	{ key = "Blue Hell",           file = "BlueHell" },
 	{ key = "Rude",                file = "Rude" },
 	{ key = "Mischievous Light",   file = "MischievousLight" },
+	{ key = "J-518",               file = "J-518" },
 }
 
 local CRUCIFIXES = {
@@ -315,8 +316,12 @@ local NUMBER_KEYS = {
 	[Enum.KeyCode.One] = 1, [Enum.KeyCode.Two] = 2, [Enum.KeyCode.Three] = 3,
 	[Enum.KeyCode.Four] = 4, [Enum.KeyCode.Five] = 5, [Enum.KeyCode.Six] = 6,
 	[Enum.KeyCode.Seven] = 7, [Enum.KeyCode.Eight] = 8, [Enum.KeyCode.Nine] = 9,
-	[Enum.KeyCode.Zero] = 10,   -- ten entities, and 0 is the one after 9
+	[Enum.KeyCode.Zero] = 10,   -- 0 is the one after 9
+	[Enum.KeyCode.Minus] = 11,  -- and - the one after 0, like the number row
 }
+
+-- What to print for each number, so the eleventh entry reads "-" rather than "11"
+local KEY_LABELS = { "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-" }
 
 local connections = {}
 
@@ -329,7 +334,7 @@ table.insert(connections, UserInputService.InputBegan:Connect(function(input, pr
 		openMenu("entity")
 		say("SUMMON -- press a number:")
 		for index, entry in ipairs(ENTITIES) do
-			say("   %d  %s", index, entry.key)
+			say("   %s  %s", KEY_LABELS[index] or tostring(index), entry.key)
 		end
 
 	elseif code == Enum.KeyCode.F2 then
