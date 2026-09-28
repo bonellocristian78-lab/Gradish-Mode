@@ -242,19 +242,27 @@ things you can't. Measured on the DOORS dump (7 rooms loaded, the player in 5):
 
 | What costs | In the dump | With the optimizer |
 |---|---|---|
-| Lights casting shadows — with DOORS' Future lighting each one redraws the scene | 43 | the 8 nearest the camera: the room you're in keeps all of its own |
+| Lights casting shadows — with DOORS' Future lighting each one redraws the scene | 43 | the 8 nearest the camera: the room you're in keeps all of its own; fewer if your FPS drop (see AUTO) |
 | Fill lights (`LowQualityDisable`) | 78 | only the ones within 60 studs |
 | Parts casting shadows | 952 | 827 — knobs, wall strips, ceiling details, plant dirt, plates and papers stop |
 | Rooms drawn | 7 | the one you're in, 2 behind and 2 ahead |
 
 - **F8** switches it off and on, so you can compare. **F7** shows or hides the
   FPS panel. Running it again replaces the old copy.
-- The panel also shows where each frame goes — video card (GPU), processor
-  (CPU), scripts, draw calls — and which one is the limit.
-- **F6** runs a 12-second test: stand still and don't turn the camera. It
-  measures FPS off, on, on with no light casting shadows, and with no shadows
-  at all, then puts everything back and leaves the table in the panel. One
-  screenshot of it says what is slowing your machine down.
+- **AUTO.** On a slow PC the F6 test gave 15 FPS with 38 lights casting
+  shadows, 14 with 8, and 22 with none: Roblox already skips the shadows of far
+  lights, so the ones that cost are the nearest. How much they cost depends on
+  the machine and the room, so the optimizer measures it while you play: below
+  `AutoFps` (40) it takes the shadows off one more nearby light every second;
+  above 52 for 3 seconds it gives one back. If they drop again right away, it
+  waits 30 seconds before trying again, so shadows don't flicker on and off.
+  `AutoFps = 0` turns it off.
+- The panel also shows the video card (GPU) and processor (CPU) times, the
+  script time and the draw calls. The times include waits, so they are for
+  comparing, not on their own.
+- **F6** runs a 9-second test: stand still and don't turn the camera. It
+  measures FPS off, on with all 8 lights, and on with no light casting
+  shadows, then puts everything back and leaves the table in the panel.
 - It only changes `Light.Shadows`, `BasePart.CastShadow`,
   `LocalTransparencyModifier` and `Enabled` on the `LowQualityDisable` lights —
   the dump shows DOORS' own scripts never write the first three on rooms, and

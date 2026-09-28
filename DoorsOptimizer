@@ -11,8 +11,8 @@
 
         F8  acceso / spento (per confrontare gli FPS)
         F7  mostra / nasconde il riquadro con gli FPS
-        F6  test: misura gli FPS in quattro situazioni e scrive i risultati
-            nel riquadro (stai fermo e non girare la camera per 12 secondi)
+        F6  test: misura gli FPS in tre situazioni e scrive i risultati
+            nel riquadro (stai fermo e non girare la camera per 9 secondi)
 
         COME L'HO CAPITO
         ----------------
@@ -38,6 +38,15 @@
            spengono le ombre, non la luce: la stanza resta illuminata uguale.
            Una luce che le ha già tiene il posto finché non è parecchio più
            lontana di un'altra, così le ombre non saltano avanti e indietro.
+        1b. AUTO. Su un PC lento il test F6 ha dato: 38 luci con le ombre
+           15 FPS, 8 luci 14 FPS, nessuna 22 FPS. Roblox salta già da solo le
+           ombre delle luci lontane: quelle che costano sono le più vicine.
+           Quanto costano dipende dal PC e dalla stanza, quindi lo misura
+           mentre giochi: se gli FPS stanno sotto AutoFps toglie le ombre a
+           una luce vicina in più ogni secondo; se restano sopra AutoFps
+           * 1.3 le ridà una alla volta, ogni 3 secondi. Se appena ridata gli
+           FPS ricadono, per 30 secondi non ci riprova (niente ombre che
+           vanno e vengono).
         2. OMBRE DEI PEZZI PICCOLI. Le parti sotto SmallSize stud, e quelle
            sottili (il lato medio sotto ThinSize: listelli, bastoni, bordi),
            non fanno più ombra.
@@ -89,6 +98,7 @@ local CONFIG = {
 	FpsCap            = 240,   -- 0 = non toccare il limite degli FPS
 
 	ShadowLights      = 8,     -- quante luci vicine tengono le ombre (una stanza ne ha da 6 a 9)
+	AutoFps           = 40,    -- sotto questi FPS toglie le ombre anche alle luci vicine; 0 = mai
 	ShadowDistance    = 80,    -- oltre questa distanza nessuna luce fa ombra
 	ShadowHysteresis  = 0.8,   -- una luce con le ombre conta come se fosse all'80% della sua distanza
 
@@ -124,7 +134,6 @@ local Players           = game:GetService("Players")
 local RunService        = game:GetService("RunService")
 local UserInputService  = game:GetService("UserInputService")
 local CollectionService = game:GetService("CollectionService")
-local Lighting          = game:GetService("Lighting")
 local Stats             = game:GetService("Stats")
 
 local LocalPlayer = Players.LocalPlayer
@@ -155,6 +164,8 @@ local queue, queueHead = {}, 1                        -- istanze da guardare
 local jobs = {}                                       -- lavori a pezzi (nascondere e mostrare stanze)
 local connections = {}
 local active = true
+local shadowBudget = CONFIG.ShadowLights -- le luci che tengono le ombre adesso (AUTO lo abbassa)
+local test = nil                         -- il test F6 in corso
 local stats = { shadowOn = 0, shadowTotal = 0, fillOn = 0, fillTotal = 0, noShadow = 0, hidden = 0, rooms = 0 }
 
 local function track(connection)
@@ -313,7 +324,9 @@ local function updateLights()
 	table.sort(candidates, function(a, b) return a.distance < b.distance end)
 
 	local keep = {}
-	for rank = 1, math.min(CONFIG.ShadowLights, #candidates) do
+	-- Durante il test decide il test, non AUTO
+	local budget = if test then CONFIG.ShadowLights else shadowBudget
+	for rank = 1, math.min(budget, #candidates) do
 		keep[candidates[rank].light] = true
 	end
 	local on = 0
@@ -448,19 +461,45 @@ local function renderTimes(frameSeconds)
 	return readStat("RenderGPUFrameTime") * scale, readStat("RenderCPUFrameTime") * scale, readStat("HeartbeatTime") * scale
 end
 
--- Chi tiene giù gli FPS: il più lento dei tre
-local function bottleneck(gpu, cpu, script)
-	if gpu <= 0 and cpu <= 0 then return nil end
-	local worst, name = gpu, "scheda video"
-	if cpu > worst then worst, name = cpu, "processore" end
-	if script > worst then name = "script" end
-	return name
+---====== AUTO ======---
+-- Ogni secondo guarda gli FPS dell'ultimo secondo (vedi 1b in cima)
+
+local autoFrames, autoSeconds, autoGood, autoRaised, autoHold = 0, 0, 0, -math.huge, 0
+
+local function stepAuto(deltaTime)
+	autoFrames += 1
+	autoSeconds += deltaTime
+	if autoSeconds < 1 then return end
+	local fps = autoFrames / autoSeconds
+	autoFrames, autoSeconds = 0, 0
+	local now = os.clock()
+	if fps < CONFIG.AutoFps then
+		autoGood = 0
+		if shadowBudget > 0 then
+			-- Appena ridata e già troppo: per 30 secondi non ci riprova
+			if now - autoRaised < 3 then
+				autoHold = now + 30
+			end
+			shadowBudget -= 1
+			updateLights()
+		end
+	elseif fps > CONFIG.AutoFps * 1.3 and now >= autoHold then
+		autoGood += 1
+		if autoGood >= 3 and shadowBudget < CONFIG.ShadowLights then
+			autoGood = 0
+			autoRaised = now
+			shadowBudget += 1
+			updateLights()
+		end
+	else
+		autoGood = 0
+	end
 end
 
 ---====== IL TEST (F6) ======---
---[[ Quattro misure di 2 secondi, ognuna dopo 1 secondo per assestarsi: ottimizzatore spento,
-     acceso, acceso senza nessuna luce con le ombre, e senza nessuna ombra (nemmeno quelle
-     globali). Poi rimette tutto com'era e lascia i risultati nel riquadro ]]
+--[[ Tre misure di 2 secondi, ognuna dopo 1 secondo per assestarsi: ottimizzatore spento,
+     acceso con tutte le ShadowLights, e acceso senza nessuna luce con le ombre. Poi rimette
+     tutto com'era e lascia i risultati nel riquadro ]]
 
 local TEST_SETTLE, TEST_MEASURE = 1, 2
 local TEST_PHASES = {
@@ -470,21 +509,19 @@ local TEST_PHASES = {
 		CONFIG.ShadowLights = 0
 		updateLights()
 	end },
-	{ name = "zero ombre", apply = function() Lighting.GlobalShadows = false end },
 }
-local test = nil        -- il test in corso
-local testResults = nil -- i risultati dell'ultimo
+local testResults = nil -- i risultati dell'ultimo test
 
 local function startTest()
 	if test then return end
 	test = { phase = 0, phaseEnd = 0, results = {},
-		wasActive = active, shadowLights = CONFIG.ShadowLights, globalShadows = Lighting.GlobalShadows }
+		wasActive = active, shadowLights = CONFIG.ShadowLights }
 	testResults = nil
 end
 
 local function finishTest()
 	CONFIG.ShadowLights = test.shadowLights
-	Lighting.GlobalShadows = test.globalShadows
+	autoFrames, autoSeconds, autoGood = 0, 0, 0
 	testResults = test.results
 	local wasActive = test.wasActive
 	test = nil
@@ -595,12 +632,15 @@ local function drawStats(deltaTime)
 		stats.shadowOn, stats.shadowTotal, stats.fillOn, stats.fillTotal, stats.noShadow, hidden, total
 	)
 
+	if CONFIG.AutoFps > 0 then
+		text ..= string.format("\nauto: ombre a %d luci su %d (sotto %d FPS)", shadowBudget, CONFIG.ShadowLights, CONFIG.AutoFps)
+	end
+	-- Questi tempi includono le attese: servono per confrontare, non da soli
 	local gpu, cpu, script = renderTimes(average)
-	local limit = bottleneck(gpu, cpu, script)
-	if limit then
+	if gpu > 0 or cpu > 0 then
 		text ..= string.format(
-			"\nGPU %.0f ms  CPU %.0f ms  script %.1f ms\ndisegni %d  per le ombre %d\nlimite: <b>%s</b>",
-			gpu, cpu, script, readStat("SceneDrawcallCount"), readStat("ShadowsDrawcallCount"), limit
+			"\nGPU %.0f ms  CPU %.0f ms  script %.1f ms\ndisegni %d  per le ombre %d",
+			gpu, cpu, script, readStat("SceneDrawcallCount"), readStat("ShadowsDrawcallCount")
 		)
 	end
 
@@ -637,7 +677,11 @@ buildStats()
 local nextLights = 0
 track(RunService.Heartbeat:Connect(function(deltaTime)
 	work()
-	if test then stepTest(deltaTime) end
+	if test then
+		stepTest(deltaTime)
+	elseif active and CONFIG.AutoFps > 0 then
+		stepAuto(deltaTime)
+	end
 	local now = os.clock()
 	if now >= nextLights then
 		nextLights = now + CONFIG.UpdateInterval
@@ -662,10 +706,7 @@ refreshRooms()
 
 -- Toglie tutto e rimette il gioco com'era: niente stanze invisibili, ombre e luci come prima
 _G.DoorsOptimizerStop = function()
-	if test then
-		Lighting.GlobalShadows = test.globalShadows
-		test = nil
-	end
+	test = nil
 	active = false
 	-- Tutte le stanze, anche quelle a metà di un lavoro
 	for _, record in pairs(rooms) do
