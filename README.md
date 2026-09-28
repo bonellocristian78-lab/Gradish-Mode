@@ -249,6 +249,12 @@ things you can't. Measured on the DOORS dump (7 rooms loaded, the player in 5):
 
 - **F8** switches it off and on, so you can compare. **F7** shows or hides the
   FPS panel. Running it again replaces the old copy.
+- The panel also shows where each frame goes — video card (GPU), processor
+  (CPU), scripts, draw calls — and which one is the limit.
+- **F6** runs a 12-second test: stand still and don't turn the camera. It
+  measures FPS off, on, on with no light casting shadows, and with no shadows
+  at all, then puts everything back and leaves the table in the panel. One
+  screenshot of it says what is slowing your machine down.
 - It only changes `Light.Shadows`, `BasePart.CastShadow`,
   `LocalTransparencyModifier` and `Enabled` on the `LowQualityDisable` lights —
   the dump shows DOORS' own scripts never write the first three on rooms, and

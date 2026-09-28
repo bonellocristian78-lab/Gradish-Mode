@@ -11,6 +11,8 @@
 
         F8  acceso / spento (per confrontare gli FPS)
         F7  mostra / nasconde il riquadro con gli FPS
+        F6  test: misura gli FPS in quattro situazioni e scrive i risultati
+            nel riquadro (stai fermo e non girare la camera per 12 secondi)
 
         COME L'HO CAPITO
         ----------------
@@ -81,6 +83,7 @@
 local CONFIG = {
 	ToggleKey         = Enum.KeyCode.F8,
 	StatsKey          = Enum.KeyCode.F7,  -- non F9: F9 apre la console di Roblox
+	TestKey           = Enum.KeyCode.F6,
 	ShowStats         = true,
 
 	FpsCap            = 240,   -- 0 = non toccare il limite degli FPS
@@ -121,6 +124,8 @@ local Players           = game:GetService("Players")
 local RunService        = game:GetService("RunService")
 local UserInputService  = game:GetService("UserInputService")
 local CollectionService = game:GetService("CollectionService")
+local Lighting          = game:GetService("Lighting")
+local Stats             = game:GetService("Stats")
 
 local LocalPlayer = Players.LocalPlayer
 
@@ -425,6 +430,98 @@ local function setActive(on)
 	updateLights()
 end
 
+---====== DOVE VA IL TEMPO ======---
+--[[ Stats dà, per ogni frame, il tempo della scheda video (GPU), quello del processore per il
+     disegno (CPU) e quello degli script. Non dice se sono secondi o millisecondi: si capisce
+     confrontando il suo FrameTime con il frame misurato qui, che è in secondi ]]
+
+local function readStat(name)
+	local ok, value = pcall(function()
+		return Stats[name]
+	end)
+	return if ok and type(value) == "number" then value else 0
+end
+
+-- GPU, CPU e script in millisecondi; frameSeconds è la durata di un frame misurata qui
+local function renderTimes(frameSeconds)
+	local scale = if readStat("FrameTime") > frameSeconds * 100 then 1 else 1000
+	return readStat("RenderGPUFrameTime") * scale, readStat("RenderCPUFrameTime") * scale, readStat("HeartbeatTime") * scale
+end
+
+-- Chi tiene giù gli FPS: il più lento dei tre
+local function bottleneck(gpu, cpu, script)
+	if gpu <= 0 and cpu <= 0 then return nil end
+	local worst, name = gpu, "scheda video"
+	if cpu > worst then worst, name = cpu, "processore" end
+	if script > worst then name = "script" end
+	return name
+end
+
+---====== IL TEST (F6) ======---
+--[[ Quattro misure di 2 secondi, ognuna dopo 1 secondo per assestarsi: ottimizzatore spento,
+     acceso, acceso senza nessuna luce con le ombre, e senza nessuna ombra (nemmeno quelle
+     globali). Poi rimette tutto com'era e lascia i risultati nel riquadro ]]
+
+local TEST_SETTLE, TEST_MEASURE = 1, 2
+local TEST_PHASES = {
+	{ name = "spento", apply = function() setActive(false) end },
+	{ name = "acceso", apply = function() setActive(true) end },
+	{ name = "0 luci ombre", apply = function()
+		CONFIG.ShadowLights = 0
+		updateLights()
+	end },
+	{ name = "zero ombre", apply = function() Lighting.GlobalShadows = false end },
+}
+local test = nil        -- il test in corso
+local testResults = nil -- i risultati dell'ultimo
+
+local function startTest()
+	if test then return end
+	test = { phase = 0, phaseEnd = 0, results = {},
+		wasActive = active, shadowLights = CONFIG.ShadowLights, globalShadows = Lighting.GlobalShadows }
+	testResults = nil
+end
+
+local function finishTest()
+	CONFIG.ShadowLights = test.shadowLights
+	Lighting.GlobalShadows = test.globalShadows
+	testResults = test.results
+	local wasActive = test.wasActive
+	test = nil
+	setActive(wasActive)
+end
+
+local function stepTest(deltaTime)
+	local now = os.clock()
+	if now < test.phaseEnd then
+		if now >= test.measureFrom then
+			test.frames += 1
+			test.seconds += deltaTime
+			test.gpu += (renderTimes(deltaTime))
+			test.shadowCalls += readStat("ShadowsDrawcallCount")
+		end
+		return
+	end
+	if test.phase > 0 then
+		local frames = math.max(test.frames, 1)
+		table.insert(test.results, {
+			name = TEST_PHASES[test.phase].name,
+			fps = test.frames / math.max(test.seconds, 1e-3),
+			gpu = test.gpu / frames,
+			shadowCalls = test.shadowCalls / frames,
+		})
+	end
+	test.phase += 1
+	if test.phase > #TEST_PHASES then
+		finishTest()
+		return
+	end
+	TEST_PHASES[test.phase].apply()
+	test.measureFrom = now + TEST_SETTLE
+	test.phaseEnd = test.measureFrom + TEST_MEASURE
+	test.frames, test.seconds, test.gpu, test.shadowCalls = 0, 0, 0, 0
+end
+
 ---====== IL RIQUADRO ======---
 
 local statsLabel = nil
@@ -440,7 +537,8 @@ local function buildStats()
 	gui.DisplayOrder = 9999
 	local label = Instance.new("TextLabel")
 	label.Position = UDim2.fromOffset(12, 60)
-	label.Size = UDim2.fromOffset(250, 118)
+	label.Size = UDim2.fromOffset(300, 0)
+	label.AutomaticSize = Enum.AutomaticSize.Y
 	label.BackgroundColor3 = Color3.fromRGB(10, 10, 14)
 	label.BackgroundTransparency = 0.35
 	label.BorderSizePixel = 0
@@ -454,6 +552,7 @@ local function buildStats()
 	local padding = Instance.new("UIPadding")
 	padding.PaddingLeft = UDim.new(0, 8)
 	padding.PaddingTop = UDim.new(0, 6)
+	padding.PaddingBottom = UDim.new(0, 6)
 	padding.Parent = label
 	local corner = Instance.new("UICorner")
 	corner.CornerRadius = UDim.new(0, 6)
@@ -488,13 +587,32 @@ local function drawStats(deltaTime)
 		total += 1
 		if record.hidden then hidden += 1 end
 	end
-	statsLabel.Text = string.format(
+	local text = string.format(
 		"<b>DOORS OPTIMIZER</b> %s\n<font color=\"%s\"><b>%d FPS</b></font>  %.1f ms  grafica %s\n"
 			.. "ombre luci   %d / %d\nluci riemp.  %d / %d\nsenza ombra  %d pezzi\nstanze nasc. %d / %d",
 		if active then "<font color=\"#7CFC9A\">ON</font>" else "<font color=\"#FF6B6B\">OFF</font>",
 		colour, math.floor(fps + 0.5), average * 1000, quality,
 		stats.shadowOn, stats.shadowTotal, stats.fillOn, stats.fillTotal, stats.noShadow, hidden, total
 	)
+
+	local gpu, cpu, script = renderTimes(average)
+	local limit = bottleneck(gpu, cpu, script)
+	if limit then
+		text ..= string.format(
+			"\nGPU %.0f ms  CPU %.0f ms  script %.1f ms\ndisegni %d  per le ombre %d\nlimite: <b>%s</b>",
+			gpu, cpu, script, readStat("SceneDrawcallCount"), readStat("ShadowsDrawcallCount"), limit
+		)
+	end
+
+	if test then
+		text ..= string.format("\n\n<b>TEST %d/%d</b>: stai fermo, non girare la camera", math.max(test.phase, 1), #TEST_PHASES)
+	elseif testResults then
+		text ..= "\n\n<b>TEST (F6)</b>      FPS  GPU ms  ombre"
+		for _, result in ipairs(testResults) do
+			text ..= string.format("\n%-13s %4.0f  %6.0f  %5.0f", result.name, result.fps, result.gpu, result.shadowCalls)
+		end
+	end
+	statsLabel.Text = text
 end
 
 ---====== AVVIO ======---
@@ -519,6 +637,7 @@ buildStats()
 local nextLights = 0
 track(RunService.Heartbeat:Connect(function(deltaTime)
 	work()
+	if test then stepTest(deltaTime) end
 	local now = os.clock()
 	if now >= nextLights then
 		nextLights = now + CONFIG.UpdateInterval
@@ -533,6 +652,9 @@ track(UserInputService.InputBegan:Connect(function(input, processed)
 		setActive(not active)
 	elseif input.KeyCode == CONFIG.StatsKey and statsLabel then
 		statsLabel.Visible = not statsLabel.Visible
+	elseif input.KeyCode == CONFIG.TestKey then
+		if statsLabel then statsLabel.Visible = true end
+		startTest()
 	end
 end))
 
@@ -540,6 +662,10 @@ refreshRooms()
 
 -- Toglie tutto e rimette il gioco com'era: niente stanze invisibili, ombre e luci come prima
 _G.DoorsOptimizerStop = function()
+	if test then
+		Lighting.GlobalShadows = test.globalShadows
+		test = nil
+	end
 	active = false
 	-- Tutte le stanze, anche quelle a metà di un lavoro
 	for _, record in pairs(rooms) do
@@ -574,5 +700,5 @@ _G.DoorsOptimizerStop = function()
 	_G.DoorsOptimizerStop = nil
 end
 
-print(("[Optimizer] acceso: F8 acceso/spento, F7 riquadro. %d stanze, FPS massimi %s"):format(
+print(("[Optimizer] acceso: F8 acceso/spento, F7 riquadro, F6 test. %d stanze, FPS massimi %s"):format(
 	#CurrentRooms:GetChildren(), if CONFIG.FpsCap > 0 and setfpscap then tostring(CONFIG.FpsCap) else "come prima"))
