@@ -54,6 +54,7 @@ mod rather than playing it.
 | Mischievous Light | `.../MischievousLight` |
 | Red Seek | `.../RedSeek` |
 | Honcho | `.../Honcho.lua` |
+| Honcho V2 | `.../HonchoV2.lua` |
 | J-518 | `.../J-518` |
 | Crucifixes in drawers | `.../CrucifixSpawner` |
 
@@ -165,7 +166,7 @@ before.
 ## The chain crucifix
 
 ```lua
-_G.CrucifixType = "Guiding"   -- or "Curious", or "Fail"; leave the line out for Guiding
+_G.CrucifixType = "Guiding"   -- or "Curious", "Fail", "Glitch"; leave the line out for Guiding
 loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/Crucifix"))()
 ```
 
@@ -180,12 +181,43 @@ ritual on your screen cannot save you from them, so it does not try.
 | `Guiding` | blue | the entity is dragged down and gone |
 | `Curious` | yellow | the same, in yellow |
 | `Fail` | blue, then red | the entity tears the chains, breaks the crucifix, lands and carries on |
+| `Glitch` | blue, then flickering violet | never still in your hand — it jumps, sheds violet and cyan ghosts and DOORS' Glitch fragments. Always fails, and the screen tears. On Honcho V2 what is left of it hits him and he transforms |
 
 Any crucifix also fails on an entity that resists — Speedster Purpleist always,
 Rose Hell 85% of the time. Honcho's fail has its own animation, also shipped as
 `HonchoCrucifixFail.rbxmx` to open in Studio's Animation Editor.
 
-The ritual lives in `CrucifixRitual`, which Honcho, J-518 and `Crucifix` all load.
+The ritual lives in `CrucifixRitual`, which Honcho, Honcho V2, J-518 and `Crucifix`
+all load.
+
+## Honcho V2
+
+```lua
+_G.CrucifixType = "Glitch"    -- optional: "Guiding", "Curious", "Fail" or "Glitch"
+loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/HonchoV2.lua"))()
+```
+
+Honcho with the crucifixion rebuilt. `Honcho.lua` is still there, unchanged. Every
+setting works the same way (`_G.Speed`, `_G.Size`, `_G.Rebounds`...).
+
+- Every animation lasts two seconds longer. A column of light lifts him and he
+  hangs in it with his arms open; the chains arrive one at a time and sway; a
+  sigil lights up above him and a halo turns behind the crucifix. At the end he
+  pulls himself half out of the hole and everything goes quiet, as if he made it
+  — then the last pull, and a column of light rises from the closing hole.
+- The fail is two seconds longer too: he gathers himself before the last tear.
+- The jumpscare and the sink at the end of the run last two seconds longer.
+- With the **Glitch** crucifix he breaks free, lands, and the glitch left where
+  the crucifix was strikes him. For ten seconds he goes mad on the floor — he
+  clutches his head, convulses, staggers around the room, his pose freezes and
+  skips like a broken video — while the glitch climbs him from the feet up,
+  smoothly, into violet and near-black. Then he gets up glitched, leaving ghosts
+  and flickering, and hunts you again, 25% faster.
+
+The three animations are also shipped for Studio's Animation Editor:
+`HonchoV2Crucifix.rbxmx`, `HonchoV2CrucifixFail.rbxmx`,
+`HonchoV2CrucifixGlitch.rbxmx`. They hold the keyed poses; the trembling, the
+glitch stutter and the wandering are added by the script.
 
 ## The crucifixes
 
@@ -226,7 +258,8 @@ supposed to feel like, so that her refusing it later lands.
 | **Blue Hell** | Rose Hell's brother. The closer he gets, the slower *you* get |
 | **Mischievous Light** | The red death light |
 | **Honcho** | Standalone. Runs the rooms like Rush; hold a crucifix and he is chained into the floor |
-| **J-518** | Standalone room boss. A black and white portal opens in the ceiling, ten seconds of warning, then he knocks on every wardrobe. Be inside one |
+| **Honcho V2** | Honcho with a longer, more dramatic crucifixion, and the Glitch crucifix that transforms him |
+| **J-518** | Standalone room boss. A black and white vortex opens in the ceiling, ten seconds of warning, then he knocks on every wardrobe. Be inside one |
 
 ---
 
@@ -263,8 +296,9 @@ Over 400 simulated seeds: no spacing violations, about 12 encounters per run.
 | `GradishCore` | the engine — every other script loads it |
 | `MainScript` | the entry point, the schedule |
 | `AchievementConfig` | every badge's wording, images and on/off switches |
-| `CrucifixRitual` | the chain ritual and the crucifix itself, shared by `Crucifix`, Honcho and J-518 |
+| `CrucifixRitual` | the chain ritual and the crucifix itself, shared by `Crucifix`, Honcho, Honcho V2 and J-518 |
 | `HonchoCrucifixFail.rbxmx` | Honcho's fail animation as a KeyframeSequence, for Studio |
+| `HonchoV2Crucifix*.rbxmx` | Honcho V2's three crucifix animations (banish, fail, glitch), for Studio |
 | `GradishDev` | the console |
 | `GradishCheck` | the config report |
 | `ImagesA/` | one file per entity saying where its picture comes from |

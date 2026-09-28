@@ -20,6 +20,10 @@
             "Curious"   giallo. Stessa cattura, tonalità e particelle gialle
             "Fail"      parte blu, poi diventa rosso: l'entità strappa le
                         catene, spezza il crocifisso e sopravvive
+            "Glitch"    in mano non sta mai fermo: scatta, lascia fantasmi viola
+                        e ciano, perde frammenti del Glitch di DOORS. Fallisce
+                        sempre, in viola, con lo schermo che si strappa. Su
+                        Honcho V2 il glitch che resta lo trasforma
 
         Anche un Guiding o un Curious finisce in Fail se l'entità resiste
         (Speedster Purpleist sempre, Rose Hell l'85% delle volte).
@@ -32,7 +36,7 @@
 ---====== IMPOSTAZIONI ======---
 
 local CONFIG = {
-	Type  = "Guiding",  -- "Guiding", "Curious" o "Fail"
+	Type  = "Guiding",  -- "Guiding", "Curious", "Fail" o "Glitch"
 	Equip = true,       -- false = va nello zaino invece che in mano
 }
 
@@ -44,7 +48,7 @@ if chosen ~= nil then
 	CONFIG.Type = chosen
 end
 
-if CONFIG.Type ~= "Guiding" and CONFIG.Type ~= "Curious" and CONFIG.Type ~= "Fail" then
+if not table.find({ "Guiding", "Curious", "Fail", "Glitch" }, CONFIG.Type) then
 	warn(("[Crucifix] tipo %q sconosciuto, uso Guiding"):format(tostring(CONFIG.Type)))
 	CONFIG.Type = "Guiding"
 end

@@ -10,14 +10,22 @@
 
         COME VA
         -------
-        1. Al centro del soffitto si apre un portale bianco e nero. Per dieci
-           secondi la stanza perde colore, le luci calano e tremano, e battiti
-           cupi arrivano sempre più fitti. Nessuna scritta: si capisce da soli.
-        2. Allo scadere scende dal portale al centro della stanza.
-        3. Va davanti a ogni armadio e bussa tre volte. Se sei dentro sei salvo,
-           e lo senti bussare a un palmo da te. Se sei fuori e ti vede, jumpscare.
-        4. Finito il giro torna sotto il portale, ci rientra e il portale si
-           chiude. Non resta niente: istanze, suoni, luci e connessioni.
+        1. Dal centro del soffitto si apre un vortice bianco e nero che pende
+           nella stanza, con tentacoli d'ombra e una colonna di luce fredda. Per
+           dieci secondi la stanza si raffredda, le luci calano e tremano, e
+           battiti cupi arrivano sempre più fitti. Nessuna scritta.
+        2. Allo scadere esce dal vortice, si gonfia, cade e rimbalza a
+           mezz'aria al centro della stanza.
+        3. Va davanti a ogni armadio e bussa tre volte: si carica, colpisce,
+           rimbalza, e alla fine si sporge ad ascoltare. Se sei dentro sei
+           salvo, e lo senti bussare a un palmo da te. Se sei fuori e ti vede,
+           jumpscare.
+        4. Finito il giro torna sotto il portale, ci viene risucchiato girando
+           su se stesso e il portale si chiude. Non resta niente: istanze,
+           suoni, luci e connessioni.
+
+        Si muove come una cosa che galleggia: accelera e frena, si piega in
+        avanti quando parte e di lato quando curva, ondeggia su e giù.
 
         Il crocifisso lo ferma (Crucifix, o quello che ti dà Honcho), con il
         rituale di CrucifixRitual. Resist = true qui sotto e nessuno lo ferma.
@@ -72,8 +80,9 @@ local CONFIG = {
 	-- Tempi, in secondi
 	Countdown     = 10,
 	PortalOpen    = 2,
+	EmergeTime    = 0.6,   -- esce dal portale gonfiandosi, prima di cadere
 	DescendTime   = 1.4,
-	ReturnTime    = 1.2,
+	ReturnTime    = 1.6,
 	KnockCount    = 3,
 	KnockInterval = 0.55,
 	ListenTime    = 1,     -- resta davanti all'armadio dopo i colpi
@@ -81,7 +90,8 @@ local CONFIG = {
 	-- Spazio, in stud
 	PortalSize  = 11,
 	HoverHeight = 4.5,     -- sopra il pavimento mentre caccia
-	Speed       = 16,      -- stud al secondo
+	Speed        = 16,     -- stud al secondo
+	Acceleration = 30,     -- stud al secondo, al secondo: niente partenze e frenate di colpo
 	StandOff    = 3,       -- a che distanza dall'anta si ferma
 	MaxSpots    = 8,       -- armadi al massimo per stanza
 
@@ -125,6 +135,8 @@ local LocalPlayer = Players.LocalPlayer
 
 local WHITE = Color3.new(1, 1, 1)
 local BLACK = Color3.fromRGB(8, 8, 10)
+local COLD  = Color3.fromRGB(190, 206, 255) -- il colore che prendono le luci della stanza
+local TINT  = Color3.fromRGB(218, 226, 255) -- e lo schermo
 
 ---====== LOG ======---
 
@@ -165,8 +177,6 @@ local state = {
 	banishing = false, -- il rituale è in corso: il giro aspetta
 	caught   = false,
 	portal   = nil,
-	position = Vector3.zero,
-	facing   = CFrame.identity,
 }
 
 local function track(item)
@@ -216,6 +226,21 @@ local function flatUnit(vector)
 	local flat = Vector3.new(vector.X, 0, vector.Z)
 	if flat.Magnitude < 0.05 then return nil end
 	return flat.Unit
+end
+
+local function smooth(x)
+	x = math.clamp(x, 0, 1)
+	return x * x * (3 - 2 * x)
+end
+
+-- Da un angolo all'altro per la via più corta
+local function turnTowards(current, target, alpha)
+	local delta = (target - current + math.pi) % (2 * math.pi) - math.pi
+	return current + delta * alpha
+end
+
+local function yawOf(direction)
+	return math.atan2(-direction.X, -direction.Z)
 end
 
 local function tween(instance, duration, goals, style, direction)
@@ -512,66 +537,158 @@ local function loadModel()
 end
 
 ---====== IL PORTALE ======---
---[[ Un disco rivolto in giù, appena sotto il soffitto. Dentro: una massa nera al centro e gli
-     anelli del cerchio di DOORS, bianchi e neri, che girano in versi opposti. Sotto: fumo nero,
-     scintille e strisce bianche che cadono, e una luce bianca che trema. La tela della SurfaceGui
-     è fissa (512), non cresce con il portale. ]]
+--[[ Un vortice che pende dal soffitto, non un disco piatto.
 
-local function buildPortal(position)
-	local disc = newPart("Portal", Vector3.new(0.2, 0.05, 0.2), CFrame.new(position), 1)
+     - La bocca: un disco nero appena sotto il soffitto, e una massa nera che si gonfia verso il
+       basso a ogni battito.
+     - Sotto la bocca cinque anelli del cerchio di DOORS, uno sotto l'altro, sempre più piccoli e
+       più trasparenti: un imbuto che scende. Girano in versi opposti e ondeggiano ognuno per
+       conto suo, così muovendo la camera si vede la profondità.
+     - Sei tentacoli d'ombra che pendono dal bordo e si contorcono.
+     - Una colonna di luce fredda fino al pavimento e un faro che illumina la stanza dall'alto.
+     - Fumo nero che scende e viene risucchiato su, scintille, strisce.
 
+     Si apre e si chiude con una molla: arriva, supera un poco e si assesta. Luce e rotazione
+     inseguono piano i valori che gli si danno, quindi non cambiano mai di colpo. Tutto si
+     aggiorna in un solo ciclo per frame, e le tele hanno una misura fissa. ]]
+
+local RING_LAYERS = {
+	-- quanto sotto il soffitto, grandezza rispetto alla bocca, colore, trasparenza, giri al secondo
+	{ depth = 0.06, scale = 1.00, colour = WHITE,                        transparency = 0.05, speed = 24 },
+	{ depth = 0.45, scale = 0.80, colour = Color3.fromRGB(150, 150, 156), transparency = 0.2,  speed = -40 },
+	{ depth = 1.00, scale = 0.62, colour = WHITE,                        transparency = 0.35, speed = 62 },
+	{ depth = 1.70, scale = 0.46, colour = Color3.fromRGB(110, 110, 118), transparency = 0.5,  speed = -90 },
+	{ depth = 2.50, scale = 0.32, colour = WHITE,                        transparency = 0.62, speed = 130 },
+}
+local TENDRILS = 6
+
+local function ringDisc(name, position, textureId, colour, face)
+	local disc = newPart(name, Vector3.new(0.05, 0.02, 0.05), CFrame.new(position), 1)
 	local gui = Instance.new("SurfaceGui")
-	gui.Face = Enum.NormalId.Bottom
+	gui.Face = face or Enum.NormalId.Bottom
 	gui.LightInfluence = 0
 	gui.Brightness = 2.5
 	gui.SizingMode = Enum.SurfaceGuiSizingMode.FixedSize
-	gui.CanvasSize = Vector2.new(512, 512)
+	gui.CanvasSize = Vector2.new(256, 256)
 	gui.Parent = disc
+	local image = Instance.new("ImageLabel")
+	image.BackgroundTransparency = 1
+	image.Size = UDim2.fromScale(1, 1)
+	image.Image = "rbxassetid://" .. textureId
+	image.ImageColor3 = colour
+	image.ImageTransparency = 1
+	image.Rotation = math.random(0, 359)
+	image.Parent = gui
+	return disc, image
+end
 
-	local mass = Instance.new("Frame")
-	mass.AnchorPoint = Vector2.new(0.5, 0.5)
-	mass.Position = UDim2.fromScale(0.5, 0.5)
-	mass.Size = UDim2.fromScale(0.6, 0.6)
-	mass.BackgroundColor3 = BLACK
-	mass.BorderSizePixel = 0
-	mass.Parent = gui
+local function buildPortal(position, geometry)
+	local size = CONFIG.PortalSize
+	local rings = CONFIG.Textures.Rings
+	local height = math.max(position.Y - geometry.floorY, 1)
+
+	-- La bocca: un cerchio nero con un bordo sfumato
+	local mouth = newPart("PortalMouth", Vector3.new(0.05, 0.02, 0.05), CFrame.new(position), 1)
+	local gui = Instance.new("SurfaceGui")
+	gui.Face = Enum.NormalId.Bottom
+	gui.LightInfluence = 0
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.FixedSize
+	gui.CanvasSize = Vector2.new(256, 256)
+	gui.Parent = mouth
+	local void = Instance.new("Frame")
+	void.AnchorPoint = Vector2.new(0.5, 0.5)
+	void.Position = UDim2.fromScale(0.5, 0.5)
+	void.Size = UDim2.fromScale(0.78, 0.78)
+	void.BackgroundColor3 = BLACK
+	void.BorderSizePixel = 0
+	void.Parent = gui
 	local corner = Instance.new("UICorner")
 	corner.CornerRadius = UDim.new(0.5, 0)
-	corner.Parent = mass
+	corner.Parent = void
+	local edge = Instance.new("ImageLabel")
+	edge.BackgroundTransparency = 1
+	edge.Size = UDim2.fromScale(1, 1)
+	edge.Image = "rbxassetid://" .. rings[1]
+	edge.ImageColor3 = BLACK
+	edge.ZIndex = 2
+	edge.Parent = gui
 
-	local rings = {}
-	local colours = { WHITE, BLACK, WHITE }
-	local speeds = { 40, -65, 95 }
-	local scales = { 1, 0.82, 0.62 }
-	for index, textureId in ipairs(CONFIG.Textures.Rings) do
-		local image = Instance.new("ImageLabel")
-		image.AnchorPoint = Vector2.new(0.5, 0.5)
-		image.Position = UDim2.fromScale(0.5, 0.5)
-		image.Size = UDim2.fromScale(scales[index], scales[index])
-		image.BackgroundTransparency = 1
-		image.Image = "rbxassetid://" .. textureId
-		image.ImageColor3 = colours[index]
-		image.Rotation = math.random(0, 359)
-		image.ZIndex = 1 + index
-		image.Parent = gui
-		table.insert(rings, { image = image, speed = speeds[index] })
+	-- La massa nera che si gonfia sotto la bocca: una sfera schiacciata, con le sue ombre
+	local mass = newPart("PortalMass", Vector3.one * 0.05, CFrame.new(position), 0)
+	mass.Color = BLACK
+	mass.Material = Enum.Material.SmoothPlastic
+	local ellipsoid = Instance.new("SpecialMesh")
+	ellipsoid.MeshType = Enum.MeshType.Sphere
+	ellipsoid.Parent = mass
+
+	-- L'imbuto di anelli
+	local layers = {}
+	for index, spec in ipairs(RING_LAYERS) do
+		local disc, image = ringDisc("PortalRing", position - Vector3.new(0, spec.depth, 0), rings[(index - 1) % #rings + 1], spec.colour)
+		table.insert(layers, { part = disc, image = image, spec = spec })
 	end
+
+	-- I tentacoli: una Beam dal bordo a un punto che pende, e si contorcono
+	local tendrils = {}
+	for index = 1, TENDRILS do
+		local angle = (index - 1) / TENDRILS * math.pi * 2 + math.random() * 0.4
+		local rim = Vector3.new(math.cos(angle), 0, math.sin(angle)) * size * 0.42
+		local root = Instance.new("Attachment")
+		root.Parent = mouth
+		local tip = Instance.new("Attachment")
+		tip.Parent = mouth
+		local beam = Instance.new("Beam")
+		beam.Attachment0 = root
+		beam.Attachment1 = tip
+		beam.Texture = "rbxassetid://" .. CONFIG.Textures.Smoke
+		beam.TextureMode = Enum.TextureMode.Stretch
+		beam.TextureSpeed = 0.6
+		beam.Color = ColorSequence.new(Color3.fromRGB(0, 0, 0), Color3.fromRGB(24, 24, 28))
+		beam.Transparency = sequence({ { 0, 0.05 }, { 0.7, 0.45 }, { 1, 1 } })
+		beam.LightEmission = 0
+		beam.LightInfluence = 0
+		beam.FaceCamera = true
+		beam.Segments = 12
+		beam.Width0 = 0
+		beam.Width1 = 0
+		beam.Parent = mouth
+		table.insert(tendrils, {
+			root = root, tip = tip, beam = beam, rim = rim,
+			hang = rim * (0.55 + math.random() * 0.3), length = 2.5 + math.random() * 3, seed = index * 2.3,
+		})
+	end
+
+	-- La colonna di luce: due cilindri al neon quasi trasparenti, fino al pavimento
+	local shafts = {}
+	for _, spec in ipairs({ { 0.35, 0.05 }, { 0.7, 0.022 } }) do
+		local shaft = newPart("PortalShaft", Vector3.new(height, 0.05, 0.05),
+			CFrame.new(position - Vector3.new(0, height / 2, 0)) * CFrame.Angles(0, 0, math.rad(90)), 1)
+		shaft.Shape = Enum.PartType.Cylinder
+		shaft.Material = Enum.Material.Neon
+		shaft.Color = Color3.fromRGB(225, 232, 255)
+		table.insert(shafts, { part = shaft, width = spec[1], strength = spec[2] })
+	end
+
+	-- Le particelle: fumo che scende e torna su, scintille che cadono, strisce per la discesa
+	local emitterBase = newPart("PortalEmitters", Vector3.new(size * 0.7, 0.2, size * 0.7), CFrame.new(position - Vector3.new(0, 0.3, 0)), 1)
 
 	local smoke = Instance.new("ParticleEmitter")
 	smoke.Texture = "rbxassetid://" .. CONFIG.Textures.Smoke
-	smoke.Color = ColorSequence.new(Color3.fromRGB(0, 0, 0), Color3.fromRGB(30, 30, 34))
+	smoke.Color = ColorSequence.new(Color3.fromRGB(0, 0, 0), Color3.fromRGB(34, 34, 38))
 	smoke.LightEmission = 0
 	smoke.LightInfluence = 0
 	smoke.EmissionDirection = Enum.NormalId.Bottom
-	smoke.Lifetime = NumberRange.new(1.5, 3)
-	smoke.Speed = NumberRange.new(1, 4)
-	smoke.SpreadAngle = Vector2.new(25, 25)
-	smoke.Size = sequence({ { 0, 2 }, { 1, 5 } })
-	smoke.Transparency = sequence({ { 0, 1 }, { 0.2, 0.35 }, { 1, 1 } })
-	smoke.RotSpeed = NumberRange.new(-40, 40)
+	smoke.Lifetime = NumberRange.new(2, 3.5)
+	smoke.Speed = NumberRange.new(2, 5)
+	smoke.Acceleration = Vector3.new(0, 3.2, 0)
+	smoke.Drag = 0.6
+	smoke.SpreadAngle = Vector2.new(30, 30)
+	smoke.Size = sequence({ { 0, 1.5 }, { 0.5, 4 }, { 1, 2.5 } })
+	smoke.Transparency = sequence({ { 0, 1 }, { 0.25, 0.35 }, { 0.8, 0.6 }, { 1, 1 } })
+	smoke.RotSpeed = NumberRange.new(-50, 50)
 	smoke.Rotation = NumberRange.new(0, 360)
 	smoke.Rate = 0
-	smoke.Parent = disc
+	smoke.Parent = emitterBase
 
 	local sparks = Instance.new("ParticleEmitter")
 	sparks.Texture = "rbxassetid://" .. CONFIG.Textures.Spark
@@ -579,13 +696,14 @@ local function buildPortal(position)
 	sparks.LightEmission = 1
 	sparks.LightInfluence = 0
 	sparks.EmissionDirection = Enum.NormalId.Bottom
-	sparks.Lifetime = NumberRange.new(0.6, 1.6)
-	sparks.Speed = NumberRange.new(3, 10)
-	sparks.Acceleration = Vector3.new(0, -8, 0)
-	sparks.SpreadAngle = Vector2.new(35, 35)
-	sparks.Size = sequence({ { 0, 0.8 }, { 1, 0 } })
+	sparks.Lifetime = NumberRange.new(0.8, 1.8)
+	sparks.Speed = NumberRange.new(2, 7)
+	sparks.Acceleration = Vector3.new(0, -6, 0)
+	sparks.Drag = 0.8
+	sparks.SpreadAngle = Vector2.new(40, 40)
+	sparks.Size = sequence({ { 0, 0.6 }, { 1, 0 } })
 	sparks.Rate = 0
-	sparks.Parent = disc
+	sparks.Parent = emitterBase
 
 	local streaks = Instance.new("ParticleEmitter")
 	streaks.Texture = "rbxassetid://" .. CONFIG.Textures.Streak
@@ -599,45 +717,134 @@ local function buildPortal(position)
 	streaks.Size = sequence({ { 0, 1.2 }, { 1, 0 } })
 	streaks.Transparency = sequence({ { 0, 0.5 }, { 1, 1 } })
 	streaks.Rate = 0
-	streaks.Parent = disc
+	streaks.Parent = emitterBase
+
+	-- Il faro: illumina la stanza dall'alto, con le ombre dei mobili
+	local spot = Instance.new("SpotLight")
+	spot.Face = Enum.NormalId.Bottom
+	spot.Color = Color3.fromRGB(225, 232, 255)
+	spot.Angle = 75
+	spot.Range = math.min(height + 8, 60)
+	spot.Brightness = 0
+	spot.Shadows = true
+	spot.Parent = mouth
 
 	local light = Instance.new("PointLight")
 	light.Color = WHITE
 	light.Brightness = 0
-	light.Range = 26
+	light.Range = 16
 	light.Shadows = false
-	light.Parent = disc
+	light.Parent = mouth
 
 	return {
-		disc = disc, gui = gui, mass = mass, rings = rings,
-		smoke = smoke, sparks = sparks, streaks = streaks, light = light,
-		spin = 1, glow = 0, flicker = 0,
+		position = position, height = height,
+		mouth = mouth, void = void, edge = edge, mass = mass, layers = layers, tendrils = tendrils, shafts = shafts,
+		smoke = smoke, sparks = sparks, streaks = streaks, spot = spot, light = light,
+		-- La molla dell'apertura: target è quanto deve essere aperto (1 = PortalSize)
+		open = 0, openSpeed = 0, target = 0, omega = 4 / (0.7 * CONFIG.PortalOpen), damping = 0.7,
+		-- Quello che gli si chiede, e quello che mostra davvero (lo insegue piano)
+		spin = 1, glow = 0, shownSpin = 1, shownGlow = 0,
+		beat = 0,
 	}
 end
 
-local function sizePortal(portal, size, duration, style, direction)
-	tween(portal.disc, duration, { Size = Vector3.new(math.max(size, 0.1), 0.05, math.max(size, 0.1)) },
-		style or Enum.EasingStyle.Back, direction or Enum.EasingDirection.Out)
+local function stepPortal(portal, deltaTime, now)
+	if not portal.mouth.Parent then return end
+
+	local omega, damping = portal.omega, portal.damping
+	portal.openSpeed += ((portal.target - portal.open) * omega * omega - portal.openSpeed * 2 * damping * omega) * deltaTime
+	portal.open = math.max(portal.open + portal.openSpeed * deltaTime, 0)
+	local follow = 1 - math.exp(-4 * deltaTime)
+	portal.shownGlow += (portal.glow - portal.shownGlow) * follow
+	portal.shownSpin += (portal.spin - portal.shownSpin) * follow
+	portal.beat = math.max(portal.beat - deltaTime * 2.5, 0)
+
+	local open = portal.open
+	local fade = math.clamp(open * 3, 0, 1)
+	local size = math.max(CONFIG.PortalSize * open, 0.05)
+	local position = portal.position
+
+	portal.mouth.Size = Vector3.new(size, 0.02, size)
+	portal.void.BackgroundTransparency = 1 - fade
+	portal.edge.ImageTransparency = 1 - fade
+
+	-- La massa respira, e a ogni battito si gonfia verso il basso
+	local breathe = 0.12 + 0.03 * math.sin(now * 1.3) + 0.12 * portal.beat
+	portal.mass.Size = Vector3.new(size * 0.55, math.max(size * breathe, 0.05), size * 0.55)
+	portal.mass.CFrame = CFrame.new(position)
+
+	for index, layer in ipairs(portal.layers) do
+		local spec = layer.spec
+		local wobble = Vector3.new(math.noise(now * 0.4, index * 3.1), 0, math.noise(now * 0.4, index * 7.3)) * 0.6 * open
+		local diameter = math.max(size * spec.scale, 0.05)
+		layer.part.Size = Vector3.new(diameter, 0.02, diameter)
+		layer.part.CFrame = CFrame.new(position - Vector3.new(0, spec.depth * math.min(open, 1.2), 0) + wobble)
+		layer.image.Rotation = (layer.image.Rotation + spec.speed * portal.shownSpin * deltaTime) % 360
+		layer.image.ImageTransparency = spec.transparency + (1 - spec.transparency) * (1 - fade)
+	end
+
+	for _, tendril in ipairs(portal.tendrils) do
+		local t = now * 0.7 + tendril.seed
+		tendril.root.Position = tendril.rim * open
+		tendril.tip.Position = tendril.hang * open + Vector3.new(
+			math.noise(t, 1.3) * 1.6,
+			-tendril.length * open * (1 + 0.25 * portal.beat) + math.noise(t, 4.2),
+			math.noise(t, 8.8) * 1.6
+		)
+		tendril.beam.CurveSize0 = math.noise(t * 1.3, 2.2) * 4 * open
+		tendril.beam.CurveSize1 = math.noise(t * 1.3, 6.6) * 3 * open
+		tendril.beam.Width0 = 0.9 * fade
+		tendril.beam.Width1 = 0.15 * fade
+	end
+
+	-- La luce trema piano, non a scatti
+	local glow = portal.shownGlow * (1 - 0.25 * math.max(math.noise(now * 6, 0.5), 0) * 2)
+	portal.spot.Brightness = glow * 0.9
+	portal.light.Brightness = glow * 0.5
+	local shaft = math.clamp(portal.shownGlow / 6, 0, 1) * math.min(open, 1)
+	for _, entry in ipairs(portal.shafts) do
+		local width = math.max(size * entry.width, 0.05)
+		entry.part.Size = Vector3.new(portal.height, width, width)
+		entry.part.Transparency = 1 - (entry.strength + entry.strength * 0.8 * portal.beat) * shaft
+	end
+end
+
+-- Un'onda di polvere sul pavimento, quando arriva
+local function floorRing(position)
+	local disc, image = ringDisc("FloorRing", position, CONFIG.Textures.Rings[1], Color3.fromRGB(190, 190, 196), Enum.NormalId.Top)
+	image.ImageTransparency = 0.2
+	tween(disc, 0.7, { Size = Vector3.new(18, 0.02, 18) }, Enum.EasingStyle.Quart)
+	tween(image, 0.7, { ImageTransparency = 1 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+	task.delay(0.8, function()
+		disc:Destroy()
+	end)
 end
 
 ---====== L'ATMOSFERA ======---
 --[[ Le luci della stanza e il colore dello schermo li comanda un solo ciclo per frame, finché
-     dura. Si ricorda com'erano e alla fine li rimette, piano. Il flicker di DOORS
-     (Module_Events.flicker) qui no: rimette le luci al valore che aveva letto, e cancellerebbe
-     il buio che stiamo facendo. ]]
+     dura. Si ricorda com'erano e alla fine li rimette, piano.
+
+     Niente bianco e nero su tutta la stanza, e niente numeri a caso a ogni frame: le luci calano
+     e prendono un colore freddo, lo schermo perde un po' di colore, e quando tremano seguono un
+     rumore liscio, ognuna per conto suo. Il bianco e nero pieno resta al portale. Il flicker di
+     DOORS (Module_Events.flicker) qui no: rimette le luci al valore che aveva letto, e
+     cancellerebbe il buio che stiamo facendo. ]]
 
 local mood = {
-	dim     = 0,   -- 0 luci normali, 1 quasi spente
-	gray    = 0,   -- 0 a colori, 1 bianco e nero
-	pulse   = 0,   -- il colpo di un battito, si spegne da solo
-	flicker = 0,   -- fino a quando le luci tremano (os.clock)
+	dim        = 0,   -- 0 luci normali, 1 abbassate
+	cold       = 0,   -- 0 colori normali, 1 stanza fredda e un po' spenta
+	pulse      = 0,   -- il colpo di un battito, si spegne da solo
+	surge      = 0,   -- quanto tremano adesso, insegue surgeUntil piano
+	surgeUntil = 0,   -- fino a quando tremano (os.clock)
 }
+
+local stepBody -- più giù, con il corpo: lo muove lo stesso ciclo
 
 local function startAtmosphere(room, portal)
 	local lights = {}
 	for _, light in ipairs(room:GetDescendants()) do
-		if light:IsA("PointLight") or light:IsA("SpotLight") or light:IsA("SurfaceLight") then
-			lights[light] = light.Brightness
+		if light:IsA("Light") then
+			table.insert(lights, { light = light, brightness = light.Brightness, colour = light.Color, seed = #lights * 1.37 + 0.5 })
 		end
 	end
 
@@ -648,12 +855,12 @@ local function startAtmosphere(room, portal)
 
 	-- Rimettere a posto viene DOPO lo stop del ciclo: in cleanup è prima, e si esegue al contrario
 	track(function()
-		for light, brightness in pairs(lights) do
-			if light.Parent then
-				tween(light, 1.5, { Brightness = brightness })
+		for _, entry in ipairs(lights) do
+			if entry.light.Parent then
+				tween(entry.light, 1.5, { Brightness = entry.brightness, Color = entry.colour })
 			end
 		end
-		tween(grade, 1.5, { Saturation = 0, Contrast = 0, Brightness = 0 })
+		tween(grade, 1.5, { Saturation = 0, Contrast = 0, Brightness = 0, TintColor = WHITE })
 		task.delay(1.6, function()
 			grade:Destroy()
 		end)
@@ -661,31 +868,25 @@ local function startAtmosphere(room, portal)
 
 	track(RunService.RenderStepped:Connect(function(deltaTime)
 		local now = os.clock()
-		mood.pulse = math.max(mood.pulse - deltaTime * 3, 0)
+		mood.pulse = math.max(mood.pulse - deltaTime * 2.5, 0)
+		mood.surge += ((if now < mood.surgeUntil then 1 else 0) - mood.surge) * (1 - math.exp(-10 * deltaTime))
 
-		local shaking = now < mood.flicker
-		for light, brightness in pairs(lights) do
+		for _, entry in ipairs(lights) do
+			local light = entry.light
 			if light.Parent then
-				local level = brightness * (1 - 0.8 * mood.dim)
-				if shaking and math.random() < 0.5 then
-					level *= math.random() * 0.4
-				end
-				light.Brightness = level
+				local wave = math.clamp(math.noise(now * 9, entry.seed) * 1.6 + 0.35, 0, 1)
+				light.Brightness = entry.brightness * (1 - 0.7 * mood.dim) * (1 - 0.75 * mood.surge * wave) * (1 - 0.3 * mood.pulse)
+				light.Color = entry.colour:Lerp(COLD, 0.5 * mood.cold)
 			end
 		end
 
-		grade.Saturation = -mood.gray
-		grade.Contrast = 0.3 * mood.gray
-		grade.Brightness = -0.04 * mood.gray - 0.12 * mood.pulse
+		grade.Saturation = -0.35 * mood.cold
+		grade.Contrast = 0.12 * mood.cold
+		grade.TintColor = WHITE:Lerp(TINT, mood.cold)
+		grade.Brightness = -0.05 * mood.pulse
 
-		if portal.disc.Parent then
-			for _, ring in ipairs(portal.rings) do
-				ring.image.Rotation = (ring.image.Rotation + ring.speed * portal.spin * deltaTime) % 360
-			end
-			-- La luce del portale trema sempre un po'
-			local jitter = if math.random() < 0.15 then math.random() * 0.6 else 1
-			portal.light.Brightness = portal.glow * jitter
-		end
+		stepPortal(portal, deltaTime, now)
+		stepBody(deltaTime)
 	end))
 end
 
@@ -734,21 +935,122 @@ local function kill(humanoid)
 end
 
 ---====== IL CORPO ======---
+--[[ Il corpo non va più a scatti. La logica dice dove deve andare e dove deve guardare; un solo
+     ciclo per frame ce lo porta: accelera al massimo di Acceleration, va a Speed, rallenta da solo
+     negli ultimi stud e si ferma senza strappi. La discesa e la risalita invece scrivono loro la
+     posizione (driven), perché sono curve disegnate apposta.
+
+     Sopra la posizione ci sono gli strati:
+     - galleggia: due onde lente su e giù, e un dondolio
+     - si piega in avanti quando accelera, all'indietro quando frena, di lato quando curva
+     - il colpo per bussare: si carica all'indietro, colpisce, rimbalza e si ferma
+     - ascolta: si sporge verso l'anta
+     - la grandezza, per uscire dal portale e rientrarci ]]
 
 local model, sounds = nil, {}
 
-local function render(offset)
-	if not (model and model.Parent) then return end
-	local cframe = CFrame.new(state.position) * state.facing
-	if offset then cframe *= offset end
-	model:PivotTo(cframe)
+local SLOW_RADIUS = 8     -- da quanti stud dall'arrivo inizia a rallentare
+local KNOCK_HIT   = 0.3   -- il colpo arriva a questo punto del movimento, dopo la carica
+
+local body = {
+	position     = Vector3.zero, -- dove sta, senza gli strati
+	velocity     = Vector3.zero,
+	lastPosition = Vector3.zero,
+	lastVelocity = Vector3.zero,
+	goal         = nil,          -- dove sta andando; nil = si ferma piano dove si trova
+	driven       = false,
+	lookAt       = nil,          -- dove guarda; nil = dove va
+	yaw          = 0,
+	yawSpeed     = 0,
+	spin         = 0,            -- giri al secondo in più (quando viene risucchiato)
+	pitch        = 0,
+	roll         = 0,
+	knockAt      = -math.huge,   -- quando è partito l'ultimo colpo
+	listen       = 0,
+	listenTarget = 0,
+	scale        = 1,
+	shownScale   = 1,
+}
+
+-- Il colpo nel tempo: quanto va avanti lungo lo sguardo, e quanto si piega in avanti
+local function knockOffset(t)
+	if t < 0 or t > 1.2 then return 0, 0 end
+	if t < 0.22 then
+		local x = smooth(t / 0.22)
+		return -0.7 * x, -0.12 * x
+	elseif t < KNOCK_HIT then
+		local x = ((t - 0.22) / (KNOCK_HIT - 0.22)) ^ 2
+		return -0.7 + 2.9 * x, -0.12 + 0.4 * x
+	end
+	local x = t - KNOCK_HIT
+	local wave = math.exp(-x * 7) * math.cos(x * 11)
+	return 2.2 * wave, 0.28 * wave
 end
 
-local function faceTowards(point, deltaTime)
-	local direction = flatUnit(point - state.position)
-	if not direction then return end
-	local target = CFrame.lookAt(Vector3.zero, direction)
-	state.facing = if deltaTime then state.facing:Lerp(target, 1 - math.exp(-8 * deltaTime)) else target
+stepBody = function(deltaTime)
+	if not (model and model.Parent) or state.paused or state.caught then return end
+	deltaTime = math.clamp(deltaTime, 1 / 240, 1 / 20)
+	local now = os.clock()
+
+	if body.driven then
+		body.velocity = (body.position - body.lastPosition) / deltaTime
+	else
+		local desired = Vector3.zero
+		if body.goal then
+			local offset = body.goal - body.position
+			local distance = offset.Magnitude
+			if distance > 0.01 then
+				desired = offset.Unit * CONFIG.Speed * math.min(distance / SLOW_RADIUS, 1)
+			end
+		end
+		local steer = (desired - body.velocity) * 8 -- con SLOW_RADIUS 8: arriva senza superare il punto
+		if steer.Magnitude > CONFIG.Acceleration then
+			steer = steer.Unit * CONFIG.Acceleration
+		end
+		body.velocity += steer * deltaTime
+		body.position += body.velocity * deltaTime
+	end
+	body.lastPosition = body.position
+
+	-- Guarda dove deve, se no dove va; si gira piano
+	local flat = Vector3.new(body.velocity.X, 0, body.velocity.Z)
+	local target = body.yaw
+	local look = body.lookAt and flatUnit(body.lookAt - body.position)
+	if look then
+		target = yawOf(look)
+	elseif flat.Magnitude > 1.5 then
+		target = yawOf(flat)
+	end
+	local before = body.yaw
+	body.yaw = turnTowards(body.yaw, target, 1 - math.exp(-5 * deltaTime)) + body.spin * math.pi * 2 * deltaTime
+	body.yawSpeed = (body.yaw - before) / deltaTime
+
+	-- Si piega con il movimento
+	local forward = Vector3.new(-math.sin(body.yaw), 0, -math.cos(body.yaw))
+	local acceleration = (body.velocity - body.lastVelocity) / deltaTime
+	body.lastVelocity = body.velocity
+	local blend = 1 - math.exp(-6 * deltaTime)
+	local pitchTarget = math.clamp(-flat:Dot(forward) * 0.012 - acceleration:Dot(forward) * 0.008, -0.35, 0.35)
+	local rollTarget = if body.spin > 0 then 0 else math.clamp(-body.yawSpeed * 0.1, -0.3, 0.3)
+	body.pitch += (pitchTarget - body.pitch) * blend
+	body.roll += (rollTarget - body.roll) * blend
+	body.listen += (body.listenTarget - body.listen) * (1 - math.exp(-4 * deltaTime))
+
+	local lunge, knockPitch = knockOffset(now - body.knockAt)
+	lunge += body.listen * 0.6
+	local bob = math.sin(now * 1.7) * 0.28 + math.sin(now * 0.63 + 1) * 0.14
+	local sway = math.sin(now * 1.1) * 0.05 + body.listen * 0.18
+
+	if math.abs(body.scale - body.shownScale) > 0.004 then
+		body.shownScale = body.scale
+		pcall(function()
+			model:ScaleTo(math.max(body.scale, 0.05))
+		end)
+	end
+
+	model:PivotTo(CFrame.new(body.position + forward * lunge + Vector3.new(0, bob, 0))
+		* CFrame.Angles(0, body.yaw, 0)
+		* CFrame.Angles(body.pitch - knockPitch, 0, body.roll + sway))
 end
 
 -- Aspetta, ma resta fermo finché il crocifisso lo tiene
@@ -766,27 +1068,27 @@ local function waitActive(seconds)
 	return false
 end
 
--- In linea retta, con un leggero ondeggiare: è un fantasma, i mobili non lo fermano
+-- Ci va e aspetta di esserci arrivato davvero, fermo. È un fantasma: i mobili non lo fermano
 local function moveTo(point, lookAt)
+	body.goal = point
+	body.lookAt = lookAt
+	local deadline = os.clock() + (point - body.position).Magnitude / CONFIG.Speed + 5
 	while not state.finished and not state.caught and model and model.Parent do
-		local deltaTime = RunService.Heartbeat:Wait()
-		if not state.paused then
-			local offset = point - state.position
-			local distance = offset.Magnitude
-			if distance < 0.1 then return true end
-			state.position += offset.Unit * math.min(CONFIG.Speed * deltaTime, distance)
-			faceTowards(lookAt or point, deltaTime)
-			render(CFrame.new(0, math.sin(os.clock() * 2.2) * 0.3, 0))
+		RunService.Heartbeat:Wait()
+		if state.paused then
+			deadline = math.max(deadline, os.clock() + 5)
+		elseif ((point - body.position).Magnitude < 0.3 and body.velocity.Magnitude < 1) or os.clock() > deadline then
+			return true
 		end
 	end
 	return false
 end
 
 ---====== I COLPI ======---
---[[ Un solo punto d'impatto riusato per tutti i colpi: una Part con il suono e l'emitter della
-     polvere, spostata davanti all'armadio di turno. ]]
+--[[ Un solo punto d'impatto riusato per tutti i colpi: una Part con il suono, l'emitter della
+     polvere e una luce che si accende per un attimo, spostata davanti all'armadio di turno. ]]
 
-local knockPoint, knockDust = nil, nil
+local knockPoint, knockDust, knockLight = nil, nil, nil
 
 local function dustAt(position, amount)
 	if not knockPoint then
@@ -800,11 +1102,18 @@ local function dustAt(position, amount)
 		knockDust.Speed = NumberRange.new(2, 6)
 		knockDust.SpreadAngle = Vector2.new(70, 70)
 		knockDust.Acceleration = Vector3.new(0, -6, 0)
+		knockDust.Drag = 1.5
 		knockDust.Size = sequence({ { 0, 0.8 }, { 1, 2 } })
 		knockDust.Transparency = sequence({ { 0, 0.5 }, { 1, 1 } })
 		knockDust.RotSpeed = NumberRange.new(-60, 60)
 		knockDust.Rate = 0
 		knockDust.Parent = knockPoint
+		knockLight = Instance.new("PointLight")
+		knockLight.Color = COLD
+		knockLight.Brightness = 0
+		knockLight.Range = 10
+		knockLight.Shadows = false
+		knockLight.Parent = knockPoint
 	end
 	knockPoint.CFrame = CFrame.new(position)
 	knockDust:Emit(amount)
@@ -812,6 +1121,8 @@ end
 
 local function knockAt(position, loud)
 	dustAt(position, if loud then 14 else 8)
+	knockLight.Brightness = if loud then 2.5 else 1.5
+	tween(knockLight, 0.35, { Brightness = 0 })
 	playSound(CONFIG.Sounds.Knock, if loud then 3 else 1.6, 0.8 + math.random() * 0.25, knockPoint)
 end
 
@@ -820,21 +1131,17 @@ local function inspect(spot, geometry)
 	local stand = contact + spot.out * CONFIG.StandOff
 	stand = Vector3.new(stand.X, geometry.floorY + CONFIG.HoverHeight, stand.Z)
 
-	if not moveTo(stand, contact) then return false end
-	faceTowards(contact)
+	-- Ci va guardando dove va; arrivato, si gira verso l'anta
+	if not moveTo(stand) then return false end
+	body.lookAt = contact
+	if not waitActive(0.35) then return false end
 
 	for _ = 1, CONFIG.KnockCount do
 		if not waitActive(0) then return false end
 
-		-- Si butta in avanti contro l'anta e torna indietro
-		local from = state.position
-		local lunge = from:Lerp(Vector3.new(contact.X, from.Y, contact.Z), 0.35)
-		local startedAt = os.clock()
-		while os.clock() - startedAt < 0.09 and not state.paused do
-			state.position = from:Lerp(lunge, (os.clock() - startedAt) / 0.09)
-			render()
-			RunService.Heartbeat:Wait()
-		end
+		-- Si carica, e il colpo arriva a KNOCK_HIT
+		body.knockAt = os.clock()
+		if not waitActive(KNOCK_HIT) then return false end
 
 		local inside = hiddenIn(spot)
 		knockAt(contact, inside)
@@ -845,22 +1152,15 @@ local function inspect(spot, geometry)
 			shake(1, 8, 0, 0.3)
 		end
 
-		startedAt = os.clock()
-		while os.clock() - startedAt < 0.2 and not state.paused do
-			state.position = lunge:Lerp(from, (os.clock() - startedAt) / 0.2)
-			render()
-			RunService.Heartbeat:Wait()
-		end
-		state.position = from
-		if not state.paused then
-			render()
-		end
-
 		if not waitActive(CONFIG.KnockInterval) then return false end
 	end
 
-	-- Ascolta
-	return waitActive(CONFIG.ListenTime)
+	-- Si sporge verso l'anta e ascolta
+	body.listenTarget = 1
+	local listened = waitActive(CONFIG.ListenTime)
+	body.listenTarget = 0
+	body.lookAt = nil
+	return listened
 end
 
 -- Una stanza senza armadi: la attraversa in tre punti lungo il lato lungo, e ascolta
@@ -885,7 +1185,7 @@ local function canSee(target, character)
 	table.insert(ignore, character)
 	table.insert(ignore, folder)
 	sightParams.FilterDescendantsInstances = ignore
-	return workspace:Raycast(state.position, target - state.position, sightParams) == nil
+	return workspace:Raycast(body.position, target - body.position, sightParams) == nil
 end
 
 local function jumpscare(humanoid)
@@ -913,8 +1213,10 @@ local function jumpscare(humanoid)
 	RunService:BindToRenderStep(stepName, Enum.RenderPriority.Camera.Value + 1, function()
 		if not (model and model.Parent) then return end
 		local view = workspace.CurrentCamera.CFrame
-		local progress = math.clamp((os.clock() - startedAt) / 0.18, 0, 1)
-		local gap = 10 - 7 * (1 - (1 - progress) ^ 3)
+		-- Arriva, supera appena la distanza e torna: un colpo, non uno scivolone
+		local progress = math.clamp((os.clock() - startedAt) / 0.22, 0, 1)
+		local overshoot = 1 + 2.2 * (progress - 1) ^ 3 + 1.2 * (progress - 1) ^ 2
+		local gap = 10 - 7 * overshoot
 		-- Il volto (l'attachment Main) sta 0.84 stud sotto il centro della parte
 		model:PivotTo(CFrame.new(view.Position + view.LookVector * gap + view.UpVector * 0.84) * view.Rotation)
 	end)
@@ -922,12 +1224,13 @@ local function jumpscare(humanoid)
 		RunService:UnbindFromRenderStep(stepName)
 	end)
 
-	for index = 1, 6 do
-		flash(if index % 2 == 0 then WHITE else Color3.new(0, 0, 0), 0.15, 0.12)
-		task.wait(0.1)
-	end
+	-- Un lampo bianco quando arriva, poi lo schermo si fa buio
+	task.wait(0.18)
+	flash(WHITE, 0, 0.35)
+	task.wait(0.55)
+	flash(Color3.new(0, 0, 0), 0.05, 1.1)
 
-	task.wait(0.5)
+	task.wait(0.4)
 	if humanoid.Parent and humanoid.Health > 0 then
 		kill(humanoid)
 	end
@@ -963,7 +1266,10 @@ local function banish(tool)
 	elseif result == "Failed" then
 		-- Si è liberato: riprende il giro, e tra un attimo ti vede di nuovo
 		log("il crocifisso si è spezzato")
-		state.position = model:GetPivot().Position
+		body.position = model:GetPivot().Position
+		body.lastPosition = body.position
+		body.velocity = Vector3.zero
+		body.lastVelocity = Vector3.zero
 		state.banishing = false
 		state.paused = false
 		task.delay(1.5, function()
@@ -984,7 +1290,7 @@ local function watch()
 
 	local head = character:FindFirstChild("Head")
 	local target = (head or root).Position
-	local distance = (target - state.position).Magnitude
+	local distance = (target - body.position).Magnitude
 
 	-- Il crocifisso conta prima: se lo hai in mano e ti vede, lo ferma
 	local tool = Ritual and Ritual.Held()
@@ -1000,15 +1306,16 @@ end
 
 ---====== ENTRATA E USCITA ======---
 
--- Il portale si chiude del tutto: gira forte, si stringe, un lampo e un ultimo sbuffo di fumo
+-- Il portale si chiude del tutto: gira forte, si stringe con la molla, un lampo, un ultimo sbuffo
 closePortal = function(portal)
 	portal.spin = 9
 	pcall(function()
 		local farewell = sounds["Leave Scream Far"]:Clone()
-		farewell.Parent = portal.disc
+		farewell.Parent = portal.mouth
 		farewell:Play()
 	end)
-	sizePortal(portal, 0, 0.5, Enum.EasingStyle.Back, Enum.EasingDirection.In)
+	portal.omega, portal.damping = 7, 0.8
+	portal.target = 0
 	portal.smoke:Emit(25)
 	task.wait(0.45)
 	flash(WHITE, 0.35, 0.6)
@@ -1020,68 +1327,123 @@ closePortal = function(portal)
 	task.wait(1.6)
 end
 
-local function descend(portal, geometry)
-	local from = portal.disc.Position + Vector3.new(0, 1.5, 0)
-	local to = Vector3.new(geometry.center.X, geometry.floorY + CONFIG.HoverHeight, geometry.center.Z)
+-- L'arrivo: discreto, ma lo senti nei piedi
+local function land(portal, geometry, point)
+	playSound(CONFIG.Sounds.Impact, 1.2, 0.8)
+	shake(3, 8, 0, 0.7)
+	local floor = Vector3.new(point.X, geometry.floorY + 0.05, point.Z)
+	dustAt(floor + Vector3.new(0, 0.45, 0), 20)
+	floorRing(floor)
+	portal.spin = 1.5
+	portal.glow = 2.5
+	portal.streaks.Rate = 0
+	portal.sparks.Rate = 8
+	portal.smoke.Rate = 6
+	portal.omega, portal.damping = 5, 0.7
+	portal.target = 0.6
+end
 
-	state.position = from
+local function descend(portal, geometry)
+	local start = portal.position - Vector3.new(0, 1.2, 0)
+	local hover = Vector3.new(geometry.center.X, geometry.floorY + CONFIG.HoverHeight, geometry.center.Z)
+
 	local character = LocalPlayer.Character
-	if character then faceTowards(character:GetPivot().Position) end
-	render()
+	local toPlayer = character and flatUnit(character:GetPivot().Position - start)
+	if toPlayer then body.yaw = yawOf(toPlayer) end
+	body.driven = true
+	body.goal = nil
+	body.lookAt = nil
+	body.position = start
+	body.lastPosition = start
+	body.velocity = Vector3.zero
+	body.lastVelocity = Vector3.zero
+	body.scale = 0.05
+	body.shownScale = 0.05
+	pcall(function() model:ScaleTo(0.05) end)
+	model:PivotTo(CFrame.new(start) * CFrame.Angles(0, body.yaw, 0))
 	model.Parent = folder
 
 	for _, name in ipairs({ "Far Scream", "Far Static", "Close Scream" }) do
 		if sounds[name] then sounds[name]:Play() end
 	end
 
+	portal.omega, portal.damping = 6, 0.45
+	portal.target = 1.15
 	portal.spin = 4
-	portal.glow = 6
+	portal.glow = 7
 	portal.streaks.Rate = 80
-	flash(WHITE, 0.55, 0.4)
+	flash(WHITE, 0.6, 0.5)
 
+	-- Esce: si gonfia dalla bocca del portale e resta appeso un attimo
 	local startedAt = os.clock()
 	while not state.finished do
-		local progress = math.clamp((os.clock() - startedAt) / CONFIG.DescendTime, 0, 1)
-		-- Scende di colpo e frena all'ultimo
-		local eased = 1 - (1 - progress) ^ 4
-		state.position = from:Lerp(to, eased)
-		render()
-		if progress >= 1 then break end
+		local t = (os.clock() - startedAt) / CONFIG.EmergeTime
+		if t >= 1 then break end
+		body.scale = 0.05 + 0.65 * (1 - (1 - t) ^ 3)
+		body.position = start - Vector3.new(0, 1.3 * smooth(t), 0)
+		RunService.Heartbeat:Wait()
+	end
+	if state.finished then return end
+
+	-- Cade sempre più veloce, sbatte appena sotto l'altezza a cui gira e rimbalza fino a fermarsi
+	local from = body.position
+	local impactAt = 0.55
+	local landed = false
+	startedAt = os.clock()
+	while not state.finished do
+		local u = math.clamp((os.clock() - startedAt) / CONFIG.DescendTime, 0, 1)
+		body.scale = 0.7 + 0.3 * smooth(u / 0.4)
+		local y
+		if u < impactAt then
+			y = from.Y + (hover.Y - 0.9 - from.Y) * (u / impactAt) ^ 2
+		else
+			if not landed then
+				landed = true
+				land(portal, geometry, hover)
+			end
+			local v = (u - impactAt) / (1 - impactAt)
+			y = hover.Y - 0.9 * math.exp(-5 * v) * math.cos(9 * v)
+		end
+		local across = from:Lerp(hover, smooth(u / impactAt))
+		body.position = Vector3.new(across.X, y, across.Z)
+		if u >= 1 then break end
 		RunService.Heartbeat:Wait()
 	end
 
-	-- L'arrivo: discreto, ma lo senti nei piedi
-	playSound(CONFIG.Sounds.Impact, 1.2, 0.8)
-	shake(3, 8, 0, 0.7)
-	dustAt(Vector3.new(to.X, geometry.floorY + 0.5, to.Z), 20)
-	portal.spin = 1.5
-	portal.glow = 2
-	portal.streaks.Rate = 0
-	portal.sparks.Rate = 8
-	portal.smoke.Rate = 6
-	sizePortal(portal, CONFIG.PortalSize * 0.6, 0.8)
+	body.scale = 1
+	body.position = hover
+	body.velocity = Vector3.zero
+	body.driven = false
 end
 
 local function ascend(portal, geometry)
 	local below = Vector3.new(geometry.center.X, geometry.floorY + CONFIG.HoverHeight, geometry.center.Z)
 	if not moveTo(below) then return end
 
-	-- Il portale si riapre
-	sizePortal(portal, CONFIG.PortalSize, 0.6)
+	-- Il portale si riapre e lo chiama
+	portal.omega, portal.damping = 5, 0.6
+	portal.target = 1
 	portal.spin = 3
 	portal.glow = 5
+	portal.smoke.Rate = 14
 	portal.streaks.Rate = 60
 	pcall(function() sounds["Leave Scream"]:Play() end)
 
-	local from = state.position
-	local to = portal.disc.Position + Vector3.new(0, 2, 0)
+	-- Si abbassa un attimo, poi viene risucchiato girando su se stesso e rimpicciolendo
+	body.driven = true
+	body.goal = nil
+	local from = body.position
+	local to = portal.position - Vector3.new(0, 0.6, 0)
 	local startedAt = os.clock()
 	while not state.finished do
-		local progress = math.clamp((os.clock() - startedAt) / CONFIG.ReturnTime, 0, 1)
-		-- Parte piano e viene risucchiato
-		state.position = from:Lerp(to, progress ^ 3)
-		render()
-		if progress >= 1 then break end
+		local u = math.clamp((os.clock() - startedAt) / CONFIG.ReturnTime, 0, 1)
+		local crouch = 0.8 * math.sin(math.pi * math.clamp(u / 0.3, 0, 1))
+		local rise = math.clamp((u - 0.2) / 0.8, 0, 1)
+		body.position = from:Lerp(to, rise ^ 3) - Vector3.new(0, crouch, 0)
+		body.spin = 2.5 * rise * rise
+		body.scale = 1 - 0.95 * math.clamp((rise - 0.55) / 0.45, 0, 1) ^ 2
+		portal.spin = 3 + 6 * rise
+		if u >= 1 then break end
 		RunService.Heartbeat:Wait()
 	end
 
@@ -1125,10 +1487,10 @@ local function main()
 	track(model)
 
 	---- 1. IL PORTALE e dieci secondi di avviso ----
-	local portal = buildPortal(Vector3.new(geometry.center.X, geometry.ceilingY - 0.1, geometry.center.Z))
+	local portal = buildPortal(Vector3.new(geometry.center.X, geometry.ceilingY - 0.05, geometry.center.Z), geometry)
 	state.portal = portal
 	startAtmosphere(room, portal)
-	sizePortal(portal, CONFIG.PortalSize, CONFIG.PortalOpen, Enum.EasingStyle.Quart)
+	portal.target = 1
 
 	local heart = playSound(CONFIG.Sounds.Heart, 0, 0.7, nil, true)
 	local rumble = playSound(CONFIG.Sounds.Rumble, 0, 0.35, nil, true)
@@ -1136,7 +1498,7 @@ local function main()
 	track(rumble)
 	tween(heart, CONFIG.Countdown * 0.8, { Volume = 1.2, PlaybackSpeed = 1.3 }, Enum.EasingStyle.Linear)
 	local rumbleRise = tween(rumble, CONFIG.Countdown - 0.8, { Volume = 1 }, Enum.EasingStyle.Linear)
-	mood.flicker = os.clock() + 1.2
+	mood.surgeUntil = os.clock() + 1.2
 
 	local startedAt = os.clock()
 	local nextBeat = startedAt + 1
@@ -1145,8 +1507,8 @@ local function main()
 		if elapsed >= CONFIG.Countdown then break end
 		local progress = elapsed / CONFIG.Countdown
 
-		mood.dim = progress
-		mood.gray = math.min(progress * 1.25, 1)
+		mood.dim = smooth(progress)
+		mood.cold = math.min(progress * 1.25, 1)
 		portal.glow = 1 + 3 * progress
 		portal.spin = 1 + 1.5 * progress
 		portal.smoke.Rate = 4 + 18 * progress
@@ -1156,9 +1518,10 @@ local function main()
 		if elapsed < CONFIG.Countdown - 0.8 and os.clock() >= nextBeat then
 			playSound(CONFIG.Sounds.Beat, 0.6 + 0.8 * progress, 0.45 + 0.15 * progress)
 			mood.pulse = 1
+			portal.beat = 1
 			shake(0.6 + 1.5 * progress, 6, 0, 0.35)
 			if math.random() < 0.35 + 0.5 * progress then
-				mood.flicker = os.clock() + 0.25 + 0.4 * math.random()
+				mood.surgeUntil = os.clock() + 0.25 + 0.4 * math.random()
 			end
 			nextBeat = os.clock() + 1.15 - 0.8 * progress
 		end
@@ -1168,7 +1531,8 @@ local function main()
 			rumbleRise:Cancel()
 			rumble.Volume = 0.2
 			-- Il portale trattiene il fiato
-			sizePortal(portal, CONFIG.PortalSize * 0.85, 0.6, Enum.EasingStyle.Sine)
+			portal.omega, portal.damping = 4, 1
+			portal.target = 0.85
 		end
 
 		task.wait(0.03)
@@ -1178,7 +1542,7 @@ local function main()
 
 	---- 2. LA DISCESA ----
 	mood.dim = 1
-	mood.gray = 1
+	mood.cold = 1
 	descend(portal, geometry)
 	if state.finished then return end
 	rumble.Volume = 0.35
@@ -1195,7 +1559,7 @@ local function main()
 		end
 	end))
 
-	local route = planRoute(spotsIn(room, geometry), state.position)
+	local route = planRoute(spotsIn(room, geometry), body.position)
 	log("%d armadi da controllare", #route)
 
 	if #route > 0 then
