@@ -181,7 +181,7 @@ ritual on your screen cannot save you from them, so it does not try.
 | `Guiding` | blue | the entity is dragged down and gone |
 | `Curious` | yellow | the same, in yellow |
 | `Fail` | blue, then red | the entity tears the chains, breaks the crucifix, lands and carries on |
-| `Glitch` | blue, then flickering violet | never still in your hand — it jumps, sheds violet and cyan ghosts and DOORS' Glitch fragments. Always fails, and the screen tears. On Honcho V2 what is left of it hits him and he transforms |
+| `Glitch` | blue, then flickering violet | Penguin's crucifix being eaten by DOORS' Glitch: its black-square skin crawls over it, its red and cyan static lights up, Glitch blocks orbit it, it jumps and leaves red and cyan ghosts. Always fails, and the screen tears. On Honcho V2 what is left of it hits him and he transforms |
 
 Any crucifix also fails on an entity that resists — Speedster Purpleist always,
 Rose Hell 85% of the time. Honcho's fail has its own animation, also shipped as
@@ -207,12 +207,16 @@ setting works the same way (`_G.Speed`, `_G.Size`, `_G.Rebounds`...).
   — then the last pull, and a column of light rises from the closing hole.
 - The fail is two seconds longer too: he gathers himself before the last tear.
 - The jumpscare and the sink at the end of the run last two seconds longer.
-- With the **Glitch** crucifix he breaks free, lands, and the glitch left where
-  the crucifix was strikes him. For ten seconds he goes mad on the floor — he
-  clutches his head, convulses, staggers around the room, his pose freezes and
-  skips like a broken video — while the glitch climbs him from the feet up,
-  smoothly, into violet and near-black. Then he gets up glitched, leaving ghosts
-  and flickering, and hunts you again, 25% faster.
+- With the **Glitch** crucifix he breaks free, lands, and what is left of the
+  crucifix — a knot of Glitch blocks — slams into him while DOORS' real Glitch
+  (`ReplicatedStorage.Entities.Glitch`) flashes over his body. For sixteen seconds
+  he goes mad on the floor — he clutches his head, convulses, staggers around the
+  room, his pose freezes and skips like a broken video — while DOORS' Glitch look
+  climbs him from the feet up: its dark violet, its black-square skin crawling,
+  its white, red and cyan static. Glitch blocks peel off him, slices of his body
+  shift sideways in red and cyan, the room's lights go wild and the Glitch sound
+  stutters. Then he gets up as a Glitch, blocks orbiting him, and hunts you
+  again, 25% faster.
 
 The three animations are also shipped for Studio's Animation Editor:
 `HonchoV2Crucifix.rbxmx`, `HonchoV2CrucifixFail.rbxmx`,

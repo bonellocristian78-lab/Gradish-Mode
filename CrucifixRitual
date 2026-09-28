@@ -70,7 +70,7 @@
 ================================================================================
 ]]
 
-local VERSION = "2.0"
+local VERSION = "2.1"
 
 local cached = getgenv and getgenv().GradishCrucifixRitual
 if type(cached) == "table" then
@@ -108,6 +108,8 @@ local SOUND_IDS = {
 	Earthquake = 9114219876,
 	Glitch     = 10237953274, -- il suono del Glitch di DOORS
 	Static     = 89109306437447, -- lo statico della morte Glitch
+	GlitchLoop = 90679642994576, -- il suono della morte Glitch, in loop sotto la trasformazione
+	GlitchHit  = 78867913682644, -- "DeathGlitch": il colpo
 }
 
 -- Texture del rituale vero di DOORS, prese dal Repentance di Vynixu
@@ -252,10 +254,10 @@ local TIMELINES = {
 			Fall   = { 7.0, 7.4 },
 			Settle = 8.0,
 			Done   = 9.2,
-			-- Solo con il crocifisso Glitch: a terra, un glitch lo colpisce e per dieci secondi
+			-- Solo con il crocifisso Glitch: a terra, un glitch lo colpisce e per sedici secondi
 			-- si trasforma. Il fail allora finisce a GlitchStrike + GlitchSpan
 			GlitchStrike = 7.7,
-			GlitchSpan   = 10,
+			GlitchSpan   = 16,
 		},
 	},
 }
@@ -354,6 +356,18 @@ local function playSound(soundId, volume, speed, parent)
 	task.delay(15, function()
 		sound:Destroy()
 	end)
+	return sound
+end
+
+-- Un suono in loop: resta finché c'è la cartella del rituale, che lo toglie con sé
+local function loopSound(soundId, volume, speed, parent)
+	local sound = Instance.new("Sound")
+	sound.SoundId = "rbxassetid://" .. soundId
+	sound.Volume = volume
+	sound.PlaybackSpeed = speed or 1
+	sound.Looped = true
+	sound.Parent = parent
+	sound:Play()
 	return sound
 end
 
@@ -477,6 +491,295 @@ function Ritual.Preload()
 		game:GetService("ContentProvider"):PreloadAsync(ids)
 	end)
 end
+
+---====== IL GLITCH DI DOORS ======---
+--[[ Il Glitch vero di DOORS (ReplicatedStorage.Entities.Glitch) è fatto così: parti viola scuro
+     (58, 52, 103) con sopra, su ogni faccia, la sua texture a quadretti neri, un riquadro ogni 3
+     stud; e dei quadrati fermi che sfarfallano bianchi, rossi e ciano. Qui ci sono gli stessi
+     pezzi, per il crocifisso Glitch e per chi si trasforma (Honcho V2), più i cubi: blocchetti
+     fatti allo stesso modo che volano, girano e si inceppano. ]]
+
+local GLITCH_BODY = Color3.fromRGB(58, 52, 103)
+local GLITCH_RED  = Color3.fromRGB(255, 0, 0)
+local GLITCH_CYAN = Color3.fromRGB(0, 255, 213)
+local GLITCH_STATIC = ColorSequence.new({
+	ColorSequenceKeypoint.new(0, WHITE),
+	ColorSequenceKeypoint.new(0.354, WHITE),
+	ColorSequenceKeypoint.new(0.361, GLITCH_RED),
+	ColorSequenceKeypoint.new(0.516, GLITCH_CYAN),
+	ColorSequenceKeypoint.new(0.524, WHITE),
+	ColorSequenceKeypoint.new(1, WHITE),
+})
+
+-- La pelle del Glitch su tutte e sei le facce, invisibile finché non la si mostra
+local function glitchSkin(part, studs)
+	local textures = {}
+	for _, face in ipairs(Enum.NormalId:GetEnumItems()) do
+		local texture = Instance.new("Texture")
+		texture.Name = "GlitchSkin"
+		texture.Texture = "rbxassetid://" .. TEXTURES.GlitchSkin
+		texture.Face = face
+		texture.Color3 = Color3.new(0, 0, 0)
+		texture.StudsPerTileU = studs
+		texture.StudsPerTileV = studs
+		texture.Transparency = 1
+		texture.Parent = part
+		table.insert(textures, texture)
+	end
+	return textures
+end
+
+-- I quadrati fermi che sfarfallano, come quelli del Glitch
+local function glitchStatic(part, rate, size)
+	local emitter = Instance.new("ParticleEmitter")
+	emitter.Name = "GlitchStatic"
+	emitter.Texture = "rbxassetid://" .. TEXTURES.GlitchBit
+	emitter.Color = GLITCH_STATIC
+	emitter.Brightness = 1.17
+	emitter.LightEmission = 0
+	emitter.Lifetime = NumberRange.new(0.2, 0.3)
+	emitter.Speed = NumberRange.new(0, 0)
+	emitter.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, size, size / 2),
+		NumberSequenceKeypoint.new(1, size, size / 2),
+	})
+	emitter.Rate = rate
+	emitter.Parent = part
+	return emitter
+end
+
+-- I quadretti saltano: a ogni chiamata qualche texture si sposta di un pezzo di riquadro
+local function crawlSkin(textures, count, studs)
+	for _ = 1, math.min(count, #textures) do
+		local texture = textures[math.random(#textures)]
+		texture.OffsetStudsU = math.random(0, 3) * studs / 4
+		texture.OffsetStudsV = math.random(0, 3) * studs / 4
+	end
+end
+
+--[[ I CUBI. Blocchetti del Glitch (viola scuro con la sua pelle, uno su tre al neon rosso o
+     ciano) mossi tutti insieme con un solo BulkMoveTo. Modi:
+       orbit     girano attorno a un punto
+       fly       volano via e rallentano; ogni tanto uno si blocca a mezz'aria
+       shed      si staccano da un corpo (source() dà un punto) e salgono piano, poi rinascono
+       converge  corrono tutti in un punto
+     Sopra ogni modo, venti volte al secondo: uno scatta di lato, uno sparisce per un attimo. ]]
+local Swarm = {}
+Swarm.__index = Swarm
+
+function Ritual.GlitchSwarm(parent, count, size)
+	local self = setmetatable({ cubes = {}, parts = {}, cframes = {}, mode = "orbit", radius = 1, visible = false, nextTick = 0 }, Swarm)
+	for index = 1, count do
+		local edge = size * (0.6 + math.random() * 0.8)
+		local neon = index % 3 == 0
+		local cube = newPart("GlitchCube", Vector3.one * edge, CFrame.new(0, 10000, 0),
+			if neon then (if index % 2 == 0 then GLITCH_RED else GLITCH_CYAN) else GLITCH_BODY,
+			if neon then Enum.Material.Neon else Enum.Material.SmoothPlastic, 1)
+		cube.Parent = parent
+		table.insert(self.cubes, {
+			part     = cube,
+			skin     = if neon then {} else glitchSkin(cube, edge * 1.5),
+			neon     = neon,
+			angle    = math.random() * math.pi * 2,
+			turn     = (1.2 + math.random() * 2.2) * (if math.random() < 0.5 then -1 else 1),
+			lift     = math.random() * 2 - 1,
+			reach    = 0.6 + math.random() * 0.5,
+			position = Vector3.new(0, 10000, 0),
+			velocity = Vector3.zero,
+			jolt     = Vector3.zero,
+			frozenUntil = 0,
+			age = 0, life = 0,
+			hidden   = false,
+			tumble   = CFrame.Angles(math.random() * 6, math.random() * 6, math.random() * 6),
+		})
+		self.parts[index] = cube
+	end
+	return self
+end
+
+local function showCube(cube, shown)
+	cube.part.Transparency = if shown then (if cube.neon then 0.15 else 0) else 1
+	for _, texture in ipairs(cube.skin) do
+		texture.Transparency = if shown then 0 else 1
+	end
+end
+
+function Swarm:setVisible(visible)
+	if self.visible == visible then return end
+	self.visible = visible
+	for _, cube in ipairs(self.cubes) do
+		cube.hidden = false
+		showCube(cube, visible)
+	end
+end
+
+function Swarm:orbit(radius)
+	self.mode = "orbit"
+	self.radius = radius
+end
+
+function Swarm:burst(origin, speed)
+	self.mode = "fly"
+	for _, cube in ipairs(self.cubes) do
+		cube.position = origin + randomUnit() * 0.3
+		cube.velocity = randomUnit() * speed * (0.4 + math.random() * 0.6) + Vector3.new(0, speed * 0.3, 0)
+	end
+	self:setVisible(true)
+end
+
+function Swarm:shed(source)
+	self.mode = "shed"
+	self.source = source
+	for _, cube in ipairs(self.cubes) do
+		cube.age, cube.life = 0, math.random() * 1.2
+	end
+end
+
+function Swarm:converge(target, duration)
+	self.mode = "converge"
+	self.target = target
+	self.convergeAt = os.clock()
+	self.convergeTime = duration
+	for _, cube in ipairs(self.cubes) do
+		cube.from = cube.position
+	end
+end
+
+-- center: il CFrame attorno a cui girano in orbit (per gli altri modi non serve)
+function Swarm:step(deltaTime, center)
+	if not self.visible then return end
+	local now = os.clock()
+	local tick = now >= self.nextTick
+	if tick then self.nextTick = now + 0.05 end
+
+	for index, cube in ipairs(self.cubes) do
+		if tick then
+			local roll = math.random()
+			if roll < 0.1 then
+				cube.jolt = randomUnit() * self.radius * 0.45
+			elseif roll < 0.45 then
+				cube.jolt = Vector3.zero
+			end
+			local hide = math.random() < 0.07
+			if hide ~= cube.hidden then
+				cube.hidden = hide
+				showCube(cube, not hide)
+			end
+			if math.random() < 0.03 then
+				cube.frozenUntil = now + 0.15 + math.random() * 0.45
+			end
+		end
+
+		local moving = now >= cube.frozenUntil
+		if self.mode == "orbit" and center then
+			if moving then cube.angle += cube.turn * deltaTime end
+			local reach = self.radius * cube.reach
+			cube.position = center.Position + Vector3.new(math.cos(cube.angle) * reach, cube.lift * self.radius * 0.6, math.sin(cube.angle) * reach)
+		elseif self.mode == "fly" then
+			if moving then
+				cube.velocity *= math.exp(-2.5 * deltaTime)
+				cube.position += cube.velocity * deltaTime
+			end
+		elseif self.mode == "shed" then
+			cube.age += deltaTime
+			if cube.age >= cube.life then
+				local point = self.source and self.source()
+				if point then
+					cube.position = point
+					cube.velocity = (randomUnit() + Vector3.new(0, 1.3, 0)).Unit * (1 + math.random() * 2.5)
+					cube.age, cube.life = 0, 0.8 + math.random() * 1.4
+				end
+			end
+			if moving then cube.position += cube.velocity * deltaTime end
+		elseif self.mode == "converge" then
+			local t = math.clamp((now - self.convergeAt) / self.convergeTime, 0, 1)
+			cube.position = (cube.from or cube.position):Lerp(self.target, t * t)
+		end
+
+		self.cframes[index] = CFrame.new(cube.position + cube.jolt) * cube.tumble * CFrame.Angles(now * cube.turn, now * cube.turn * 0.7, 0)
+	end
+	workspace:BulkMoveTo(self.parts, self.cframes, Enum.BulkMoveMode.FireCFrameChanged)
+end
+
+function Swarm:destroy()
+	for _, part in ipairs(self.parts) do
+		part:Destroy()
+	end
+	table.clear(self.cubes)
+	table.clear(self.parts)
+end
+
+--[[ Il Glitch vero di DOORS, preso da ReplicatedStorage: solo il corpo (senza la radice alta 21
+     stud, luci, suoni e animazioni), ancorato e scalato all'altezza voluta. Resta sempre nella
+     scena e per nasconderlo lo si porta in alto, lontano: è più leggero che toglierlo e rimetterlo.
+     nil se in questa partita non c'è. ]]
+local function glitchPhantom(parent, height)
+	local entities = ReplicatedStorage:FindFirstChild("Entities")
+	local source = entities and entities:FindFirstChild("Glitch")
+	if not (source and source:IsA("Model")) then return nil end
+
+	local ok, phantom = pcall(function()
+		source.Archivable = true
+		for _, descendant in ipairs(source:GetDescendants()) do
+			descendant.Archivable = true
+		end
+		return source:Clone()
+	end)
+	if not ok or not phantom then return nil end
+
+	for _, descendant in ipairs(phantom:GetDescendants()) do
+		if descendant.Name == "Root" or descendant:IsA("Light") or descendant:IsA("Sound")
+			or descendant:IsA("AnimationController") or descendant:IsA("Folder") or descendant:IsA("LuaSourceContainer")
+		then
+			descendant:Destroy()
+		end
+	end
+	local parts = {}
+	for _, part in ipairs(phantom:GetDescendants()) do
+		if part:IsA("BasePart") then
+			part.Anchored = true
+			part.CanCollide = false
+			part.CanTouch = false
+			part.CanQuery = false
+			part.CastShadow = false
+			table.insert(parts, part)
+		end
+	end
+	if #parts == 0 then
+		phantom:Destroy()
+		return nil
+	end
+	phantom.PrimaryPart = phantom:FindFirstChild("Torso") or parts[1]
+
+	local _, size = phantom:GetBoundingBox()
+	pcall(function()
+		phantom:ScaleTo(math.max(height / math.max(size.Y, 1), 0.1))
+	end)
+	local boxCFrame, box = phantom:GetBoundingBox()
+	local footOffset = phantom:GetPivot().Position.Y - (boxCFrame.Position.Y - box.Y / 2)
+
+	phantom:PivotTo(CFrame.new(0, 10000, 0))
+	phantom.Parent = parent
+	return {
+		model = phantom,
+		-- Lo mette in piedi su floor, girato verso facing (una direzione piatta)
+		show = function(floor, facing)
+			phantom:PivotTo(CFrame.lookAt(floor + Vector3.new(0, footOffset, 0), floor + Vector3.new(0, footOffset, 0) + facing))
+		end,
+		hide = function()
+			phantom:PivotTo(CFrame.new(0, 10000, 0))
+		end,
+	}
+end
+
+Ritual.Glitch = {
+	Body   = GLITCH_BODY,
+	Red    = GLITCH_RED,
+	Cyan   = GLITCH_CYAN,
+	Skin   = glitchSkin,
+	Static = glitchStatic,
+	Crawl  = crawlSkin,
+}
 
 ---====== IL CROCIFISSO ======---
 
@@ -627,11 +930,14 @@ end
 
 local armSpawner -- definita più giù, con lo spawner
 
---[[ IL CROCIFISSO GLITCH in mano. Non sta mai fermo:
-     - a scatti la presa salta di qualche centimetro e si gira, poi torna al suo posto
-     - due fantasmi del crocifisso, uno viola e uno ciano, gli si staccano di lato
-     - la sagoma sfarfalla tra viola e ciano, e ogni tanto sparisce per un frame
-     - frammenti del Glitch di DOORS gli girano attorno, una luce che trema
+--[[ IL CROCIFISSO GLITCH in mano. È il crocifisso di Penguin, ma il Glitch di DOORS lo sta
+     mangiando:
+     - la pelle del Glitch (i quadretti neri) gli striscia sopra e sfarfalla
+     - i quadrati fermi bianchi, rossi e ciano del Glitch gli si accendono addosso
+     - blocchetti del Glitch gli girano attorno, scattano e si inceppano
+     - a scatti la presa salta e si gira, poi torna al suo posto
+     - due fantasmi, uno rosso e uno ciano, gli si staccano di lato
+     - la sagoma sfarfalla, e ogni tanto sparisce per un frame
      - quando lo prendi in mano, il suono del Glitch
      Si anima solo mentre lo tieni in mano; nello zaino è fermo e non costa niente. ]]
 local function animateGlitchTool(tool)
@@ -639,26 +945,26 @@ local function animateGlitchTool(tool)
 	if not (handle and handle:IsA("BasePart")) then return end
 	local grip = tool.Grip
 
+	local skins = {}
+	for _, part in ipairs(tool:GetDescendants()) do
+		if part:IsA("BasePart") and part.Transparency < 1 then
+			for _, texture in ipairs(glitchSkin(part, 0.4)) do
+				texture.Transparency = 0.35
+				table.insert(skins, texture)
+			end
+		end
+	end
+	glitchStatic(handle, 8, 0.3)
+
 	local aura = Instance.new("Highlight")
 	aura.Name = "GlitchAura"
 	aura.DepthMode = Enum.HighlightDepthMode.Occluded
-	aura.FillColor = PALETTES.Glitch.Main
-	aura.FillTransparency = 0.55
-	aura.OutlineColor = PALETTES.GlitchAlt.Main
-	aura.OutlineTransparency = 0.2
+	aura.FillColor = GLITCH_BODY
+	aura.FillTransparency = 0.6
+	aura.OutlineColor = PALETTES.Glitch.Main
+	aura.OutlineTransparency = 0.3
 	aura.Enabled = false
 	aura.Parent = tool
-
-	local bits = makeEmitter(handle, TEXTURES.GlitchBit)
-	bits.Name = "GlitchBits"
-	bits.Rate = 18
-	bits.Lifetime = NumberRange.new(0.25, 0.7)
-	bits.Speed = NumberRange.new(0.3, 1.6)
-	bits.SpreadAngle = Vector2.new(180, 180)
-	bits.Size = sequence({ { 0, 0.22 }, { 0.5, 0.3 }, { 1, 0 } })
-	bits.Transparency = sequence({ { 0, 0.1 }, { 1, 1 } })
-	bits.Color = ColorSequence.new(PALETTES.Glitch.Main, PALETTES.GlitchAlt.Main)
-	bits.LockedToPart = true
 
 	local light = Instance.new("PointLight")
 	light.Name = "GlitchGlow"
@@ -668,15 +974,16 @@ local function animateGlitchTool(tool)
 	light.Shadows = false
 	light.Parent = handle
 
-	-- I fantasmi: copie delle parti, solo sul tuo schermo, dentro la camera
+	-- Fantasmi e cubi: solo sul tuo schermo, dentro la camera, creati la prima volta che lo impugni
 	local ghosts = {}
+	local swarm = nil
 	local function buildGhosts()
-		for index, colour in ipairs({ PALETTES.Glitch.Main, PALETTES.GlitchAlt.Main }) do
+		for index, colour in ipairs({ GLITCH_RED, GLITCH_CYAN }) do
 			local folder = Instance.new("Folder")
 			folder.Name = "GlitchCrucifixGhost"
 			local parts = {}
 			for _, descendant in ipairs(tool:GetDescendants()) do
-				if descendant:IsA("BasePart") then
+				if descendant:IsA("BasePart") and descendant.Transparency < 1 then
 					descendant.Archivable = true
 					local copy = descendant:Clone()
 					if copy then
@@ -699,6 +1006,8 @@ local function animateGlitchTool(tool)
 			folder.Parent = workspace.CurrentCamera
 			ghosts[index] = { folder = folder, parts = parts, side = if index == 1 then -1 else 1 }
 		end
+		swarm = Ritual.GlitchSwarm(workspace.CurrentCamera, 9, 0.13)
+		swarm:orbit(0.85)
 	end
 
 	local function hideGhosts()
@@ -719,14 +1028,20 @@ local function animateGlitchTool(tool)
 		tool.Grip = grip
 		aura.Enabled = false
 		hideGhosts()
+		if swarm then swarm:setVisible(false) end
 	end
 
 	tool.Equipped:Connect(function()
 		if #ghosts == 0 then buildGhosts() end
 		aura.Enabled = true
+		swarm:setVisible(true)
 		playSound(SOUND_IDS.Glitch, 0.35, 1.2 + math.random() * 0.2, handle)
 		if connection then return end
-		connection = RunService.RenderStepped:Connect(function()
+		connection = RunService.RenderStepped:Connect(function(deltaTime)
+			if handle.Parent then
+				swarm:step(deltaTime, handle.CFrame)
+			end
+
 			local now = os.clock()
 			if now < nextTick then return end
 			nextTick = now + 0.035 + math.random() * 0.1
@@ -739,12 +1054,18 @@ local function animateGlitchTool(tool)
 				tool.Grip = grip
 			end
 
+			-- La pelle striscia e sfarfalla
+			crawlSkin(skins, 4, 0.4)
+			for _ = 1, 3 do
+				local texture = skins[math.random(#skins)]
+				if texture then texture.Transparency = 0.05 + math.random() * 0.6 end
+			end
+
 			local roll = math.random()
-			aura.FillColor = if roll < 0.5 then PALETTES.Glitch.Main else PALETTES.GlitchAlt.Main
-			aura.OutlineColor = if roll < 0.5 then PALETTES.GlitchAlt.Main else PALETTES.Glitch.Main
-			aura.FillTransparency = if roll < 0.08 then 1 else 0.35 + math.random() * 0.4
+			aura.OutlineColor = if roll < 0.4 then PALETTES.Glitch.Main elseif roll < 0.7 then GLITCH_CYAN else GLITCH_RED
+			aura.FillTransparency = if roll < 0.08 then 1 else 0.45 + math.random() * 0.3
 			light.Brightness = 0.4 + math.random() * 2
-			light.Color = aura.FillColor
+			light.Color = aura.OutlineColor
 
 			-- I fantasmi si staccano a tratti, di lato rispetto alla camera
 			split = if math.random() < 0.45 then 0.08 + math.random() * 0.3 else split * 0.3
@@ -768,6 +1089,7 @@ local function animateGlitchTool(tool)
 			ghost.folder:Destroy()
 		end
 		table.clear(ghosts)
+		if swarm then swarm:destroy() end
 	end)
 end
 
@@ -1686,6 +2008,7 @@ function Ritual.Run(opts)
 	-- Glitch: il crocifisso che fluttua va a scatti, e quando si spezza ne resta un grumo
 	local crucifixJitter, nextJitter = CFrame.identity, 0
 	local residue = nil
+	local swarm = nil
 
 	---- 0. IL COLPO ----
 	local grade, bloom = stage:postEffects()
@@ -1744,6 +2067,13 @@ function Ritual.Run(opts)
 	end
 	stage:sphere(floatAt, 14, 0.6, true)
 
+	-- Glitch: blocchetti del Glitch che girano attorno al crocifisso
+	if glitch then
+		swarm = Ritual.GlitchSwarm(stage.folder, 14, 0.22)
+		swarm:orbit(1.4)
+		swarm:setVisible(true)
+	end
+
 	-- V2: un'aureola dietro al crocifisso, due anelli di DOORS che girano in versi opposti
 	if cinematic then
 		local halo = Instance.new("BillboardGui")
@@ -1788,6 +2118,9 @@ function Ritual.Run(opts)
 					else CFrame.identity
 			end
 			crucifix:PivotTo(CFrame.new(position) * CFrame.Angles(0, crucifixAngle, 0) * fromCFrame.Rotation * crucifixJitter)
+		end
+		if swarm and crucifix.Parent then
+			swarm:step(deltaTime, crucifix:GetPivot())
 		end
 		if residue and residue.part.Parent then
 			residue.part.CFrame = CFrame.new(residue.at + crucifixJitter.Position * 1.5) * CFrame.Angles(elapsed * 3, elapsed * 5, 0)
@@ -2144,6 +2477,26 @@ function Ritual.Run(opts)
 		-- Resiste: il cerchio si fa rosso (viola, se è il Glitch) e il crocifisso si incrina
 		if not at(F.Resist) then return wrapUp() end
 		if glitch then
+			-- Le catene si guastano: a scatti una prende la pelle del Glitch per un attimo
+			task.spawn(function()
+				local chainTexture = "rbxassetid://" .. TEXTURES.Chain
+				local glitchTexture = "rbxassetid://" .. TEXTURES.GlitchBit
+				while not stage.done and os.clock() - stage.startedAt < F.Break do
+					local chain = chains[math.random(math.max(#chains, 1))]
+					if chain and chain.beam.Parent then
+						chain.beam.Texture = glitchTexture
+						chain.beam.Width0 = 1.6 * scale
+						task.delay(0.05 + math.random() * 0.07, function()
+							if chain.beam.Parent then
+								chain.beam.Texture = chainTexture
+								chain.beam.Width0 = 1.1 * scale
+							end
+						end)
+					end
+					task.wait(0.06 + math.random() * 0.14)
+				end
+			end)
+
 			-- Non sfuma: sfarfalla tra i colori, e il suono del crocifisso si inceppa
 			stage:glitchFlicker(0.9, "Glitch")
 			stage:glitchScreen(0.7, 0.8)
@@ -2217,6 +2570,9 @@ function Ritual.Run(opts)
 		if glitch then
 			stage:glitchScreen(0.6, 1)
 			playSound(SOUND_IDS.Glitch, 1.6, 0.8, stage.folder)
+			if swarm then
+				swarm:burst(crucifix:GetPivot().Position, 16)
+			end
 
 			-- Del crocifisso resta un grumo di glitch che pulsa a mezz'aria
 			local spot = crucifix:GetPivot().Position
@@ -2282,48 +2638,139 @@ function Ritual.Run(opts)
 			local strikeAt = F.GlitchStrike
 			local span = F.GlitchSpan
 
+			local chest = center + Vector3.new(0, (body.ChestHeight or 3) * scale, 0)
 			if residue then
-				stage:glitchBolt(residue.part.Position, center + Vector3.new(0, (body.ChestHeight or 3) * scale, 0), 0.55)
+				stage:glitchBolt(residue.part.Position, chest, 0.55)
 				tween(residue.part, 0.15, { Size = Vector3.one * 0.05 }, Enum.EasingStyle.Back, Enum.EasingDirection.In)
 				task.delay(0.2, function()
 					if residue then residue.part:Destroy() end
 				end)
 			end
+			-- I blocchetti rimasti a mezz'aria gli si schiantano addosso
+			if swarm then
+				swarm:converge(chest, 0.35)
+				task.delay(0.4, function()
+					if swarm then swarm:setVisible(false) end
+				end)
+			end
+
 			flickerRoom(playerRoom(), 1.5)
-			stage:flash(PALETTES.GlitchAlt.Main, 0.1, 0.5)
-			stage:glitchScreen(1, 1)
-			stage:glitchFlicker(0.6)
-			stage:fovPunch(20, 0.9)
+			stage:flash(GLITCH_CYAN, 0.1, 0.5)
+			stage:glitchScreen(1.2, 1)
+			stage:glitchFlicker(0.8)
+			stage:fovPunch(22, 1)
 			shake(14, 20, 0, 1.4)
+			playSound(SOUND_IDS.GlitchHit, 2, 1, stage.folder)
 			playSound(SOUND_IDS.Glitch, 2, 0.6, stage.folder)
 			stage:sphere(center + Vector3.new(0, 3, 0), radius * 2.4, 0.6, false)
 			tween(grade, 0.3, { TintColor = PALETTES.Glitch.Tint, Contrast = 0.6, Saturation = -0.45 })
 			if body.Scream then pcall(body.Scream, stage, "glitch") end
 
-			local static = playSound(SOUND_IDS.Static, 0, 1, stage.folder)
-			static.Looped = true
-			tween(static, span * 0.8, { Volume = 0.9 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+			local static = loopSound(SOUND_IDS.Static, 0, 1, stage.folder)
+			tween(static, span * 0.8, { Volume = 0.8 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+			local loop = loopSound(SOUND_IDS.GlitchLoop, 0, 0.9, stage.folder)
+			tween(loop, 2, { Volume = 0.7 })
+
+			--[[ Il Glitch vero di DOORS entra in lui: appare intero per un attimo sopra di lui, poi
+			     durante la trasformazione torna a lampi, sempre più spesso ]]
+			local _, box = model:GetBoundingBox()
+			local phantom = glitchPhantom(stage.folder, body.Height or box.Y)
+			local toPlayer = if playerRoot then flatUnit(playerRoot.Position - center) else nil
+			local phantomFacing = toPlayer or facing.LookVector
+			if phantom then
+				phantom.show(center, phantomFacing)
+				task.delay(0.3, phantom.hide)
+			end
+
+			--[[ La stanza impazzisce: le sue luci saltano di colore e d'intensità a caso, e tornano
+			     come erano alla fine (o se il rituale si interrompe) ]]
+			local roomLights = {}
+			local room = playerRoom()
+			if room then
+				for _, light in ipairs(room:GetDescendants()) do
+					if light:IsA("Light") then
+						table.insert(roomLights, { light = light, colour = light.Color, brightness = light.Brightness })
+					end
+				end
+			end
+			local function restoreLights()
+				for _, entry in ipairs(roomLights) do
+					if entry.light.Parent then
+						entry.light.Color = entry.colour
+						entry.light.Brightness = entry.brightness
+					end
+				end
+			end
+			table.insert(stage.cleanup, restoreLights)
 
 			local ok, err = pcall(body.Glitch, stage)
 			if not ok then problem("Body.Glitch: %s", tostring(err)) end
 
 			-- Scosse glitch sempre più fitte mentre si trasforma
 			task.spawn(function()
+				local glitchColours = { PALETTES.Glitch.Main, GLITCH_RED, GLITCH_CYAN }
 				while not stage.done and alive() do
 					local progress = (os.clock() - stage.startedAt - strikeAt) / span
 					if progress >= 1 then break end
 					local power = 0.3 + 0.7 * progress
-					stage:glitchScreen(0.08 + 0.2 * math.random() * power, power)
+					stage:glitchScreen(0.08 + 0.25 * math.random() * power, power)
 					shake(1.5 + 5 * power, 18, 0, 0.35)
-					if math.random() < 0.35 then
+					if math.random() < 0.4 then
 						stage:glitchFlicker(0.15)
 					end
-					task.wait(0.25 + (1 - progress) * (0.4 + math.random() * 0.6))
+					if math.random() < 0.3 then
+						stage:fovPunch(4 + 8 * math.random() * power, 0.2)
+					end
+
+					-- Lo schermo cambia colore di colpo per un attimo
+					if math.random() < 0.3 then
+						grade.TintColor = glitchColours[math.random(#glitchColours)]:Lerp(WHITE, 0.4)
+						grade.Saturation = -1 + 2 * math.random()
+						task.delay(0.06, function()
+							if grade.Parent then
+								grade.TintColor = PALETTES.Glitch.Tint
+								grade.Saturation = -0.45
+							end
+						end)
+					end
+
+					-- Le luci della stanza
+					for _ = 1, math.ceil(#roomLights * 0.3) do
+						local entry = roomLights[math.random(#roomLights)]
+						if entry and entry.light.Parent then
+							entry.light.Color = glitchColours[math.random(#glitchColours)]
+							entry.light.Brightness = if math.random() < 0.4 then 0 else entry.brightness * (1 + 2 * math.random())
+						end
+					end
+					if math.random() < 0.25 then
+						restoreLights()
+					end
+
+					-- Il suono si inceppa: riparte da un punto a caso
+					if math.random() < 0.25 then
+						pcall(function()
+							loop.TimePosition = math.random() * math.max(loop.TimeLength - 0.5, 0.1)
+							loop.PlaybackSpeed = 0.6 + math.random() * 0.6
+						end)
+					end
+
+					-- Il Glitch vero ricompare sopra di lui a lampi
+					if phantom and math.random() < 0.15 + 0.3 * progress then
+						local jitter = Vector3.new(randomUnit().X, 0, randomUnit().Z) * 1.5 * scale
+						phantom.show(center + jitter, phantomFacing)
+						task.delay(0.05 + math.random() * 0.12, function()
+							if not stage.done then phantom.hide() end
+						end)
+					end
+
+					task.wait(0.2 + (1 - progress) * (0.35 + math.random() * 0.5))
 				end
 			end)
 
 			if not at(strikeAt + span) then return wrapUp() end
 			pcall(function() tween(static, 0.6, { Volume = 0 }) end)
+			pcall(function() tween(loop, 1.2, { Volume = 0 }) end)
+			restoreLights()
 			stage:flash(PALETTES.Glitch.Main, 0.15, 0.9)
 			stage:glitchScreen(0.5, 1)
 			shake(8, 14, 0, 1)

@@ -1579,6 +1579,9 @@ local function main()
 	if state.finished or state.caught or state.banishing then return end
 
 	---- 4. IL RITORNO ----
+	-- Il giro è finito e se ne va: da qui non ti vede più. Prima ti uccideva mentre veniva
+	-- risucchiato, proprio quando uscivi dall'armadio perché sembrava finita
+	state.hunting = false
 	ascend(portal, geometry)
 	finish("tornato nel portale")
 end
