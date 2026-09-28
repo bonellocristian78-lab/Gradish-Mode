@@ -1,0 +1,67 @@
+--[[
+================================================================================
+
+        C R U C I F I X
+
+        Il crocifisso con le catene. Si consuma al primo utilizzo e funziona su
+        ogni entità custom: Honcho, J-518, le entità Gradish e qualsiasi entità
+        fatta con lo spawner di Vynixu.
+
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/Crucifix"))()
+
+        Per scegliere il tipo senza toccare lo script, una riga prima:
+
+            _G.CrucifixType = "Curious"
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/Crucifix"))()
+
+        I TIPI
+        ------
+            "Guiding"   blu. La crocifissione classica, l'entità finisce nel buco
+            "Curious"   giallo. Stessa cattura, tonalità e particelle gialle
+            "Fail"      parte blu, poi diventa rosso: l'entità strappa le
+                        catene, spezza il crocifisso e sopravvive
+
+        Anche un Guiding o un Curious finisce in Fail se l'entità resiste
+        (Speedster Purpleist sempre, Rose Hell l'85% delle volte).
+
+        Il rituale sta in CrucifixRitual, che è lo stesso che usa Honcho.
+
+================================================================================
+]]
+
+---====== IMPOSTAZIONI ======---
+
+local CONFIG = {
+	Type  = "Guiding",  -- "Guiding", "Curious" o "Fail"
+	Equip = true,       -- false = va nello zaino invece che in mano
+}
+
+---=====================================================================---
+
+local chosen = _G.CrucifixType
+_G.CrucifixType = nil
+if chosen ~= nil then
+	CONFIG.Type = chosen
+end
+
+if CONFIG.Type ~= "Guiding" and CONFIG.Type ~= "Curious" and CONFIG.Type ~= "Fail" then
+	warn(("[Crucifix] tipo %q sconosciuto, uso Guiding"):format(tostring(CONFIG.Type)))
+	CONFIG.Type = "Guiding"
+end
+
+local ok, Ritual = pcall(function()
+	return loadstring(game:HttpGet(
+		"https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/CrucifixRitual"
+	))()
+end)
+
+if not ok or type(Ritual) ~= "table" then
+	warn("[Crucifix] CrucifixRitual non si è caricato: " .. tostring(Ritual))
+	return
+end
+
+local tool = Ritual.Give(CONFIG.Type, CONFIG.Equip)
+
+if tool then
+	print(("[Crucifix] crocifisso %s pronto. Tienilo in mano davanti a un'entità."):format(CONFIG.Type))
+end

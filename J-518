@@ -1,0 +1,1226 @@
+--[[
+================================================================================
+
+        J - 5 1 8
+
+        Un boss da stanza. Non attraversa la mappa: scende dal soffitto della
+        stanza in cui sei, bussa a ogni armadio e torna da dove è venuto.
+
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/J-518"))()
+
+        COME VA
+        -------
+        1. Al centro del soffitto si apre un portale bianco e nero. Per dieci
+           secondi la stanza perde colore, le luci calano e tremano, e battiti
+           cupi arrivano sempre più fitti. Nessuna scritta: si capisce da soli.
+        2. Allo scadere scende dal portale al centro della stanza.
+        3. Va davanti a ogni armadio e bussa tre volte. Se sei dentro sei salvo,
+           e lo senti bussare a un palmo da te. Se sei fuori e ti vede, jumpscare.
+        4. Finito il giro torna sotto il portale, ci rientra e il portale si
+           chiude. Non resta niente: istanze, suoni, luci e connessioni.
+
+        Il crocifisso lo ferma (Crucifix, o quello che ti dà Honcho), con il
+        rituale di CrucifixRitual. Resist = true qui sotto e nessuno lo ferma.
+
+        Una stanza senza armadi: la perlustra lo stesso. L'unica salvezza allora
+        è non farsi vedere, cioè uscire dalla stanza.
+
+        Lo vedi solo tu: è creato sul tuo client.
+
+================================================================================
+]]
+
+local CurrentRooms = workspace:FindFirstChild("CurrentRooms")
+if not CurrentRooms then
+	warn("[J-518] non sei in una partita di DOORS: manca workspace.CurrentRooms")
+	return
+end
+
+if workspace:FindFirstChild("SeekMovingNewClone") then
+	warn("[J-518] c'è l'inseguimento di Seek in corso: rieseguilo quando è finito")
+	return
+end
+
+---====== CONFIGURAZIONE ======---
+
+local REPO = "https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/"
+
+local CONFIG = {
+	-- Il modello
+	ModelName = "J-518",
+	ModelUrl  = REPO .. "J-518.rbxm",
+	RitualUrl = REPO .. "CrucifixRitual",
+
+	-- Suoni: tutti asset che DOORS usa già, quindi dentro DOORS partono
+	Sounds = {
+		Beat   = 9125402169,     -- il colpo di Dread, abbassato: i battiti cupi
+		Heart  = 6556968450,     -- il battito di DOORS, sotto ai colpi
+		Rumble = 9114219876,     -- il terremoto dello spawner di Vynixu, rallentato
+		Impact = 74149238738530, -- l'atterraggio
+		Knock  = 5188314808,     -- il bussare alle porte di DOORS
+	},
+
+	-- Texture del portale e delle particelle
+	Textures = {
+		Rings  = { 11523868118, 11523868246, 11523868335 }, -- anelli del cerchio di DOORS
+		Smoke  = 8945404215,     -- il fumo di J-518
+		Spark  = 4998425421,     -- scintille del rituale di DOORS
+		Streak = 12293713542,    -- le strisce di J-518
+		Dust   = 18496232079,    -- la polvere di DOORS
+	},
+
+	-- Tempi, in secondi
+	Countdown     = 10,
+	PortalOpen    = 2,
+	DescendTime   = 1.4,
+	ReturnTime    = 1.2,
+	KnockCount    = 3,
+	KnockInterval = 0.55,
+	ListenTime    = 1,     -- resta davanti all'armadio dopo i colpi
+
+	-- Spazio, in stud
+	PortalSize  = 11,
+	HoverHeight = 4.5,     -- sopra il pavimento mentre caccia
+	Speed       = 16,      -- stud al secondo
+	StandOff    = 3,       -- a che distanza dall'anta si ferma
+	MaxSpots    = 8,       -- armadi al massimo per stanza
+
+	-- Caccia
+	KillRange = 70,        -- ti vede da qui, se sei fuori da un nascondiglio e senza muri in mezzo
+	Jumpscare = true,      -- false = muori e basta
+
+	-- Crocifisso
+	CrucifixRange = 40,
+	Resist        = false, -- true = ogni crocifisso fallisce su di lui
+
+	--[[ Il modello ha un emitter a 10000 particelle al secondo e uno a 33
+	     milioni. Ognuno ne tiene vive al massimo queste (nil = come nel modello). ]]
+	MaxLiveParticles = 150,
+
+	Failsafe = 150,        -- dopo questi secondi si pulisce tutto comunque
+
+	Death = {
+		Cause  = "J-518",
+		Colour = "Blue",   -- "Blue" o "Yellow"
+		Hints  = {
+			"You died to J-518...",
+			"The room lost its colour and something listened from the ceiling.",
+			"When the dark starts beating, get inside a wardrobe.",
+			"It will knock. Do not come out.",
+		},
+	},
+
+	Debug = false,
+}
+
+---====== SERVIZI ======---
+
+local Players           = game:GetService("Players")
+local RunService        = game:GetService("RunService")
+local TweenService      = game:GetService("TweenService")
+local CollectionService = game:GetService("CollectionService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local LocalPlayer = Players.LocalPlayer
+
+local WHITE = Color3.new(1, 1, 1)
+local BLACK = Color3.fromRGB(8, 8, 10)
+
+---====== LOG ======---
+
+local function log(format, ...)
+	if CONFIG.Debug then
+		print("[J-518] " .. string.format(format, ...))
+	end
+end
+
+local function problem(format, ...)
+	warn("[J-518] " .. string.format(format, ...))
+end
+
+-- Un thread per ogni parte: se una si rompe lo scrive in console invece di fermarsi in silenzio
+local function spawnSafe(label, fn, ...)
+	task.spawn(function(...)
+		local ok, err = xpcall(fn, debug.traceback, ...)
+		if not ok then
+			problem("errore in %s: %s", label, tostring(err))
+		end
+	end, ...)
+end
+
+---====== STATO E PULIZIA ======---
+--[[ Tutto quello che crea finisce in cleanup: connessioni, istanze e funzioni che rimettono a
+     posto. finish() le esegue al contrario, quindi prima si stacca un ciclo e poi si ripristina
+     quello che toccava. Una seconda esecuzione toglie la prima. ]]
+
+if _G.J518Cleanup then
+	pcall(_G.J518Cleanup)
+end
+
+local cleanup = {}
+local state = {
+	finished = false,
+	hunting  = false,  -- può vederti e ucciderti
+	paused   = false,  -- fermo per il crocifisso
+	banishing = false, -- il rituale è in corso: il giro aspetta
+	caught   = false,
+	portal   = nil,
+	position = Vector3.zero,
+	facing   = CFrame.identity,
+}
+
+local function track(item)
+	table.insert(cleanup, item)
+	return item
+end
+
+local dismiss
+
+local function finish(reason)
+	if state.finished then return end
+	state.finished = true
+	state.hunting = false
+	log("fine: %s", reason)
+
+	for index = #cleanup, 1, -1 do
+		local item = cleanup[index]
+		pcall(function()
+			if typeof(item) == "RBXScriptConnection" then
+				item:Disconnect()
+			elseif typeof(item) == "Instance" then
+				item:Destroy()
+			elseif type(item) == "function" then
+				item()
+			end
+		end)
+	end
+	table.clear(cleanup)
+
+	if _G.J518Cleanup == dismiss then
+		_G.J518Cleanup = nil
+	end
+end
+
+dismiss = function()
+	finish("tolto da una nuova esecuzione")
+end
+_G.J518Cleanup = dismiss
+
+local folder = track(Instance.new("Folder"))
+folder.Name = "J518"
+folder.Parent = workspace
+
+---====== UTILITÀ ======---
+
+local function flatUnit(vector)
+	local flat = Vector3.new(vector.X, 0, vector.Z)
+	if flat.Magnitude < 0.05 then return nil end
+	return flat.Unit
+end
+
+local function tween(instance, duration, goals, style, direction)
+	local playing = TweenService:Create(instance, TweenInfo.new(duration, style or Enum.EasingStyle.Quad, direction or Enum.EasingDirection.Out), goals)
+	playing:Play()
+	return playing
+end
+
+local function sequence(points)
+	local keypoints = {}
+	for _, point in ipairs(points) do
+		table.insert(keypoints, NumberSequenceKeypoint.new(point[1], point[2]))
+	end
+	return NumberSequence.new(keypoints)
+end
+
+local function newPart(name, size, cframe, transparency)
+	local part = Instance.new("Part")
+	part.Name = name
+	part.Size = size
+	part.CFrame = cframe
+	part.Transparency = transparency
+	part.Anchored = true
+	part.CanCollide = false
+	part.CanTouch = false
+	part.CanQuery = false
+	part.CastShadow = false
+	part.Parent = folder
+	return part
+end
+
+-- Un suono. Quelli in loop restano finché li si ferma; gli altri si tolgono da soli
+local function playSound(soundId, volume, speed, parent, looped)
+	local sound = Instance.new("Sound")
+	sound.SoundId = "rbxassetid://" .. soundId
+	sound.Volume = volume
+	sound.PlaybackSpeed = speed or 1
+	sound.Looped = looped == true
+	sound.Parent = parent or folder
+	sound:Play()
+	if not looped then
+		task.delay(12, function()
+			sound:Destroy()
+		end)
+	end
+	return sound
+end
+
+-- Il camShaker di DOORS. Main_Game rinasce con te, quindi si prende ogni volta
+local function shake(magnitude, roughness, fadeIn, fadeOut)
+	pcall(function()
+		local mainGame = require(LocalPlayer.PlayerGui.MainUI.Initiator.Main_Game)
+		mainGame.camShaker:ShakeOnce(magnitude, roughness, fadeIn, fadeOut)
+	end)
+end
+
+-- Un lampo su tutto lo schermo: una sola ScreenGui, riusata
+local flashFrame
+local function flash(colour, startTransparency, duration)
+	if not flashFrame then
+		local playerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+		if not playerGui then return end
+		local gui = track(Instance.new("ScreenGui"))
+		gui.Name = "J518Flash"
+		gui.IgnoreGuiInset = true
+		gui.ResetOnSpawn = false
+		gui.DisplayOrder = 1000
+		flashFrame = Instance.new("Frame")
+		flashFrame.Size = UDim2.fromScale(1, 1)
+		flashFrame.BorderSizePixel = 0
+		flashFrame.BackgroundTransparency = 1
+		flashFrame.Parent = gui
+		gui.Parent = playerGui
+	end
+	flashFrame.BackgroundColor3 = colour
+	flashFrame.BackgroundTransparency = startTransparency
+	tween(flashFrame, duration, { BackgroundTransparency = 1 })
+end
+
+local function characters()
+	local list = {}
+	for _, player in ipairs(Players:GetPlayers()) do
+		if player.Character then
+			table.insert(list, player.Character)
+		end
+	end
+	return list
+end
+
+---====== LA STANZA ======---
+
+local function currentRoom()
+	local number = LocalPlayer:GetAttribute("CurrentRoom")
+	if number == nil then
+		local gameData = ReplicatedStorage:FindFirstChild("GameData")
+		local latest = gameData and gameData:FindFirstChild("LatestRoom")
+		number = latest and latest.Value
+	end
+	return number and CurrentRooms:FindFirstChild(tostring(number)) or nil
+end
+
+local function taggedIn(room, tag)
+	local list = {}
+	for _, instance in ipairs(CollectionService:GetTagged(tag)) do
+		if instance:IsDescendantOf(room) then
+			table.insert(list, instance)
+		end
+	end
+	return list
+end
+
+--[[ Il centro e le altezze della stanza.
+
+     Il pavimento è la Part più grande con il tag PartFloor: in DOORS è il pavimento vero della
+     stanza, centrato. Il soffitto invece non si trova con un raycast, perché DOORS gli spegne
+     CanQuery (tag CanQueryFalse): si prende la Part con il tag PartCeiling più vicina al centro. ]]
+local function measureRoom(room)
+	local boxCFrame, boxSize = room:GetBoundingBox()
+	local center = boxCFrame.Position
+	local floorY = nil
+
+	local floorPart, floorArea = nil, 0
+	for _, floor in ipairs(taggedIn(room, "PartFloor")) do
+		if floor:IsA("BasePart") and floor.Size.X * floor.Size.Z > floorArea then
+			floorPart, floorArea = floor, floor.Size.X * floor.Size.Z
+		end
+	end
+
+	if floorPart then
+		center = floorPart.Position
+		floorY = floorPart.Position.Y + floorPart.Size.Y / 2
+	else
+		local params = RaycastParams.new()
+		params.FilterType = Enum.RaycastFilterType.Exclude
+		params.RespectCanCollide = true
+		params.FilterDescendantsInstances = characters()
+		local hit = workspace:Raycast(boxCFrame.Position, Vector3.new(0, -60, 0), params)
+		floorY = if hit then hit.Position.Y else boxCFrame.Position.Y - boxSize.Y / 2
+	end
+
+	local ceilingY, nearest = nil, math.huge
+	for _, ceiling in ipairs(taggedIn(room, "PartCeiling")) do
+		if ceiling:IsA("BasePart") then
+			local bottom = ceiling.Position.Y - ceiling.Size.Y / 2
+			local distance = (Vector3.new(ceiling.Position.X, 0, ceiling.Position.Z) - Vector3.new(center.X, 0, center.Z)).Magnitude
+			if bottom > floorY + 6 and distance < nearest then
+				ceilingY, nearest = bottom, distance
+			end
+		end
+	end
+	ceilingY = math.clamp(ceilingY or floorY + 14, floorY + 8, floorY + 40)
+
+	-- L'asse lungo della stanza, per perlustrarla quando non ha armadi
+	local axis, length = Vector3.xAxis, boxSize.X
+	if floorPart then
+		local size = floorPart.Size
+		if size.Z > size.X then
+			axis, length = floorPart.CFrame.LookVector, size.Z
+		else
+			axis, length = floorPart.CFrame.RightVector, size.X
+		end
+	elseif boxSize.Z > boxSize.X then
+		axis, length = Vector3.zAxis, boxSize.Z
+	end
+
+	return {
+		center   = Vector3.new(center.X, floorY, center.Z),
+		floorY   = floorY,
+		ceilingY = ceilingY,
+		axis     = flatUnit(axis) or Vector3.xAxis,
+		length   = length,
+	}
+end
+
+--[[ Gli armadi della stanza. Davanti a sé ognuno ha l'ExitAttachment, dove esci quando smetti di
+     nasconderti: è il lato dell'anta. Se non c'è, il davanti è il lato verso il centro. ]]
+local function spotsIn(room, geometry)
+	local spots = {}
+	for _, spot in ipairs(taggedIn(room, "HidingSpot")) do
+		if spot:IsA("Model") or spot:IsA("BasePart") then
+			local pivot = spot:GetPivot().Position
+			local exit = spot:FindFirstChild("ExitAttachment", true)
+			local front = if exit and exit:IsA("Attachment") then exit.WorldPosition else pivot
+			local out = flatUnit(front - pivot) or flatUnit(geometry.center - pivot) or Vector3.xAxis
+			table.insert(spots, { model = spot, pivot = pivot, front = front, out = out })
+		end
+	end
+	return spots
+end
+
+-- Il giro: sempre l'armadio più vicino a dove si trova, fino a MaxSpots
+local function planRoute(spots, from)
+	local route, left = {}, table.clone(spots)
+	local here = from
+	while #left > 0 and #route < CONFIG.MaxSpots do
+		local bestIndex, bestDistance = 1, math.huge
+		for index, spot in ipairs(left) do
+			local distance = (spot.front - here).Magnitude
+			if distance < bestDistance then
+				bestIndex, bestDistance = index, distance
+			end
+		end
+		local spot = table.remove(left, bestIndex)
+		table.insert(route, spot)
+		here = spot.front
+	end
+	return route
+end
+
+-- Sei nascosto proprio in quell'armadio?
+local function hiddenIn(spot)
+	local character = LocalPlayer.Character
+	if not character or not character:GetAttribute("Hiding") then return false end
+
+	local hidden = spot.model:FindFirstChild("HiddenPlayer")
+	if hidden and hidden:IsA("ObjectValue") and hidden.Value then
+		return hidden.Value == LocalPlayer or hidden.Value == character
+	end
+	local root = character:FindFirstChild("HumanoidRootPart")
+	return root ~= nil and (root.Position - spot.pivot).Magnitude < 5
+end
+
+---====== IL MODELLO ======---
+
+local function loadModel()
+	local model = nil
+
+	if type(LoadCustomInstance) == "function" then
+		local ok, result = pcall(LoadCustomInstance, CONFIG.ModelUrl)
+		if ok and typeof(result) == "Instance" then
+			model = result
+		end
+	end
+
+	if not model then
+		if not (getcustomasset and writefile) then
+			problem("il tuo executor non ha getcustomasset: non posso caricare il modello")
+			return nil
+		end
+		local file = "gradish_j518.txt"
+		local ok, result = pcall(function()
+			writefile(file, game:HttpGet(CONFIG.ModelUrl))
+			return game:GetObjects(getcustomasset(file, true))[1]
+		end)
+		pcall(function()
+			if isfile and delfile and isfile(file) then delfile(file) end
+		end)
+		if not ok or typeof(result) ~= "Instance" then
+			problem("il modello non si è caricato: %s", tostring(result))
+			return nil
+		end
+		model = result
+	end
+
+	if not model:IsA("Model") then
+		local wrapper = Instance.new("Model")
+		model.Parent = wrapper
+		model = wrapper
+	end
+	model.Name = CONFIG.ModelName
+
+	local root = model:FindFirstChild("RushNew", true) or model.PrimaryPart or model:FindFirstChildWhichIsA("BasePart", true)
+	if not (root and root:IsA("BasePart")) then
+		problem("il modello non ha nessuna parte")
+		return nil
+	end
+	model.PrimaryPart = root
+
+	local sounds = {}
+	for _, descendant in ipairs(model:GetDescendants()) do
+		if descendant:IsA("BasePart") then
+			-- Un fantasma: non tocca, non blocca, non fa ombra
+			descendant.Anchored = true
+			descendant.CanCollide = false
+			descendant.CanTouch = false
+			descendant.CanQuery = false
+			descendant.CastShadow = false
+		elseif descendant:IsA("JointInstance") and (descendant.Part0 == nil or descendant.Part1 == nil) then
+			-- Nel modello c'è una Weld con una parte sola: non tiene niente
+			descendant:Destroy()
+		elseif descendant:IsA("ParticleEmitter") and CONFIG.MaxLiveParticles then
+			local life = descendant.Lifetime.Max
+			if life > 0 and descendant.Rate * life > CONFIG.MaxLiveParticles then
+				log("%s: %d particelle/s portate a %d", descendant.Name, descendant.Rate, CONFIG.MaxLiveParticles / life)
+				descendant.Rate = CONFIG.MaxLiveParticles / life
+			end
+		elseif descendant:IsA("Sound") then
+			descendant.Playing = false
+			sounds[descendant.Name] = descendant
+		end
+	end
+
+	return model, sounds
+end
+
+---====== IL PORTALE ======---
+--[[ Un disco rivolto in giù, appena sotto il soffitto. Dentro: una massa nera al centro e gli
+     anelli del cerchio di DOORS, bianchi e neri, che girano in versi opposti. Sotto: fumo nero,
+     scintille e strisce bianche che cadono, e una luce bianca che trema. La tela della SurfaceGui
+     è fissa (512), non cresce con il portale. ]]
+
+local function buildPortal(position)
+	local disc = newPart("Portal", Vector3.new(0.2, 0.05, 0.2), CFrame.new(position), 1)
+
+	local gui = Instance.new("SurfaceGui")
+	gui.Face = Enum.NormalId.Bottom
+	gui.LightInfluence = 0
+	gui.Brightness = 2.5
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.FixedSize
+	gui.CanvasSize = Vector2.new(512, 512)
+	gui.Parent = disc
+
+	local mass = Instance.new("Frame")
+	mass.AnchorPoint = Vector2.new(0.5, 0.5)
+	mass.Position = UDim2.fromScale(0.5, 0.5)
+	mass.Size = UDim2.fromScale(0.6, 0.6)
+	mass.BackgroundColor3 = BLACK
+	mass.BorderSizePixel = 0
+	mass.Parent = gui
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0.5, 0)
+	corner.Parent = mass
+
+	local rings = {}
+	local colours = { WHITE, BLACK, WHITE }
+	local speeds = { 40, -65, 95 }
+	local scales = { 1, 0.82, 0.62 }
+	for index, textureId in ipairs(CONFIG.Textures.Rings) do
+		local image = Instance.new("ImageLabel")
+		image.AnchorPoint = Vector2.new(0.5, 0.5)
+		image.Position = UDim2.fromScale(0.5, 0.5)
+		image.Size = UDim2.fromScale(scales[index], scales[index])
+		image.BackgroundTransparency = 1
+		image.Image = "rbxassetid://" .. textureId
+		image.ImageColor3 = colours[index]
+		image.Rotation = math.random(0, 359)
+		image.ZIndex = 1 + index
+		image.Parent = gui
+		table.insert(rings, { image = image, speed = speeds[index] })
+	end
+
+	local smoke = Instance.new("ParticleEmitter")
+	smoke.Texture = "rbxassetid://" .. CONFIG.Textures.Smoke
+	smoke.Color = ColorSequence.new(Color3.fromRGB(0, 0, 0), Color3.fromRGB(30, 30, 34))
+	smoke.LightEmission = 0
+	smoke.LightInfluence = 0
+	smoke.EmissionDirection = Enum.NormalId.Bottom
+	smoke.Lifetime = NumberRange.new(1.5, 3)
+	smoke.Speed = NumberRange.new(1, 4)
+	smoke.SpreadAngle = Vector2.new(25, 25)
+	smoke.Size = sequence({ { 0, 2 }, { 1, 5 } })
+	smoke.Transparency = sequence({ { 0, 1 }, { 0.2, 0.35 }, { 1, 1 } })
+	smoke.RotSpeed = NumberRange.new(-40, 40)
+	smoke.Rotation = NumberRange.new(0, 360)
+	smoke.Rate = 0
+	smoke.Parent = disc
+
+	local sparks = Instance.new("ParticleEmitter")
+	sparks.Texture = "rbxassetid://" .. CONFIG.Textures.Spark
+	sparks.Color = ColorSequence.new(WHITE)
+	sparks.LightEmission = 1
+	sparks.LightInfluence = 0
+	sparks.EmissionDirection = Enum.NormalId.Bottom
+	sparks.Lifetime = NumberRange.new(0.6, 1.6)
+	sparks.Speed = NumberRange.new(3, 10)
+	sparks.Acceleration = Vector3.new(0, -8, 0)
+	sparks.SpreadAngle = Vector2.new(35, 35)
+	sparks.Size = sequence({ { 0, 0.8 }, { 1, 0 } })
+	sparks.Rate = 0
+	sparks.Parent = disc
+
+	local streaks = Instance.new("ParticleEmitter")
+	streaks.Texture = "rbxassetid://" .. CONFIG.Textures.Streak
+	streaks.Color = ColorSequence.new(WHITE)
+	streaks.LightEmission = 0.4
+	streaks.LightInfluence = 0
+	streaks.Orientation = Enum.ParticleOrientation.VelocityParallel
+	streaks.EmissionDirection = Enum.NormalId.Bottom
+	streaks.Lifetime = NumberRange.new(0.3, 0.5)
+	streaks.Speed = NumberRange.new(20, 35)
+	streaks.Size = sequence({ { 0, 1.2 }, { 1, 0 } })
+	streaks.Transparency = sequence({ { 0, 0.5 }, { 1, 1 } })
+	streaks.Rate = 0
+	streaks.Parent = disc
+
+	local light = Instance.new("PointLight")
+	light.Color = WHITE
+	light.Brightness = 0
+	light.Range = 26
+	light.Shadows = false
+	light.Parent = disc
+
+	return {
+		disc = disc, gui = gui, mass = mass, rings = rings,
+		smoke = smoke, sparks = sparks, streaks = streaks, light = light,
+		spin = 1, glow = 0, flicker = 0,
+	}
+end
+
+local function sizePortal(portal, size, duration, style, direction)
+	tween(portal.disc, duration, { Size = Vector3.new(math.max(size, 0.1), 0.05, math.max(size, 0.1)) },
+		style or Enum.EasingStyle.Back, direction or Enum.EasingDirection.Out)
+end
+
+---====== L'ATMOSFERA ======---
+--[[ Le luci della stanza e il colore dello schermo li comanda un solo ciclo per frame, finché
+     dura. Si ricorda com'erano e alla fine li rimette, piano. Il flicker di DOORS
+     (Module_Events.flicker) qui no: rimette le luci al valore che aveva letto, e cancellerebbe
+     il buio che stiamo facendo. ]]
+
+local mood = {
+	dim     = 0,   -- 0 luci normali, 1 quasi spente
+	gray    = 0,   -- 0 a colori, 1 bianco e nero
+	pulse   = 0,   -- il colpo di un battito, si spegne da solo
+	flicker = 0,   -- fino a quando le luci tremano (os.clock)
+}
+
+local function startAtmosphere(room, portal)
+	local lights = {}
+	for _, light in ipairs(room:GetDescendants()) do
+		if light:IsA("PointLight") or light:IsA("SpotLight") or light:IsA("SurfaceLight") then
+			lights[light] = light.Brightness
+		end
+	end
+
+	local camera = workspace.CurrentCamera
+	local grade = Instance.new("ColorCorrectionEffect")
+	grade.Name = "J518Grade"
+	grade.Parent = camera
+
+	-- Rimettere a posto viene DOPO lo stop del ciclo: in cleanup è prima, e si esegue al contrario
+	track(function()
+		for light, brightness in pairs(lights) do
+			if light.Parent then
+				tween(light, 1.5, { Brightness = brightness })
+			end
+		end
+		tween(grade, 1.5, { Saturation = 0, Contrast = 0, Brightness = 0 })
+		task.delay(1.6, function()
+			grade:Destroy()
+		end)
+	end)
+
+	track(RunService.RenderStepped:Connect(function(deltaTime)
+		local now = os.clock()
+		mood.pulse = math.max(mood.pulse - deltaTime * 3, 0)
+
+		local shaking = now < mood.flicker
+		for light, brightness in pairs(lights) do
+			if light.Parent then
+				local level = brightness * (1 - 0.8 * mood.dim)
+				if shaking and math.random() < 0.5 then
+					level *= math.random() * 0.4
+				end
+				light.Brightness = level
+			end
+		end
+
+		grade.Saturation = -mood.gray
+		grade.Contrast = 0.3 * mood.gray
+		grade.Brightness = -0.04 * mood.gray - 0.12 * mood.pulse
+
+		if portal.disc.Parent then
+			for _, ring in ipairs(portal.rings) do
+				ring.image.Rotation = (ring.image.Rotation + ring.speed * portal.spin * deltaTime) % 360
+			end
+			-- La luce del portale trema sempre un po'
+			local jitter = if math.random() < 0.15 then math.random() * 0.6 else 1
+			portal.light.Brightness = portal.glow * jitter
+		end
+	end))
+end
+
+---====== IL CROCIFISSO ======---
+
+local Ritual = nil
+spawnSafe("crocifisso", function()
+	local ok, result = pcall(function()
+		return loadstring(game:HttpGet(CONFIG.RitualUrl))()
+	end)
+	if ok and type(result) == "table" then
+		Ritual = result
+		if CONFIG.Debug then Ritual.Debug = true end
+		Ritual.Preload()
+	else
+		problem("CrucifixRitual non si è caricato, il crocifisso non lo fermerà: %s", tostring(result))
+	end
+end)
+
+---====== LA MORTE ======---
+
+local function fireDeathHints()
+	if not firesignal then
+		problem("l'executor non ha firesignal: niente messaggi sulla schermata di morte")
+		return
+	end
+	task.spawn(function()
+		pcall(function()
+			-- DOORS ascolta i messaggi solo quando la schermata di morte è visibile
+			local screen = LocalPlayer.PlayerGui:WaitForChild("MainUI"):WaitForChild("Death")
+			if not screen.Visible then
+				screen:GetPropertyChangedSignal("Visible"):Wait()
+			end
+			firesignal(ReplicatedStorage.RemotesFolder.DeathHint.OnClientEvent, CONFIG.Death.Hints, CONFIG.Death.Colour)
+		end)
+	end)
+end
+
+local function kill(humanoid)
+	pcall(function()
+		ReplicatedStorage.GameStats["Player_" .. LocalPlayer.Name].Total.DeathCause.Value = CONFIG.Death.Cause
+	end)
+	humanoid.Health = 0
+	fireDeathHints()
+	log("ti ha preso")
+end
+
+---====== IL CORPO ======---
+
+local model, sounds = nil, {}
+
+local function render(offset)
+	if not (model and model.Parent) then return end
+	local cframe = CFrame.new(state.position) * state.facing
+	if offset then cframe *= offset end
+	model:PivotTo(cframe)
+end
+
+local function faceTowards(point, deltaTime)
+	local direction = flatUnit(point - state.position)
+	if not direction then return end
+	local target = CFrame.lookAt(Vector3.zero, direction)
+	state.facing = if deltaTime then state.facing:Lerp(target, 1 - math.exp(-8 * deltaTime)) else target
+end
+
+-- Aspetta, ma resta fermo finché il crocifisso lo tiene
+local function waitActive(seconds)
+	local deadline = os.clock() + seconds
+	while not state.finished and not state.caught do
+		if state.paused then
+			deadline += RunService.Heartbeat:Wait()
+		elseif os.clock() >= deadline then
+			return true
+		else
+			RunService.Heartbeat:Wait()
+		end
+	end
+	return false
+end
+
+-- In linea retta, con un leggero ondeggiare: è un fantasma, i mobili non lo fermano
+local function moveTo(point, lookAt)
+	while not state.finished and not state.caught and model and model.Parent do
+		local deltaTime = RunService.Heartbeat:Wait()
+		if not state.paused then
+			local offset = point - state.position
+			local distance = offset.Magnitude
+			if distance < 0.1 then return true end
+			state.position += offset.Unit * math.min(CONFIG.Speed * deltaTime, distance)
+			faceTowards(lookAt or point, deltaTime)
+			render(CFrame.new(0, math.sin(os.clock() * 2.2) * 0.3, 0))
+		end
+	end
+	return false
+end
+
+---====== I COLPI ======---
+--[[ Un solo punto d'impatto riusato per tutti i colpi: una Part con il suono e l'emitter della
+     polvere, spostata davanti all'armadio di turno. ]]
+
+local knockPoint, knockDust = nil, nil
+
+local function dustAt(position, amount)
+	if not knockPoint then
+		knockPoint = newPart("KnockPoint", Vector3.new(1, 1, 1), CFrame.new(position), 1)
+		knockDust = Instance.new("ParticleEmitter")
+		knockDust.Texture = "rbxassetid://" .. CONFIG.Textures.Dust
+		knockDust.Color = ColorSequence.new(Color3.fromRGB(150, 146, 140))
+		knockDust.LightEmission = 0
+		knockDust.LightInfluence = 1
+		knockDust.Lifetime = NumberRange.new(0.8, 1.6)
+		knockDust.Speed = NumberRange.new(2, 6)
+		knockDust.SpreadAngle = Vector2.new(70, 70)
+		knockDust.Acceleration = Vector3.new(0, -6, 0)
+		knockDust.Size = sequence({ { 0, 0.8 }, { 1, 2 } })
+		knockDust.Transparency = sequence({ { 0, 0.5 }, { 1, 1 } })
+		knockDust.RotSpeed = NumberRange.new(-60, 60)
+		knockDust.Rate = 0
+		knockDust.Parent = knockPoint
+	end
+	knockPoint.CFrame = CFrame.new(position)
+	knockDust:Emit(amount)
+end
+
+local function knockAt(position, loud)
+	dustAt(position, if loud then 14 else 8)
+	playSound(CONFIG.Sounds.Knock, if loud then 3 else 1.6, 0.8 + math.random() * 0.25, knockPoint)
+end
+
+local function inspect(spot, geometry)
+	local contact = Vector3.new(spot.front.X, geometry.floorY + 4, spot.front.Z)
+	local stand = contact + spot.out * CONFIG.StandOff
+	stand = Vector3.new(stand.X, geometry.floorY + CONFIG.HoverHeight, stand.Z)
+
+	if not moveTo(stand, contact) then return false end
+	faceTowards(contact)
+
+	for _ = 1, CONFIG.KnockCount do
+		if not waitActive(0) then return false end
+
+		-- Si butta in avanti contro l'anta e torna indietro
+		local from = state.position
+		local lunge = from:Lerp(Vector3.new(contact.X, from.Y, contact.Z), 0.35)
+		local startedAt = os.clock()
+		while os.clock() - startedAt < 0.09 and not state.paused do
+			state.position = from:Lerp(lunge, (os.clock() - startedAt) / 0.09)
+			render()
+			RunService.Heartbeat:Wait()
+		end
+
+		local inside = hiddenIn(spot)
+		knockAt(contact, inside)
+		if inside then
+			-- Sei lì dentro: lo senti addosso
+			shake(3.5, 12, 0, 0.5)
+		elseif LocalPlayer.Character and (LocalPlayer.Character:GetPivot().Position - contact).Magnitude < 35 then
+			shake(1, 8, 0, 0.3)
+		end
+
+		startedAt = os.clock()
+		while os.clock() - startedAt < 0.2 and not state.paused do
+			state.position = lunge:Lerp(from, (os.clock() - startedAt) / 0.2)
+			render()
+			RunService.Heartbeat:Wait()
+		end
+		state.position = from
+		if not state.paused then
+			render()
+		end
+
+		if not waitActive(CONFIG.KnockInterval) then return false end
+	end
+
+	-- Ascolta
+	return waitActive(CONFIG.ListenTime)
+end
+
+-- Una stanza senza armadi: la attraversa in tre punti lungo il lato lungo, e ascolta
+local function searchPoints(geometry)
+	local points = {}
+	for _, fraction in ipairs({ -0.3, 0.3, 0 }) do
+		local point = geometry.center + geometry.axis * geometry.length * fraction
+		table.insert(points, Vector3.new(point.X, geometry.floorY + CONFIG.HoverHeight, point.Z))
+	end
+	return points
+end
+
+---====== LA CACCIA ======---
+
+local sightParams = RaycastParams.new()
+sightParams.FilterType = Enum.RaycastFilterType.Exclude
+sightParams.RespectCanCollide = true
+
+local function canSee(target, character)
+	-- Come nello spawner di Vynixu: armadi e letti non bloccano la vista, devi esserci dentro
+	local ignore = CollectionService:GetTagged("HidingSpot")
+	table.insert(ignore, character)
+	table.insert(ignore, folder)
+	sightParams.FilterDescendantsInstances = ignore
+	return workspace:Raycast(state.position, target - state.position, sightParams) == nil
+end
+
+local function jumpscare(humanoid)
+	state.caught = true
+	state.hunting = false
+	log("ti ha visto")
+
+	if not CONFIG.Jumpscare then
+		kill(humanoid)
+		finish("preso")
+		return
+	end
+
+	pcall(function()
+		sounds["Close Scream"].Volume = 3
+		sounds["Close Scream"].PlaybackSpeed = 0.9
+		sounds["Close Scream"]:Play()
+		sounds["Far Static"].Volume = 2
+	end)
+	shake(12, 18, 0, 1.4)
+
+	-- Ti arriva in faccia e resta lì, ovunque guardi; lo schermo lampeggia bianco e nero
+	local startedAt = os.clock()
+	local stepName = "J518Jumpscare" .. tostring(startedAt)
+	RunService:BindToRenderStep(stepName, Enum.RenderPriority.Camera.Value + 1, function()
+		if not (model and model.Parent) then return end
+		local view = workspace.CurrentCamera.CFrame
+		local progress = math.clamp((os.clock() - startedAt) / 0.18, 0, 1)
+		local gap = 10 - 7 * (1 - (1 - progress) ^ 3)
+		-- Il volto (l'attachment Main) sta 0.84 stud sotto il centro della parte
+		model:PivotTo(CFrame.new(view.Position + view.LookVector * gap + view.UpVector * 0.84) * view.Rotation)
+	end)
+	track(function()
+		RunService:UnbindFromRenderStep(stepName)
+	end)
+
+	for index = 1, 6 do
+		flash(if index % 2 == 0 then WHITE else Color3.new(0, 0, 0), 0.15, 0.12)
+		task.wait(0.1)
+	end
+
+	task.wait(0.5)
+	if humanoid.Parent and humanoid.Health > 0 then
+		kill(humanoid)
+	end
+	task.wait(0.8)
+	finish("jumpscare")
+end
+
+local closePortal -- più giù, con l'entrata e l'uscita
+
+local function banish(tool)
+	state.paused = true
+	state.banishing = true
+	state.hunting = false
+	log("crocifisso")
+
+	local result = Ritual.Run({
+		Model   = model,
+		Tool    = tool,
+		Resist  = CONFIG.Resist,
+		-- RushNew è una parte invisibile di 15 per 17 stud: il volto è grande 6
+		BoxSize = Vector3.new(6, 7, 6),
+		Alive   = function()
+			return not state.finished
+		end,
+	})
+
+	if result == "Banished" then
+		-- Lui è finito nel buco; il portale da cui era venuto si richiude da solo
+		if state.portal and not state.finished then
+			closePortal(state.portal)
+		end
+		finish("esorcizzato")
+	elseif result == "Failed" then
+		-- Si è liberato: riprende il giro, e tra un attimo ti vede di nuovo
+		log("il crocifisso si è spezzato")
+		state.position = model:GetPivot().Position
+		state.banishing = false
+		state.paused = false
+		task.delay(1.5, function()
+			if not state.finished and not state.caught then
+				state.hunting = true
+			end
+		end)
+	end
+end
+
+local function watch()
+	if not state.hunting or state.paused or state.caught then return end
+
+	local character = LocalPlayer.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	if not humanoid or not root or humanoid.Health <= 0 then return end
+
+	local head = character:FindFirstChild("Head")
+	local target = (head or root).Position
+	local distance = (target - state.position).Magnitude
+
+	-- Il crocifisso conta prima: se lo hai in mano e ti vede, lo ferma
+	local tool = Ritual and Ritual.Held()
+	if tool and distance <= CONFIG.CrucifixRange and canSee(target, character) then
+		spawnSafe("rituale", banish, tool)
+		return
+	end
+
+	if distance <= CONFIG.KillRange and not character:GetAttribute("Hiding") and canSee(target, character) then
+		spawnSafe("jumpscare", jumpscare, humanoid)
+	end
+end
+
+---====== ENTRATA E USCITA ======---
+
+-- Il portale si chiude del tutto: gira forte, si stringe, un lampo e un ultimo sbuffo di fumo
+closePortal = function(portal)
+	portal.spin = 9
+	pcall(function()
+		local farewell = sounds["Leave Scream Far"]:Clone()
+		farewell.Parent = portal.disc
+		farewell:Play()
+	end)
+	sizePortal(portal, 0, 0.5, Enum.EasingStyle.Back, Enum.EasingDirection.In)
+	portal.smoke:Emit(25)
+	task.wait(0.45)
+	flash(WHITE, 0.35, 0.6)
+	shake(2.5, 10, 0, 0.6)
+	portal.glow = 0
+	portal.smoke.Rate = 0
+	portal.sparks.Rate = 0
+	portal.streaks.Rate = 0
+	task.wait(1.6)
+end
+
+local function descend(portal, geometry)
+	local from = portal.disc.Position + Vector3.new(0, 1.5, 0)
+	local to = Vector3.new(geometry.center.X, geometry.floorY + CONFIG.HoverHeight, geometry.center.Z)
+
+	state.position = from
+	local character = LocalPlayer.Character
+	if character then faceTowards(character:GetPivot().Position) end
+	render()
+	model.Parent = folder
+
+	for _, name in ipairs({ "Far Scream", "Far Static", "Close Scream" }) do
+		if sounds[name] then sounds[name]:Play() end
+	end
+
+	portal.spin = 4
+	portal.glow = 6
+	portal.streaks.Rate = 80
+	flash(WHITE, 0.55, 0.4)
+
+	local startedAt = os.clock()
+	while not state.finished do
+		local progress = math.clamp((os.clock() - startedAt) / CONFIG.DescendTime, 0, 1)
+		-- Scende di colpo e frena all'ultimo
+		local eased = 1 - (1 - progress) ^ 4
+		state.position = from:Lerp(to, eased)
+		render()
+		if progress >= 1 then break end
+		RunService.Heartbeat:Wait()
+	end
+
+	-- L'arrivo: discreto, ma lo senti nei piedi
+	playSound(CONFIG.Sounds.Impact, 1.2, 0.8)
+	shake(3, 8, 0, 0.7)
+	dustAt(Vector3.new(to.X, geometry.floorY + 0.5, to.Z), 20)
+	portal.spin = 1.5
+	portal.glow = 2
+	portal.streaks.Rate = 0
+	portal.sparks.Rate = 8
+	portal.smoke.Rate = 6
+	sizePortal(portal, CONFIG.PortalSize * 0.6, 0.8)
+end
+
+local function ascend(portal, geometry)
+	local below = Vector3.new(geometry.center.X, geometry.floorY + CONFIG.HoverHeight, geometry.center.Z)
+	if not moveTo(below) then return end
+
+	-- Il portale si riapre
+	sizePortal(portal, CONFIG.PortalSize, 0.6)
+	portal.spin = 3
+	portal.glow = 5
+	portal.streaks.Rate = 60
+	pcall(function() sounds["Leave Scream"]:Play() end)
+
+	local from = state.position
+	local to = portal.disc.Position + Vector3.new(0, 2, 0)
+	local startedAt = os.clock()
+	while not state.finished do
+		local progress = math.clamp((os.clock() - startedAt) / CONFIG.ReturnTime, 0, 1)
+		-- Parte piano e viene risucchiato
+		state.position = from:Lerp(to, progress ^ 3)
+		render()
+		if progress >= 1 then break end
+		RunService.Heartbeat:Wait()
+	end
+
+	state.hunting = false
+	for _, sound in pairs(sounds) do
+		pcall(function() sound:Stop() end)
+	end
+	if model then model.Parent = nil end
+
+	closePortal(portal)
+end
+
+---====== AVVIO ======---
+
+local function main()
+	local room = currentRoom()
+	if not room then
+		problem("non trovo la stanza in cui sei")
+		finish("nessuna stanza")
+		return
+	end
+
+	-- Se DOORS scarica la stanza mentre è qui, se ne va anche lui
+	track(room.AncestryChanged:Connect(function()
+		if not room:IsDescendantOf(workspace) then
+			finish("la stanza è stata tolta")
+		end
+	end))
+
+	local geometry = measureRoom(room)
+	log("stanza %s: pavimento %.1f, soffitto %.1f", room.Name, geometry.floorY, geometry.ceilingY)
+
+	-- Il modello prima del portale, così scende in orario
+	local loadedSounds
+	model, loadedSounds = loadModel()
+	if not model then
+		finish("niente modello")
+		return
+	end
+	sounds = loadedSounds
+	track(model)
+
+	---- 1. IL PORTALE e dieci secondi di avviso ----
+	local portal = buildPortal(Vector3.new(geometry.center.X, geometry.ceilingY - 0.1, geometry.center.Z))
+	state.portal = portal
+	startAtmosphere(room, portal)
+	sizePortal(portal, CONFIG.PortalSize, CONFIG.PortalOpen, Enum.EasingStyle.Quart)
+
+	local heart = playSound(CONFIG.Sounds.Heart, 0, 0.7, nil, true)
+	local rumble = playSound(CONFIG.Sounds.Rumble, 0, 0.35, nil, true)
+	track(heart)
+	track(rumble)
+	tween(heart, CONFIG.Countdown * 0.8, { Volume = 1.2, PlaybackSpeed = 1.3 }, Enum.EasingStyle.Linear)
+	local rumbleRise = tween(rumble, CONFIG.Countdown - 0.8, { Volume = 1 }, Enum.EasingStyle.Linear)
+	mood.flicker = os.clock() + 1.2
+
+	local startedAt = os.clock()
+	local nextBeat = startedAt + 1
+	while not state.finished do
+		local elapsed = os.clock() - startedAt
+		if elapsed >= CONFIG.Countdown then break end
+		local progress = elapsed / CONFIG.Countdown
+
+		mood.dim = progress
+		mood.gray = math.min(progress * 1.25, 1)
+		portal.glow = 1 + 3 * progress
+		portal.spin = 1 + 1.5 * progress
+		portal.smoke.Rate = 4 + 18 * progress
+		portal.sparks.Rate = 2 + 20 * progress
+
+		-- I battiti, sempre più fitti. L'ultimo secondo è silenzio
+		if elapsed < CONFIG.Countdown - 0.8 and os.clock() >= nextBeat then
+			playSound(CONFIG.Sounds.Beat, 0.6 + 0.8 * progress, 0.45 + 0.15 * progress)
+			mood.pulse = 1
+			shake(0.6 + 1.5 * progress, 6, 0, 0.35)
+			if math.random() < 0.35 + 0.5 * progress then
+				mood.flicker = os.clock() + 0.25 + 0.4 * math.random()
+			end
+			nextBeat = os.clock() + 1.15 - 0.8 * progress
+		end
+
+		if elapsed >= CONFIG.Countdown - 0.8 and heart.Volume > 0 then
+			heart.Volume = 0
+			rumbleRise:Cancel()
+			rumble.Volume = 0.2
+			-- Il portale trattiene il fiato
+			sizePortal(portal, CONFIG.PortalSize * 0.85, 0.6, Enum.EasingStyle.Sine)
+		end
+
+		task.wait(0.03)
+	end
+	if state.finished then return end
+	heart:Stop()
+
+	---- 2. LA DISCESA ----
+	mood.dim = 1
+	mood.gray = 1
+	descend(portal, geometry)
+	if state.finished then return end
+	rumble.Volume = 0.35
+
+	---- 3. LA CACCIA: gli armadi, uno per uno ----
+	state.hunting = true
+	local lastWatch = 0
+	track(RunService.Heartbeat:Connect(function()
+		if os.clock() - lastWatch < 0.05 then return end
+		lastWatch = os.clock()
+		local ok, err = pcall(watch)
+		if not ok then
+			problem("controllo del giocatore: %s", tostring(err))
+		end
+	end))
+
+	local route = planRoute(spotsIn(room, geometry), state.position)
+	log("%d armadi da controllare", #route)
+
+	if #route > 0 then
+		for _, spot in ipairs(route) do
+			if state.finished or state.caught or state.banishing then return end
+			if spot.model.Parent then
+				inspect(spot, geometry)
+			end
+		end
+	else
+		for _, point in ipairs(searchPoints(geometry)) do
+			if state.finished or state.caught or state.banishing then return end
+			moveTo(point)
+			waitActive(CONFIG.ListenTime * 1.5)
+		end
+	end
+	if state.finished or state.caught or state.banishing then return end
+
+	---- 4. IL RITORNO ----
+	ascend(portal, geometry)
+	finish("tornato nel portale")
+end
+
+task.delay(CONFIG.Failsafe, function()
+	finish("failsafe")
+end)
+
+spawnSafe("J-518", main)

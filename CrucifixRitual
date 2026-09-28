@@ -1,0 +1,1847 @@
+--[[
+================================================================================
+
+        C R U C I F I X   R I T U A L
+
+        Il rituale del crocifisso con le catene, per qualsiasi entità custom.
+        È un modulo: da solo non fa niente, lo caricano Crucifix, Honcho e J-518.
+
+            local Ritual = loadstring(game:HttpGet(
+                "https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/CrucifixRitual"
+            ))()
+
+        COSA C'È DENTRO
+        ---------------
+        Ritual.Give(tipo, impugna)   ti dà il crocifisso (modello di Penguin,
+                                     si consuma al primo utilizzo)
+        Ritual.Held()                il crocifisso che hai in mano, o nil
+        Ritual.Run(opzioni)          il rituale su un modello; aspetta la fine
+                                     e rende "Banished", "Failed" o "Aborted"
+
+        I TRE TIPI
+        ----------
+            "Guiding"   blu, la crocifissione classica: l'entità finisce nel buco
+            "Curious"   giallo, stessa cattura con tonalità e particelle gialle
+            "Fail"      parte come Guiding, poi diventa rosso: l'entità strappa
+                        le catene, spezza il crocifisso e sopravvive
+
+        Il tipo sta nel crocifisso (attributo CrucifixType). In più finisce in
+        Fail qualsiasi crocifisso usato su un'entità che resiste (Resist).
+
+        LE ENTITÀ DELLO SPAWNER DI VYNIXU
+        --------------------------------
+        Finché hai in mano QUESTO crocifisso, ogni entità dello spawner riceve un
+        CrucifixionOverwrite: lo spawner, invece del suo rituale, chiama questo.
+        Il Resist della sua config decide il Fail. Quando metti via il
+        crocifisso l'overwrite viene tolto, così un crocifisso normale fa
+        ancora il rituale normale dello spawner.
+
+        Le entità vere di DOORS (Rush, Ambush, Figure, Seek...) no: le comanda
+        il server, e un rituale sul tuo schermo non cambia se il server ti
+        uccide.
+
+        PERCHÉ NON LAGGA PIÙ (rispetto al rituale che c'era in Honcho)
+        ---------------------------------------------------------------
+        - Ogni cerchio era una SurfaceGui a 32 pixel per stud: le onde finali,
+          larghe fino a 96 stud, erano tele da 3072x3072, tre insieme, nel
+          momento più pesante. Ora hanno una tela fissa da 256 o 512.
+        - Uno scoppio di scintille creava un ParticleEmitter nuovo ogni volta.
+          Ora ce n'è uno per parte, riusato.
+        - Le onde ad anello si riusano da un piccolo pool.
+        - Un solo ciclo per frame (più uno per la posa, solo se l'entità ne ha
+          una), invece di un Heartbeat per ogni catena in volo.
+        - Il FOV: ogni colpo salvava il FOV di partenza, che a metà di un altro
+          colpo era già allargato, e a fine rituale poteva restare largo. Ora
+          i colpi si sommano sopra un solo valore di base.
+
+================================================================================
+]]
+
+if getgenv and getgenv().GradishCrucifixRitual then
+	return getgenv().GradishCrucifixRitual
+end
+
+---====== SERVIZI ======---
+
+local Players           = game:GetService("Players")
+local RunService        = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local CollectionService = game:GetService("CollectionService")
+local TweenService      = game:GetService("TweenService")
+
+local LocalPlayer = Players.LocalPlayer
+
+local Ritual = {
+	Version = "1.0",
+	Debug   = false,
+	Busy    = setmetatable({}, { __mode = "k" }), -- modelli con un rituale in corso
+}
+
+---====== COSTANTI ======---
+
+local PENGUIN_URL = "https://raw.githubusercontent.com/PenguinManiack/Crucifix/main/Crucifix.lua"
+
+local SOUND_IDS = {
+	Crucifix   = 6555668806, -- "usecrucifix", il suono vero del crocifisso di DOORS
+	Slam       = 74149238738530,
+	Earthquake = 9114219876,
+}
+
+-- Texture del rituale vero di DOORS, prese dal Repentance di Vynixu
+local TEXTURES = {
+	Circle  = { 11523868118, 11523868246, 11523868335, 11523868403 },
+	Chain   = 11517174215,
+	Spark   = 4998425421,
+	Lines   = 11226108137,
+	Twinkle = 134531489,
+	Ball    = 12284064159,
+	Dust    = 18496232079,
+}
+
+-- Le schegge del crocifisso di DOORS
+local SHARD_MESHES = {
+	6552335606, 6552335764, 6552335680, 6552335832,
+	6552335635, 6552335563, 6552335722, 6552335799,
+}
+
+local WHITE = Color3.new(1, 1, 1)
+local WOOD  = Color3.fromRGB(92, 64, 42)
+
+--[[ Main: cerchio, catene, luci. Deep: il vortice nel buco. Tint: il colore
+     dello schermo durante il rituale. Guiding, Curious e il rosso del fail
+     sono gli stessi dello spawner di Vynixu. ]]
+local PALETTES = {
+	Guiding = {
+		Main = Color3.fromRGB(137, 207, 255),
+		Deep = Color3.fromRGB(40, 90, 160),
+		Tint = Color3.fromRGB(205, 228, 255),
+	},
+	Curious = {
+		Main = Color3.fromRGB(255, 227, 137),
+		Deep = Color3.fromRGB(170, 120, 30),
+		Tint = Color3.fromRGB(255, 240, 205),
+	},
+	Fail = {
+		Main = Color3.fromRGB(255, 116, 130),
+		Deep = Color3.fromRGB(150, 20, 35),
+		Tint = Color3.fromRGB(255, 205, 205),
+	},
+}
+Ritual.Palettes = PALETTES
+
+local TOOLTIPS = {
+	Guiding = "Crucifix",
+	Curious = "Crucifix (Curious)",
+	Fail    = "Crucifix",   -- non ti dice che si spezzerà
+}
+
+-- I tempi del rituale riuscito: gli strattoni, l'ultima tirata e il colpo finale
+local JOLTS = {
+	{ time = 2.50, reach = 0.14, climb = 0.035, strength = 0.4 },
+	{ time = 3.30, reach = 0.33, climb = 0.035, strength = 0.55 },
+	{ time = 4.05, reach = 0.50, climb = 0.035, strength = 0.7 },
+	{ time = 4.75, reach = 0.64, climb = 0.01, strength = 0.85 },
+}
+local JOLT_TIME = 0.16
+local PLUNGE_AT = 5.35
+local SLAM_AT   = 5.8
+local LIFT      = 2.2   -- quanto lo alza la luce, in stud per scala 1
+
+-- Il fail: due strattoni riescono, al secondo resiste, poi strappa le catene
+local FAIL = {
+	Jolts    = {
+		{ time = 2.50, reach = 0.14, climb = 0.03, strength = 0.4 },
+		{ time = 3.30, reach = 0.26, climb = 0.0, strength = 0.55 },
+	},
+	Resist   = 3.36,              -- il cerchio diventa rosso
+	Climb    = { 3.62, 4.9 },     -- risale dal buco
+	Snaps    = { 3.95, 4.22, 4.48 },
+	Break    = 4.9,               -- tutte le catene saltano, il crocifisso esplode
+	Fall     = { 5.25, 5.62 },    -- ricade a terra
+	Settle   = 6.0,
+	Done     = 7.2,
+}
+Ritual.FailTimes = FAIL
+
+-- Le otto catene quando l'entità non ne sceglie di sue: punti del suo box
+-- (in mezze misure), angolo sul bordo del cerchio, distanza dal centro, quando
+local GENERIC_CHAINS = {
+	{ point = Vector3.new(0.9, 0.35, 0),    angle = 35,   reach = 0.85, at = 0.95 },
+	{ point = Vector3.new(-0.9, 0.35, 0),   angle = 145,  reach = 0.85, at = 1.00 },
+	{ point = Vector3.new(0.5, -0.85, 0),   angle = -60,  reach = 0.45, at = 1.12 },
+	{ point = Vector3.new(-0.5, -0.85, 0),  angle = -120, reach = 0.45, at = 1.18 },
+	{ point = Vector3.new(0.6, 0.1, 0.3),   angle = -20,  reach = 0.9,  at = 1.28 },
+	{ point = Vector3.new(-0.6, 0.1, 0.3),  angle = -160, reach = 0.9,  at = 1.34 },
+	{ point = Vector3.new(1, 0.1, 0),       angle = 5,    reach = 0.95, at = 1.44 },
+	{ point = Vector3.new(-1, 0.1, 0),      angle = 175,  reach = 0.95, at = 1.50 },
+}
+local CHAIN_FLIGHT = 0.12
+
+---====== UTILITÀ ======---
+
+local function log(format, ...)
+	if Ritual.Debug then
+		print("[Crucifix] " .. string.format(format, ...))
+	end
+end
+
+local function problem(format, ...)
+	warn("[Crucifix] " .. string.format(format, ...))
+end
+
+local function flatUnit(vector)
+	local flat = Vector3.new(vector.X, 0, vector.Z)
+	if flat.Magnitude < 0.05 then return nil end
+	return flat.Unit
+end
+
+local function randomUnit()
+	local vector = Vector3.new(math.random() - 0.5, math.random() - 0.5, math.random() - 0.5)
+	if vector.Magnitude < 0.01 then return Vector3.yAxis end
+	return vector.Unit
+end
+
+local function smooth(x)
+	x = math.clamp(x, 0, 1)
+	return x * x * (3 - 2 * x)
+end
+
+local function backIn(x)
+	return 2.70158 * x ^ 3 - 1.70158 * x ^ 2
+end
+
+local function sequence(points)
+	local keypoints = {}
+	for _, point in ipairs(points) do
+		table.insert(keypoints, NumberSequenceKeypoint.new(point[1], point[2]))
+	end
+	return NumberSequence.new(keypoints)
+end
+
+-- Una Part ancorata che non tocca, non blocca e non fa ombra
+local function newPart(name, size, cframe, colour, material, transparency)
+	local part = Instance.new("Part")
+	part.Name = name
+	part.Size = size
+	part.CFrame = cframe
+	part.Color = colour
+	part.Material = material
+	part.Transparency = transparency
+	part.Anchored = true
+	part.CanCollide = false
+	part.CanTouch = false
+	part.CanQuery = false
+	part.CastShadow = false
+	part.TopSurface = Enum.SurfaceType.Smooth
+	part.BottomSurface = Enum.SurfaceType.Smooth
+	return part
+end
+
+local function tween(instance, duration, goals, style, direction)
+	local info = TweenInfo.new(duration, style or Enum.EasingStyle.Quad, direction or Enum.EasingDirection.Out)
+	local playing = TweenService:Create(instance, info, goals)
+	playing:Play()
+	return playing
+end
+
+local function playSound(soundId, volume, speed, parent)
+	local sound = Instance.new("Sound")
+	sound.SoundId = "rbxassetid://" .. soundId
+	sound.Volume = volume
+	sound.PlaybackSpeed = speed or 1
+	sound.Parent = parent
+	sound:Play()
+	task.delay(15, function()
+		sound:Destroy()
+	end)
+	return sound
+end
+
+-- Il camShaker di DOORS. Main_Game rinasce con te, quindi si prende ogni volta
+local function shake(magnitude, roughness, fadeIn, fadeOut)
+	pcall(function()
+		local mainGame = require(LocalPlayer.PlayerGui.MainUI.Initiator.Main_Game)
+		mainGame.camShaker:ShakeOnce(magnitude, roughness, fadeIn, fadeOut)
+	end)
+end
+
+local moduleEventsCache
+local function moduleEvents()
+	if moduleEventsCache == nil then
+		local ok, result = pcall(function()
+			return require(ReplicatedStorage:WaitForChild("ModulesClient", 5):WaitForChild("Module_Events", 5))
+		end)
+		moduleEventsCache = if ok then result else false
+	end
+	return moduleEventsCache or nil
+end
+
+local function playerRoom()
+	local rooms = workspace:FindFirstChild("CurrentRooms")
+	local number = LocalPlayer:GetAttribute("CurrentRoom")
+	return rooms and number and rooms:FindFirstChild(tostring(number)) or nil
+end
+
+local function flickerRoom(room, duration)
+	local events = moduleEvents()
+	if room and events and events.flicker then
+		pcall(events.flicker, room, duration)
+	end
+end
+
+local function shatterRoom(room)
+	local events = moduleEvents()
+	if room and events and events.shatter then
+		pcall(events.shatter, room)
+	end
+end
+
+local function makeEmitter(parent, textureId, colour)
+	local emitter = Instance.new("ParticleEmitter")
+	emitter.Texture = "rbxassetid://" .. textureId
+	emitter.Color = ColorSequence.new(colour or WHITE)
+	emitter.LightEmission = 1
+	emitter.LightInfluence = 0
+	emitter.Rate = 0
+	emitter.Parent = parent
+	return emitter
+end
+
+--[[ Un disco piatto con un'immagine di DOORS che brilla da sola.
+
+     La tela è FISSA (canvas pixels, non pixel per stud). Prima era 32 pixel
+     per stud, e un'onda larga 96 stud diventava una tela di 3072x3072 da
+     ridisegnare ogni frame. Un anello di luce sfocato non ha bisogno di più
+     di 256 pixel, e non si vede la differenza. ]]
+local function glowDisc(parent, name, position, diameter, textureId, colour, canvas)
+	local disc = newPart(name, Vector3.new(diameter, 0.02, diameter), CFrame.new(position), colour, Enum.Material.SmoothPlastic, 1)
+	disc.Parent = parent
+
+	local gui = Instance.new("SurfaceGui")
+	gui.Face = Enum.NormalId.Top
+	gui.LightInfluence = 0
+	gui.Brightness = 4
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.FixedSize
+	gui.CanvasSize = Vector2.new(canvas or 256, canvas or 256)
+	gui.Parent = disc
+
+	local image = Instance.new("ImageLabel")
+	image.BackgroundTransparency = 1
+	image.Size = UDim2.fromScale(1, 1)
+	image.Image = "rbxassetid://" .. textureId
+	image.ImageColor3 = colour
+	image.ImageTransparency = 1
+	image.Parent = gui
+
+	return disc, image
+end
+
+local function characters()
+	local list = {}
+	for _, player in ipairs(Players:GetPlayers()) do
+		if player.Character then
+			table.insert(list, player.Character)
+		end
+	end
+	return list
+end
+
+-- Il pavimento sotto un punto, ignorando l'entità e i giocatori
+local function floorBelow(point, model)
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	params.RespectCanCollide = true
+	local ignore = characters()
+	table.insert(ignore, model)
+	params.FilterDescendantsInstances = ignore
+	local hit = workspace:Raycast(point + Vector3.new(0, 1, 0), Vector3.new(0, -120, 0), params)
+	return hit and hit.Position.Y or nil
+end
+
+-- Scarica prima texture e suoni del rituale, così quando serve appare tutto subito
+function Ritual.Preload()
+	local ids = {}
+	for key, value in pairs(TEXTURES) do
+		if key == "Circle" then
+			for _, id in ipairs(value) do
+				table.insert(ids, "rbxassetid://" .. id)
+			end
+		else
+			table.insert(ids, "rbxassetid://" .. value)
+		end
+	end
+	for _, id in pairs(SOUND_IDS) do
+		table.insert(ids, "rbxassetid://" .. id)
+	end
+	pcall(function()
+		game:GetService("ContentProvider"):PreloadAsync(ids)
+	end)
+end
+
+---====== IL CROCIFISSO ======---
+
+local function isCrucifix(tool)
+	if not (tool and tool:IsA("Tool")) then return false end
+	if tool.Name == "Crucifix" then return true end
+	local ok, tagged = pcall(function() return tool:HasTag("Crucifix") end)
+	return ok and tagged == true
+end
+
+-- Il crocifisso che hai IN MANO (quello nello zaino non conta, come per lo spawner)
+function Ritual.Held()
+	local character = LocalPlayer.Character
+	local tool = character and character:FindFirstChildOfClass("Tool")
+	if isCrucifix(tool) then return tool end
+	return nil
+end
+
+function Ritual.IsOurs(tool)
+	return tool ~= nil and tool:GetAttribute("GradishCrucifix") == true
+end
+
+--[[ Che rituale fa questo crocifisso su questa entità: il colore di partenza e
+     se fallisce. Un crocifisso senza tipo (quello di Penguin, quello vero di
+     DOORS) è un Guiding. ]]
+function Ritual.Outcome(tool, resist)
+	local kind = tool and tool:GetAttribute("CrucifixType")
+	if kind == "Fail" then
+		return "Guiding", true
+	end
+	if kind ~= "Curious" then
+		kind = "Guiding"
+	end
+	return kind, resist == true
+end
+
+local template = nil
+local fetching = false
+
+local function toolsNow()
+	local seen = {}
+	for _, container in ipairs({ LocalPlayer:FindFirstChildOfClass("Backpack"), LocalPlayer.Character }) do
+		if container then
+			for _, child in ipairs(container:GetChildren()) do
+				if child:IsA("Tool") then seen[child] = true end
+			end
+		end
+	end
+	return seen
+end
+
+local function newToolSince(seen)
+	for tool in pairs(toolsNow()) do
+		if not seen[tool] then return tool end
+	end
+	return nil
+end
+
+-- Due assi di legno: quando il loader di Penguin non risponde non resti a mani vuote
+local function buildPlanks()
+	local tool = Instance.new("Tool")
+	tool.RequiresHandle = true
+
+	local handle = newPart("Handle", Vector3.new(0.22, 1.7, 0.22), CFrame.identity, WOOD, Enum.Material.Wood, 0)
+	handle.Anchored = false
+	handle.Massless = true
+	handle.Parent = tool
+
+	local bar = newPart("Crossbar", Vector3.new(0.95, 0.22, 0.22), CFrame.new(0, 0.42, 0), WOOD, Enum.Material.Wood, 0)
+	bar.Anchored = false
+	bar.Massless = true
+	bar.Parent = tool
+
+	local weld = Instance.new("WeldConstraint")
+	weld.Part0 = handle
+	weld.Part1 = bar
+	weld.Parent = handle
+
+	tool.Grip = CFrame.new(0, -0.45, 0) * CFrame.Angles(math.rad(-90), 0, 0)
+	return tool
+end
+
+--[[ Il modello è quello di Penguin, il comportamento no.
+
+     Il loader è offuscato e il suo tool ha una logica sua che non si può
+     leggere. Quindi si esegue una volta sola, si copia quello che si vede
+     (le parti, le saldature, la presa), si tolgono gli script e si distrugge
+     l'originale: le sue connessioni muoiono con lui. La copia pulita resta
+     come stampo per tutti i crocifissi successivi. ]]
+local function penguinTemplate()
+	while fetching do task.wait(0.1) end
+	if template then return template end
+	fetching = true
+
+	local seen = toolsNow()
+	_G.Uses = 1
+	_G.Range = 30
+	-- Se un altro script l'ha lasciato a true, il suo crocifisso vale su tutto
+	_G.OnAnything = nil
+
+	local ok, err = pcall(function()
+		loadstring(game:HttpGet(PENGUIN_URL))()
+	end)
+
+	local original
+	if ok then
+		local deadline = os.clock() + 12
+		repeat
+			original = newToolSince(seen)
+			if not original then task.wait(0.15) end
+		until original or os.clock() > deadline
+	else
+		problem("il loader di Penguin non si è caricato: %s", tostring(err))
+	end
+
+	if original then
+		for _, descendant in ipairs(original:GetDescendants()) do
+			pcall(function() descendant.Archivable = true end)
+		end
+		original.Archivable = true
+
+		local copy = original:Clone()
+		pcall(function() original:Destroy() end)
+
+		if copy then
+			for _, descendant in ipairs(copy:GetDescendants()) do
+				if descendant:IsA("LuaSourceContainer") then
+					descendant:Destroy()
+				end
+			end
+			template = copy
+			log("stampo preso dal crocifisso di Penguin")
+		end
+	end
+
+	if not template then
+		problem("uso il crocifisso di riserva (due assi): il modello di Penguin non è arrivato")
+		template = buildPlanks()
+	end
+
+	fetching = false
+	return template
+end
+
+local armSpawner -- definita più giù, con lo spawner
+
+--[[ Il crocifisso. Si chiama "Crucifix" e ha il tag, perché è quello che
+     guardano lo spawner, Honcho e GradishCore; il tipo è un attributo, mai un
+     nome diverso. Si consuma al primo utilizzo: il rituale lo distrugge. ]]
+function Ritual.Give(kind, equip)
+	if not PALETTES[kind] then kind = "Guiding" end
+
+	local character = LocalPlayer.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	if not humanoid or humanoid.Health <= 0 then
+		problem("niente crocifisso: non sei vivo")
+		return nil
+	end
+
+	local tool = penguinTemplate():Clone()
+	tool.Name = "Crucifix"
+	tool.CanBeDropped = false
+	tool.ToolTip = TOOLTIPS[kind]
+	tool:SetAttribute("GradishCrucifix", true)
+	tool:SetAttribute("CrucifixType", kind)
+	pcall(function() CollectionService:AddTag(tool, "Crucifix") end)
+
+	-- Il giallo si vede già in mano: una luce piccola, niente di più
+	if kind == "Curious" then
+		local handle = tool:FindFirstChild("Handle") or tool:FindFirstChildWhichIsA("BasePart", true)
+		if handle then
+			local glow = Instance.new("PointLight")
+			glow.Name = "CuriousGlow"
+			glow.Color = PALETTES.Curious.Main
+			glow.Brightness = 1
+			glow.Range = 8
+			glow.Parent = handle
+		end
+	end
+
+	tool.Equipped:Connect(function()
+		armSpawner()
+	end)
+
+	tool.Parent = LocalPlayer:FindFirstChildOfClass("Backpack") or character
+
+	if equip then
+		pcall(function() humanoid:EquipTool(tool) end)
+	end
+
+	log("crocifisso %s dato", kind)
+	return tool
+end
+
+-- Il tool esce dalla mano e diventa un modello che fluttua. Il tool si consuma
+local function floatingCrucifix(tool, folder)
+	local handle = tool and tool:FindFirstChild("Handle")
+	local startCFrame = if handle and handle:IsA("BasePart")
+		then handle.CFrame
+		else workspace.CurrentCamera.CFrame * CFrame.new(0.8, -0.8, -2)
+
+	local crucifix = Instance.new("Model")
+	crucifix.Name = "RitualCrucifix"
+
+	if tool then
+		tool.Archivable = true
+		for _, descendant in ipairs(tool:GetDescendants()) do
+			pcall(function() descendant.Archivable = true end)
+		end
+		local copy = tool:Clone()
+		tool:Destroy()
+		if copy then
+			for _, child in ipairs(copy:GetChildren()) do
+				child.Parent = crucifix
+			end
+			copy:Destroy()
+		end
+	end
+
+	for _, descendant in ipairs(crucifix:GetDescendants()) do
+		if descendant:IsA("LuaSourceContainer") or descendant:IsA("TouchTransmitter") then
+			descendant:Destroy()
+		elseif descendant:IsA("BasePart") then
+			descendant.Anchored = true
+			descendant.CanCollide = false
+			descendant.CanTouch = false
+			descendant.CanQuery = false
+		end
+	end
+
+	local primary = crucifix:FindFirstChild("Handle") or crucifix:FindFirstChildWhichIsA("BasePart", true)
+	if not (primary and primary:IsA("BasePart")) then
+		crucifix:ClearAllChildren()
+		primary = newPart("Handle", Vector3.new(0.22, 1.7, 0.22), startCFrame, WOOD, Enum.Material.Wood, 0)
+		primary.Parent = crucifix
+		newPart("Crossbar", Vector3.new(0.95, 0.22, 0.22), startCFrame * CFrame.new(0, 0.42, 0), WOOD, Enum.Material.Wood, 0).Parent = crucifix
+	end
+
+	crucifix.PrimaryPart = primary
+	crucifix:PivotTo(startCFrame)
+	crucifix.Parent = folder
+	return crucifix, startCFrame
+end
+
+---====== IL PALCO ======---
+--[[ Tutto quello che il rituale crea vive qui: una cartella, un ciclo per
+     frame, i colori legati alla tavolozza (così il passaggio al rosso del fail
+     li cambia tutti insieme), gli emitter e gli anelli riusati, il FOV. ]]
+
+local Stage = {}
+Stage.__index = Stage
+
+local function roleColour(palette, role)
+	return palette[role] or palette.Main
+end
+
+local function applyBinding(entry, palette)
+	local colour = roleColour(palette, entry.role)
+	if entry.form == "sequence" then
+		entry.instance[entry.property] = ColorSequence.new(colour)
+	elseif entry.form == "whiteSequence" then
+		entry.instance[entry.property] = ColorSequence.new(WHITE, colour)
+	else
+		entry.instance[entry.property] = colour
+	end
+end
+
+function Stage.new(center, paletteName)
+	local self = setmetatable({}, Stage)
+	self.center = center
+	self.palette = PALETTES[paletteName]
+	self.fade = nil
+	self.bound = {}
+	self.bursts = setmetatable({}, { __mode = "k" })
+	self.freeRings = {}
+	self.kicks = {}
+	self.cleanup = {}
+	self.done = false
+
+	self.folder = Instance.new("Folder")
+	self.folder.Name = "CrucifixRitual"
+	self.folder.Parent = workspace
+	return self
+end
+
+function Stage:bind(instance, property, role, form)
+	local entry = { instance = instance, property = property, role = role or "Main", form = form }
+	table.insert(self.bound, entry)
+	pcall(applyBinding, entry, self.palette)
+	return instance
+end
+
+function Stage:setPalette(name, duration)
+	local target = PALETTES[name]
+	if not target or target == self.palette then return end
+	self.fade = { from = self.palette, to = target, start = os.clock(), duration = duration or 0.5 }
+	self.palette = target
+end
+
+-- Chiamata dal ciclo per frame: lavora solo durante un cambio di colore
+function Stage:stepFade()
+	local fade = self.fade
+	if not fade then return end
+
+	local alpha = math.clamp((os.clock() - fade.start) / fade.duration, 0, 1)
+	local mixed = {}
+	for key, colour in pairs(fade.from) do
+		mixed[key] = colour:Lerp(fade.to[key], alpha)
+	end
+	for _, entry in ipairs(self.bound) do
+		pcall(applyBinding, entry, mixed)
+	end
+	if alpha >= 1 then
+		self.fade = nil
+	end
+end
+
+-- Scintille rotonde: un emitter per parte, riusato a ogni scoppio
+function Stage:burst(parent, count, speed)
+	if not parent or not parent.Parent then return end
+	local emitter = self.bursts[parent]
+	if not emitter or not emitter.Parent then
+		emitter = makeEmitter(parent, TEXTURES.Ball)
+		emitter.Brightness = 3
+		emitter.Lifetime = NumberRange.new(0.4, 1.8)
+		emitter.Drag = 3
+		emitter.SpreadAngle = Vector2.new(180, 180)
+		emitter.Size = sequence({ { 0, 0.7 }, { 0.12, 0.35 }, { 0.4, 0.1 }, { 1, 0 } })
+		emitter.Transparency = sequence({ { 0, 0 }, { 0.9, 0 }, { 1, 1 } })
+		self:bind(emitter, "Color", "Main", "sequence")
+		self.bursts[parent] = emitter
+	end
+	emitter.Speed = NumberRange.new(speed * 0.3, speed)
+	emitter:Emit(count)
+end
+
+-- Un anello che si allarga sul pavimento e sparisce. Pochi, riusati
+function Stage:ring(fromDiameter, toDiameter, duration, white)
+	local ring = table.remove(self.freeRings)
+	if not ring then
+		local disc, image = glowDisc(self.folder, "RingWave", self.center + Vector3.new(0, 0.2, 0), fromDiameter, TEXTURES.Circle[1], WHITE, 256)
+		ring = { disc = disc, image = image }
+	end
+
+	ring.disc.Size = Vector3.new(fromDiameter, 0.02, fromDiameter)
+	ring.image.ImageColor3 = if white then WHITE else self.palette.Main
+	ring.image.ImageTransparency = 0
+	tween(ring.disc, duration, { Size = Vector3.new(toDiameter, 0.02, toDiameter) }, Enum.EasingStyle.Quart)
+	tween(ring.image, duration, { ImageTransparency = 1 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+
+	task.delay(duration + 0.05, function()
+		if not self.done then
+			table.insert(self.freeRings, ring)
+		end
+	end)
+end
+
+-- Una sfera di energia che si gonfia e svanisce
+function Stage:sphere(position, toSize, duration, white)
+	local ball = newPart("SphereWave", Vector3.one, CFrame.new(position), if white then WHITE else self.palette.Main, Enum.Material.ForceField, 0)
+	ball.Shape = Enum.PartType.Ball
+	ball.Parent = self.folder
+	tween(ball, duration, { Size = Vector3.one * toSize, Transparency = 1 }, Enum.EasingStyle.Quart)
+	task.delay(duration + 0.05, function()
+		ball:Destroy()
+	end)
+end
+
+-- Un lampo su tutto lo schermo. Una sola ScreenGui per rituale, riusata
+function Stage:flash(colour, startTransparency, duration)
+	if not self.flashFrame then
+		local playerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+		if not playerGui then return end
+
+		local gui = Instance.new("ScreenGui")
+		gui.Name = "CrucifixFlash"
+		gui.IgnoreGuiInset = true
+		gui.ResetOnSpawn = false
+		gui.DisplayOrder = 1000
+
+		local frame = Instance.new("Frame")
+		frame.Size = UDim2.fromScale(1, 1)
+		frame.BorderSizePixel = 0
+		frame.BackgroundTransparency = 1
+		frame.Parent = gui
+		gui.Parent = playerGui
+
+		self.flashGui = gui
+		self.flashFrame = frame
+	end
+
+	self.flashFrame.BackgroundColor3 = colour
+	self.flashFrame.BackgroundTransparency = startTransparency
+	tween(self.flashFrame, duration, { BackgroundTransparency = 1 })
+end
+
+-- Un calcio al FOV. Si sommano tutti sopra lo stesso valore di base
+function Stage:fovPunch(amount, duration)
+	table.insert(self.kicks, { amount = amount, start = os.clock(), duration = duration })
+end
+
+function Stage:stepFov()
+	local camera = workspace.CurrentCamera
+	if not camera then return end
+
+	local now = os.clock()
+	local offset = 0
+	for index = #self.kicks, 1, -1 do
+		local kick = self.kicks[index]
+		local progress = (now - kick.start) / kick.duration
+		if progress >= 1 then
+			table.remove(self.kicks, index)
+		else
+			offset += kick.amount * (1 - progress) ^ 3
+		end
+	end
+
+	-- Se DOORS ha scritto il suo FOV da quando l'abbiamo toccato noi, quello
+	-- è la nuova base. Se no, la base resta quella di prima
+	local current = camera.FieldOfView
+	if self.fovWritten == nil or math.abs(current - self.fovWritten) > 1e-3 then
+		self.fovBase = current
+	end
+
+	if offset > 0 then
+		local target = math.clamp(self.fovBase + offset, 1, 120)
+		camera.FieldOfView = target
+		self.fovWritten = target
+	elseif self.fovWritten then
+		camera.FieldOfView = self.fovBase
+		self.fovWritten = nil
+	end
+end
+
+-- Colore, contrasto e bloom solo sul tuo schermo, finché dura il rituale
+function Stage:postEffects()
+	local camera = workspace.CurrentCamera
+	local grade = Instance.new("ColorCorrectionEffect")
+	grade.Name = "CrucifixGrade"
+	grade.Parent = camera
+
+	local bloom = Instance.new("BloomEffect")
+	bloom.Name = "CrucifixBloom"
+	bloom.Intensity = 0
+	bloom.Size = 30
+	bloom.Threshold = 2
+	bloom.Parent = camera
+
+	table.insert(self.cleanup, grade)
+	table.insert(self.cleanup, bloom)
+	self.grade = grade
+	self.bloom = bloom
+	return grade, bloom
+end
+
+-- Polvere dai soffitti vicini: solo i più vicini, un colpo di particelle ciascuno
+function Stage:ceilingDust(center)
+	local ceilings = {}
+	for _, ceiling in ipairs(CollectionService:GetTagged("PartCeiling")) do
+		if ceiling:IsA("BasePart") then
+			local distance = (ceiling.Position - center).Magnitude
+			if distance < 90 then
+				table.insert(ceilings, { part = ceiling, distance = distance })
+			end
+		end
+	end
+	table.sort(ceilings, function(a, b) return a.distance < b.distance end)
+
+	for index = 1, math.min(#ceilings, 8) do
+		local ceiling = ceilings[index].part
+		local dust = makeEmitter(ceiling, TEXTURES.Dust, Color3.fromRGB(165, 160, 150))
+		dust.LightEmission = 0
+		dust.LightInfluence = 1
+		dust.EmissionDirection = Enum.NormalId.Bottom
+		dust.Acceleration = Vector3.new(0, -10, 0)
+		dust.Lifetime = NumberRange.new(1, 3)
+		dust.Speed = NumberRange.new(3, 12)
+		dust.SpreadAngle = Vector2.new(60, 60)
+		dust.Size = sequence({ { 0, 2.1 }, { 1, 1.3 } })
+		dust.Transparency = sequence({ { 0, 1 }, { 0.23, 0.86 }, { 0.8, 0.89 }, { 1, 1 } })
+		dust.RotSpeed = NumberRange.new(-35, 35)
+		dust.Rotation = NumberRange.new(-360, 360)
+		dust:Emit(math.clamp(math.floor(ceiling.Size.Magnitude * 0.07), 3, 12))
+		task.delay(4, function()
+			dust:Destroy()
+		end)
+	end
+end
+
+function Stage:destroy()
+	if self.done then return end
+	self.done = true
+
+	if self.stepName then
+		pcall(function() RunService:UnbindFromRenderStep(self.stepName) end)
+	end
+	if self.poseConnection then
+		self.poseConnection:Disconnect()
+	end
+
+	-- Il FOV torna quello di DOORS, se l'ultimo a scriverlo siamo stati noi
+	local camera = workspace.CurrentCamera
+	if camera and self.fovWritten and math.abs(camera.FieldOfView - self.fovWritten) < 1e-3 then
+		camera.FieldOfView = self.fovBase
+	end
+
+	for _, item in ipairs(self.cleanup) do
+		pcall(function()
+			if typeof(item) == "RBXScriptConnection" then
+				item:Disconnect()
+			elseif typeof(item) == "Instance" then
+				item:Destroy()
+			else
+				item()
+			end
+		end)
+	end
+	table.clear(self.cleanup)
+
+	if self.flashGui then self.flashGui:Destroy() end
+	self.folder:Destroy()
+	table.clear(self.bound)
+end
+
+---====== L'ENTITÀ GENERICA ======---
+--[[ Per un modello qualsiasi: si muove tutto intero (alzato dalla luce,
+     tirato giù dalle catene), e le catene prendono otto punti attorno al suo
+     box, girato verso di te. Un'entità con un corpo suo (Honcho) passa il
+     proprio Body e usa questo solo come esempio. ]]
+
+local function nearestPart(model, point)
+	local best, bestDistance = nil, math.huge
+	for _, descendant in ipairs(model:GetDescendants()) do
+		if descendant:IsA("BasePart") then
+			local distance = (descendant.Position - point).Magnitude
+			if distance < bestDistance then
+				best, bestDistance = descendant, distance
+			end
+		end
+	end
+	return best
+end
+
+local function genericBody(model, opts)
+	local pivot = model:GetPivot()
+	local boxCFrame, boxSize = model:GetBoundingBox()
+	if opts.BoxSize then
+		boxCFrame, boxSize = CFrame.new(pivot.Position), opts.BoxSize
+	end
+	boxSize = Vector3.new(math.max(boxSize.X, 2), math.max(boxSize.Y, 3), math.max(boxSize.Z, 2))
+
+	local scale = opts.Scale or math.clamp(boxSize.Y / 6, 0.6, 2)
+	local bottom = boxCFrame.Position.Y - boxSize.Y / 2
+	local floorY = floorBelow(boxCFrame.Position, model) or bottom
+	local top = boxCFrame.Position.Y + boxSize.Y / 2
+
+	local body = {
+		Scale  = scale,
+		Anchor = Vector3.new(pivot.Position.X, floorY, pivot.Position.Z),
+		Radius = math.clamp(math.max(boxSize.X, boxSize.Z) / 2 + 4, 6, 16),
+		-- Abbastanza giù da non vedere più niente di lui
+		Depth  = (top - floorY) + (LIFT + 4) * scale,
+		Generic = true,
+	}
+
+	function body.Chains(facing)
+		local chains = {}
+		local frame = CFrame.new(boxCFrame.Position) * facing
+		local half = boxSize / 2
+		for _, spec in ipairs(GENERIC_CHAINS) do
+			local world = frame:PointToWorldSpace(spec.point * half)
+			local part = nearestPart(model, world)
+			if part then
+				table.insert(chains, {
+					part   = part,
+					offset = part.CFrame:PointToObjectSpace(world),
+					angle  = spec.angle,
+					reach  = spec.reach,
+					at     = spec.at,
+				})
+			end
+		end
+		return chains
+	end
+
+	function body.Place(yOffset, localOffset)
+		model:PivotTo(CFrame.new(pivot.Position + Vector3.new(0, yOffset, 0)) * pivot.Rotation * localOffset)
+	end
+
+	-- I suoni dell'entità si spengono mentre affonda, come nel rituale di Vynixu
+	local volumes = {}
+	function body.Mute()
+		for _, sound in ipairs(model:GetDescendants()) do
+			if sound:IsA("Sound") then
+				volumes[sound] = sound.Volume
+				tween(sound, 3, { Volume = 0 }, Enum.EasingStyle.Back, Enum.EasingDirection.In)
+			end
+		end
+	end
+
+	function body.Vanish()
+		if model.Parent then model:Destroy() end
+	end
+
+	function body.Recover()
+		model:PivotTo(pivot)
+		for sound, volume in pairs(volumes) do
+			if sound.Parent then sound.Volume = volume end
+		end
+	end
+
+	return body
+end
+
+---====== I TEMPI ======---
+
+local function sinkWith(jolts, elapsed)
+	local sunk = 0
+	for _, jolt in ipairs(jolts) do
+		if elapsed < jolt.time then break end
+		local pull = math.clamp((elapsed - jolt.time) / JOLT_TIME, 0, 1)
+		local climb = jolt.climb * math.clamp((elapsed - jolt.time - JOLT_TIME) / 0.5, 0, 1)
+		sunk = sunk + (jolt.reach - sunk) * (1 - (1 - pull) ^ 3) - climb
+	end
+	return sunk
+end
+
+-- Da 0 a 1: quanto è sprofondato
+local function sinkAt(elapsed, fail)
+	if fail then
+		local sunk = sinkWith(FAIL.Jolts, elapsed)
+		-- Si pianta e risale: il buco non lo tiene più
+		return sunk * (1 - smooth((elapsed - FAIL.Climb[1]) / (FAIL.Climb[2] - FAIL.Climb[1])))
+	end
+
+	local sunk = sinkWith(JOLTS, elapsed)
+	if elapsed >= PLUNGE_AT then
+		sunk += (1 - sunk) * backIn(math.clamp((elapsed - PLUNGE_AT) / (SLAM_AT - PLUNGE_AT), 0, 1))
+	end
+	return sunk
+end
+
+-- Quanto lo tiene su la luce, in stud per scala 1
+local function baseLift(elapsed)
+	local rise = math.clamp((elapsed - 0.55) / 0.45, 0, 1)
+	local strain = math.clamp((elapsed - 1.3) / 1.2, 0, 1)
+	local jerk = math.sin(math.pi * math.clamp((elapsed - 1.1) / 0.25, 0, 1))
+	return 1.5 * (1 - (1 - rise) ^ 2) + 0.7 * (1 - math.cos(strain * math.pi)) / 2 - 0.45 * jerk
+end
+
+local function liftAt(elapsed, fail)
+	if not fail or elapsed < FAIL.Climb[1] then
+		return baseLift(elapsed)
+	end
+
+	-- Nel fail tira verso l'alto con tutte le forze, poi, libero, ricade
+	local held = baseLift(FAIL.Climb[1]) + 1.1 * smooth((elapsed - FAIL.Climb[1]) / (FAIL.Break - FAIL.Climb[1]))
+	if elapsed < FAIL.Fall[1] then
+		return held
+	end
+	local fall = math.clamp((elapsed - FAIL.Fall[1]) / (FAIL.Fall[2] - FAIL.Fall[1]), 0, 1)
+	return held * (1 - fall * fall)
+end
+
+-- Appeso alle catene oscilla e si gira; si ferma quando si pianta o si aggrappa
+local function swayAt(elapsed, fail, scale)
+	local stopAt = if fail then FAIL.Resist else 4.5
+	local hold = math.clamp((elapsed - 1.1) / 0.4, 0, 1) * (1 - math.clamp((elapsed - stopAt) / 0.3, 0, 1))
+	local yaw = (math.sin(elapsed * 5.3) * 14 + math.sin(elapsed * 13.1 + 1) * 5) * hold
+	local side = math.sin(elapsed * 4.1) * 0.35 * hold * scale
+	return CFrame.new(side, 0, 0) * CFrame.Angles(0, math.rad(yaw), 0)
+end
+
+---====== IL RITUALE ======---
+
+local function chainBeam(parent, from, to, width)
+	local beam = Instance.new("Beam")
+	beam.Attachment0 = from
+	beam.Attachment1 = to
+	beam.Texture = "rbxassetid://" .. TEXTURES.Chain
+	beam.TextureMode = Enum.TextureMode.Static
+	beam.TextureLength = 1
+	beam.TextureSpeed = -2
+	beam.FaceCamera = true
+	beam.Width0 = 1.1 * width
+	beam.Width1 = 0.85 * width
+	beam.Brightness = 1
+	beam.LightEmission = 1
+	beam.LightInfluence = 0
+	beam.Transparency = NumberSequence.new(0)
+	beam.Segments = 1
+	beam.Parent = parent
+	return beam
+end
+
+local function attachmentAt(parent, worldPosition)
+	local attachment = Instance.new("Attachment")
+	attachment.Position = parent.CFrame:PointToObjectSpace(worldPosition)
+	attachment.Parent = parent
+	return attachment
+end
+
+--[[ Ritual.Run(opzioni) -- aspetta la fine del rituale
+
+         Model    il modello dell'entità                      (obbligatorio)
+         Tool     il crocifisso usato: si consuma
+         Resist   true = l'entità resiste, il rituale fallisce
+         Kind     "Guiding" / "Curious" / "Fail" invece di leggerlo dal tool
+         Alive    function() -> false per interromperlo a metà
+         BoxSize  Vector3: il box da usare se quello del modello mente
+                  (un Part invisibile enorme, per dire)
+         Body     il corpo di un'entità che si anima da sola (Honcho). Senza,
+                  si usa quello generico qui sopra
+
+     Il Body può avere: Scale, Anchor, Radius, Depth, Chains(facing),
+     SnapFirst, SnapGroups, Place(y, offset), Pose(elapsed, fail),
+     Start(stage), Step(stage, elapsed, dt), Jolt(stage, forza),
+     Scream(stage, "hit"/"roar"), Mute(), Vanish(stage), After(stage),
+     BreakFree(stage), Land(stage), Recover(stage), Lights, Emitters.
+
+     Rende "Banished", "Failed" o "Aborted". ]]
+function Ritual.Run(opts)
+	local model = opts.Model
+	if not (model and model.Parent) then return "Aborted" end
+	if Ritual.Busy[model] then return "Aborted" end
+	Ritual.Busy[model] = true
+
+	local kind, fail = Ritual.Outcome(opts.Tool, opts.Resist)
+	if opts.Kind == "Fail" then
+		fail = true
+	elseif opts.Kind == "Guiding" or opts.Kind == "Curious" then
+		kind = opts.Kind
+	end
+
+	local alive = opts.Alive or function() return true end
+	local body = opts.Body or genericBody(model, opts)
+	local scale = body.Scale or 1
+	local center = body.Anchor
+	local floorY = center.Y
+	local radius = body.Radius
+	local diameter = radius * 2
+	local depth = body.Depth
+
+	local stage = Stage.new(center, kind)
+	stage.model = model
+	stage.body = body
+	stage.fail = fail
+	stage.kind = kind
+	stage.floorY = floorY
+	stage.radius = radius
+	stage.scale = scale
+	stage.startedAt = os.clock()
+
+	log("rituale %s%s su %s", kind, fail and " (fallirà)" or "", model.Name)
+
+	local character = LocalPlayer.Character
+	local playerRoot = character and character:FindFirstChild("HumanoidRootPart")
+	local facing = CFrame.identity
+	if playerRoot then
+		local toPlayer = flatUnit(playerRoot.Position - center)
+		if toPlayer then facing = CFrame.lookAt(Vector3.zero, toPlayer) end
+	end
+	stage.facing = facing
+
+	local result = "Aborted"
+	local function wrapUp()
+		stage:destroy()
+		Ritual.Busy[model] = nil
+		return result
+	end
+
+	local function at(seconds)
+		while true do
+			if stage.done or not alive() then return false end
+			local remaining = stage.startedAt + seconds - os.clock()
+			if remaining <= 0 then return true end
+			task.wait(math.min(remaining, 0.1))
+		end
+	end
+
+	if body.Start then
+		local ok, err = pcall(body.Start, stage)
+		if not ok then problem("Body.Start: %s", tostring(err)) end
+	end
+
+	-- Cosa comanda il ciclo per frame
+	local layers, layerSpeeds, guis = {}, { 24, -38, 55, -14 }, {}
+	local chains, flights = {}, {}
+	local spinBoost, pulse, shudder, crucifixSpin = 1, 0, 0, 1.6
+	local swirl = nil
+	local vanished = false
+
+	---- 0. IL COLPO ----
+	local grade, bloom = stage:postEffects()
+	stage:flash(WHITE, 0.15, 0.35)
+	stage:fovPunch(12, 0.6)
+	shake(7, 10, 0, 0.8)
+	local ritualSound = playSound(SOUND_IDS.Crucifix, 1, 1, stage.folder)
+	flickerRoom(playerRoom(), 2)
+	tween(grade, 0.4, { TintColor = stage.palette.Tint, Contrast = 0.25, Saturation = -0.35 })
+	tween(bloom, 0.4, { Intensity = 1.2, Threshold = 0.9 })
+
+	-- Diventa bianco per un attimo. Occluded: quando affonda il pavimento lo copre
+	local glow = Instance.new("Highlight")
+	glow.DepthMode = Enum.HighlightDepthMode.Occluded
+	glow.FillColor = WHITE
+	glow.FillTransparency = 0
+	glow.OutlineTransparency = 0
+	glow.Parent = model
+	stage:bind(glow, "OutlineColor", "Main")
+	table.insert(stage.cleanup, glow)
+	tween(glow, 0.35, { FillTransparency = 0.85 })
+
+	local crucifix, fromCFrame = floatingCrucifix(opts.Tool, stage.folder)
+	local crucifixPart = crucifix.PrimaryPart
+
+	local crucifixLight = Instance.new("PointLight")
+	crucifixLight.Brightness = 0
+	crucifixLight.Range = 16
+	crucifixLight.Shadows = false
+	crucifixLight.Parent = crucifixPart
+	stage:bind(crucifixLight, "Color", "Main")
+	tween(crucifixLight, 0.5, { Brightness = 4 })
+
+	local crucifixGlow = Instance.new("Highlight")
+	crucifixGlow.DepthMode = Enum.HighlightDepthMode.Occluded
+	crucifixGlow.FillTransparency = 0.5
+	crucifixGlow.OutlineColor = WHITE
+	crucifixGlow.OutlineTransparency = 0
+	crucifixGlow.Parent = crucifix
+	stage:bind(crucifixGlow, "FillColor", "Main")
+
+	local twinkles = makeEmitter(crucifixPart, TEXTURES.Twinkle)
+	twinkles.Rate = 25
+	twinkles.Lifetime = NumberRange.new(0.4, 1)
+	twinkles.SpreadAngle = Vector2.new(180, 180)
+	twinkles.Speed = NumberRange.new(1, 3)
+	twinkles.Size = sequence({ { 0, 0.5 }, { 0.3, 1.8 }, { 0.35, 0.45 }, { 1, 0.3 } })
+	twinkles.Transparency = sequence({ { 0, 0.3 }, { 1, 1 } })
+	twinkles.RotSpeed = NumberRange.new(-10, 10)
+	stage:bind(twinkles, "Color", "Main", "sequence")
+
+	local floatAt = fromCFrame.Position + Vector3.new(0, 1.2, 0)
+	if playerRoot then
+		local toEntity = flatUnit(center - playerRoot.Position) or Vector3.new(0, 0, -1)
+		floatAt = playerRoot.Position + toEntity * 3 + Vector3.new(0, 1.8, 0)
+	end
+	stage:sphere(floatAt, 14, 0.6, true)
+
+	--[[ UN SOLO CICLO PER FRAME: crocifisso, cerchio, catene in volo, entità,
+	     cambio di colore, FOV. Dopo la camera, così il FOV e la posizione
+	     non vengono riscritti prima di arrivare sullo schermo. ]]
+	local crucifixAngle = 0
+	stage.stepName = "GradishCrucifixRitual" .. tostring(stage.startedAt)
+	RunService:BindToRenderStep(stage.stepName, Enum.RenderPriority.Last.Value, function(deltaTime)
+		local elapsed = os.clock() - stage.startedAt
+
+		if crucifix.Parent then
+			crucifixAngle += crucifixSpin * deltaTime
+			local rise = 1 - (1 - math.clamp(elapsed / 0.6, 0, 1)) ^ 3
+			local position = fromCFrame.Position:Lerp(floatAt, rise) + Vector3.new(0, math.sin(elapsed * 2.2) * 0.15 * rise, 0)
+			crucifix:PivotTo(CFrame.new(position) * CFrame.Angles(0, crucifixAngle, 0) * fromCFrame.Rotation)
+		end
+
+		for index, image in ipairs(layers) do
+			image.Rotation = (image.Rotation + layerSpeeds[index] * spinBoost * deltaTime) % 360
+		end
+		-- Il lampo del cerchio a ogni strattone: si scrive solo mentre si spegne
+		if pulse > 0 then
+			pulse = math.max(pulse - deltaTime * 2.5, 0)
+			for _, gui in ipairs(guis) do
+				gui.Brightness = 4 + 10 * pulse
+			end
+		end
+		if swirl then
+			swirl.Rotation = (swirl.Rotation - 150 * spinBoost * deltaTime) % 360
+		end
+
+		-- Le catene in volo, tutte qui invece di un Heartbeat per ognuna
+		for index = #flights, 1, -1 do
+			local flight = flights[index]
+			local chain = flight.chain
+			if not (chain.grip.Parent and flight.target.Parent and chain.beam.Parent) then
+				table.remove(flights, index)
+			else
+				local progress = math.clamp((os.clock() - flight.shotAt) / CHAIN_FLIGHT, 0, 1)
+				local gripWorld = flight.target.CFrame:PointToWorldSpace(chain.grip.Position)
+				flight.tip.Position = flight.anchor.CFrame:PointToObjectSpace(flight.origin:Lerp(gripWorld, progress * progress))
+				if progress >= 1 then
+					table.remove(flights, index)
+					chain.beam.Attachment1 = chain.grip
+					flight.tip:Destroy()
+					stage:burst(chain.grip, 16, 14)
+					shake(1.5, 8, 0, 0.3)
+				end
+			end
+		end
+
+		if not vanished and model.Parent then
+			shudder = math.max(shudder - deltaTime * 2.5, 0)
+			local y = (liftAt(elapsed, fail) * scale) - depth * sinkAt(elapsed, fail)
+			local j = (0.04 + 0.3 * shudder) * scale
+			local offset = CFrame.new((math.random() - 0.5) * j, (math.random() - 0.5) * j * 0.5, (math.random() - 0.5) * j)
+				* swayAt(elapsed, fail, scale)
+			local ok, err = pcall(body.Place, y, offset)
+			if not ok and not stage.placeWarned then
+				stage.placeWarned = true
+				problem("Body.Place: %s", tostring(err))
+			end
+			if body.Step then
+				pcall(body.Step, stage, elapsed, deltaTime)
+			end
+		end
+
+		stage:stepFade()
+		stage:stepFov()
+	end)
+
+	-- La posa va nei giunti dopo l'Animator, altrimenti lui la rimette a zero
+	if body.Pose then
+		stage.poseConnection = RunService.PreSimulation:Connect(function()
+			if not vanished and model.Parent then
+				pcall(body.Pose, os.clock() - stage.startedAt, fail)
+			end
+		end)
+	end
+
+	---- 0.25 IL CERCHIO: i quattro anelli di DOORS si aprono sotto di lui ----
+	if not at(0.25) then return wrapUp() end
+	local circleParts = {}
+	for index, textureId in ipairs(TEXTURES.Circle) do
+		local disc, image = glowDisc(stage.folder, "CircleLayer", center + Vector3.new(0, 0.04 + index * 0.02, 0), 0.2, textureId, stage.palette.Main, 512)
+		stage:bind(image, "ImageColor3", "Main")
+		image.Rotation = math.random(0, 359)
+		tween(disc, 0.8, { Size = Vector3.new(diameter, 0.02, diameter) }, Enum.EasingStyle.Back)
+		tween(image, 0.5, { ImageTransparency = 0 })
+		table.insert(layers, image)
+		table.insert(guis, image.Parent)
+		table.insert(circleParts, disc)
+		task.wait(0.06)
+	end
+
+	local lamp = newPart("Lamp", Vector3.one * 0.2, CFrame.new(center + Vector3.new(0, 3, 0)), WHITE, Enum.Material.SmoothPlastic, 1)
+	lamp.Parent = stage.folder
+	local circleLight = Instance.new("PointLight")
+	circleLight.Brightness = 0
+	circleLight.Range = math.min(radius * 3.5, 60)
+	circleLight.Shadows = false
+	circleLight.Parent = lamp
+	stage:bind(circleLight, "Color", "Main")
+	tween(circleLight, 0.5, { Brightness = 5 })
+
+	local emitterBase = newPart("CircleEmitters", Vector3.new(diameter * 0.9, 0.5, diameter * 0.9), CFrame.new(center + Vector3.new(0, 0.3, 0)), WHITE, Enum.Material.SmoothPlastic, 1)
+	emitterBase.Parent = stage.folder
+
+	local sparks = makeEmitter(emitterBase, TEXTURES.Spark)
+	sparks.Rate = 45
+	sparks.EmissionDirection = Enum.NormalId.Top
+	sparks.Lifetime = NumberRange.new(0.6, 2.2)
+	sparks.Speed = NumberRange.new(2, 9)
+	sparks.Acceleration = Vector3.new(0, 6, 0)
+	sparks.Drag = 1
+	sparks.SpreadAngle = Vector2.new(12, 12)
+	sparks.Size = sequence({ { 0, 1.4 }, { 1, 0.2 } })
+	sparks.Transparency = sequence({ { 0, 1 }, { 0.2, 0.25 }, { 1, 1 } })
+	sparks.RotSpeed = NumberRange.new(35, 100)
+	stage:bind(sparks, "Color", "Main", "sequence")
+
+	local lines = makeEmitter(emitterBase, TEXTURES.Lines)
+	lines.Rate = 35
+	lines.EmissionDirection = Enum.NormalId.Top
+	lines.Orientation = Enum.ParticleOrientation.VelocityParallel
+	lines.Lifetime = NumberRange.new(0.8, 1.2)
+	lines.Speed = NumberRange.new(4, 10)
+	lines.Acceleration = Vector3.new(0, 14, 0)
+	lines.Size = sequence({ { 0, 1.5 }, { 1, 1.3 } })
+	lines.Squash = sequence({ { 0, -1.2 }, { 1, 1 } })
+	lines.Transparency = sequence({ { 0, 1 }, { 0.5, 0.35 }, { 1, 1 } })
+	stage:bind(lines, "Color", "Main", "sequence")
+
+	---- 0.55 LA LUCE LO SOLLEVA ----
+	if not at(0.55) then return wrapUp() end
+	stage:ring(diameter * 0.4, diameter * 1.8, 0.7, true)
+	stage:burst(emitterBase, 50, 26)
+	shake(4, 10, 0, 0.6)
+	glow.FillTransparency = 0.3
+	tween(glow, 0.4, { FillTransparency = 0.85 })
+
+	---- 0.95 LE CATENE partono dal bordo del cerchio ----
+	if not at(0.95) then return wrapUp() end
+	local anchor = newPart("ChainAnchor", Vector3.one * 0.2, CFrame.new(center), WHITE, Enum.Material.SmoothPlastic, 1)
+	anchor.Parent = stage.folder
+
+	local chainSpecs = body.Chains and body.Chains(facing) or {}
+	local function shootChain(spec)
+		local target = spec.part
+		if not (target and target.Parent) then return end
+
+		local angle = math.rad(spec.angle)
+		local direction = facing:VectorToWorldSpace(Vector3.new(math.cos(angle), 0, math.sin(angle)))
+		local origin = center + direction * radius * spec.reach + Vector3.new(0, 0.2, 0)
+		local from = attachmentAt(anchor, origin)
+		local tip = attachmentAt(anchor, origin)
+
+		local grip = Instance.new("Attachment")
+		grip.Name = "CrucifixChainGrip"
+		grip.Position = spec.offset or Vector3.zero
+		grip.Parent = target
+		table.insert(stage.cleanup, grip)
+
+		local chain = { name = spec.name or target.Name, grip = grip, beam = chainBeam(stage.folder, from, tip, scale) }
+		stage:bind(chain.beam, "Color", "Main", "sequence")
+		table.insert(chains, chain)
+		table.insert(flights, { chain = chain, target = target, tip = tip, anchor = anchor, origin = origin, shotAt = os.clock() })
+	end
+
+	task.spawn(function()
+		for _, spec in ipairs(chainSpecs) do
+			if not at(spec.at) then return end
+			if model.Parent then shootChain(spec) end
+		end
+	end)
+
+	---- 1.0 L'URLO: lo tengono, si divincola ----
+	if not at(1.0) then return wrapUp() end
+	if body.Scream then pcall(body.Scream, stage, "hit") end
+	TweenService:Create(glow, TweenInfo.new(0.22, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { FillTransparency = 0.45 }):Play()
+	for _, light in ipairs(body.Lights or {}) do
+		stage:bind(light, "Color", "Main")
+		tween(light, 0.4, { Brightness = 2 })
+	end
+	for _, emitter in ipairs(body.Emitters or {}) do
+		stage:bind(emitter, "Color", "Main", "whiteSequence")
+		if emitter.Name == "Triangles" then emitter.Enabled = true end
+	end
+
+	---- 2.5 GIÙ, A STRATTONI: al centro si apre il buco ----
+	if not at(2.5) then return wrapUp() end
+	playSound(SOUND_IDS.Earthquake, 0.9, 0.5, stage.folder)
+	stage:ceilingDust(center)
+	tween(bloom, 3.3, { Intensity = 2.2, Size = 40 })
+	tween(grade, 3.3, { Contrast = 0.45, Saturation = -0.5 })
+	tween(circleLight, 3.3, { Brightness = 9 })
+	for _, emitter in ipairs(body.Emitters or {}) do
+		emitter.Enabled = true
+	end
+	if not fail and body.Mute then pcall(body.Mute) end
+
+	-- Il buco: un disco nero con il vortice e un bordo di luce
+	local hole = newPart("Hole", Vector3.new(0.04, 0.1, 0.1), CFrame.new(center + Vector3.new(0, 0.14, 0)) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(4, 6, 12), Enum.Material.SmoothPlastic, 0)
+	hole.Shape = Enum.PartType.Cylinder
+	hole.Parent = stage.folder
+	local swirlDisc, swirlImage = glowDisc(stage.folder, "HoleSwirl", center + Vector3.new(0, 0.16, 0), 0.1, TEXTURES.Circle[3], stage.palette.Deep, 256)
+	local rimDisc, rimImage = glowDisc(stage.folder, "HoleRim", center + Vector3.new(0, 0.18, 0), 0.1, TEXTURES.Circle[1], WHITE, 256)
+	stage:bind(swirlImage, "ImageColor3", "Deep")
+	swirlImage.ImageTransparency = 0
+	rimImage.ImageTransparency = 0
+	swirl = swirlImage
+
+	local holeSize = math.clamp(diameter * 0.35, 5, radius * 1.2)
+	local function sizeHole(size, duration, direction)
+		local style, way = Enum.EasingStyle.Back, direction or Enum.EasingDirection.Out
+		size = math.max(size, 0.1)
+		tween(hole, duration, { Size = Vector3.new(0.04, size, size) }, style, way)
+		tween(swirlDisc, duration, { Size = Vector3.new(size * 1.05, 0.02, size * 1.05) }, style, way)
+		tween(rimDisc, duration, { Size = Vector3.new(size * 1.3, 0.02, size * 1.3) }, style, way)
+	end
+
+	local quakeUntil = if fail then FAIL.Break else SLAM_AT
+	task.spawn(function()
+		while os.clock() - stage.startedAt < quakeUntil and not stage.done and alive() do
+			local progress = math.clamp((os.clock() - stage.startedAt - 2.5) / 3.3, 0, 1)
+			spinBoost = 1 + 3 * progress
+			crucifixSpin = 1.6 + (if fail then 16 else 10) * progress
+			shake(1.5 + 3 * progress, 10, 0.1, 0.5)
+			task.wait(0.35)
+		end
+	end)
+
+	local function jolt(strength)
+		pulse = 1
+		shudder = 1
+		shake(3 + 5 * strength, 14, 0, 0.6)
+		stage:fovPunch(3 + 5 * strength, 0.4)
+		playSound(SOUND_IDS.Slam, 0.4 + 0.6 * strength, 1.4 - 0.3 * strength, stage.folder)
+		stage:ring(diameter * 0.2, diameter * (0.9 + 0.5 * strength), 0.6, true)
+		stage:burst(emitterBase, math.floor(20 + 40 * strength), 22)
+		for _, chain in ipairs(chains) do
+			if chain.beam.Parent then
+				chain.beam.Brightness = 5
+				tween(chain.beam, 0.35, { Brightness = 1 })
+			end
+		end
+		for _, light in ipairs(body.Lights or {}) do
+			light.Brightness = 3 + 5 * strength
+			tween(light, 0.5, { Brightness = 2 + 2 * strength })
+		end
+		if body.Jolt then pcall(body.Jolt, stage, strength) end
+	end
+
+	-- Il crocifisso si spezza nelle schegge di DOORS, che cadono davvero
+	local function shatterCrucifix(colour, speed)
+		local position = crucifix:GetPivot().Position
+		for _, descendant in ipairs(crucifix:GetDescendants()) do
+			if descendant:IsA("BasePart") then descendant.Transparency = 1 end
+		end
+		for _, meshId in ipairs(SHARD_MESHES) do
+			local spin = CFrame.Angles(math.random() * 6.28, math.random() * 6.28, math.random() * 6.28)
+			local shard = newPart("Shard", Vector3.one * 0.3, CFrame.new(position + randomUnit() * 0.3) * spin, colour, Enum.Material.Wood, 0)
+			local mesh = Instance.new("SpecialMesh")
+			mesh.MeshType = Enum.MeshType.FileMesh
+			mesh.MeshId = "rbxassetid://" .. meshId
+			mesh.Parent = shard
+			shard.Anchored = false
+			shard.CanCollide = true
+			shard.Parent = stage.folder
+			shard.AssemblyLinearVelocity = randomUnit() * speed + Vector3.new(0, 12, 0)
+			shard.AssemblyAngularVelocity = randomUnit() * 25
+			task.delay(2.4, function()
+				if shard.Parent then tween(shard, 0.6, { Transparency = 1 }) end
+			end)
+		end
+	end
+
+	-- La catena si spezza vicino alla parte: quella parte è libera
+	local function snap(chain, strength)
+		if not chain.beam.Parent then return end
+		chain.beam:Destroy()
+		if chain.grip.Parent then
+			stage:burst(chain.grip, math.floor(30 + 25 * strength), 26)
+		end
+		if body.Snap then pcall(body.Snap, stage, chain) end
+	end
+
+	local function snapNamed(names, strength)
+		for _, chain in ipairs(chains) do
+			if table.find(names, chain.name) then
+				snap(chain, strength)
+			end
+		end
+	end
+
+	if fail then
+		---- IL FAIL ----
+		for _, step in ipairs(FAIL.Jolts) do
+			if not at(step.time) then return wrapUp() end
+			sizeHole(holeSize * (0.3 + 0.2 * step.strength), 0.3)
+			jolt(step.strength)
+		end
+
+		-- 3.36 resiste: il cerchio si fa rosso e il crocifisso si incrina
+		if not at(FAIL.Resist) then return wrapUp() end
+		stage:setPalette("Fail", 0.5)
+		tween(grade, 0.5, { TintColor = PALETTES.Fail.Tint, Contrast = 0.5, Saturation = -0.2 })
+		playSound(SOUND_IDS.Slam, 1.2, 0.6, stage.folder)
+		stage:flash(PALETTES.Fail.Main, 0.7, 0.4)
+		stage:burst(crucifixPart, 25, 12)
+		shake(5, 18, 0, 0.8)
+		crucifixLight.Brightness = 10
+		tween(crucifixLight, 0.6, { Brightness = 3 })
+
+		-- 3.62 il buco non lo tiene più e si richiude
+		if not at(FAIL.Climb[1]) then return wrapUp() end
+		sizeHole(0, FAIL.Climb[2] - FAIL.Climb[1], Enum.EasingDirection.In)
+
+		-- Strappa le catene a coppie
+		local groups = body.SnapGroups or { { 1, 2 }, { 3, 4 }, { 5, 6 } }
+		for index, time in ipairs(FAIL.Snaps) do
+			if not at(time) then return wrapUp() end
+			local group = groups[index] or {}
+			local strength = 0.5 + 0.15 * index
+			for _, key in ipairs(group) do
+				if type(key) == "number" then
+					if chains[key] then snap(chains[key], strength) end
+				else
+					snapNamed({ key }, strength)
+				end
+			end
+			shudder = 1
+			pulse = 1
+			shake(4 + 2 * index, 16, 0, 0.5)
+			stage:fovPunch(4 + 2 * index, 0.4)
+			playSound(SOUND_IDS.Slam, 0.8, 1.6 + 0.1 * index, stage.folder)
+			stage:ring(diameter * 0.2, diameter * (0.7 + 0.2 * index), 0.5, false)
+		end
+
+		-- 4.9 SI LIBERA: saltano tutte le catene, il crocifisso esplode
+		if not at(FAIL.Break) then return wrapUp() end
+		for _, chain in ipairs(chains) do
+			snap(chain, 1)
+		end
+		if body.Scream then pcall(body.Scream, stage, "roar") end
+		if body.BreakFree then pcall(body.BreakFree, stage) end
+
+		pcall(function()
+			tween(ritualSound, 0.4, { Volume = 0 })
+		end)
+		playSound(SOUND_IDS.Slam, 2, 0.7, stage.folder)
+		stage:flash(PALETTES.Fail.Main, 0.2, 0.8)
+		stage:fovPunch(16, 0.8)
+		shake(12, 16, 0, 1.6)
+		stage:ceilingDust(center)
+		stage:sphere(center + Vector3.new(0, 2, 0), radius * 3.2, 0.9, false)
+		for index = 0, 2 do
+			task.delay(index * 0.12, function()
+				if not stage.done then
+					stage:ring(diameter * 0.3, diameter * (3 - index * 0.6), 0.9, false)
+				end
+			end)
+		end
+
+		-- Il crocifisso si spezza, e le schegge sono rosse
+		shatterCrucifix(PALETTES.Fail.Deep, 22)
+		stage:burst(crucifixPart, 70, 28)
+		tween(crucifixLight, 0.15, { Brightness = 14 })
+		task.delay(0.2, function()
+			if crucifixLight.Parent then tween(crucifixLight, 0.8, { Brightness = 0 }) end
+		end)
+		tween(crucifixGlow, 0.5, { FillTransparency = 1, OutlineTransparency = 1 })
+		twinkles.Enabled = false
+
+		-- Il cerchio si rompe: gli anelli volano via e si spengono
+		sparks.Enabled = false
+		lines.Enabled = false
+		spinBoost = 6
+		for index, disc in ipairs(circleParts) do
+			tween(disc, 0.7, { Size = Vector3.new(diameter * (1.4 + 0.2 * index), 0.02, diameter * (1.4 + 0.2 * index)) }, Enum.EasingStyle.Quart)
+			tween(layers[index], 0.7, { ImageTransparency = 1 })
+		end
+		tween(circleLight, 0.1, { Brightness = 14 })
+		task.delay(0.15, function()
+			if circleLight.Parent then tween(circleLight, 1.2, { Brightness = 0 }) end
+		end)
+		tween(glow, 0.8, { FillTransparency = 1, OutlineTransparency = 1 })
+
+		-- 5.62 ricade e atterra
+		if not at(FAIL.Fall[2]) then return wrapUp() end
+		shake(6, 12, 0, 0.8)
+		playSound(SOUND_IDS.Slam, 1, 0.8, stage.folder)
+		stage:ring(diameter * 0.2, diameter * 1.1, 0.6, true)
+		if body.Land then pcall(body.Land, stage) end
+
+		-- 6.0 il mondo torna normale
+		if not at(FAIL.Settle) then return wrapUp() end
+		tween(grade, 1.2, { TintColor = WHITE, Contrast = 0, Saturation = 0 })
+		tween(bloom, 1.2, { Intensity = 0 })
+
+		if not at(FAIL.Done) then return wrapUp() end
+		pcall(function() glow:Destroy() end)
+		if body.Recover then
+			local ok, err = pcall(body.Recover, stage)
+			if not ok then problem("Body.Recover: %s", tostring(err)) end
+		end
+		result = "Failed"
+		log("fallito: %s si è liberato", model.Name)
+		return wrapUp()
+	end
+
+	---- IL RITUALE RIUSCITO ----
+	for index, step in ipairs(JOLTS) do
+		if not at(step.time) then return wrapUp() end
+		sizeHole(holeSize * (0.45 + 0.55 * index / #JOLTS), 0.3)
+		jolt(step.strength)
+		if index == #JOLTS then
+			local first = body.SnapFirst
+			if type(first) == "string" then
+				snapNamed({ first }, 0.8)
+			elseif chains[1] then
+				snap(chains[1], 0.8)
+			end
+			stage:flash(WHITE, 0.6, 0.25)
+		end
+	end
+
+	---- 5.35 L'ULTIMA TIRATA ----
+	if not at(PLUNGE_AT) then return wrapUp() end
+	shake(6, 16, 0.3, 0.4)
+	tween(circleLight, 0.45, { Brightness = 14 })
+	for _, light in ipairs(body.Lights or {}) do
+		tween(light, 0.45, { Brightness = 8 })
+	end
+
+	---- 5.8 IL COLPO FINALE: sparisce nel buco ----
+	if not at(SLAM_AT) then return wrapUp() end
+	vanished = true
+	if body.Vanish then
+		local ok, err = pcall(body.Vanish, stage)
+		if not ok then problem("Body.Vanish: %s", tostring(err)) end
+	end
+	if model.Parent then model:Destroy() end
+	if opts.OnVanish then task.spawn(opts.OnVanish) end
+
+	playSound(SOUND_IDS.Slam, 2, 0.9, stage.folder)
+	stage:flash(WHITE, 0.05, 1)
+	stage:fovPunch(18, 0.8)
+	shake(12, 16, 0, 1.6)
+	stage:burst(emitterBase, 220, 45)
+	stage:sphere(center + Vector3.new(0, 2, 0), radius * 3.2, 0.9, false)
+	for index = 0, 2 do
+		task.delay(index * 0.12, function()
+			if not stage.done then
+				stage:ring(diameter * 0.3, diameter * (3 - index * 0.6), 0.9, index == 0)
+			end
+		end)
+	end
+	sizeHole(0, 0.35, Enum.EasingDirection.In)
+	shatterRoom(playerRoom())
+
+	shatterCrucifix(WOOD, 16)
+	stage:burst(crucifixPart, 60, 25)
+	tween(crucifixLight, 0.15, { Brightness = 12 })
+	for _, chain in ipairs(chains) do
+		if chain.beam.Parent then chain.beam:Destroy() end
+	end
+	tween(bloom, 0.08, { Intensity = 3.5 })
+	tween(circleLight, 0.08, { Brightness = 14 })
+	sparks.Enabled = false
+	lines.Enabled = false
+
+	---- 6.0 IL CERCHIO SI RICHIUDE ----
+	if not at(6.0) then return wrapUp() end
+	spinBoost = 8
+	for index, disc in ipairs(circleParts) do
+		tween(disc, 0.6, { Size = Vector3.new(0.1, 0.02, 0.1) }, Enum.EasingStyle.Back, Enum.EasingDirection.In)
+		tween(layers[index], 0.6, { ImageTransparency = 1 })
+	end
+	tween(crucifixLight, 1, { Brightness = 0 })
+	tween(crucifixGlow, 1, { FillTransparency = 1, OutlineTransparency = 1 })
+	twinkles.Enabled = false
+	tween(bloom, 1.5, { Intensity = 1 })
+
+	---- 6.2 BRACI che scendono piano (e quello che l'entità aggiunge) ----
+	if not at(6.2) then return wrapUp() end
+	tween(circleLight, 1.5, { Brightness = 0 })
+	local area = radius * 2.4
+	local embersBase = newPart("Embers", Vector3.new(area * 2, 0.5, area * 2), CFrame.new(center + Vector3.new(0, 11, 0)), WHITE, Enum.Material.SmoothPlastic, 1)
+	embersBase.Parent = stage.folder
+	local embers = makeEmitter(embersBase, TEXTURES.Spark)
+	embers.Rate = 30
+	embers.EmissionDirection = Enum.NormalId.Bottom
+	embers.Lifetime = NumberRange.new(3, 5)
+	embers.Speed = NumberRange.new(0.5, 1.5)
+	embers.Acceleration = Vector3.new(0, -1.5, 0)
+	embers.SpreadAngle = Vector2.new(40, 40)
+	embers.Size = sequence({ { 0, 0.45 }, { 1, 0 } })
+	embers.Transparency = sequence({ { 0, 1 }, { 0.1, 0.2 }, { 1, 1 } })
+	stage:bind(embers, "Color", "Main", "sequence")
+	task.delay(2.5, function()
+		embers.Enabled = false
+	end)
+	if body.After then
+		local ok, err = pcall(body.After, stage)
+		if not ok then problem("Body.After: %s", tostring(err)) end
+	end
+
+	---- 8.7 Il mondo torna normale ----
+	if not at(8.7) then return wrapUp() end
+	tween(grade, 2, { TintColor = WHITE, Contrast = 0, Saturation = 0 })
+	tween(bloom, 2, { Intensity = 0 })
+	if not at(10.8) then return wrapUp() end
+
+	result = "Banished"
+	log("esorcizzato: %s", model.Name)
+	return wrapUp()
+end
+
+---====== LO SPAWNER DI VYNIXU ======---
+--[[ Lo spawner guarda ogni frame se hai in mano un Tool che si chiama
+     "Crucifix" e, se l'entità ha un CrucifixionOverwrite, chiama quello al
+     posto del suo rituale. Il campo si scrive direttamente: SetCallback lo
+     rifiuta, perché nella config di default vale nil.
+
+     L'overwrite si mette solo mentre hai in mano QUESTO crocifisso, e solo
+     dove non ce n'è già uno di qualcun altro. ]]
+
+local armed = setmetatable({}, { __mode = "k" }) -- entità -> la nostra funzione
+
+local function spawnerModule()
+	local env = getgenv and getgenv()
+	local spawner = env and env.VynixuEntitySpawnerV2
+	if type(spawner) == "table" and type(spawner.ActiveEntities) == "table" then
+		return spawner
+	end
+	return nil
+end
+
+local function overwriteFor(entity)
+	local function overwrite()
+		local model = entity.Model
+		if not (model and model.Parent) or model:GetAttribute("BeingBanished") then return end
+
+		local tool = Ritual.Held()
+		if not Ritual.IsOurs(tool) then
+			-- Non è il nostro: il prossimo frame lo spawner fa il suo rituale
+			if entity.Debug and entity.Debug.CrucifixionOverwrite == overwrite then
+				entity.Debug.CrucifixionOverwrite = nil
+			end
+			armed[entity] = nil
+			return
+		end
+
+		-- Subito, così lo spawner non ci richiama al frame dopo
+		model:SetAttribute("BeingBanished", true)
+		model:SetAttribute("Paused", true)
+
+		local crucifixion = entity.Config and entity.Config.Crucifixion or {}
+		task.spawn(function()
+			local ok, outcome = pcall(Ritual.Run, {
+				Model  = model,
+				Tool   = tool,
+				Resist = crucifixion.Resist == true,
+			})
+			if not ok then
+				problem("rituale su %s: %s", model.Name, tostring(outcome))
+			end
+
+			-- Fallito, o rotto a metà: l'entità non deve restare congelata
+			if model.Parent and (not ok or outcome ~= "Banished") then
+				model:SetAttribute("BeingBanished", false)
+				model:SetAttribute("Paused", false)
+			end
+		end)
+	end
+	return overwrite
+end
+
+armSpawner = function()
+	local spawner = spawnerModule()
+	if not spawner then return end
+	for _, entity in ipairs(spawner.ActiveEntities) do
+		if type(entity) == "table" and type(entity.Debug) == "table" and armed[entity] == nil
+			and entity.Debug.CrucifixionOverwrite == nil
+			and not (entity.Config and entity.Config.Crucifixion and entity.Config.Crucifixion.Enabled == false)
+		then
+			local overwrite = overwriteFor(entity)
+			entity.Debug.CrucifixionOverwrite = overwrite
+			armed[entity] = overwrite
+		end
+	end
+end
+
+local function disarmSpawner()
+	for entity, overwrite in pairs(armed) do
+		if type(entity.Debug) == "table" and entity.Debug.CrucifixionOverwrite == overwrite then
+			entity.Debug.CrucifixionOverwrite = nil
+		end
+	end
+	table.clear(armed)
+end
+
+-- Leggero: guarda solo il tool in mano. Arma anche le entità arrivate dopo
+RunService.Heartbeat:Connect(function()
+	if Ritual.IsOurs(Ritual.Held()) then
+		armSpawner()
+	elseif next(armed) then
+		disarmSpawner()
+	end
+end)
+
+---====== EXPORT ======---
+
+Ritual.Stage = Stage
+
+if getgenv then
+	getgenv().GradishCrucifixRitual = Ritual
+end
+
+return Ritual

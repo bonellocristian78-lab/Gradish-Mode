@@ -32,6 +32,7 @@ mod rather than playing it.
 | **Dev console** | F1–F6 | `.../GradishDev` |
 | **Config checker** | — | `.../GradishCheck` |
 | Every crucifix | 1–5 | `.../CrucifixAll` |
+| Chain crucifix (works on every custom entity) | — | `.../Crucifix` |
 | Plain crucifix | K | `.../CrucifixGiver` |
 | Corroded crucifix | H | `.../CorrodedCrucifixGiver` |
 | Drawer test | J / H / K | `.../CrucifixTest` |
@@ -52,6 +53,8 @@ mod rather than playing it.
 | Blue Hell | `.../BlueHell` |
 | Mischievous Light | `.../MischievousLight` |
 | Red Seek | `.../RedSeek` |
+| Honcho | `.../Honcho.lua` |
+| J-518 | `.../J-518` |
 | Crucifixes in drawers | `.../CrucifixSpawner` |
 
 `...` is `https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main`
@@ -75,7 +78,7 @@ instead of screenshotting.
 
 | Key | What |
 |---|---|
-| **F1** | summon menu — prints the ten entities, press 1–9 or 0 |
+| **F1** | summon menu — prints the entities, press 1–9, 0 or - |
 | **F2** | crucifix menu — plain, Corroded, Crimson, Violet, Rainbow |
 | **F3** | badges — list / wipe all / grant all / revoke all |
 | **F4** | dump the live state: room, seed, what is spawned, your health, what you are holding |
@@ -159,6 +162,31 @@ before.
 
 ---
 
+## The chain crucifix
+
+```lua
+_G.CrucifixType = "Guiding"   -- or "Curious", or "Fail"; leave the line out for Guiding
+loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/Crucifix"))()
+```
+
+Penguin's crucifix model, used up on the first try, with the chain ritual Honcho
+has: the circle opens under the entity, eight chains take it and drag it into a
+hole in the floor. It works on Honcho, J-518, every Gradish entity and anything
+else built on Vynixu's spawner. DOORS' own entities are run by the server and a
+ritual on your screen cannot save you from them, so it does not try.
+
+| Type | Colour | What happens |
+|---|---|---|
+| `Guiding` | blue | the entity is dragged down and gone |
+| `Curious` | yellow | the same, in yellow |
+| `Fail` | blue, then red | the entity tears the chains, breaks the crucifix, lands and carries on |
+
+Any crucifix also fails on an entity that resists — Speedster Purpleist always,
+Rose Hell 85% of the time. Honcho's fail has its own animation, also shipped as
+`HonchoCrucifixFail.rbxmx` to open in Studio's Animation Editor.
+
+The ritual lives in `CrucifixRitual`, which Honcho, J-518 and `Crucifix` all load.
+
 ## The crucifixes
 
 | Variant | Colour | Beats | Where |
@@ -197,6 +225,8 @@ supposed to feel like, so that her refusing it later lands.
 | **Speedster Purpleist** | Fast |
 | **Blue Hell** | Rose Hell's brother. The closer he gets, the slower *you* get |
 | **Mischievous Light** | The red death light |
+| **Honcho** | Standalone. Runs the rooms like Rush; hold a crucifix and he is chained into the floor |
+| **J-518** | Standalone room boss. A black and white portal opens in the ceiling, ten seconds of warning, then he knocks on every wardrobe. Be inside one |
 
 ---
 
@@ -233,6 +263,8 @@ Over 400 simulated seeds: no spacing violations, about 12 encounters per run.
 | `GradishCore` | the engine — every other script loads it |
 | `MainScript` | the entry point, the schedule |
 | `AchievementConfig` | every badge's wording, images and on/off switches |
+| `CrucifixRitual` | the chain ritual and the crucifix itself, shared by `Crucifix`, Honcho and J-518 |
+| `HonchoCrucifixFail.rbxmx` | Honcho's fail animation as a KeyframeSequence, for Studio |
 | `GradishDev` | the console |
 | `GradishCheck` | the config report |
 | `ImagesA/` | one file per entity saying where its picture comes from |
