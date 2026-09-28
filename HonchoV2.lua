@@ -3,19 +3,19 @@
 	Motore: Roblox · Linguaggio: Luau · Tipo: script client da executor
 
 	È Honcho (Honcho.lua resta com'era) con la crocifissione rifatta:
-	- Ogni animazione dura due secondi in più ed è più drammatica. Una colonna di luce lo stacca da
-	  terra e lui resta sospeso a braccia aperte; le catene arrivano una alla volta e ondeggiano;
-	  sopra di lui si accende un sigillo; dietro al crocifisso gira un'aureola. All'ultimo si tira
-	  fuori dal buco e per un attimo tutto si ferma, come se ce la facesse: poi l'ultima tirata, e
-	  dal buco che si chiude sale una colonna di luce.
+	- Ogni animazione dura due secondi in più ed è più drammatica. La luce lo stacca da terra e lui
+	  resta sospeso a braccia aperte; le catene arrivano una alla volta e ondeggiano; dietro al
+	  crocifisso gira un'aureola. All'ultimo si tira fuori dal buco e per un attimo tutto si ferma,
+	  come se ce la facesse: poi l'ultima tirata.
 	- Il fail dura due secondi in più: prima di strappare l'ultima catena raccoglie la forza.
 	- Il jumpscare e la sparizione a fine percorso durano due secondi in più.
-	- Il crocifisso GLITCH (_G.CrucifixType = "Glitch"): in mano non sta mai fermo, sul rituale
-	  fallisce in viola con lo schermo che si strappa. Honcho si libera, ricade, e il glitch che
-	  resta del crocifisso lo colpisce, e sopra di lui compare a lampi il Glitch vero di DOORS: per
-	  sedici secondi impazzisce, barcolla e si dimena sul pavimento (non vola) mentre il Glitch gli
-	  sale addosso dai piedi alla testa, con la sua pelle e i suoi quadrati. Poi si rialza come un
-	  Glitch e torna a cacciarti, più veloce.
+	- Il crocifisso GLITCH (_G.CrucifixType = "Glitch"): la metà alta è fatta di pixel del Glitch di
+	  DOORS che saltano fuori e tornano. Sul rituale fallisce in viola. Honcho si libera e ricade;
+	  i pixel del crocifisso gli si schiantano addosso e il Glitch vero di DOORS gli appare sopra.
+	  Poi sedici secondi a momenti chiari: il tempo si ferma; in ginocchio lotta mentre il Glitch
+	  gli sale dai piedi al petto; si prende la testa mentre gli arriva in faccia, che diventa uno
+	  schermo rotto; si alza a braccia aperte e gli si monta sopra una corona di blocchetti; tutto
+	  si spegne; urla. Resta un Glitch e torna a cacciarti, più veloce.
 
 	Tutto il resto è come Honcho: corre sui PathfindNodes come Rush, rompe le luci, ti uccide se
 	sei a tiro e fuori da un nascondiglio, _G.Rebounds per tornare indietro come Ambush.
@@ -1924,6 +1924,93 @@ POSE_SPECS.StaggerA = {
 	},
 }
 
+-- In ginocchio: il ginocchio sinistro a terra, il destro davanti, una mano sul ginocchio e una a
+-- terra, la testa bassa. Lotta contro quello che gli sale addosso
+POSE_SPECS.Kneel = {
+	Pelvis      = { -8, 0, 0, 0, -1.3, 0.2 },
+	LowerTorso  = { -10, 0, 0 },
+	MiddleTorso = { -14, 0, 0 },
+	UpperTorso  = { -18, 0, 0 },
+	Neck        = { -8, 0, 0 },
+	Head        = { -22, 0, 0 },
+	R = {
+		Shoulder   = { -20, 20, -70 },
+		UpperArm   = { -6, 0, -4 },
+		UpperWrist = { 0, 45, 0 },
+		LowerWrist = { 0, 12, 0 },
+		Hand       = { 30, 0, -20 },
+		UpperLeg   = { 75, 0, 10 },
+		MiddleLeg  = { -80, 0, 0 },
+		LowerLeg   = { -15, 0, 0 },
+		Ankle      = { 15, 0, 0 },
+	},
+	L = {
+		Shoulder   = { -45, 0, -55 },
+		UpperArm   = { -10, 0, -6 },
+		UpperWrist = { 0, 20, 0 },
+		LowerWrist = { 0, 8, 0 },
+		Hand       = { 50, 0, -20 },
+		UpperLeg   = { -5, 0, 8 },
+		MiddleLeg  = { -85, 0, 0 },
+		LowerLeg   = { -10, 0, 0 },
+		Ankle      = { 30, 0, 0 },
+	},
+}
+
+-- In ginocchio ma inarcato all'indietro: le braccia aperte e basse, la testa rovesciata, urla
+POSE_SPECS.KneelArch = {
+	Pelvis      = { 6, 0, 0, 0, -1.2, 0 },
+	LowerTorso  = { 8, 0, 0 },
+	MiddleTorso = { 16, 0, 0 },
+	UpperTorso  = { 24, 0, 0, 0, 0.1, 0 },
+	Neck        = { 18, 0, 0 },
+	Head        = { 48, 0, 0 },
+	R = {
+		Shoulder   = { 0, -25, -25 },
+		UpperArm   = { 0, -8, 5 },
+		UpperWrist = { 0, 20, 0 },
+		LowerWrist = { 0, 8, 0 },
+		Hand       = { 0, 0, 30 },
+		UpperLeg   = { 70, 0, 10 },
+		MiddleLeg  = { -80, 0, 0 },
+		LowerLeg   = { -15, 0, 0 },
+		Ankle      = { 15, 0, 0 },
+	},
+	L = {
+		Shoulder   = { 0, -25, -25 },
+		UpperArm   = { 0, -8, 5 },
+		UpperWrist = { 0, 20, 0 },
+		LowerWrist = { 0, 8, 0 },
+		Hand       = { 0, 0, 30 },
+		UpperLeg   = { -5, 0, 8 },
+		MiddleLeg  = { -85, 0, 0 },
+		LowerLeg   = { -10, 0, 0 },
+		Ankle      = { 30, 0, 0 },
+	},
+}
+
+-- In piedi, dritto e alto: le braccia aperte verso il basso con i palmi in fuori, la testa un po'
+-- alzata e storta. Non lotta più: adesso è il Glitch
+POSE_SPECS.Rise = {
+	Pelvis      = { 2, 0, 0, 0, 0.15, 0 },
+	LowerTorso  = { 3, 0, 0 },
+	MiddleTorso = { 5, 0, 0 },
+	UpperTorso  = { 8, 0, 0, 0, 0.1, 0 },
+	Neck        = { 8, 0, 8 },
+	Head        = { 20, 0, 14 },
+	R = {
+		Shoulder   = { 0, -15, -35 },
+		UpperArm   = { 0, -5, 4 },
+		UpperWrist = { 0, 10, 0 },
+		LowerWrist = { 0, 5, 0 },
+		Hand       = { -15, 0, 25 },
+		UpperLeg   = { 0, 0, 10 },
+		MiddleLeg  = { -4, 0, 0 },
+		LowerLeg   = { -4, 0, 0 },
+		Ankle      = { 0, 0, 0 },
+	},
+}
+
 -- La stessa posa girata dall'altra parte: R e L si scambiano, il resto cambia verso
 local function mirrorSpec(spec)
 	local mirrored = { R = spec.L or spec.R, L = spec.R }
@@ -2052,33 +2139,57 @@ for _, key in ipairs({
 end
 
 --[[ Il copione del GLITCH: il fail fino all'atterraggio, poi a 7.70 il glitch lo colpisce e per
-     sedici secondi impazzisce. Si prende la testa, ha le convulsioni, barcolla, si torce come non
-     si potrebbe, sempre più fitto; all'ultimo raccoglie la forza, urla e si rialza glitchato. ]]
+     sedici secondi si trasforma. Non è un dimenarsi a caso: sono cinque momenti, ognuno con la sua
+     idea, e si capisce sempre cosa sta succedendo.
+
+       IL COLPO     0 - 1      il colpo lo inarca, e il tempo si ferma per mezzo secondo
+       LA RISALITA  1 - 5.4    in ginocchio, lotta; il Glitch gli sale dai piedi al petto
+       LA TESTA     5.4 - 10.2 si prende la testa, si torce: il Glitch gli arriva in faccia
+       IN PIEDI     10.2 - 13.5 raccoglie la forza e si alza a braccia aperte; sopra la sua testa
+                                si monta, un blocchetto alla volta, una corona
+       IL SILENZIO  13.5 - 14.3 tutto si spegne e lui è immobile
+       L'URLO       14.3 - 16  urla, e tutto riparte
+
+     I secondi qui sotto sono dal colpo. Gli scatti (GLITCH_BEATS) non sono a caso: arrivano a
+     tempo, sempre più fitti, come un cuore che accelera. ]]
 local GLITCH_STRIKE = 7.7
 local GLITCH_SPAN   = 16  -- gli stessi di CrucifixRitual (copione V2)
 
+local GLITCH_PHASES = { Hit = 1, Corrupt = 5.4, Head = 10.2, Rise = 13.5, Hush = 14.3 }
+local GLITCH_BEATS = {
+	1.6, 2.3, 2.9, 3.4, 3.9, 4.4, 4.9, 5.3,
+	5.8, 6.3, 6.7, 7.1, 7.5, 7.85, 8.2, 8.5, 8.8, 9.1, 9.35, 9.6, 9.85, 10.05,
+}
+
 local GLITCH_KEYS = keysUntil(FAIL_KEYS, 7.40)
-do
-	local cycle = { "Clutch", "ConvulseA", "ConvulseB", "StaggerA", "StaggerB", "Twist", "Clutch",
-		"ConvulseB", "ConvulseA", "StaggerB", "StaggerA", "TwistB", "Spasm" }
-	local finish = GLITCH_STRIKE + GLITCH_SPAN
-	table.insert(GLITCH_KEYS, { GLITCH_STRIKE, "Land" })
-	table.insert(GLITCH_KEYS, { GLITCH_STRIKE + 0.08, "GlitchHit", "Out" })
-	table.insert(GLITCH_KEYS, { GLITCH_STRIKE + 0.45, "GlitchHit", "InOut" })
-
-	local time, index = GLITCH_STRIKE + 0.9, 0
-	while time < finish - 1.6 do
-		index += 1
-		local name = cycle[(index - 1) % #cycle + 1]
-		table.insert(GLITCH_KEYS, { time, name, if name == "Spasm" or string.find(name, "Convulse") then "Out" else "InOut" })
-		-- Sempre più fitto: all'inizio mezzo secondo tra una posa e l'altra, alla fine un quarto
-		time += 0.55 - 0.3 * (time - GLITCH_STRIKE) / GLITCH_SPAN
-	end
-
-	table.insert(GLITCH_KEYS, { finish - 1.2, "Gather", "InOut" })
-	table.insert(GLITCH_KEYS, { finish - 0.5, "Roar", "Out" }) -- l'urlo glitchato
-	table.insert(GLITCH_KEYS, { finish + 0.1, "Roar", "InOut" })
-	table.insert(GLITCH_KEYS, { finish + 0.8, "Loom", "InOut" })
+for _, key in ipairs({
+	{ 0.00, "Land" },
+	{ 0.08, "GlitchHit", "Out" },   -- il colpo
+	{ 0.60, "GlitchHit" },          -- (il tempo è fermo)
+	{ 1.20, "Kneel", "InOut" },     -- cade in ginocchio
+	{ 1.95, "KneelArch", "Out" },   -- si inarca e urla
+	{ 2.55, "Kneel", "InOut" },
+	{ 3.10, "ConvulseA", "Out" },   -- si rialza a scatti
+	{ 3.60, "StaggerA", "InOut" },  -- barcolla
+	{ 4.15, "StaggerB", "InOut" },
+	{ 4.70, "ConvulseB", "Out" },
+	{ 5.40, "Clutch", "InOut" },    -- LA TESTA: se la prende
+	{ 6.10, "Twist", "Out" },
+	{ 6.70, "Clutch", "InOut" },
+	{ 7.30, "TwistB", "Out" },
+	{ 7.90, "Clutch", "InOut" },
+	{ 8.45, "ConvulseA", "Out" },
+	{ 8.90, "Spasm", "Out" },
+	{ 9.40, "Clutch", "InOut" },
+	{ 10.20, "Gather", "InOut" },   -- IN PIEDI: raccoglie la forza
+	{ 11.40, "Rise", "InOut" },     -- si alza a braccia aperte
+	{ 14.30, "Rise" },              -- (il silenzio: immobile)
+	{ 14.38, "Roar", "Out" },       -- L'URLO
+	{ 15.20, "Roar", "InOut" },
+	{ 16.00, "Loom", "InOut" },
+	{ 16.80, "Loom" },
+}) do
+	table.insert(GLITCH_KEYS, { GLITCH_STRIKE + key[1], key[2], key[3] })
 end
 
 local KEYS = { Banish = BANISH_KEYS, Fail = FAIL_KEYS, Glitch = GLITCH_KEYS }
@@ -2101,9 +2212,14 @@ end
 -- massimo mentre raccoglie la forza; nel glitch sempre di più per sedici secondi
 local function trembleAt(elapsed, mode)
 	if mode == "Glitch" and elapsed >= GLITCH_STRIKE then
-		local progress = (elapsed - GLITCH_STRIKE) / GLITCH_SPAN
-		if progress < 1 then return 1.2 + 1.4 * progress end
-		return 0.4
+		local g = elapsed - GLITCH_STRIKE
+		if g < GLITCH_PHASES.Hit then return 2.2 end
+		if g < GLITCH_PHASES.Corrupt then return 1.3 end
+		if g < GLITCH_PHASES.Head then return 1.3 + 0.9 * (g - GLITCH_PHASES.Corrupt) / (GLITCH_PHASES.Head - GLITCH_PHASES.Corrupt) end
+		if g < GLITCH_PHASES.Rise then return 0.8 - 0.6 * (g - GLITCH_PHASES.Head) / (GLITCH_PHASES.Rise - GLITCH_PHASES.Head) end
+		if g < GLITCH_PHASES.Hush then return 0.03 end
+		if g < GLITCH_PHASES.Hush + 0.9 then return 2.4 end
+		return 0.3
 	end
 	if mode ~= "Banish" and elapsed >= 4.46 then
 		if elapsed < 6.3 then return 1.7 end
@@ -2298,18 +2414,23 @@ local CHAIN_TARGETS = {
 }
 
 ---====== IL GLITCH ======---
---[[ Il crocifisso Glitch fallisce, e quello che ne resta lo colpisce a terra. Per sedici secondi il
-     Glitch di DOORS gli sale addosso dai piedi alla testa, liscio: il colore scivola nel viola scuro
-     del Glitch, la sua pelle a quadretti neri compare parte per parte e i quadretti strisciano, e
-     i quadrati bianchi, rossi e ciano del Glitch gli si accendono addosso. Solo il bordo della
-     trasformazione sfarfalla. Blocchetti del Glitch gli si staccano dal corpo e salgono; fette del
-     suo corpo si spostano di lato, rosse e ciano; l'urlo si inceppa e riparte da un punto a caso.
+--[[ Il crocifisso Glitch fallisce, e quello che ne resta lo colpisce a terra. Poi sedici secondi
+     che seguono il copione del glitch (GLITCH_PHASES, qui sopra), e ogni cosa ha il suo momento:
 
-     Intanto lui impazzisce ma resta a terra: barcolla di qua e di là per la stanza, si gira di
-     scatto, e la posa si blocca per qualche frame o salta, come un video rotto.
+     - Il Glitch di DOORS gli sale addosso come un'onda, dai piedi (appena colpito) al petto (a
+       5.4) alla testa (a 10.2): il colore scivola nel viola scuro del Glitch e compare la sua
+       pelle a quadretti. Solo la fascia dove passa l'onda sfarfalla, e solo da lì si staccano i
+       blocchetti: si vede dov'è arrivato.
+     - La faccia diventa uno schermo rotto, con l'immagine del Glitch di DOORS, quando l'onda ci
+       arriva.
+     - Gli scatti arrivano a tempo (GLITCH_BEATS), non a caso: a ogni colpo la posa si ferma per un
+       decimo di secondo, una fetta del corpo scivola di lato in rosso e ciano, una parte scatta di
+       traverso, lo schermo si strappa appena, l'urlo si inceppa. Tra un colpo e l'altro, calmo.
+     - In piedi, i blocchetti gli montano sopra la testa una corona, uno alla volta.
+     - Il silenzio: luci quasi spente, niente suoni, immobile. Poi l'urlo, e tutto riparte.
 
-     Finito, resta un Glitch: la pelle resta e continua a strisciare, i blocchetti gli girano
-     attorno, sfarfalla e scatta di lato anche mentre corre, e corre più forte. ]]
+     Finito, resta un Glitch: pelle, faccia rotta, corona che gira a scatti. Ogni tanto, anche
+     mentre corre, un colpo di glitch. E corre più forte. ]]
 
 local GLITCH = {
 	Main  = Color3.fromRGB(196, 70, 255),  -- il viola del rituale Glitch
@@ -2318,8 +2439,20 @@ local GLITCH = {
 	Cyan  = Color3.fromRGB(0, 255, 213),
 	Body  = Color3.fromRGB(58, 52, 103),   -- il colore del corpo del Glitch di DOORS
 	Speed = 1.25,                          -- quanto corre più forte dopo
-	Ramp  = 0.8,                           -- la trasformazione finisce all'80% dei sedici secondi
+	Band  = 0.14,                          -- quanto è alta la fascia dell'onda che lo trasforma
 }
+
+-- A che altezza del corpo è arrivata l'onda (0 i piedi, 1 la testa), g secondi dopo il colpo
+local function glitchFront(g)
+	if g < 0.6 then return -0.1 end
+	if g < GLITCH_PHASES.Corrupt then
+		return -0.1 + 0.72 * (g - 0.6) / (GLITCH_PHASES.Corrupt - 0.6)
+	end
+	if g < GLITCH_PHASES.Head then
+		return 0.62 + 0.5 * (g - GLITCH_PHASES.Corrupt) / (GLITCH_PHASES.Head - GLITCH_PHASES.Corrupt)
+	end
+	return 1.2
+end
 
 -- I pezzi dove si accendono i quadrati del Glitch
 local STATIC_PARTS = { "UpperTorso", "MiddleTorso", "Pelvis", "Head", "RightUpperArm", "LeftUpperArm",
@@ -2400,22 +2533,94 @@ local function glitchBody(model, stage, jointNames, Ritual)
 	distortion.Level = 0.45
 	pcall(function() distortion.Parent = body.scream end)
 
-	-- I blocchetti: si staccano da una parte già trasformata e salgono
+	-- I blocchetti: si staccano solo dalla fascia dove sta passando l'onda. Più tardi diventano
+	-- la corona
 	local swarmFolder = Instance.new("Folder")
 	swarmFolder.Name = "HonchoGlitchCubes"
 	swarmFolder.Parent = workspace
 	table.insert(cleanupTasks, function()
 		swarmFolder:Destroy()
 	end)
-	local swarm = Ritual.GlitchSwarm(swarmFolder, 36, 0.35 * size)
+	local swarm = Ritual.GlitchSwarm(swarmFolder, 18, 0.4 * size, true, 4)
+	swarm.chaos = 0.15
 	swarm:shed(function()
-		local entry = parts[math.random(#parts)]
-		if not (entry and entry.part.Parent) then return nil end
-		if not entry.done and fx.power * 1.6 - entry.height * 0.6 < 0.3 then return nil end
-		local half = entry.part.Size / 2
-		return entry.part.CFrame:PointToWorldSpace(Vector3.new(randomSigned(half.X), randomSigned(half.Y), randomSigned(half.Z)))
+		for _ = 1, 6 do
+			local entry = parts[math.random(#parts)]
+			if entry and entry.band and entry.part.Parent then
+				local half = entry.part.Size / 2
+				return entry.part.CFrame:PointToWorldSpace(Vector3.new(randomSigned(half.X), randomSigned(half.Y), randomSigned(half.Z)))
+			end
+		end
+		return nil
 	end)
 	swarm:setVisible(true)
+
+	-- La faccia: uno schermo rotto con l'immagine del Glitch di DOORS, tre copie (rossa, ciano,
+	-- viola) che si separano quando è forte
+	local head = findPart(model, "Head")
+	local faceImages = {}
+	if head then
+		for _, face in ipairs({ Enum.NormalId.Front, Enum.NormalId.Back }) do
+			local gui = Instance.new("SurfaceGui")
+			gui.Name = "GlitchFace"
+			gui.Face = face
+			gui.LightInfluence = 0
+			gui.Brightness = 2
+			gui.SizingMode = Enum.SurfaceGuiSizingMode.FixedSize
+			gui.CanvasSize = Vector2.new(128, 128)
+			gui.ClipsDescendants = true
+			gui.Parent = head
+			for index, colour in ipairs({ GLITCH.Red, GLITCH.Cyan, GLITCH.Main }) do
+				local image = Instance.new("ImageLabel")
+				image.BackgroundTransparency = 1
+				image.AnchorPoint = Vector2.new(0.5, 0.5)
+				image.Position = UDim2.fromScale(0.5, 0.5)
+				image.Size = UDim2.fromScale(1.1, 1.1)
+				image.Image = "rbxassetid://" .. kit.Screen
+				image.ImageColor3 = colour
+				image.ImageTransparency = 1
+				image.ZIndex = index
+				image.Parent = gui
+				table.insert(faceImages, { image = image, side = index - 2 })
+			end
+		end
+	end
+	local function drawFace(level)
+		for _, entry in ipairs(faceImages) do
+			entry.image.ImageTransparency = 1 - level * (if entry.side == 0 then 0.9 else 0.55)
+			entry.image.Position = UDim2.fromScale(0.5 + entry.side * 0.05 * level * math.random(), 0.5 + randomSigned(0.02) * level)
+		end
+	end
+	local function crownCenter()
+		local host = if head and head.Parent then head else lightHost
+		return host.CFrame
+	end
+
+	-- L'anello che sale: un cerchio di luce ciano, orizzontale, che gli sale lungo il corpo insieme
+	-- all'onda e gira piano. Si vede sempre fin dove è arrivato il Glitch
+	local ringDiameter = math.max(boxSize.X, boxSize.Z) * 1.3
+	local scanRing = newPart("GlitchScanRing", Vector3.new(ringDiameter, 0.02, ringDiameter), CFrame.new(0, 10000, 0),
+		GLITCH.Cyan, Enum.Material.SmoothPlastic, 1)
+	scanRing.Parent = swarmFolder
+	local ringImages = {}
+	for _, face in ipairs({ Enum.NormalId.Top, Enum.NormalId.Bottom }) do
+		local gui = Instance.new("SurfaceGui")
+		gui.Face = face
+		gui.LightInfluence = 0
+		gui.Brightness = 3
+		gui.SizingMode = Enum.SurfaceGuiSizingMode.FixedSize
+		gui.CanvasSize = Vector2.new(256, 256)
+		gui.Parent = scanRing
+		local image = Instance.new("ImageLabel")
+		image.BackgroundTransparency = 1
+		image.Size = UDim2.fromScale(1, 1)
+		image.Image = "rbxassetid://" .. kit.Ring
+		image.ImageColor3 = GLITCH.Cyan
+		image.ImageTransparency = 1
+		image.Parent = gui
+		table.insert(ringImages, image)
+	end
+	local ringShown = 0
 
 	-- I fantasmi, rosso e ciano: a volte tutto il corpo, a volte solo una fetta, spostati di lato
 	local ghostFolder = Instance.new("Folder")
@@ -2480,35 +2685,99 @@ local function glitchBody(model, stage, jointNames, Ritual)
 		end
 	end
 
-	local nextTick, nextCrawl, nextScream = 0, 0, os.clock() + 0.6
+	local nextTick, nextCrawl = 0, 0
+	local beatIndex, beatUntil = 1, 0
+	local frozenAt, frozenUntil = nil, 0
+	local snap = nil
 	local blinkUntil, blinkOffset = 0, Vector3.zero
-	local snapYawUntil, snapYaw = 0, 0
+	local hitFrozen, crowned, hushed, released = false, false, false, false
+	local headEntry = nil
+	for _, entry in ipairs(parts) do
+		if entry.part == head then headEntry = entry end
+	end
 	local lastStep = os.clock()
 
-	-- Trenta volte al secondo, non a ogni frame: la trasformazione è liscia, gli scatti no
+	-- UN COLPO DI GLITCH: tutto insieme, per un decimo di secondo, poi di nuovo calmo
+	local function beat(power)
+		local now = os.clock()
+		beatUntil = now + 0.1 + 0.06 * power
+		frozenUntil = beatUntil
+		snap = {
+			name     = jointNames[math.random(#jointNames)],
+			rotation = CFrame.Angles(randomSigned(0.8), randomSigned(0.8), randomSigned(0.8)),
+		}
+		showGhosts(1)
+		pcall(function() stage:glitchScreen(0.1, 0.25 + 0.3 * power) end)
+		aura.OutlineColor = if math.random() < 0.5 then GLITCH.Cyan else GLITCH.Red
+		light.Brightness = 3 + 2 * power
+		Ritual.Glitch.Crawl(allSkins, 24, studs)
+		drawFace(math.min((headEntry and headEntry.reached or 0) + 0.5, 1))
+		-- Dal petto in su, a volte sparisce di lato per la durata del colpo
+		if power > 0.5 and math.random() < 0.5 then
+			blinkOffset = (flatUnit(randomUnit()) or Vector3.xAxis) * (1.2 + math.random()) * size
+			blinkUntil = beatUntil
+		end
+		-- L'urlo si inceppa: riparte da un punto a caso
+		pcall(function()
+			local scream = body.scream
+			scream.PlaybackSpeed = 0.45 + math.random() * 0.4
+			scream.TimePosition = math.random() * math.max(scream.TimeLength - 0.3, 0.1)
+			scream:Play()
+		end)
+		pcall(function()
+			local loop = stage.glitchLoop
+			loop.TimePosition = math.random() * math.max(loop.TimeLength - 0.5, 0.1)
+		end)
+	end
+
+	-- Trenta volte al secondo; i cubi a ogni frame
 	function fx.step()
 		local now = os.clock()
-		swarm:step(math.min(now - lastStep, 0.1))
+		local g = now - startedAt
+		local deltaTime = math.min(now - lastStep, 0.1)
+		swarm:step(deltaTime, crownCenter())
 		lastStep = now
+
+		-- L'anello segue l'onda a ogni frame, e compare e sparisce sfumando
+		local ringTarget = if g > 0.6 and g < GLITCH_PHASES.Head + 0.2 then 1 else 0
+		ringShown += (ringTarget - ringShown) * (1 - math.exp(-6 * deltaTime))
+		if ringShown > 0.01 and model.PrimaryPart then
+			local root = model.PrimaryPart.Position
+			local height = bottom + math.clamp(glitchFront(g), 0, 1) * boxSize.Y
+			scanRing.CFrame = CFrame.new(root.X, height, root.Z) * CFrame.Angles(0, g * 1.5, 0)
+			for _, image in ipairs(ringImages) do
+				image.ImageTransparency = 1 - 0.85 * ringShown
+				image.ImageColor3 = if now < beatUntil then GLITCH.Red else GLITCH.Cyan
+			end
+		elseif ringImages[1] and ringImages[1].ImageTransparency < 1 then
+			for _, image in ipairs(ringImages) do
+				image.ImageTransparency = 1
+			end
+		end
+
 		if now < nextTick then return end
 		nextTick = now + 1 / 30
 
-		local progress = smoothstep((now - startedAt) / (GLITCH_SPAN * GLITCH.Ramp))
-		fx.power = progress
+		local front = glitchFront(g)
+		local power = math.clamp(front, 0, 1)
+		fx.power = power
 
-		-- Sale dai piedi alla testa: ogni parte parte quando il fronte arriva alla sua altezza
+		-- L'onda: ogni parte cambia quando la fascia passa alla sua altezza
 		for _, entry in ipairs(parts) do
 			if not entry.done then
-				local reached = smoothstep(progress * 1.6 - entry.height * 0.6)
+				local reached = smoothstep((front - entry.height) / GLITCH.Band + 0.5)
+				entry.reached = reached
+				entry.band = reached > 0.03 and reached < 0.97
 				if reached >= 1 then
 					entry.part.Color = GLITCH.Body
 					for _, texture in ipairs(entry.skin) do
 						texture.Transparency = 0
 					end
 					entry.done = true
+					entry.band = false
 				elseif reached > 0 then
-					-- Solo il bordo sfarfalla, il resto sfuma
-					local edge = reached > 0.05 and reached < 0.95 and math.random() < 0.25
+					-- Solo la fascia sfarfalla, poco: il resto sfuma liscio
+					local edge = entry.band and math.random() < 0.12
 					entry.part.Color = if edge
 						then (if math.random() < 0.5 then GLITCH.Red else GLITCH.Cyan)
 						else entry.from:Lerp(GLITCH.Body, reached)
@@ -2519,116 +2788,135 @@ local function glitchBody(model, stage, jointNames, Ritual)
 			end
 		end
 		for _, entry in ipairs(decals) do
-			entry.decal.Color3 = entry.from:Lerp(GLITCH.Cyan, progress)
+			entry.decal.Color3 = entry.from:Lerp(GLITCH.Cyan, power)
 		end
 
-		-- I quadretti strisciano, sempre di più
 		if now >= nextCrawl then
-			nextCrawl = now + 0.12 - 0.07 * progress
-			Ritual.Glitch.Crawl(allSkins, 10 + math.floor(40 * progress), studs)
+			nextCrawl = now + 0.15
+			Ritual.Glitch.Crawl(allSkins, 6 + math.floor(18 * power), studs)
 		end
 		for _, emitter in ipairs(statics) do
-			emitter.Rate = 3 + 14 * progress
+			emitter.Rate = 2 + 10 * power
 		end
 
-		aura.FillTransparency = if math.random() < 0.06 then 0.4 else 1 - 0.2 * progress
-		aura.OutlineTransparency = 1 - 0.7 * progress
-		if math.random() < 0.3 then
-			local roll = math.random()
-			aura.OutlineColor = if roll < 0.4 then GLITCH.Main elseif roll < 0.7 then GLITCH.Cyan else GLITCH.Red
+		-- IL COLPO: mezzo secondo di tempo fermo, appena inarcato
+		if not hitFrozen and g >= 0.12 then
+			hitFrozen = true
+			frozenUntil = now + 0.45
+			pcall(function()
+				local grade = stage.grade
+				grade.Saturation = -1
+				task.delay(0.45, function()
+					if grade.Parent then tween(grade, 0.2, { Saturation = -0.4 }) end
+				end)
+			end)
 		end
-		light.Brightness = (0.5 + 2 * progress) * (0.6 + 0.8 * math.random())
-		light.Color = aura.OutlineColor
 
-		showGhosts(0.12 + 0.45 * progress)
-
-		-- Ogni tanto sparisce per un attimo di lato, o si gira di scatto
-		if now >= blinkUntil and math.random() < 0.012 + 0.035 * progress then
-			local direction = flatUnit(randomUnit()) or Vector3.xAxis
-			blinkOffset = direction * (1.5 + 2.5 * math.random()) * size
-			blinkUntil = now + 0.04 + math.random() * 0.06
-			pcall(function() stage:glitchScreen(0.08, 0.4) end)
+		-- Gli scatti, a tempo
+		while beatIndex <= #GLITCH_BEATS and g >= GLITCH_BEATS[beatIndex] do
+			beatIndex += 1
+			beat(power)
 		end
-		if now >= snapYawUntil then
-			snapYaw = 0
-			if math.random() < 0.015 + 0.03 * progress then
-				snapYaw = (if math.random() < 0.5 then -1 else 1) * (0.8 + math.random() * 1.2)
-				snapYawUntil = now + 0.06 + math.random() * 0.08
+		if beatUntil > 0 and now >= beatUntil then
+			beatUntil = 0
+			snap = nil
+			showGhosts(0)
+		end
+		if beatUntil == 0 and not hushed then
+			aura.OutlineColor = GLITCH.Main
+			aura.OutlineTransparency = 1 - 0.6 * power
+			light.Brightness = 0.4 + 1.6 * power
+			drawFace((headEntry and headEntry.reached or 0) * (0.7 + 0.15 * math.noise(g * 3, 0.7)))
+		end
+
+		-- IN PIEDI: i blocchetti vanno a fargli una corona sopra la testa, uno alla volta
+		if not crowned and g >= GLITCH_PHASES.Head + 0.8 then
+			crowned = true
+			swarm:ring(1.7 * size, 1.4 * size, 0.12)
+		end
+
+		-- IL SILENZIO: luci quasi spente, niente suoni, immobile
+		if not hushed and g >= GLITCH_PHASES.Rise then
+			hushed = true
+			stage:roomDim(0.92, 0.5)
+			pcall(function() tween(stage.glitchLoop, 0.4, { Volume = 0.03 }) end)
+			pcall(function() tween(stage.glitchStatic, 0.4, { Volume = 0 }) end)
+			pcall(function() body.scream:Stop() end)
+			pcall(function() tween(stage.grade, 0.5, { Saturation = -1, Contrast = 0.6 }) end)
+			tween(light, 0.5, { Brightness = 0 })
+			for _, emitter in ipairs(statics) do
+				emitter.Enabled = false
 			end
 		end
 
-		-- L'urlo si inceppa: riparte da un punto a caso, a una velocità a caso
-		if now >= nextScream and now - startedAt < GLITCH_SPAN - 0.8 then
-			nextScream = now + 0.4 + math.random() * (1.1 - 0.7 * progress)
+		-- L'URLO: tutto riparte insieme
+		if not released and g >= GLITCH_PHASES.Hush then
+			released = true
+			stage:flash(GLITCH.Main, 0.25, 0.7)
+			pcall(function() stage:glitchScreen(0.4, 1) end)
+			pcall(function() stage:fovPunch(14, 0.8) end)
+			shake(10, 16, 0, 1.2)
+			stage:roomBurst(0.3)
+			task.delay(0.35, function()
+				if not stage.done then stage:roomDim(0.35, 0.8) end
+			end)
+			pcall(function() tween(stage.glitchLoop, 0.3, { Volume = 0.6 }) end)
+			pcall(function() tween(stage.glitchStatic, 0.3, { Volume = 0.3 }) end)
+			pcall(function() tween(stage.grade, 0.6, { Saturation = -0.4, Contrast = 0.4 }) end)
 			pcall(function()
 				local scream = body.scream
-				scream.PlaybackSpeed = 0.45 + math.random() * 0.5
-				scream.TimePosition = math.random() * math.max(scream.TimeLength - 0.3, 0.1)
+				scream.PlaybackSpeed = 0.5
+				scream.Volume = 3
+				scream.TimePosition = 0
 				scream:Play()
 			end)
+			light.Brightness = 5
+			tween(light, 1, { Brightness = 1.5 })
+			for _, emitter in ipairs(statics) do
+				emitter.Enabled = true
+				emitter:Emit(12)
+			end
+			drawFace(1)
+			-- La corona si apre di colpo e si richiude; un'onda corre sul pavimento
+			swarm:pulse(3, 0.25)
+			pcall(function() stage:ring(2 * size, 30 * size, 0.9, false) end)
 		end
 	end
 
-	-- Barcolla per la stanza e torna dov'era alla fine; mai in aria
+	-- Barcolla per la stanza solo mentre lotta in piedi (dopo le ginocchia, prima di alzarsi);
+	-- mai in aria. A un colpo può sparire di lato per un attimo
 	function fx.offset()
 		local now = os.clock()
-		local elapsed = now - startedAt
-		local envelope = smoothstep(elapsed / 1.2) * (1 - smoothstep((elapsed - (GLITCH_SPAN - 1.8)) / 1.8))
-		local wander = Vector3.new(math.noise(elapsed * 0.3, 11.3), 0, math.noise(elapsed * 0.3, 27.1)) * 8 * size * envelope
+		local g = now - startedAt
+		local envelope = smoothstep((g - 3.0) / 0.8) * (1 - smoothstep((g - 9.0) / 0.8))
+		local wander = Vector3.new(math.noise(g * 0.35, 11.3), 0, math.noise(g * 0.35, 27.1)) * 7 * size * envelope
 		if now < blinkUntil then
 			wander += blinkOffset
 		end
-		local yaw = math.noise(elapsed * 0.45, 5.5) * 2.6 * envelope + (if now < snapYawUntil then snapYaw else 0)
-		return wander, CFrame.Angles(0, yaw, 0)
+		return wander, CFrame.Angles(0, math.noise(g * 0.45, 5.5) * 1.6 * envelope, 0)
 	end
 
-	-- Il tempo della posa: ogni tanto si blocca per qualche frame, o salta avanti e indietro
-	local frozenAt, frozenUntil, skip, skipUntil = nil, 0, 0, 0
+	-- Il tempo della posa: si ferma al colpo e a ogni scatto, se no scorre liscio
 	function fx.poseTime(elapsed)
-		local now = os.clock()
-		if now - startedAt > GLITCH_SPAN then return elapsed end
-		if frozenAt and now < frozenUntil then return frozenAt end
-		frozenAt = nil
-		local shifted = elapsed + (if now < skipUntil then skip else 0)
-		if math.random() < 0.01 + 0.045 * fx.power then
-			frozenAt = shifted
-			frozenUntil = now + 0.05 + math.random() * 0.15
+		if os.clock() < frozenUntil then
+			frozenAt = frozenAt or elapsed
 			return frozenAt
 		end
-		if now >= skipUntil and math.random() < 0.006 + 0.02 * fx.power then
-			skip = randomSigned(0.4) - 0.05
-			skipUntil = now + 0.06 + math.random() * 0.1
-		end
-		return shifted
+		frozenAt = nil
+		return elapsed
 	end
 
-	-- Una parte del corpo scatta di traverso per un paio di frame, a volte due insieme
-	local snaps = {}
+	-- A ogni scatto una parte del corpo è storta per la durata del colpo
 	function fx.snapJoints(frame)
-		local now = os.clock()
-		if now - startedAt > GLITCH_SPAN then return end
-		for index = #snaps, 1, -1 do
-			if now >= snaps[index].untilAt then
-				table.remove(snaps, index)
-			end
-		end
-		if #snaps < 2 and math.random() < 0.04 + 0.12 * fx.power then
-			table.insert(snaps, {
-				name     = jointNames[math.random(#jointNames)],
-				rotation = CFrame.Angles(randomSigned(0.9), randomSigned(0.9), randomSigned(0.9)),
-				untilAt  = now + 0.04 + math.random() * 0.1,
-			})
-		end
-		for _, snap in ipairs(snaps) do
-			if frame[snap.name] then
-				frame[snap.name] *= snap.rotation
-			end
+		if snap and frame[snap.name] then
+			frame[snap.name] *= snap.rotation
 		end
 	end
 
-	--[[ Finito: resta un Glitch. La pelle e il colore restano, i quadretti continuano a strisciare,
-	     i blocchetti gli girano attorno al petto, e dieci volte al secondo può sfarfallare, lasciare
-	     i fantasmi o scattare di lato, anche mentre corre. ]]
+	--[[ Finito: resta un Glitch. Pelle e colore del Glitch, la faccia rotta, la corona che gli gira
+	     sopra la testa a scatti, i quadrati che si accendono. Ogni due-quattro secondi e mezzo, anche
+	     mentre corre, un colpo di glitch: scatta di lato, una fetta scivola via, la faccia si
+	     accende. Tra un colpo e l'altro è calmo, così si vede bene cos'è diventato. ]]
 	function fx.settle()
 		for _, entry in ipairs(parts) do
 			if entry.part.Parent then
@@ -2641,40 +2929,49 @@ local function glitchBody(model, stage, jointNames, Ritual)
 		for _, entry in ipairs(decals) do
 			entry.decal.Color3 = GLITCH.Cyan
 		end
-		aura.FillTransparency = 0.85
-		aura.OutlineTransparency = 0.35
+		aura.OutlineColor = GLITCH.Main
+		aura.OutlineTransparency = 0.45
 		for _, emitter in ipairs(statics) do
-			emitter.Rate = 6
+			emitter.Enabled = true
+			emitter.Rate = 5
 		end
 		showGhosts(0)
-		swarm:orbit(2.6 * size)
+		if not crowned then
+			crowned = true
+			swarm:ring(1.7 * size, 1.4 * size, 0.05)
+		end
 
-		local nextIdle, jitterUntil = 0, 0
+		local nextIdle, nextBeat, idleBeatUntil = 0, os.clock() + 2, 0
 		local lastFrame = os.clock()
 		table.insert(connections, RunService.Heartbeat:Connect(function()
 			local now = os.clock()
-			if model.Parent and lightHost.Parent then
-				swarm:step(math.min(now - lastFrame, 0.1), lightHost.CFrame)
+			if model.Parent then
+				swarm:step(math.min(now - lastFrame, 0.1), crownCenter())
 			end
 			lastFrame = now
-			if state.jitter and now >= jitterUntil then
-				state.jitter = nil
-			end
 			if now < nextIdle or not model.Parent then return end
 			nextIdle = now + 0.1
 
-			Ritual.Glitch.Crawl(allSkins, 12, studs)
-			if math.random() < 0.2 then
-				local roll = math.random()
-				aura.OutlineColor = if roll < 0.4 then GLITCH.Main elseif roll < 0.7 then GLITCH.Cyan else GLITCH.Red
-			end
-			aura.FillTransparency = if math.random() < 0.05 then 0.4 else 0.85
-			light.Brightness = 1 + math.random()
-			showGhosts(0.12)
-			if not state.paused and math.random() < 0.04 then
-				state.jitter = CFrame.new(randomSigned(1.2) * size, 0, randomSigned(0.6) * size)
-					* CFrame.Angles(0, randomSigned(0.5), 0)
-				jitterUntil = now + 0.04 + math.random() * 0.05
+			Ritual.Glitch.Crawl(allSkins, 4, studs)
+			light.Brightness = 1.3 + 0.4 * math.noise(now, 0.2)
+
+			if now >= nextBeat then
+				nextBeat = now + 2.5 + math.random() * 2
+				idleBeatUntil = now + 0.12
+				aura.OutlineColor = if math.random() < 0.5 then GLITCH.Cyan else GLITCH.Red
+				showGhosts(1)
+				drawFace(1)
+				if not state.paused then
+					state.jitter = CFrame.new(randomSigned(1.2) * size, 0, randomSigned(0.6) * size)
+						* CFrame.Angles(0, randomSigned(0.5), 0)
+				end
+			elseif idleBeatUntil > 0 and now >= idleBeatUntil then
+				idleBeatUntil = 0
+				aura.OutlineColor = GLITCH.Main
+				showGhosts(0)
+				state.jitter = nil
+			else
+				drawFace(0.65 + 0.1 * math.noise(now * 3, 0.9))
 			end
 		end))
 	end
@@ -2741,9 +3038,7 @@ local function honchoBody(mode, T, Ritual)
 		-- saltano a coppie: la destra, la sinistra, il petto, poi tutte
 		SnapFirst  = "RightHand",
 		SnapGroups = { { "RightHand", "RightUpperWrist" }, { "LeftHand", "LeftUpperWrist" }, { "UpperTorso" } },
-		-- V2: il sigillo si accende sopra la sua testa; il fulmine del glitch lo prende al petto; il
-		-- Glitch vero che gli appare sopra è alto come lui
-		SigilHeight = state.pivotHeight + state.headHeight + 4.5 * SETTINGS.Size,
+		-- Il fulmine del glitch lo prende al petto; il Glitch vero che gli appare sopra è alto come lui
 		ChestHeight = (state.pivotHeight + state.headHeight * 0.55) / SETTINGS.Size,
 		Height      = state.pivotHeight + state.headHeight + 0.8 * SETTINGS.Size,
 	}

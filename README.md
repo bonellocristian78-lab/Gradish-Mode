@@ -181,7 +181,7 @@ ritual on your screen cannot save you from them, so it does not try.
 | `Guiding` | blue | the entity is dragged down and gone |
 | `Curious` | yellow | the same, in yellow |
 | `Fail` | blue, then red | the entity tears the chains, breaks the crucifix, lands and carries on |
-| `Glitch` | blue, then flickering violet | Penguin's crucifix being eaten by DOORS' Glitch: its black-square skin crawls over it, its red and cyan static lights up, Glitch blocks orbit it, it jumps and leaves red and cyan ghosts. Always fails, and the screen tears. On Honcho V2 what is left of it hits him and he transforms |
+| `Glitch` | blue, then violet | Penguin's crucifix being eaten by DOORS' Glitch from the top: its upper half is made of Glitch pixels, aligned to the crucifix, that pop out a step or three and snap back; a cyan scan line sweeps it. Every second or two a short, clean glitch hit (the grip jumps, red and cyan ghosts). Always fails; its pixels blow apart. On Honcho V2 they slam into him and he transforms |
 
 Any crucifix also fails on an entity that resists — Speedster Purpleist always,
 Rose Hell 85% of the time. Honcho's fail has its own animation, also shipped as
@@ -200,23 +200,29 @@ loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab
 Honcho with the crucifixion rebuilt. `Honcho.lua` is still there, unchanged. Every
 setting works the same way (`_G.Speed`, `_G.Size`, `_G.Rebounds`...).
 
-- Every animation lasts two seconds longer. A column of light lifts him and he
-  hangs in it with his arms open; the chains arrive one at a time and sway; a
-  sigil lights up above him and a halo turns behind the crucifix. At the end he
-  pulls himself half out of the hole and everything goes quiet, as if he made it
-  — then the last pull, and a column of light rises from the closing hole.
+- Every animation lasts two seconds longer. The light lifts him and he hangs in
+  it with his arms open; the chains arrive one at a time and sway; a halo turns
+  behind the crucifix. At the end he pulls himself half out of the hole and
+  everything goes quiet, as if he made it — then the last pull.
 - The fail is two seconds longer too: he gathers himself before the last tear.
 - The jumpscare and the sink at the end of the run last two seconds longer.
-- With the **Glitch** crucifix he breaks free, lands, and what is left of the
-  crucifix — a knot of Glitch blocks — slams into him while DOORS' real Glitch
-  (`ReplicatedStorage.Entities.Glitch`) flashes over his body. For sixteen seconds
-  he goes mad on the floor — he clutches his head, convulses, staggers around the
-  room, his pose freezes and skips like a broken video — while DOORS' Glitch look
-  climbs him from the feet up: its dark violet, its black-square skin crawling,
-  its white, red and cyan static. Glitch blocks peel off him, slices of his body
-  shift sideways in red and cyan, the room's lights go wild and the Glitch sound
-  stutters. Then he gets up as a Glitch, blocks orbiting him, and hunts you
-  again, 25% faster.
+- With the **Glitch** crucifix he breaks free and lands; the crucifix's pixels
+  slam into him and DOORS' real Glitch (`ReplicatedStorage.Entities.Glitch`)
+  appears over him for an instant. Then sixteen seconds in clear beats:
+
+  | seconds | what happens |
+  |---|---|
+  | 0 – 1 | the hit arches him and time stops for half a second |
+  | 1 – 5.4 | on his knees he fights it; DOORS' Glitch look climbs him like a wave, feet to chest |
+  | 5.4 – 10.2 | he clutches his head as the wave reaches his face, which becomes a broken screen |
+  | 10.2 – 13.5 | he gets up with his arms open while a crown of Glitch blocks assembles over his head, one block at a time |
+  | 13.5 – 14.3 | silence: lights almost out, no sound, he does not move |
+  | 14.3 – 16 | he roars and everything comes back |
+
+  The glitch hits land on a beat that speeds up like a heartbeat — the pose
+  freezes, a slice of him slides sideways in red and cyan, one joint snaps —
+  with calm in between. Blocks peel off only where the wave is passing. Then he
+  hunts you again as a Glitch, crown and broken face included, 25% faster.
 
 The three animations are also shipped for Studio's Animation Editor:
 `HonchoV2Crucifix.rbxmx`, `HonchoV2CrucifixFail.rbxmx`,
