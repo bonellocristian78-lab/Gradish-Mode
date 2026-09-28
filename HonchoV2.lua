@@ -2476,18 +2476,23 @@ local function glitchBody(model, stage, jointNames, Ritual)
 	local studs = 2 * size -- un riquadro della pelle ogni 2 stud, come il Glitch (3 su 15 di altezza)
 	local kit = Ritual.Glitch
 
-	-- Le parti visibili, dal basso in alto, ognuna con la sua pelle ancora invisibile
+	-- Le parti visibili, dal basso in alto, ognuna con la sua pelle ancora invisibile. La pelle va
+	-- solo sulle parti grandi e sulle quattro facce che si vedono stando in piedi davanti a lui:
+	-- sui pezzetti (anelli, fibbie, polsini) basta il colore. Da 288 Texture a 148
+	local SKIN_FACES = { Enum.NormalId.Front, Enum.NormalId.Back, Enum.NormalId.Left, Enum.NormalId.Right }
 	local boxCFrame, boxSize = model:GetBoundingBox()
 	local bottom = boxCFrame.Position.Y - boxSize.Y / 2
 	local parts, allSkins = {}, {}
 	for _, part in ipairs(model:GetDescendants()) do
 		if part:IsA("BasePart") and part.Transparency < 1 then
-			local skin = kit.Skin(part, studs)
+			local big = math.max(part.Size.X, part.Size.Y, part.Size.Z) >= 0.9 * size
+			local skin = if big then kit.Skin(part, studs, SKIN_FACES) else {}
 			for _, texture in ipairs(skin) do
 				table.insert(allSkins, texture)
 			end
 			table.insert(parts, {
 				part   = part,
+				big    = big,
 				from   = part.Color,
 				skin   = skin,
 				height = math.clamp((part.Position.Y - bottom) / math.max(boxSize.Y, 1), 0, 1),
@@ -2628,9 +2633,10 @@ local function glitchBody(model, stage, jointNames, Ritual)
 	local ghosts = {}
 	for index, colour in ipairs({ GLITCH.Red, GLITCH.Cyan }) do
 		local ghost = { side = if index == 1 then -1 else 1, list = {}, sources = {}, heights = {}, cframes = {}, shown = false }
+		-- Solo le parti grandi: la sagoma si legge uguale, e sono la metà dei cloni da creare e muovere
 		for _, entry in ipairs(parts) do
 			entry.part.Archivable = true
-			local copy = entry.part:Clone()
+			local copy = if entry.big then entry.part:Clone() else nil
 			if copy then
 				copy:ClearAllChildren()
 				copy.Anchored = true

@@ -511,10 +511,11 @@ local GLITCH_STATIC = ColorSequence.new({
 	ColorSequenceKeypoint.new(1, WHITE),
 })
 
--- La pelle del Glitch su tutte e sei le facce, invisibile finché non la si mostra
-local function glitchSkin(part, studs)
+-- La pelle del Glitch, invisibile finché non la si mostra. Su tutte e sei le facce, o solo su
+-- quelle in faces: ogni Texture è un disegno in più per la scheda video
+local function glitchSkin(part, studs, faces)
 	local textures = {}
-	for _, face in ipairs(Enum.NormalId:GetEnumItems()) do
+	for _, face in ipairs(faces or Enum.NormalId:GetEnumItems()) do
 		local texture = Instance.new("Texture")
 		texture.Name = "GlitchSkin"
 		texture.Texture = "rbxassetid://" .. TEXTURES.GlitchSkin
@@ -589,7 +590,8 @@ function Ritual.GlitchSwarm(parent, count, size, aligned, neonEvery)
 		cube.Parent = parent
 		table.insert(self.cubes, {
 			part     = cube,
-			skin     = if neon then {} else glitchSkin(cube, edge * 1.5),
+			-- Sotto i 3 decimi di stud i quadretti non si vedono: niente pelle, sei Texture in meno
+			skin     = if neon or edge < 0.3 then {} else glitchSkin(cube, edge * 1.5),
 			neon     = neon,
 			angle    = math.random() * math.pi * 2,
 			turn     = (1.2 + math.random() * 2.2) * (if math.random() < 0.5 then -1 else 1),

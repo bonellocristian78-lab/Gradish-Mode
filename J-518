@@ -726,7 +726,8 @@ local function buildPortal(position, geometry)
 	spot.Angle = 75
 	spot.Range = math.min(height + 8, 60)
 	spot.Brightness = 0
-	spot.Shadows = true
+	-- Le ombre di un faro costano molto più della luce: senza, niente scatti
+	spot.Shadows = false
 	spot.Parent = mouth
 
 	local light = Instance.new("PointLight")
@@ -764,9 +765,15 @@ local function stepPortal(portal, deltaTime, now)
 	local size = math.max(CONFIG.PortalSize * open, 0.05)
 	local position = portal.position
 
-	portal.mouth.Size = Vector3.new(size, 0.02, size)
-	portal.void.BackgroundTransparency = 1 - fade
-	portal.edge.ImageTransparency = 1 - fade
+	-- Misure e trasparenze si riscrivono solo mentre il portale si apre o si chiude: quando la
+	-- molla è ferma restano uguali, e riscriverle a ogni frame costa per niente
+	local resized = math.abs(open - (portal.drawnOpen or -1)) > 0.0005
+	if resized then
+		portal.drawnOpen = open
+		portal.mouth.Size = Vector3.new(size, 0.02, size)
+		portal.void.BackgroundTransparency = 1 - fade
+		portal.edge.ImageTransparency = 1 - fade
+	end
 
 	-- La massa respira, e a ogni battito si gonfia verso il basso
 	local breathe = 0.12 + 0.03 * math.sin(now * 1.3) + 0.12 * portal.beat
@@ -776,11 +783,13 @@ local function stepPortal(portal, deltaTime, now)
 	for index, layer in ipairs(portal.layers) do
 		local spec = layer.spec
 		local wobble = Vector3.new(math.noise(now * 0.4, index * 3.1), 0, math.noise(now * 0.4, index * 7.3)) * 0.6 * open
-		local diameter = math.max(size * spec.scale, 0.05)
-		layer.part.Size = Vector3.new(diameter, 0.02, diameter)
+		if resized then
+			local diameter = math.max(size * spec.scale, 0.05)
+			layer.part.Size = Vector3.new(diameter, 0.02, diameter)
+			layer.image.ImageTransparency = spec.transparency + (1 - spec.transparency) * (1 - fade)
+		end
 		layer.part.CFrame = CFrame.new(position - Vector3.new(0, spec.depth * math.min(open, 1.2), 0) + wobble)
 		layer.image.Rotation = (layer.image.Rotation + spec.speed * portal.shownSpin * deltaTime) % 360
-		layer.image.ImageTransparency = spec.transparency + (1 - spec.transparency) * (1 - fade)
 	end
 
 	for _, tendril in ipairs(portal.tendrils) do
@@ -793,19 +802,29 @@ local function stepPortal(portal, deltaTime, now)
 		)
 		tendril.beam.CurveSize0 = math.noise(t * 1.3, 2.2) * 4 * open
 		tendril.beam.CurveSize1 = math.noise(t * 1.3, 6.6) * 3 * open
-		tendril.beam.Width0 = 0.9 * fade
-		tendril.beam.Width1 = 0.15 * fade
+		if resized then
+			tendril.beam.Width0 = 0.9 * fade
+			tendril.beam.Width1 = 0.15 * fade
+		end
 	end
 
-	-- La luce trema piano, non a scatti
-	local glow = portal.shownGlow * (1 - 0.25 * math.max(math.noise(now * 6, 0.5), 0) * 2)
-	portal.spot.Brightness = glow * 0.9
-	portal.light.Brightness = glow * 0.5
+	-- Le luci trenta volte al secondo, come quelle della stanza. Tremano piano, non a scatti
+	if now >= (portal.nextLight or 0) then
+		portal.nextLight = now + 1 / 30
+		local glow = portal.shownGlow * (1 - 0.25 * math.max(math.noise(now * 6, 0.5), 0) * 2)
+		portal.spot.Brightness = glow * 0.9
+		portal.light.Brightness = glow * 0.5
+	end
 	local shaft = math.clamp(portal.shownGlow / 6, 0, 1) * math.min(open, 1)
 	for _, entry in ipairs(portal.shafts) do
-		local width = math.max(size * entry.width, 0.05)
-		entry.part.Size = Vector3.new(portal.height, width, width)
-		entry.part.Transparency = 1 - (entry.strength + entry.strength * 0.8 * portal.beat) * shaft
+		if resized then
+			local width = math.max(size * entry.width, 0.05)
+			entry.part.Size = Vector3.new(portal.height, width, width)
+		end
+		local transparency = 1 - (entry.strength + entry.strength * 0.8 * portal.beat) * shaft
+		if math.abs(transparency - entry.part.Transparency) > 0.002 then
+			entry.part.Transparency = transparency
+		end
 	end
 end
 
@@ -866,17 +885,28 @@ local function startAtmosphere(room, portal)
 		end)
 	end)
 
+	-- Le luci della stanza si riscrivono trenta volte al secondo, non a ogni frame: ogni cambio di
+	-- una luce fa ricalcolare l'illuminazione, e a 30 il tremito sembra uguale. Il colore solo
+	-- quando cambia davvero
+	local nextLights, lastCold = 0, -1
 	track(RunService.RenderStepped:Connect(function(deltaTime)
 		local now = os.clock()
 		mood.pulse = math.max(mood.pulse - deltaTime * 2.5, 0)
 		mood.surge += ((if now < mood.surgeUntil then 1 else 0) - mood.surge) * (1 - math.exp(-10 * deltaTime))
 
-		for _, entry in ipairs(lights) do
-			local light = entry.light
-			if light.Parent then
-				local wave = math.clamp(math.noise(now * 9, entry.seed) * 1.6 + 0.35, 0, 1)
-				light.Brightness = entry.brightness * (1 - 0.7 * mood.dim) * (1 - 0.75 * mood.surge * wave) * (1 - 0.3 * mood.pulse)
-				light.Color = entry.colour:Lerp(COLD, 0.5 * mood.cold)
+		if now >= nextLights then
+			nextLights = now + 1 / 30
+			local recolour = math.abs(mood.cold - lastCold) > 0.01
+			if recolour then lastCold = mood.cold end
+			for _, entry in ipairs(lights) do
+				local light = entry.light
+				if light.Parent then
+					local wave = math.clamp(math.noise(now * 9, entry.seed) * 1.6 + 0.35, 0, 1)
+					light.Brightness = entry.brightness * (1 - 0.7 * mood.dim) * (1 - 0.75 * mood.surge * wave) * (1 - 0.3 * mood.pulse)
+					if recolour then
+						light.Color = entry.colour:Lerp(COLD, 0.5 * mood.cold)
+					end
+				end
 			end
 		end
 
