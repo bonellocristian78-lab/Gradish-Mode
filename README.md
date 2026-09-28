@@ -24,6 +24,7 @@ mod rather than playing it.
 | What | Loadstring |
 |---|---|
 | **The mod** | `.../MainScript` |
+| DOORS optimizer (max graphics, less lag) | `.../DoorsOptimizer` |
 
 ### Build (tools — not for players)
 
@@ -229,6 +230,39 @@ The three animations are also shipped for Studio's Animation Editor:
 `HonchoV2CrucifixGlitch.rbxmx`. They hold the keyed poses; the trembling, the
 glitch stutter and the wandering are added by the script.
 
+## DOORS optimizer
+
+```lua
+loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/DoorsOptimizer"))()
+```
+
+For DOORS itself, with or without the mod: run it in a match and turn graphics
+up to 10. It lowers nothing you can see; it takes away work the GPU does for
+things you can't. Measured on the DOORS dump (7 rooms loaded, the player in 5):
+
+| What costs | In the dump | With the optimizer |
+|---|---|---|
+| Lights casting shadows — with DOORS' Future lighting each one redraws the scene | 43 | the 8 nearest the camera: the room you're in keeps all of its own |
+| Fill lights (`LowQualityDisable`) | 78 | only the ones within 60 studs |
+| Parts casting shadows | 952 | 827 — knobs, wall strips, ceiling details, plant dirt, plates and papers stop |
+| Rooms drawn | 7 | the one you're in, 2 behind and 2 ahead |
+
+- **F8** switches it off and on, so you can compare. **F7** shows or hides the
+  FPS panel. Running it again replaces the old copy.
+- It only changes `Light.Shadows`, `BasePart.CastShadow`,
+  `LocalTransparencyModifier` and `Enabled` on the `LowQualityDisable` lights —
+  the dump shows DOORS' own scripts never write the first three on rooms, and
+  set the fourth only once, when graphics are low. Far rooms are hidden on your
+  screen only: they stay solid and in place. F8 puts everything back.
+- Room loads are spread over several frames, so there is no spike when a door
+  opens. `setfpscap`, if your executor has it, lifts the 60 FPS cap to 240.
+- Settings, before the loadstring:
+  `_G.DoorsOptimizer = { ShadowLights = 6, RoomsBehind = 3, FpsCap = 0 }`
+  (every one is listed at the top of the file).
+- It cannot make Roblox draw faster than your GPU can. If a single room at
+  graphics 10 is already too much, it helps but will not fix it — F8 shows how
+  much it gains on your machine.
+
 ## The crucifixes
 
 | Variant | Colour | Beats | Where |
@@ -310,6 +344,7 @@ Over 400 simulated seeds: no spacing violations, about 12 encounters per run.
 | `HonchoCrucifixFail.rbxmx` | Honcho's fail animation as a KeyframeSequence, for Studio |
 | `HonchoV2Crucifix*.rbxmx` | Honcho V2's three crucifix animations (banish, fail, glitch), for Studio |
 | `GradishDev` | the console |
+| `DoorsOptimizer` | the DOORS optimizer |
 | `GradishCheck` | the config report |
 | `ImagesA/` | one file per entity saying where its picture comes from |
 | `*.rbxm` | the models |

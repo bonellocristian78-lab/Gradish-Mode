@@ -1,0 +1,578 @@
+--[[
+================================================================================
+
+        D O O R S   O P T I M I Z E R
+
+        Per giocare a DOORS con la grafica al massimo senza scatti. Non abbassa
+        niente di quello che si vede: toglie il lavoro che la scheda video fa
+        per cose che non vedi.
+
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/DoorsOptimizer"))()
+
+        F8  acceso / spento (per confrontare gli FPS)
+        F7  mostra / nasconde il riquadro con gli FPS
+
+        COME L'HO CAPITO
+        ----------------
+        Dal dump di DOORS: 7 stanze caricate insieme (dalla 1 alla 7), il
+        giocatore era nella 5. In quelle 7 stanze:
+          - 43 luci con le ombre accese, da 6 a 9 per stanza: quasi tutte
+            faretti (SpotLight) delle lampade del soffitto
+            (Light_Fixtures.LightStand.LightFixture).
+            Con l'illuminazione Future di DOORS, ogni luce con le ombre deve
+            ridisegnare la scena per conto suo: sono il costo più grosso.
+          - 78 luci di riempimento (PointLight con il tag LowQualityDisable):
+            DOORS stesso le spegne quando abbassi la grafica.
+          - 952 parti che fanno ombra; 125 sono pomelli (49), listelli
+            sottili lungo i muri (Wall_Strip, 39), decorazioni del soffitto,
+            terra nei vasi, targhette, fogli: ombre che non si vedono.
+          - Le stanze vecchie restano caricate: con il giocatore alla 5 c'erano
+            ancora la 1, la 2, la 3 e la 4.
+
+        COSA FA
+        -------
+        1. OMBRE DELLE LUCI. Tengono le ombre solo le luci più vicine alla
+           camera (ShadowLights, di base 8), entro ShadowDistance. Le altre le
+           spengono le ombre, non la luce: la stanza resta illuminata uguale.
+           Una luce che le ha già tiene il posto finché non è parecchio più
+           lontana di un'altra, così le ombre non saltano avanti e indietro.
+        2. OMBRE DEI PEZZI PICCOLI. Le parti sotto SmallSize stud, e quelle
+           sottili (il lato medio sotto ThinSize: listelli, bastoni, bordi),
+           non fanno più ombra.
+        3. LUCI DI RIEMPIMENTO. Le luci LowQualityDisable si accendono solo
+           entro FillLightDistance dalla camera.
+        4. STANZE LONTANE. Le stanze più indietro di RoomsBehind (o più avanti
+           di RoomsAhead) diventano invisibili, solo sul tuo schermo
+           (LocalTransparencyModifier): non si toccano né si spostano, i
+           muri restano solidi e gli script di DOORS non se ne accorgono.
+           Tornano visibili appena ti avvicini.
+        5. NESSUN PICCO. Quando DOORS carica una stanza (da 150 a 400 pezzi)
+           il lavoro si fa un po' per frame (WorkPerFrame), non tutto insieme.
+        6. FPS. Con setfpscap (se l'executor ce l'ha) il limite dei 60 sale a
+           FpsCap.
+
+        PERCHÉ NON DÀ FASTIDIO A DOORS
+        -----------------------------
+        Il dump mostra cosa toccano gli script di DOORS: le luci delle stanze
+        le accendono, spengono e fanno sfarfallare con Brightness ed Enabled
+        (Module_Events: flicker, shatter, toggle), mai con Shadows. CastShadow lo cambiano
+        solo sul personaggio. LocalTransparencyModifier solo sui personaggi.
+        Questo script usa proprio quelle tre proprietà, più Enabled sulle sole
+        luci LowQualityDisable, che DOORS tocca solo con la grafica bassa.
+        Con F8 (o rieseguendolo) rimette tutto com'era.
+
+        COSA NON PUÒ FARE
+        -----------------
+        Uno script non rende più veloce il motore di Roblox: se la scheda
+        video non regge nemmeno una stanza sola con la grafica al massimo,
+        questo aiuta ma non fa miracoli. Il riquadro FPS serve a vederlo: F8
+        per spegnerlo e riaccenderlo, e guardi la differenza.
+
+        IMPOSTAZIONI SENZA TOCCARE LO SCRIPT
+        ------------------------------------
+            _G.DoorsOptimizer = { ShadowLights = 4, RoomsBehind = 3 }
+            loadstring(game:HttpGet(".../DoorsOptimizer"))()
+
+================================================================================
+]]
+
+---====== IMPOSTAZIONI ======---
+
+local CONFIG = {
+	ToggleKey         = Enum.KeyCode.F8,
+	StatsKey          = Enum.KeyCode.F7,  -- non F9: F9 apre la console di Roblox
+	ShowStats         = true,
+
+	FpsCap            = 240,   -- 0 = non toccare il limite degli FPS
+
+	ShadowLights      = 8,     -- quante luci vicine tengono le ombre (una stanza ne ha da 6 a 9)
+	ShadowDistance    = 80,    -- oltre questa distanza nessuna luce fa ombra
+	ShadowHysteresis  = 0.8,   -- una luce con le ombre conta come se fosse all'80% della sua distanza
+
+	SmallShadows      = true,
+	SmallSize         = 2,     -- stud: sotto, niente ombra
+	ThinSize          = 0.6,   -- stud: se il lato medio è sotto, niente ombra
+
+	FillLightDistance = 60,    -- le luci LowQualityDisable accese solo entro questa distanza
+
+	HideRooms         = true,
+	RoomsBehind       = 2,     -- stanze visibili dietro quella in cui sei
+	RoomsAhead        = 2,     -- e davanti
+
+	UpdateInterval    = 0.25,  -- secondi tra un controllo delle luci e il successivo
+	WorkPerFrame      = 400,   -- istanze trattate al massimo per frame
+}
+
+local override = _G.DoorsOptimizer
+_G.DoorsOptimizer = nil
+if type(override) == "table" then
+	for key, value in pairs(override) do
+		if CONFIG[key] ~= nil and type(CONFIG[key]) == type(value) then
+			CONFIG[key] = value
+		else
+			warn(("[Optimizer] impostazione %s ignorata"):format(tostring(key)))
+		end
+	end
+end
+
+---====== SERVIZI ======---
+
+local Players           = game:GetService("Players")
+local RunService        = game:GetService("RunService")
+local UserInputService  = game:GetService("UserInputService")
+local CollectionService = game:GetService("CollectionService")
+
+local LocalPlayer = Players.LocalPlayer
+
+local CurrentRooms = workspace:FindFirstChild("CurrentRooms")
+if not CurrentRooms then
+	warn("[Optimizer] non sei in una partita di DOORS: manca workspace.CurrentRooms")
+	return
+end
+
+-- Una seconda esecuzione toglie la prima e rimette tutto com'era
+if _G.DoorsOptimizerStop then
+	pcall(_G.DoorsOptimizerStop)
+end
+
+---====== STATO ======---
+--[[ Per ogni stanza si tiene l'elenco di quello che interessa, riempito un po' per frame:
+       visuals  parti, decal e texture (per renderla invisibile)
+       lights   le luci con le ombre accese all'origine
+       fills    le luci LowQualityDisable
+     Tutto quello che lo script cambia se lo ricorda, per rimetterlo a posto. ]]
+
+local rooms = {}                                      -- Model -> record
+local originalCast = setmetatable({}, { __mode = "k" }) -- parte -> true se l'abbiamo tolta noi
+local shadowLights = {}                               -- luce -> record
+local fillLights = {}                                 -- luce -> record
+local queue, queueHead = {}, 1                        -- istanze da guardare
+local jobs = {}                                       -- lavori a pezzi (nascondere e mostrare stanze)
+local connections = {}
+local active = true
+local stats = { shadowOn = 0, shadowTotal = 0, fillOn = 0, fillTotal = 0, noShadow = 0, hidden = 0, rooms = 0 }
+
+local function track(connection)
+	table.insert(connections, connection)
+	return connection
+end
+
+---====== LE STANZE ======---
+
+local function roomNumber(model)
+	return tonumber(model.Name)
+end
+
+local function roomOf(instance)
+	local current = instance
+	while current and current.Parent ~= CurrentRooms do
+		current = current.Parent
+	end
+	return current and rooms[current]
+end
+
+-- Il lato medio di una parte: se è sottile, è un listello, un bastone, un bordo
+local function middleSide(size)
+	local a, b, c = size.X, size.Y, size.Z
+	if a > b then a, b = b, a end
+	if b > c then b, c = c, b end
+	if a > b then a, b = b, a end
+	return b, c
+end
+
+local function lightPosition(light)
+	local parent = light.Parent
+	if parent then
+		if parent:IsA("Attachment") then return parent.WorldPosition end
+		if parent:IsA("BasePart") then return parent.Position end
+	end
+	return nil
+end
+
+-- Guarda un'istanza appena arrivata in una stanza e la mette dove serve
+local function index(instance)
+	if not instance.Parent then return end
+	local room = roomOf(instance)
+	if not room then return end
+
+	if instance:IsA("BasePart") then
+		table.insert(room.visuals, instance)
+		if room.hidden then
+			instance.LocalTransparencyModifier = 1
+		end
+		if CONFIG.SmallShadows and active and instance.CastShadow and instance.Transparency < 1 then
+			local middle, longest = middleSide(instance.Size)
+			if longest < CONFIG.SmallSize or middle < CONFIG.ThinSize then
+				instance.CastShadow = false
+				originalCast[instance] = true
+				stats.noShadow += 1
+			end
+		end
+	elseif instance:IsA("Decal") then
+		table.insert(room.visuals, instance)
+		if room.hidden then
+			instance.LocalTransparencyModifier = 1
+		end
+	elseif instance:IsA("Light") and not (shadowLights[instance] or fillLights[instance]) then
+		-- Le LightRelated le spegne DOORS con Enabled (Module_Events): quelle non si toccano
+		if CollectionService:HasTag(instance, "LowQualityDisable") and not CollectionService:HasTag(instance, "LightRelated") then
+			fillLights[instance] = { room = room, wanted = instance.Enabled, wrote = nil }
+		elseif instance.Shadows then
+			shadowLights[instance] = { room = room, original = true, wrote = nil }
+		end
+	end
+end
+
+local function addRoom(model)
+	if rooms[model] or not model:IsA("Model") then return end
+	local record = { model = model, number = roomNumber(model), visuals = {}, hidden = false }
+	rooms[model] = record
+	for _, descendant in ipairs(model:GetDescendants()) do
+		table.insert(queue, descendant)
+	end
+	record.added = model.DescendantAdded:Connect(function(descendant)
+		table.insert(queue, descendant)
+	end)
+end
+
+local function removeRoom(model)
+	local record = rooms[model]
+	if not record then return end
+	record.added:Disconnect()
+	rooms[model] = nil
+	for light, entry in pairs(shadowLights) do
+		if entry.room == record then shadowLights[light] = nil end
+	end
+	for light, entry in pairs(fillLights) do
+		if entry.room == record then fillLights[light] = nil end
+	end
+end
+
+---====== VISIBILITÀ DELLE STANZE ======---
+
+-- Rende invisibile o visibile una stanza, a pezzi: un lavoro che la coda finisce nei frame dopo
+local function setRoomHidden(record, hidden)
+	if record.hidden == hidden then return end
+	record.hidden = hidden
+	table.insert(jobs, { list = record.visuals, at = 1, value = if hidden then 1 else 0, record = record, hidden = hidden })
+end
+
+-- Quali stanze si vedono: quella in cui sei e quelle vicine. Da morto (spettatore) tutte.
+-- CurrentRoom e Alive sono gli attributi che DOORS stesso mette sul giocatore
+local function refreshRooms()
+	local current = LocalPlayer:GetAttribute("CurrentRoom")
+	local knowsWhere = type(current) == "number" and LocalPlayer:GetAttribute("Alive") == true
+	for _, record in pairs(rooms) do
+		local hide = false
+		if active and CONFIG.HideRooms and knowsWhere and record.number then
+			hide = record.number < current - CONFIG.RoomsBehind or record.number > current + CONFIG.RoomsAhead
+		end
+		setRoomHidden(record, hide)
+	end
+end
+
+---====== LE LUCI ======---
+
+local candidates = {}
+
+local function updateLights()
+	local camera = workspace.CurrentCamera
+	if not camera then return end
+	local eye = camera.CFrame.Position
+
+	-- Le ombre: si ordinano le luci accese per distanza, e le prime ShadowLights le tengono
+	table.clear(candidates)
+	local total = 0
+	for light, entry in pairs(shadowLights) do
+		if not light.Parent then
+			shadowLights[light] = nil
+		else
+			total += 1
+			-- Se qualcun altro gli ha cambiato le ombre, quello è il nuovo valore giusto
+			if entry.wrote ~= nil and light.Shadows ~= entry.wrote then
+				entry.original = light.Shadows
+				entry.wrote = nil
+			end
+			local position = lightPosition(light)
+			if active and entry.original and position and light.Enabled and light.Brightness > 0.01 and not entry.room.hidden then
+				local distance = (position - eye).Magnitude
+				if distance <= CONFIG.ShadowDistance then
+					if light.Shadows then
+						distance *= CONFIG.ShadowHysteresis
+					end
+					table.insert(candidates, { light = light, distance = distance })
+				end
+			end
+		end
+	end
+	table.sort(candidates, function(a, b) return a.distance < b.distance end)
+
+	local keep = {}
+	for rank = 1, math.min(CONFIG.ShadowLights, #candidates) do
+		keep[candidates[rank].light] = true
+	end
+	local on = 0
+	for light, entry in pairs(shadowLights) do
+		local want = if active then keep[light] == true else entry.original
+		if light.Shadows ~= want then
+			light.Shadows = want
+		end
+		entry.wrote = if active then want else nil
+		if want then on += 1 end
+	end
+	stats.shadowOn, stats.shadowTotal = on, total
+
+	-- Le luci di riempimento: accese solo vicino
+	local fillOn, fillTotal = 0, 0
+	for light, entry in pairs(fillLights) do
+		if not light.Parent then
+			fillLights[light] = nil
+		else
+			fillTotal += 1
+			if entry.wrote ~= nil and light.Enabled ~= entry.wrote then
+				entry.wanted = light.Enabled
+			end
+			local position = lightPosition(light)
+			local near = position ~= nil and (position - eye).Magnitude <= CONFIG.FillLightDistance and not entry.room.hidden
+			local want = entry.wanted and (not active or near)
+			if light.Enabled ~= want then
+				light.Enabled = want
+			end
+			entry.wrote = if active then want else nil
+			if want then fillOn += 1 end
+		end
+	end
+	stats.fillOn, stats.fillTotal = fillOn, fillTotal
+end
+
+---====== IL LAVORO A PEZZI ======---
+
+local function work()
+	local budget = CONFIG.WorkPerFrame
+
+	-- Prima le stanze da nascondere o mostrare
+	while budget > 0 and #jobs > 0 do
+		local job = jobs[1]
+		if job.record.hidden ~= job.hidden then
+			-- È cambiato idea prima di finire: questo lavoro non serve più
+			table.remove(jobs, 1)
+		else
+			local list = job.list
+			local stop = math.min(job.at + budget - 1, #list)
+			for i = job.at, stop do
+				local item = list[i]
+				if item.Parent then
+					item.LocalTransparencyModifier = job.value
+				end
+			end
+			budget -= stop - job.at + 1
+			job.at = stop + 1
+			if job.at > #list then
+				table.remove(jobs, 1)
+			end
+		end
+	end
+
+	-- Poi le istanze nuove
+	while budget > 0 and queueHead <= #queue do
+		local instance = queue[queueHead]
+		queue[queueHead] = nil
+		queueHead += 1
+		index(instance)
+		budget -= 1
+	end
+	if queueHead > #queue then
+		table.clear(queue)
+		queueHead = 1
+	end
+end
+
+---====== ACCESO E SPENTO ======---
+
+local function restoreShadows()
+	for part in pairs(originalCast) do
+		if part.Parent then
+			part.CastShadow = true
+		end
+	end
+	table.clear(originalCast)
+	stats.noShadow = 0
+end
+
+local function reapplySmallShadows()
+	for _, record in pairs(rooms) do
+		for _, item in ipairs(record.visuals) do
+			if item:IsA("BasePart") and item.Parent and item.CastShadow and item.Transparency < 1 then
+				local middle, longest = middleSide(item.Size)
+				if longest < CONFIG.SmallSize or middle < CONFIG.ThinSize then
+					item.CastShadow = false
+					originalCast[item] = true
+					stats.noShadow += 1
+				end
+			end
+		end
+	end
+end
+
+local function setActive(on)
+	active = on
+	if on then
+		if CONFIG.SmallShadows then reapplySmallShadows() end
+	else
+		restoreShadows()
+	end
+	refreshRooms()
+	updateLights()
+end
+
+---====== IL RIQUADRO ======---
+
+local statsLabel = nil
+local function buildStats()
+	local ok, parent = pcall(function()
+		return if gethui then gethui() else LocalPlayer:WaitForChild("PlayerGui")
+	end)
+	if not ok or not parent then return end
+	local gui = Instance.new("ScreenGui")
+	gui.Name = "DoorsOptimizerStats"
+	gui.ResetOnSpawn = false
+	gui.IgnoreGuiInset = true
+	gui.DisplayOrder = 9999
+	local label = Instance.new("TextLabel")
+	label.Position = UDim2.fromOffset(12, 60)
+	label.Size = UDim2.fromOffset(250, 118)
+	label.BackgroundColor3 = Color3.fromRGB(10, 10, 14)
+	label.BackgroundTransparency = 0.35
+	label.BorderSizePixel = 0
+	label.Font = Enum.Font.Code
+	label.TextSize = 14
+	label.TextColor3 = Color3.fromRGB(230, 230, 230)
+	label.TextXAlignment = Enum.TextXAlignment.Left
+	label.TextYAlignment = Enum.TextYAlignment.Top
+	label.RichText = true
+	label.Visible = CONFIG.ShowStats
+	local padding = Instance.new("UIPadding")
+	padding.PaddingLeft = UDim.new(0, 8)
+	padding.PaddingTop = UDim.new(0, 6)
+	padding.Parent = label
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 6)
+	corner.Parent = label
+	label.Parent = gui
+	gui.Parent = parent
+	table.insert(connections, gui)
+	statsLabel = label
+end
+
+local frameTimes, frameIndex, frameSum = {}, 1, 0
+local nextLabel = 0
+local function drawStats(deltaTime)
+	-- FPS mediato sugli ultimi 60 frame
+	frameSum += deltaTime - (frameTimes[frameIndex] or 0)
+	frameTimes[frameIndex] = deltaTime
+	frameIndex = frameIndex % 60 + 1
+	if not (statsLabel and statsLabel.Visible) then return end
+	local now = os.clock()
+	if now < nextLabel then return end
+	nextLabel = now + 0.25
+
+	local average = frameSum / math.max(#frameTimes, 1)
+	local fps = if average > 0 then 1 / average else 0
+	local colour = if fps >= 55 then "#7CFC9A" elseif fps >= 30 then "#FFD75E" else "#FF6B6B"
+	local quality = "?"
+	pcall(function()
+		quality = tostring(UserSettings().GameSettings.SavedQualityLevel.Value)
+	end)
+	local hidden, total = 0, 0
+	for _, record in pairs(rooms) do
+		total += 1
+		if record.hidden then hidden += 1 end
+	end
+	statsLabel.Text = string.format(
+		"<b>DOORS OPTIMIZER</b> %s\n<font color=\"%s\"><b>%d FPS</b></font>  %.1f ms  grafica %s\n"
+			.. "ombre luci   %d / %d\nluci riemp.  %d / %d\nsenza ombra  %d pezzi\nstanze nasc. %d / %d",
+		if active then "<font color=\"#7CFC9A\">ON</font>" else "<font color=\"#FF6B6B\">OFF</font>",
+		colour, math.floor(fps + 0.5), average * 1000, quality,
+		stats.shadowOn, stats.shadowTotal, stats.fillOn, stats.fillTotal, stats.noShadow, hidden, total
+	)
+end
+
+---====== AVVIO ======---
+
+for _, model in ipairs(CurrentRooms:GetChildren()) do
+	addRoom(model)
+end
+track(CurrentRooms.ChildAdded:Connect(function(model)
+	addRoom(model)
+	refreshRooms()
+end))
+track(CurrentRooms.ChildRemoved:Connect(removeRoom))
+track(LocalPlayer:GetAttributeChangedSignal("CurrentRoom"):Connect(refreshRooms))
+track(LocalPlayer:GetAttributeChangedSignal("Alive"):Connect(refreshRooms))
+
+if CONFIG.FpsCap > 0 and setfpscap then
+	pcall(setfpscap, CONFIG.FpsCap)
+end
+
+buildStats()
+
+local nextLights = 0
+track(RunService.Heartbeat:Connect(function(deltaTime)
+	work()
+	local now = os.clock()
+	if now >= nextLights then
+		nextLights = now + CONFIG.UpdateInterval
+		updateLights()
+	end
+	drawStats(deltaTime)
+end))
+
+track(UserInputService.InputBegan:Connect(function(input, processed)
+	if processed then return end
+	if input.KeyCode == CONFIG.ToggleKey then
+		setActive(not active)
+	elseif input.KeyCode == CONFIG.StatsKey and statsLabel then
+		statsLabel.Visible = not statsLabel.Visible
+	end
+end))
+
+refreshRooms()
+
+-- Toglie tutto e rimette il gioco com'era: niente stanze invisibili, ombre e luci come prima
+_G.DoorsOptimizerStop = function()
+	active = false
+	-- Tutte le stanze, anche quelle a metà di un lavoro
+	for _, record in pairs(rooms) do
+		record.added:Disconnect()
+		for _, item in ipairs(record.visuals) do
+			if item.Parent and item.LocalTransparencyModifier ~= 0 then
+				item.LocalTransparencyModifier = 0
+			end
+		end
+	end
+	restoreShadows()
+	for light, entry in pairs(shadowLights) do
+		if light.Parent and entry.wrote ~= nil and light.Shadows == entry.wrote then
+			light.Shadows = entry.original
+		end
+	end
+	for light, entry in pairs(fillLights) do
+		if light.Parent and entry.wrote ~= nil and light.Enabled == entry.wrote then
+			light.Enabled = entry.wanted
+		end
+	end
+	for _, connection in ipairs(connections) do
+		pcall(function()
+			if typeof(connection) == "Instance" then
+				connection:Destroy()
+			else
+				connection:Disconnect()
+			end
+		end)
+	end
+	table.clear(connections)
+	_G.DoorsOptimizerStop = nil
+end
+
+print(("[Optimizer] acceso: F8 acceso/spento, F7 riquadro. %d stanze, FPS massimi %s"):format(
+	#CurrentRooms:GetChildren(), if CONFIG.FpsCap > 0 and setfpscap then tostring(CONFIG.FpsCap) else "come prima"))
