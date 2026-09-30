@@ -25,6 +25,7 @@ mod rather than playing it.
 |---|---|
 | **The mod** | `.../MainScript` |
 | DOORS optimizer (max graphics, less lag) | `.../DoorsOptimizer` |
+| Hellish Time Ever (K = an entity, spam it) | `.../HellishTimeEver` |
 
 ### Build (tools — not for players)
 
@@ -230,6 +231,37 @@ The three animations are also shipped for Studio's Animation Editor:
 `HonchoV2CrucifixGlitch.rbxmx`. They hold the keyed poses; the trembling, the
 glitch stutter and the wandering are added by the script.
 
+## Hellish Time Ever
+
+```lua
+_G.Time   = 0      -- optional: seconds before it starts
+_G.Random = true   -- optional: false = entities only come with K
+loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/HellishTimeEver"))()
+```
+
+A DOORS mode. **K** brings an entity, every time: spam it and they keep coming.
+With `_G.Random` left on, they also come on their own, one every 20 to 60
+seconds. `_G.Time` delays the start by that many seconds from the loadstring.
+
+- Everything on screen is DOORS' own, cloned while you play: the font, the red
+  flash, the jumpscare text, the vignette, the modifier panel, the sounds (Dread's
+  boom and ambience, the modifier-added sound), the camera shake.
+- **The start:** black screen, red flash with Dread's boom, HELLISH TIME EVER in
+  the font of DOORS' "YOU ARE DEAD" text in moving black and white, DOORS' knob
+  badge under it, then DOORS' modifier panel with **+666%** knobs.
+- **Every entity:** red flash, camera kick, the room's lights red for a moment,
+  and a counter at the top: `HELLISH x7   SPEED 150`.
+- **The hell rises:** each entity makes the rooms redder and darker, the sound
+  more muffled and Dread's ambience louder, up to the 12th.
+- A bag, not dice: nine entities (Rush, Ambush, A-60, A-120, Scribble, Bash,
+  Blitz, Honcho V2, J-518), never the same one twice in a row, and the bag fills
+  up again by itself. Speed climbs from 60 to 250 (100 = Rush).
+- Everything is downloaded at the start, so spamming K spawns at once. One that
+  cannot be loaded is skipped and the next comes instead.
+- It gives nothing away: it switches off `CrucifixGiver`, `CorrodedCrucifixGiver`
+  and `CrucifixAll`, mutes the mod's badges while it runs, and Honcho V2 comes
+  without his crucifix and badges.
+
 ## DOORS optimizer
 
 ```lua
@@ -359,6 +391,9 @@ Over 400 simulated seeds: no spacing violations, about 12 encounters per run.
 | `HonchoV2Crucifix*.rbxmx` | Honcho V2's three crucifix animations (banish, fail, glitch), for Studio |
 | `GradishDev` | the console |
 | `DoorsOptimizer` | the DOORS optimizer |
+| `HellishTimeEver` | the Hellish Time Ever mode |
+| `HellishGradient` | the moving black and white of its modifier row and title |
+| `HTE/` | the models Hellish Time Ever summons |
 | `GradishCheck` | the config report |
 | `ImagesA/` | one file per entity saying where its picture comes from |
 | `*.rbxm` | the models |

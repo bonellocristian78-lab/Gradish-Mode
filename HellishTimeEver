@@ -3,48 +3,89 @@
 
         H E L L I S H   T I M E   E V E R
 
+            _G.Time   = 0      -- optional: seconds before it starts
+            _G.Random = true   -- optional: false = entities only come with K
             loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/HellishTimeEver"))()
 
-            K   one random entity. Never the same one twice.
-            J   reset: every entity can come again, from speed 60.
+            K   an entity, now. Spam it: every press is one more.
 
-        Run it inside a DOORS run. It adds "Hellish Time Ever" to DOORS' own
-        modifier panel -- in black and white, moving -- next to any modifiers
-        you already picked.
+        Run it inside a DOORS run. Everything on screen is DOORS' own, cloned
+        from DOORS while you play: its fonts, its red flash, its jumpscare
+        text, its vignette, its modifier panel, its sounds, its camera shake.
+        Nothing is drawn or played from outside the game.
 
-        WHY NO REPEATS
+        THE TWO SETTINGS
+        ----------------
+        _G.Time    Seconds after the loadstring before Hellish Time Ever
+                   starts. Missing or 0: it starts at once.
+        _G.Random  true, the default: entities also come on their own, one
+                   every AUTO_MIN to AUTO_MAX seconds, at random -- and K
+                   still works on top. false: they only come when you press K.
+
+        HOW IT STARTS
+        -------------
+        The screen goes black. DOORS' red flash hits with Dread's boom and
+        the camera shakes; HELLISH TIME EVER comes up in the font of DOORS'
+        "YOU ARE DEAD" jumpscare text, in moving black and white, with
+        DOORS' knob badge under it: +666%. Then back to the game, and DOORS'
+        modifier panel slides in with Hellish Time Ever on top and +666% on
+        the knob bonus.
+
+        EVERY ENTITY
+        ------------
+        A red flash, a kick of the camera, the sound DOORS makes when a
+        modifier is added, the lights of your room red for a moment, and the
+        counter at the top -- DOORS' own "MODIFIERS ACTIVATED" label -- goes
+        up: HELLISH x7   SPEED 150.
+
+        THE HELL RISES
         --------------
-        Spam K in a video and pure random gives you three Rushes in a row.
-        This is a bag, not dice: every entity is in it once, K pulls one out,
-        and it does not go back in until you press J. Eight presses, eight
-        different entities.
+        Every entity turns the rooms a little redder and darker, muffles the
+        sound a little more -- an equalizer in SoundService.Main, the same
+        group DOORS puts its own Sanity and Oxygen equalizers in -- and turns
+        Dread's ambience up. After HEAT_FULL entities it is as far as it goes.
 
-        EACH ONE FASTER
-        ---------------
-        The first comes at speed 60 -- where 100 is Rush's normal pace -- and
-        every one after it is SPEED_STEP faster than the last. J starts the
-        climb again from 60.
+        NEVER THE SAME ONE TWICE
+        ------------------------
+        A bag, not dice: every entity is in it once and each one pulls one
+        out. When it is empty it fills up again by itself, and the first of
+        the new round is never the last of the old one. Speed keeps climbing
+        from BASE_SPEED to MAX_SPEED, where 100 is Rush's normal pace.
+
+        SPAM
+        ----
+        Every model and script is downloaded once, at the start, so a press
+        spawns at once instead of waiting for a download. One that could not
+        be loaded is skipped and the next one comes instead.
+
+        NOTHING GIVEN AWAY
+        ------------------
+        When it starts it switches off this repo's crucifix givers --
+        CrucifixGiver, which would also answer every K, CorrodedCrucifixGiver
+        and CrucifixAll -- and while it runs no badge of the mod is awarded.
+        Honcho V2 comes without his crucifix and without his badges.
 
         WHERE THE ENTITIES COME FROM
         ----------------------------
-        Nothing is inside this script. Each one is loaded when it is summoned:
-
             Rush, Ambush     Vynixu's own models, from the Entity Spawner repo
             A-60, A-120,     your models from Roblox Studio, exported to the
             Scribble, Bash,  HTE/ folder of this repo with their sounds
             Blitz
-            Honcho           Honcho.lua from this repo, which runs itself
+            Honcho V2        HonchoV2.lua from this repo -- without his
+                             crucifix and without badges
+            J-518            J-518 from this repo
 
-        HOW THE MODIFIER IS SHOWN
-        -------------------------
+        THE MODIFIER PANEL
+        ------------------
         Built from DOORS' own panel, not an imitation of it. When a run starts
         with modifiers, DOORS clones MainUI.Modifiers, adds one row per
-        modifier, writes "N MODIFIERS ACTIVATED" and slides it out after ten
+        modifier, writes "N MODIFIERS ACTIVATED" and takes it away after ten
         seconds. This does the same thing, with the same pieces.
 
         It does NOT add Hellish Time Ever to DOORS' modifier list itself.
         DOORS reads every active modifier's knob bonus from its own table, and
-        a name that is not in that table would crash DOORS' own script.
+        a name that is not in that table would crash DOORS' own script. The
+        +666% is written on the panel only.
 
 ================================================================================
 ]]
@@ -56,14 +97,17 @@ local SPEED_STEP   = 15     -- every entity after it is this much faster
 local MAX_SPEED    = 250
 local WARNING      = 2      -- seconds of flickering lights before it runs
 local PASS_SECONDS = nil    -- nil = it runs its whole route. A number = gone
-                            -- after that many seconds (Honcho decides for
-                            -- himself and ignores this)
+                            -- after that many seconds (Honcho V2 and J-518
+                            -- decide for themselves and ignore this)
 local ANNOUNCE     = false  -- true = the caption names each entity. Off, so
                             -- a video keeps the surprise
 local BANNER_TIME  = 10     -- seconds the modifier panel stays, as in DOORS
+local KNOB_BONUS   = 666    -- added to the knob bonus on the panel
+local AUTO_MIN     = 20     -- with _G.Random: at least this many seconds
+local AUTO_MAX     = 60     -- and at most this many between two entities
+local HEAT_FULL    = 12     -- entities until the rooms are as red as they get
 
 local SPAWN_KEY = Enum.KeyCode.K
-local RESET_KEY = Enum.KeyCode.J
 
 ---====== WHERE THINGS ARE ======---
 
@@ -74,7 +118,8 @@ local GRADIENT = REPO .. "HellishGradient"
 
 ---====== THE ENTITIES ======---
 --[[ Death: "Guiding" is the blue death screen, "Curious" the yellow one.
-     Rebound: nil = passes once. ]]
+     Rebound: nil = passes once. A script entity gets `globals` as _G values
+     before it runs, and _G.Speed and _G.Delay too if `speed` is set. ]]
 
 local ENTITIES = {
 	{
@@ -123,8 +168,17 @@ local ENTITIES = {
 		hints   = { "You died to Blitz...", "It turns around.", "Coming out too early is exactly what it waits for." },
 	},
 	{
-		name   = "Honcho",
-		script = REPO .. "Honcho.lua",
+		name    = "Honcho V2",
+		script  = REPO .. "HonchoV2.lua",
+		-- Hellish Time Ever gives nothing away: no crucifix of his, no badges
+		globals = { GiveCrucifix = false, Badges = false },
+		speed   = true,
+	},
+	{
+		name   = "J-518",
+		script = REPO .. "J-518",
+		-- J-518 refuses to come during Seek's chase: then the next one comes instead
+		notDuringSeek = true,
 	},
 }
 
@@ -135,9 +189,29 @@ local UserInputService  = game:GetService("UserInputService")
 local TweenService      = game:GetService("TweenService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace         = game:GetService("Workspace")
+local Lighting          = game:GetService("Lighting")
+local SoundService      = game:GetService("SoundService")
+local Debris            = game:GetService("Debris")
 
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui   = LocalPlayer:WaitForChild("PlayerGui")
+
+--[[ Read once and cleared, like every other script here, so the next
+     loadstring without them goes back to the defaults. ]]
+local function option(name, kind, default)
+	local value = _G[name]
+	_G[name] = nil
+	if value == nil then return default end
+	if type(value) ~= kind then
+		warn(("[Hellish Time Ever] _G.%s must be a %s -- using %s"):format(name, kind, tostring(default)))
+		return default
+	end
+	return value
+end
+
+local START_DELAY = math.max(option("Time", "number", 0), 0)
+local AUTO        = option("Random", "boolean", true)
+local LOADED_AT   = os.clock() -- _G.Time counts from here, downloads included
 
 if not Workspace:FindFirstChild("CurrentRooms") then
 	warn("[Hellish Time Ever] run this inside a DOORS run, not in the lobby")
@@ -147,6 +221,16 @@ end
 -- A second load replaces the first, instead of both answering every K.
 if getgenv and type(getgenv().__HellishTimeEverCleanup) == "function" then
 	pcall(getgenv().__HellishTimeEverCleanup)
+end
+
+local running = false  -- started (after _G.Time)
+local stopped = false  -- replaced or cleaned up
+local connections = {}
+local created = {}     -- destroyed on cleanup
+
+local function own(instance)
+	table.insert(created, instance)
+	return instance
 end
 
 local function caption(text)
@@ -167,6 +251,13 @@ local function fetch(url)
 	return result
 end
 
+local function tween(instance, seconds, goal, style, direction)
+	local playing = TweenService:Create(instance,
+		TweenInfo.new(seconds, style or Enum.EasingStyle.Quad, direction or Enum.EasingDirection.Out), goal)
+	playing:Play()
+	return playing
+end
+
 local Gradient = fetch(GRADIENT)
 local Spawner  = fetch(SPAWNER)
 
@@ -175,12 +266,114 @@ if not Spawner then
 	return
 end
 
+---====== DOORS' OWN PIECES ======---
+--[[ Every piece is cloned from DOORS while you play. If DOORS ever moves one,
+     that one effect is skipped and everything else goes on. ]]
+
+local MainUI = PlayerGui:WaitForChild("MainUI", 10)
+
+local function find(root, path)
+	local current = root
+	for name in string.gmatch(path, "[^%.]+") do
+		current = current and current:FindFirstChild(name)
+	end
+	return current
+end
+
+local MainGame = nil
+pcall(function()
+	MainGame = require(MainUI.Initiator.Main_Game)
+end)
+
+-- A copy of one of DOORS' GUI pieces, or nil
+local function doorsPiece(path)
+	local original = MainUI and find(MainUI, path)
+	return if original then original:Clone() else nil
+end
+
+local SOUNDS = {
+	Boom     = { MainUI, "Initiator.Main_Game.RemoteListener.Jumpscares.Dread.Boom" },
+	Added    = { PlayerGui, "TopbarUI.Topbar.Modifiers.SoundIncrease" },
+	Ambience = { MainUI, "Initiator.Main_Game.RemoteListener.Modules.Dread.Ambience" },
+}
+
+local function doorsSound(name, volume, speed, looped)
+	local where = SOUNDS[name]
+	local original = where[1] and find(where[1], where[2])
+	if not (original and original:IsA("Sound")) then return nil end
+	local sound = original:Clone()
+	sound.Volume = volume or sound.Volume
+	sound.PlaybackSpeed = speed or sound.PlaybackSpeed
+	sound.Looped = looped == true
+	sound.Parent = SoundService
+	sound:Play()
+	if not sound.Looped then
+		Debris:AddItem(sound, 12)
+	end
+	return sound
+end
+
+-- DOORS' camera shake, the one its own entities use
+local function shake(magnitude, roughness, fadeIn, fadeOut)
+	if MainGame and MainGame.camShaker then
+		pcall(function()
+			MainGame.camShaker:ShakeOnce(magnitude, roughness, fadeIn, fadeOut)
+		end)
+	end
+end
+
+-- DOORS' red flash (MainUI.FlashFrame, Figure's jumpscare uses it), behind the HUD like DOORS'
+local function flash(strength, seconds)
+	local frame = doorsPiece("FlashFrame")
+	if not frame then return end
+	frame.Name = "HellishFlash"
+	frame.Visible = true
+	frame.BackgroundTransparency = 1 - strength
+	frame.Parent = MainUI
+	tween(frame, seconds, { BackgroundTransparency = 1 })
+	Debris:AddItem(frame, seconds + 0.1)
+end
+
+---====== PRELOAD ======---
+--[[ Everything is downloaded once, now, in the background. A model is kept
+     and cloned for every summon; a script is kept as source and run fresh
+     every time. Whatever cannot be loaded is marked broken and skipped. ]]
+
+local loadModel = getgenv and getgenv().LoadCustomInstance -- Vynixu's, loaded with the spawner
+
+local function preload(entry)
+	entry.loading = true
+	pcall(function()
+		if entry.script then
+			local source = game:HttpGet(entry.script)
+			if loadstring(source) then
+				entry.source = source
+			end
+		elseif loadModel then
+			local model = loadModel(entry.asset)
+			if typeof(model) == "Instance" and model:IsA("Model") then
+				entry.template = model
+			end
+		end
+	end)
+	-- Without Vynixu's loader the spawner downloads the model itself, on every summon
+	entry.broken = if entry.script then entry.source == nil else (loadModel ~= nil and entry.template == nil)
+	entry.loading = false
+	if entry.broken then
+		warn("[Hellish Time Ever] " .. entry.name .. " could not be loaded: it will be skipped")
+	end
+end
+
+for _, entry in ipairs(ENTITIES) do
+	task.spawn(preload, entry)
+end
+
 ---====== THE MODIFIER PANEL ======---
 
 local banner = nil
 
 local function showModifier()
-	local MainUI = PlayerGui:FindFirstChild("MainUI")
+	if stopped then return end
 	local template = MainUI and MainUI:FindFirstChild("Modifiers")
 
 	if not template then
@@ -204,6 +397,7 @@ local function showModifier()
 	local rowTemplate = panel:FindFirstChild("Template")
 	local count = 0
 	local firstRow = rowTemplate and rowTemplate.LayoutOrder or 0
+	local knobs = 0
 
 	-- DOORS' own active modifiers first, exactly as DOORS lays them out.
 	local okMods, Modifiers = pcall(function()
@@ -228,12 +422,19 @@ local function showModifier()
 				end
 			end
 
-			local knobs = Modifiers.getPercs()
-			local bonus = panel:FindFirstChild("KnobBonus")
-			if bonus and type(knobs) == "number" then
-				bonus.Text = (knobs < 0 and "-" or "+") .. math.abs(knobs) .. "%"
+			local percent = Modifiers.getPercs()
+			if type(percent) == "number" then
+				knobs = percent
 			end
 		end)
+	end
+
+	-- DOORS' own bonus plus ours: +0% becomes +666%
+	local bonus = panel:FindFirstChild("KnobBonus")
+	if bonus then
+		local total = knobs + KNOB_BONUS
+		bonus.Text = (if total < 0 then "-" else "+") .. math.abs(total) .. "%"
+		bonus.Visible = true
 	end
 
 	-- Then ours, at the top.
@@ -260,7 +461,7 @@ local function showModifier()
 
 	local desc = panel:FindFirstChild("Desc")
 	if desc then
-		desc.Text = count == 1 and "1 MODIFIER ACTIVATED" or (count .. " MODIFIERS ACTIVATED")
+		desc.Text = if count == 1 then "1 MODIFIER ACTIVATED" else (count .. " MODIFIERS ACTIVATED")
 	end
 
 	-- In from the right, where DOORS puts it, then back out the way it goes.
@@ -268,15 +469,11 @@ local function showModifier()
 	panel.Parent = MainUI
 	banner = panel
 
-	TweenService:Create(panel, TweenInfo.new(0.8, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-		Position = UDim2.new(0.965, 0, 0.5, 0),
-	}):Play()
+	tween(panel, 0.8, { Position = UDim2.new(0.965, 0, 0.5, 0) }, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 
 	task.delay(BANNER_TIME, function()
 		if banner ~= panel or not panel.Parent then return end
-		TweenService:Create(panel, TweenInfo.new(1, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
-			Position = UDim2.new(1.3, 0, 0.5, 0),
-		}):Play()
+		tween(panel, 1, { Position = UDim2.new(1.3, 0, 0.5, 0) }, Enum.EasingStyle.Back, Enum.EasingDirection.In)
 		task.wait(1)
 		pcall(function() panel:Destroy() end)
 	end)
@@ -289,23 +486,119 @@ local function showModifier()
 	end)
 end
 
+---====== THE HELL RISES ======---
+
+local BASE_HEAT = 0.12 -- how red it is as soon as it starts
+
+local colour = own(Instance.new("ColorCorrectionEffect"))
+colour.Name = "HellishTimeEver"
+colour.TintColor = Color3.new(1, 1, 1)
+colour.Brightness = 0
+colour.Contrast = 0
+colour.Saturation = 0
+colour.Parent = Lighting
+
+-- In the group where DOORS keeps its own Sanity and Oxygen equalizers
+local muffle = own(Instance.new("EqualizerSoundEffect"))
+muffle.Name = "HellishEqualizer"
+muffle.HighGain = 0
+muffle.MidGain = 0
+muffle.LowGain = 0
+muffle.Parent = SoundService:FindFirstChild("Main")
+
+local ambience = nil
+
+local function setHeat(level, seconds)
+	level = math.clamp(level, 0, 1)
+	tween(colour, seconds, {
+		TintColor  = Color3.new(1, 1, 1):Lerp(Color3.fromRGB(255, 118, 106), level),
+		Brightness = -0.12 * level,
+		Contrast   = 0.25 * level,
+		Saturation = 0.15 * level,
+	}, Enum.EasingStyle.Sine)
+	if muffle.Parent then
+		tween(muffle, seconds, { HighGain = -14 * level, MidGain = -4 * level, LowGain = 3 * level }, Enum.EasingStyle.Sine)
+	end
+	if ambience then
+		tween(ambience, seconds, { Volume = 0.1 + 0.5 * level }, Enum.EasingStyle.Sine)
+	end
+end
+
+---====== EVERY ENTITY ======---
+
+local summoned = 0
+local counter, counterScale = nil, nil
+local lightColours = setmetatable({}, { __mode = "k" }) -- light -> its colour before the red
+
+-- DOORS' "N MODIFIERS ACTIVATED" label, cloned: the count at the top of the screen
+local function buildCounter()
+	local label = doorsPiece("Modifiers.Desc")
+	if not label then return end
+	label.Name = "HellishTimeEverCounter"
+	label.AnchorPoint = Vector2.new(0.5, 0)
+	label.Position = UDim2.fromScale(0.5, 0.06)
+	label.Size = UDim2.new(0.22, 0, 0.035, 10)
+	label.Visible = false
+	counterScale = Instance.new("UIScale")
+	counterScale.Parent = label
+	label.Parent = MainUI
+	counter = own(label)
+end
+
+-- The lights of the room you are in go red for a moment, then back to their own colour
+local function redRoom()
+	local room = Workspace.CurrentRooms:FindFirstChild(tostring(LocalPlayer:GetAttribute("CurrentRoom")))
+	if not room then return end
+	for _, light in ipairs(room:GetDescendants()) do
+		if light:IsA("Light") then
+			local original = lightColours[light] or light.Color
+			lightColours[light] = original
+			light.Color = Color3.fromRGB(255, 30, 30)
+			TweenService:Create(light, TweenInfo.new(1.4, Enum.EasingStyle.Quad, Enum.EasingDirection.In, 0, false, 0.25), {
+				Color = original,
+			}):Play()
+		end
+	end
+end
+
+local function hit(speed)
+	flash(0.55, 0.6)
+	shake(6, 10, 0, 0.8)
+	doorsSound("Added", 0.6)
+	doorsSound("Boom", 0.35, 0.45)
+	redRoom()
+	if counter then
+		counter.Text = ("HELLISH x%d   SPEED %d"):format(summoned, speed)
+		counter.Visible = true
+		counterScale.Scale = 1.5
+		tween(counterScale, 0.45, { Scale = 1 }, Enum.EasingStyle.Back)
+	end
+	setHeat(BASE_HEAT + (1 - BASE_HEAT) * math.min(summoned / HEAT_FULL, 1), 1.5)
+end
+
 ---====== THE BAG ======---
 
 local rng = Random.new()
 local bag = {}
-local summoned = 0
+local lastDrawn = nil
 
-local function refill()
-	table.clear(bag)
-	for _, entry in ipairs(ENTITIES) do
-		table.insert(bag, entry)
-	end
-	summoned = 0
-end
-
+-- One entity out of the bag. Empty: it fills up again, never starting with the last one
 local function draw()
+	for i = #bag, 1, -1 do
+		if bag[i].broken then table.remove(bag, i) end
+	end
+	if #bag == 0 then
+		for _, entry in ipairs(ENTITIES) do
+			if not entry.broken then table.insert(bag, entry) end
+		end
+	end
 	if #bag == 0 then return nil end
-	return table.remove(bag, rng:NextInteger(1, #bag))
+	local index = rng:NextInteger(1, #bag)
+	if bag[index] == lastDrawn and #bag > 1 then
+		index = index % #bag + 1
+	end
+	lastDrawn = bag[index]
+	return table.remove(bag, index)
 end
 
 ---====== SUMMONING ======---
@@ -322,10 +615,10 @@ local function blitzVoice(entity)
 		local forward = { main:FindFirstChild("Footsteps"), main:FindFirstChild("PlaySound") }
 		local back    = { main:FindFirstChild("Footsteps1"), main:FindFirstChild("PlaySound1") }
 
-		for _, sound in ipairs(startOfRebound and forward or back) do
+		for _, sound in ipairs(if startOfRebound then forward else back) do
 			if sound then sound:Stop() end
 		end
-		for _, sound in ipairs(startOfRebound and back or forward) do
+		for _, sound in ipairs(if startOfRebound then back else forward) do
 			if sound then sound:Play() end
 		end
 	end)
@@ -337,7 +630,7 @@ local function summonModel(entry, speed)
 	local entity = Spawner:Create({
 		Entity = {
 			Name = entry.name,
-			Asset = entry.asset,
+			Asset = if entry.template then entry.template:Clone() else entry.asset,
 			HeightOffset = 0,
 		},
 		Lights = {
@@ -373,80 +666,269 @@ local function summonModel(entry, speed)
 	})
 
 	if not entity then
-		caption("Hellish Time Ever: " .. entry.name .. " could not be loaded")
+		warn("[Hellish Time Ever] " .. entry.name .. " could not be created")
 		return
 	end
 
 	if entry.blitz then blitzVoice(entity) end
-
-	Spawner:Run(entity, false)
 
 	if PASS_SECONDS then
 		task.delay(PASS_SECONDS, function()
 			pcall(function() entity:Despawn() end)
 		end)
 	end
+
+	Spawner:Run(entity, false)
 end
 
 local function summonScript(entry, speed)
-	-- Honcho reads these once and clears them, so they cannot leak into the
-	-- next time someone runs him on his own.
-	_G.Speed = speed
-	_G.Delay = WARNING
-	fetch(entry.script)
+	local given = table.clone(entry.globals or {})
+	if entry.speed then
+		given.Speed = speed
+		given.Delay = WARNING
+	end
+	for key, value in pairs(given) do
+		_G[key] = value
+	end
+	-- It reads its _G values before it first waits. Whatever it did not read
+	-- (it stopped early) is cleared, so it cannot reach the next script.
+	task.spawn(loadstring(entry.source))
+	for key in pairs(given) do
+		_G[key] = nil
+	end
 end
 
 local function summon()
-	local entry = draw()
-
-	if not entry then
-		caption("Every entity has come. Press J to start again")
-		return
-	end
+	if not running then return end
 
 	local speed = math.min(BASE_SPEED + summoned * SPEED_STEP, MAX_SPEED)
 	summoned += 1
-
-	if ANNOUNCE then
-		caption(("%s -- speed %d"):format(entry.name, speed))
-	end
-	print(("[Hellish Time Ever] %s at speed %d (%d left in the bag)"):format(entry.name, speed, #bag))
+	hit(speed)
 
 	task.spawn(function()
-		local ok, err = pcall(function()
-			if entry.script then
-				summonScript(entry, speed)
-			else
-				summonModel(entry, speed)
+		-- One that turns out not to load, or cannot come now, gives its turn to the next
+		for _ = 1, #ENTITIES do
+			local entry = draw()
+			if not entry then break end
+			while entry.loading do
+				task.wait(0.1)
 			end
-		end)
-		if not ok then
-			warn("[Hellish Time Ever] " .. entry.name .. " failed: " .. tostring(err))
+			local blocked = entry.notDuringSeek and Workspace:FindFirstChild("SeekMovingNewClone")
+			if not entry.broken and not blocked then
+				if ANNOUNCE then
+					caption(("%s -- speed %d"):format(entry.name, speed))
+				end
+				print(("[Hellish Time Ever] %s at speed %d (%d left in the bag)"):format(entry.name, speed, #bag))
+				local ok, err = pcall(if entry.script then summonScript else summonModel, entry, speed)
+				if not ok then
+					warn("[Hellish Time Ever] " .. entry.name .. " failed: " .. tostring(err))
+				end
+				return
+			end
 		end
+		caption("Hellish Time Ever: no entity could be loaded")
 	end)
 end
 
----====== KEYS ======---
+---====== THE ENTRANCE ======---
 
-refill()
+local function entrance()
+	local gui = own(Instance.new("ScreenGui"))
+	gui.Name = "HellishTimeEverEntrance"
+	gui.IgnoreGuiInset = true
+	gui.ScreenInsets = Enum.ScreenInsets.None
+	gui.ResetOnSpawn = false
+	gui.DisplayOrder = 100 -- over DOORS' HUD and topbar, for four seconds
 
-local connection = UserInputService.InputBegan:Connect(function(input, processed)
-	if processed then return end
-
-	if input.KeyCode == SPAWN_KEY then
-		summon()
-	elseif input.KeyCode == RESET_KEY then
-		refill()
-		caption("Hellish Time Ever: every entity is back, from speed " .. BASE_SPEED)
+	-- DOORS' flash frame, recoloured: the black, and the red that hits
+	local function fullScreen(name, fill, layer)
+		local frame = doorsPiece("FlashFrame") or Instance.new("Frame")
+		frame.Name = name
+		frame.Visible = true
+		frame.AnchorPoint = Vector2.new(0.5, 0.5)
+		frame.Position = UDim2.fromScale(0.5, 0.5)
+		frame.Size = UDim2.fromScale(1, 1)
+		frame.BorderSizePixel = 0
+		frame.BackgroundColor3 = fill
+		frame.BackgroundTransparency = 1
+		frame.ZIndex = layer
+		frame.Parent = gui
+		return frame
 	end
-end)
+	local black = fullScreen("Black", Color3.new(0, 0, 0), 1)
+	local red = fullScreen("Red", Color3.fromRGB(255, 0, 0), 2)
 
-if getgenv then
-	getgenv().__HellishTimeEverCleanup = function()
-		pcall(function() connection:Disconnect() end)
-		if banner then pcall(function() banner:Destroy() end) end
+	-- Shade's jumpscare vignette, dark red
+	local vignette = doorsPiece("Jumpscare.Jumpscare_Shade.Vignette")
+	if vignette then
+		vignette.Visible = true
+		vignette.ZIndex = 3
+		vignette.ImageColor3 = Color3.fromRGB(90, 0, 0)
+		vignette.ImageTransparency = 1
+		vignette.Parent = gui
+	end
+
+	local group = Instance.new("CanvasGroup")
+	group.Name = "Title"
+	group.BackgroundTransparency = 1
+	group.Size = UDim2.fromScale(1, 1)
+	group.GroupTransparency = 1
+	group.ZIndex = 4
+	group.Parent = gui
+	local scale = Instance.new("UIScale")
+	scale.Scale = 1.35
+	scale.Parent = group
+
+	-- The "YOU ARE DEAD. NO BIG SURPRISE!" text of DOORS' jumpscares, with DOORS' font
+	local title = doorsPiece("Jumpscare.Jumpscare_Rush.TextLabel") or doorsPiece("Modifiers.Desc")
+	if title then
+		title.Name = "HellishTimeEver"
+		title.Text = "HELLISH TIME EVER"
+		title.Visible = true
+		title.TextScaled = true
+		title.AnchorPoint = Vector2.new(0.5, 0.5)
+		title.Position = UDim2.fromScale(0.5, 0.45)
+		title.Size = UDim2.fromScale(0.86, 0.2)
+		title.BackgroundTransparency = 1
+		title.TextTransparency = 0
+		title.ZIndex = 5
+		title.Parent = group
+		if Gradient then pcall(Gradient.apply, title) end
+	end
+
+	-- DOORS' knob badge from the modifier panel, under the title
+	local knobs = doorsPiece("Modifiers.KnobBonus")
+	if knobs then
+		knobs.Text = "+" .. KNOB_BONUS .. "%"
+		knobs.Visible = true
+		knobs.AnchorPoint = Vector2.new(0.5, 0.5)
+		knobs.Position = UDim2.fromScale(0.5, 0.62)
+		knobs.Size = UDim2.fromScale(0.16, 0.065)
+		knobs.ZIndex = 5
+		knobs.Parent = group
+	end
+
+	gui.Parent = PlayerGui
+
+	-- 0.0  the screen goes black
+	tween(black, 0.6, { BackgroundTransparency = 0 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+
+	-- 0.6  the hit: red, Dread's boom, the camera, the title
+	task.delay(0.6, function()
+		if stopped then return end
+		red.BackgroundTransparency = 0.1
+		tween(red, 1.4, { BackgroundTransparency = 1 })
+		doorsSound("Boom")
+		shake(10, 4, 0, 2)
+		if vignette then tween(vignette, 0.4, { ImageTransparency = 0.1 }) end
+		tween(group, 0.25, { GroupTransparency = 0 })
+		tween(scale, 0.7, { Scale = 1 }, Enum.EasingStyle.Back)
+	end)
+
+	-- 3.4  back to the game
+	task.delay(3.4, function()
+		if stopped then return end
+		tween(group, 0.6, { GroupTransparency = 1 })
+		tween(scale, 0.6, { Scale = 0.92 })
+		tween(black, 1, { BackgroundTransparency = 1 })
+		if vignette then tween(vignette, 1, { ImageTransparency = 1 }) end
+	end)
+
+	-- 3.9  DOORS' modifier panel
+	task.delay(3.9, showModifier)
+	task.delay(4.6, function()
+		pcall(function() gui:Destroy() end)
+	end)
+end
+
+---====== ON THEIR OWN (_G.Random) ======---
+
+local function comeOnTheirOwn()
+	while not stopped do
+		task.wait(rng:NextNumber(AUTO_MIN, AUTO_MAX))
+		-- Not while you are dead: the next one waits for you
+		if not stopped and LocalPlayer:GetAttribute("Alive") ~= false then
+			summon()
+		end
 	end
 end
 
-showModifier()
-print(("[Hellish Time Ever] active -- %d entities in the bag. K to summon, J to reset."):format(#bag))
+---====== NOTHING GIVEN AWAY ======---
+--[[ The givers are stopped with their own cleanup, the one they use when
+     they are run twice. Every badge of the mod goes through GradishCore's
+     Achievements:Award, so muting that one function mutes them all; it is
+     put back on cleanup. ]]
+
+local GIVERS = { "__CrucifixGiverCleanup", "__CorrodedCrucifixCleanup", "__CrucifixAllCleanup" }
+local muted = nil -- { achievements = ..., award = the original Award }
+
+local function giveNothingAway()
+	if not getgenv then return end
+	local env = getgenv()
+	for _, name in ipairs(GIVERS) do
+		if type(env[name]) == "function" then
+			pcall(env[name])
+		end
+	end
+	local core = env.GradishCore
+	local achievements = type(core) == "table" and core.Achievements
+	if type(achievements) == "table" and type(achievements.Award) == "function" then
+		muted = { achievements = achievements, award = achievements.Award }
+		achievements.Award = function() end
+	end
+end
+
+---====== START ======---
+
+local function start()
+	if stopped then return end
+	running = true
+	giveNothingAway()
+	buildCounter()
+	ambience = doorsSound("Ambience", 0, nil, true)
+	if ambience then own(ambience) end
+	setHeat(BASE_HEAT, 3)
+	entrance()
+	if AUTO then
+		task.spawn(comeOnTheirOwn)
+	end
+end
+
+table.insert(connections, UserInputService.InputBegan:Connect(function(input, processed)
+	if processed then return end
+	if input.KeyCode == SPAWN_KEY then
+		summon()
+	end
+end))
+
+if getgenv then
+	getgenv().__HellishTimeEverCleanup = function()
+		stopped = true
+		running = false
+		for _, connection in ipairs(connections) do
+			pcall(function() connection:Disconnect() end)
+		end
+		for _, instance in ipairs(created) do
+			pcall(function() instance:Destroy() end)
+		end
+		for light, original in pairs(lightColours) do
+			pcall(function() light.Color = original end)
+		end
+		if banner then pcall(function() banner:Destroy() end) end
+		if muted then
+			muted.achievements.Award = muted.award
+			muted = nil
+		end
+	end
+end
+
+if START_DELAY > 0 then
+	local left = math.max(START_DELAY - (os.clock() - LOADED_AT), 0)
+	print(("[Hellish Time Ever] starts in %.0f seconds"):format(left))
+	task.delay(left, start)
+else
+	start()
+end
+
+print(("[Hellish Time Ever] %d entities in the bag. K to summon%s."):format(
+	#ENTITIES, if AUTO then ", and they also come on their own" else ""))
