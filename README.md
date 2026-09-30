@@ -26,6 +26,7 @@ mod rather than playing it.
 | **The mod** | `.../MainScript` |
 | DOORS optimizer (max graphics, less lag) | `.../DoorsOptimizer` |
 | Hellish Time Ever (K = an entity, spam it) | `.../HellishTimeEver` |
+| DOORS' walk, run, crouch and jump in any game | `.../DoorsAnimations` |
 
 ### Build (tools — not for players)
 
@@ -262,6 +263,32 @@ seconds. `_G.Time` delays the start by that many seconds from the loadstring.
   and `CrucifixAll`, mutes the mod's badges while it runs, and Honcho V2 comes
   without his crucifix and badges.
 
+## DOORS animations in any game
+
+```lua
+loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/DoorsAnimations"))()
+```
+
+Two steps, the first only once:
+
+1. **Run it inside DOORS**, in a run. A copy of your character appears in front
+   of you and plays DOORS' animations while they are written down, thirty
+   samples a second. Stand still until it says it is done. They are saved in your
+   executor's workspace as `DoorsAnimations.lua`.
+2. **Run it in any other game**: it reads that file and your character moves
+   like in DOORS.
+
+Why not just play DOORS' animation IDs: Roblox plays an animation only in games
+owned by whoever uploaded it, and DOORS' belong to the LSPLASH group (Forward is
+17186586680, Idle 4341150436, both LSPLASH's). Elsewhere they never start. Step
+2 loads no animation: it moves the joints itself, so no game can refuse it.
+
+It does what DOORS' `Main_Game.Movement` does: Idle always on; Forward always
+on with weight and speed = your speed / 15, which is DOORS' run; **C** to crouch
+(and slide, when faster than 20 studs/s); Jump and Land; Seated; Interact on a
+prompt. **F4** switches it off and on. Only you see it — everybody else keeps
+seeing your normal animations. R15 characters only, like DOORS'.
+
 ## DOORS optimizer
 
 ```lua
@@ -394,6 +421,7 @@ Over 400 simulated seeds: no spacing violations, about 12 encounters per run.
 | `HellishTimeEver` | the Hellish Time Ever mode |
 | `HellishGradient` | the moving black and white of its modifier row and title |
 | `HTE/` | the models Hellish Time Ever summons |
+| `DoorsAnimations` | DOORS' character animations, recorded in DOORS and played anywhere |
 | `GradishCheck` | the config report |
 | `ImagesA/` | one file per entity saying where its picture comes from |
 | `*.rbxm` | the models |

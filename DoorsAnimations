@@ -1,0 +1,617 @@
+--[[
+================================================================================
+
+        D O O R S   A N I M A T I O N S
+
+        DOORS' walk, run, crouch, slide, jump, landing, sitting and
+        interacting, on your character, in any game.
+
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/DoorsAnimations"))()
+
+        TWO STEPS, THE FIRST ONLY ONCE
+        ------------------------------
+        1. Run it once INSIDE DOORS, in a run (room 0 is the quietest). A copy
+           of your character appears in front of you and plays DOORS'
+           animations one after the other while they are written down. Stand
+           still until the caption says it is done. It saves them in your
+           executor's workspace folder as DoorsAnimations.lua.
+        2. Run it in any other game: it reads that file and your character
+           moves like in DOORS.
+
+        WHY NOT JUST PLAY DOORS' ANIMATION IDS
+        --------------------------------------
+        Roblox plays an animation only in games that belong to whoever
+        uploaded it. DOORS' belong to the LSPLASH group -- checked on Roblox:
+        Forward is 17186586680 "WalkLoopWithSignalsIdle", Idle is 4341150436
+        "walkidle", both LSPLASH's -- so in any other game they never start.
+        Inside DOORS they do: step 1 plays them there and writes down, thirty
+        times a second, where every joint of your character is. Step 2 moves
+        the joints that way itself, without loading any animation, so no game
+        can refuse it.
+
+        WHAT IT PLAYS, THE WAY DOORS DOES (Main_Game.Movement in the dump)
+        --------------------------------
+          Idle      always on, at speed 0.75
+          Forward   always on too. Its weight is your speed / 15, from 0.02 to
+                    1, and so is its speed: that is DOORS' run, the same walk,
+                    faster. When you start moving it jumps to 0.15 or 0.55 s,
+                    one of its two steps, as DOORS does.
+          Crouch    C, as in DOORS. It takes Forward's place and keeps its
+                    step; standing still, it holds the pose.
+          Slide     C while faster than SLIDE_SPEED
+          Jump      when you jump; Land (weight 0.66) when you touch down
+          Seated    while you sit
+          Interact  when you use a prompt
+
+        ONLY YOU SEE IT
+        ---------------
+        It moves the joints on your screen, every frame, after Roblox's own
+        animations have moved them. The game's Animate script keeps running,
+        so everybody else still sees your normal animations -- not a statue.
+
+        R15 only, like DOORS' character. On R6 it says so and does nothing.
+
+        F4  off and on.
+
+================================================================================
+]]
+
+---====== SETTINGS ======---
+
+local FILE        = "DoorsAnimations.lua" -- in the executor's workspace folder
+local FPS         = 30                    -- samples per second when recording
+local CROUCH_KEY  = Enum.KeyCode.C
+local TOGGLE_KEY  = Enum.KeyCode.F4
+local SLIDE_SPEED = 20                    -- studs/s: faster than this, C slides
+local SLIDE_TIME  = 0.9                   -- seconds of slide before the crouch
+
+-- The ones step 2 uses, from the Animations folder DOORS puts in your character
+local RECORD = { "Idle", "Forward", "Crouch", "Jump", "Land", "Seated", "Interact", "SlideEnter", "Slide" }
+
+-- DOORS' places, from ReplicatedFirst.GetPlaceId in the dump (and its test universe)
+local DOORS_PLACES = {
+	[6516141723] = true, [6839171747] = true, [10549820578] = true, [87716067947993] = true, [110258689672367] = true,
+	[10548891534] = true, [10549003388] = true, [10549005830] = true, [93554613224730] = true, [108247830715782] = true,
+}
+
+---=====================================================================---
+
+local Players                = game:GetService("Players")
+local RunService             = game:GetService("RunService")
+local UserInputService       = game:GetService("UserInputService")
+local ProximityPromptService = game:GetService("ProximityPromptService")
+local StarterGui             = game:GetService("StarterGui")
+local Workspace              = game:GetService("Workspace")
+
+local LocalPlayer = Players.LocalPlayer
+
+-- A second load replaces the first
+if getgenv and type(getgenv().__DoorsAnimationsCleanup) == "function" then
+	pcall(getgenv().__DoorsAnimationsCleanup)
+end
+
+local connections = {}
+local function track(connection)
+	table.insert(connections, connection)
+	return connection
+end
+
+local function say(text)
+	print("[DOORS Animations] " .. text)
+	-- DOORS' own caption when there is one, Roblox's notification elsewhere
+	local shown = pcall(function()
+		require(LocalPlayer.PlayerGui.MainUI.Initiator.Main_Game).caption(text, true)
+	end)
+	if not shown then
+		pcall(function()
+			StarterGui:SetCore("SendNotification", { Title = "DOORS Animations", Text = text, Duration = 6 })
+		end)
+	end
+end
+
+local function motorsOf(model)
+	local motors = {}
+	for _, motor in ipairs(model:GetDescendants()) do
+		if motor:IsA("Motor6D") then
+			motors[motor.Name] = motor
+		end
+	end
+	return motors
+end
+
+---====== STEP 1: RECORDING, INSIDE DOORS ======---
+
+-- 4 decimals, without trailing zeros: the file stays small
+local function number(value)
+	local text = string.format("%.4f", value):gsub("%.?0+$", "")
+	if text == "-0" or text == "" then return "0" end
+	return text
+end
+
+-- One animation on the copy: every 1/FPS seconds, the Transform of every joint
+local function sample(animator, motors, animation, waits)
+	local playing = animator:LoadAnimation(animation)
+	local deadline = os.clock() + 8
+	while playing.Length == 0 and os.clock() < deadline do
+		task.wait(0.1)
+	end
+	if playing.Length == 0 then
+		playing:Destroy()
+		return nil
+	end
+
+	local clip = {
+		length = playing.Length,
+		looped = playing.Looped,
+		priority = playing.Priority.Name,
+		joints = {},
+	}
+	local numbers = {}
+	for name in pairs(motors) do
+		numbers[name] = {}
+	end
+
+	-- Whatever the previous animation left on the joints is cleared first
+	for _, motor in pairs(motors) do
+		motor.Transform = CFrame.identity
+	end
+
+	-- Paused, and moved by hand to every sample
+	playing:Play(0, 1, 0)
+	local count = math.max(math.floor(clip.length * FPS + 0.5), 1) + 1
+	for index = 0, count - 1 do
+		playing.TimePosition = math.min(index / FPS, clip.length - 1e-3)
+		for _ = 1, waits do
+			RunService.Heartbeat:Wait()
+		end
+		for name, motor in pairs(motors) do
+			local transform = motor.Transform
+			local rx, ry, rz = transform:ToEulerAnglesXYZ()
+			local list = numbers[name]
+			for _, value in ipairs({ transform.X, transform.Y, transform.Z, rx, ry, rz }) do
+				table.insert(list, value)
+			end
+		end
+	end
+	playing:Stop(0)
+	playing:Destroy()
+
+	-- A joint that never moves is left out: in step 2 the others show through there
+	for name, list in pairs(numbers) do
+		local moves = false
+		for _, value in ipairs(list) do
+			if math.abs(value) > 1e-4 then
+				moves = true
+				break
+			end
+		end
+		if moves then
+			clip.joints[name] = list
+		end
+	end
+	return clip
+end
+
+local function write(clips)
+	local lines = {
+		"-- DOORS' animations, recorded inside DOORS by DoorsAnimations on " .. os.date("%Y-%m-%d %H:%M"),
+		"-- Per joint: x, y, z, rx, ry, rz of Motor6D.Transform, one sample every 1/fps seconds",
+		"return {",
+		("\tfps = %d,"):format(FPS),
+		"\tanimations = {",
+	}
+	for _, name in ipairs(RECORD) do
+		local clip = clips[name]
+		if clip then
+			table.insert(lines, ("\t\t[%q] = { length = %s, looped = %s, priority = %q, joints = {"):format(
+				name, number(clip.length), tostring(clip.looped), clip.priority))
+			for joint, list in pairs(clip.joints) do
+				local parts = table.create(#list)
+				for i, value in ipairs(list) do
+					parts[i] = number(value)
+				end
+				table.insert(lines, ("\t\t\t[%q] = { %s },"):format(joint, table.concat(parts, ", ")))
+			end
+			table.insert(lines, "\t\t} },")
+		end
+	end
+	table.insert(lines, "\t},")
+	table.insert(lines, "}")
+	writefile(FILE, table.concat(lines, "\n"))
+end
+
+local function record(character, folder)
+	if not writefile then
+		say("Your executor cannot write files (writefile): nothing can be saved")
+		return
+	end
+	say("Recording DOORS' animations: stand still until it says it is done")
+
+	-- A copy of you, in front of you, facing you. Scripts, sounds and your
+	-- Humanoid are taken out; an AnimationController plays the animations,
+	-- like DOORS' own base rig.
+	local wasArchivable = character.Archivable
+	character.Archivable = true
+	local rig = character:Clone()
+	character.Archivable = wasArchivable
+	if not rig then
+		say("Could not copy your character")
+		return
+	end
+	for _, item in ipairs(rig:GetDescendants()) do
+		if item:IsA("LuaSourceContainer") or item:IsA("Sound") or item:IsA("Humanoid") or item:IsA("Tool")
+			or item:IsA("BodyMover") or item:IsA("ForceField") then
+			item:Destroy()
+		elseif item:IsA("BasePart") then
+			item.Anchored = false
+			item.CanCollide = false
+			item.CanTouch = false
+			item.CanQuery = false
+			item.Massless = true
+		end
+	end
+	local root = rig:FindFirstChild("HumanoidRootPart")
+	if not root then
+		rig:Destroy()
+		say("Your character has no HumanoidRootPart")
+		return
+	end
+	root.Anchored = true
+	rig.Name = "DoorsAnimationsRecorder"
+	local controller = Instance.new("AnimationController")
+	controller.Parent = rig
+	local animator = Instance.new("Animator")
+	animator.Parent = controller
+	-- Level, whichever way you are looking
+	local camera = Workspace.CurrentCamera
+	local look = camera.CFrame.LookVector * Vector3.new(1, 0, 1)
+	look = if look.Magnitude > 1e-3 then look.Unit else Vector3.new(0, 0, -1)
+	local spot = camera.CFrame.Position + look * 7 - Vector3.new(0, 1, 0)
+	rig:PivotTo(CFrame.lookAt(spot, spot - look))
+	rig.Parent = Workspace
+
+	local motors = motorsOf(rig)
+	local clips, recorded, missing = {}, 0, {}
+	for index, name in ipairs(RECORD) do
+		local animation = folder:FindFirstChild(name)
+		local clip = nil
+		if animation and animation:IsA("Animation") then
+			say(("Recording %s (%d of %d)"):format(name, index, #RECORD))
+			clip = sample(animator, motors, animation, 1)
+			-- Nothing moved: the frames came faster than the rig. Once more, slower
+			if clip and next(clip.joints) == nil then
+				clip = sample(animator, motors, animation, 3)
+			end
+		end
+		if clip and next(clip.joints) ~= nil then
+			clips[name] = clip
+			recorded += 1
+		else
+			table.insert(missing, name)
+		end
+	end
+	rig:Destroy()
+
+	if recorded == 0 then
+		say("Nothing could be recorded: try again in a run, standing still")
+		return
+	end
+	write(clips)
+	say(("Done: %d animations saved in %s. Now run this in any game"):format(recorded, FILE))
+	if #missing > 0 then
+		warn("[DOORS Animations] not recorded: " .. table.concat(missing, ", "))
+	end
+end
+
+---====== STEP 2: PLAYING, IN ANY GAME ======---
+
+local PRIORITY = { Idle = 0, Movement = 1, Action = 2, Action2 = 3, Action3 = 4, Action4 = 5, Core = 1000 }
+
+-- The file's numbers, turned into CFrames once
+local function loadClips(data)
+	local clips = {}
+	for name, raw in pairs(data.animations or {}) do
+		local clip = {
+			length = raw.length,
+			looped = raw.looped,
+			order = PRIORITY[raw.priority] or 0,
+			fps = data.fps or FPS,
+			joints = {},
+		}
+		for joint, list in pairs(raw.joints) do
+			local frames = {}
+			for i = 1, #list - 5, 6 do
+				table.insert(frames, CFrame.new(list[i], list[i + 1], list[i + 2])
+					* CFrame.fromEulerAnglesXYZ(list[i + 3], list[i + 4], list[i + 5]))
+			end
+			clip.joints[joint] = frames
+		end
+		clips[name] = clip
+	end
+	return clips
+end
+
+--[[ A small animator: tracks with a time, a speed, a weight and a fade, blended
+     the way Roblox blends them. Within one priority, a weighted average; each
+     priority then covers the ones below as much as its weights add up to, at
+     most fully. A track only touches the joints it moves. ]]
+local function newAnimator(clips)
+	local tracks = {}
+	for name, clip in pairs(clips) do
+		tracks[name] = { clip = clip, time = 0, speed = 1, weight = 1, fade = 0, target = 0, rate = math.huge, playing = false }
+	end
+
+	local animator = { tracks = tracks }
+
+	function animator.play(name, fadeTime, weight, speed)
+		local entry = tracks[name]
+		if not entry then return end
+		entry.time = 0
+		entry.playing = true
+		entry.weight = weight or 1
+		entry.speed = speed or 1
+		entry.target = 1
+		entry.rate = if fadeTime and fadeTime > 0 then 1 / fadeTime else math.huge
+	end
+
+	function animator.stop(name, fadeTime)
+		local entry = tracks[name]
+		if not entry or not entry.playing then return end
+		entry.target = 0
+		entry.rate = if fadeTime and fadeTime > 0 then 1 / fadeTime else math.huge
+	end
+
+	function animator.isPlaying(name)
+		local entry = tracks[name]
+		return entry ~= nil and entry.playing and entry.target > 0
+	end
+
+	function animator.step(deltaTime)
+		for name, entry in pairs(tracks) do
+			if entry.playing then
+				local clip = entry.clip
+				entry.time += deltaTime * entry.speed
+				if entry.time >= clip.length then
+					if clip.looped then
+						entry.time %= clip.length
+					else
+						entry.time = clip.length
+						animator.stop(name, 0.1)
+					end
+				end
+				local change = deltaTime * entry.rate
+				if entry.fade < entry.target then
+					entry.fade = math.min(entry.fade + change, entry.target)
+				elseif entry.fade > entry.target then
+					entry.fade = math.max(entry.fade - change, entry.target)
+				end
+				if entry.fade <= 0 and entry.target <= 0 then
+					entry.playing = false
+				end
+			end
+		end
+	end
+
+	local function frameAt(entry, frames)
+		local clip = entry.clip
+		local position = math.clamp(entry.time * clip.fps, 0, #frames - 1)
+		local index = math.floor(position)
+		local a = frames[index + 1]
+		local b = frames[index + 2] or a
+		return a:Lerp(b, position - index)
+	end
+
+	-- The blended pose of one joint, or nil if no track moves it
+	function animator.pose(joint)
+		local levels = {}
+		for _, entry in pairs(tracks) do
+			local frames = entry.playing and entry.clip.joints[joint]
+			local weight = entry.weight * entry.fade
+			if frames and weight > 0 then
+				local order = entry.clip.order
+				local level = levels[order]
+				if not level then
+					level = { order = order, weight = 0 }
+					levels[order] = level
+				end
+				local cframe = frameAt(entry, frames)
+				level.weight += weight
+				level.cframe = if level.cframe then level.cframe:Lerp(cframe, weight / level.weight) else cframe
+			end
+		end
+		local ordered = {}
+		for _, level in pairs(levels) do
+			table.insert(ordered, level)
+		end
+		if #ordered == 0 then return nil end
+		table.sort(ordered, function(a, b) return a.order < b.order end)
+		local pose = CFrame.identity
+		for _, level in ipairs(ordered) do
+			pose = pose:Lerp(level.cframe, math.min(level.weight, 1))
+		end
+		return pose
+	end
+
+	return animator
+end
+
+local function play(clips)
+	local enabled = true
+	local perCharacter = {}
+
+	local function forget()
+		for _, connection in ipairs(perCharacter) do
+			pcall(function() connection:Disconnect() end)
+		end
+		table.clear(perCharacter)
+	end
+
+	local function attach(character)
+		forget()
+		local humanoid = character:WaitForChild("Humanoid", 10)
+		local root = character:WaitForChild("HumanoidRootPart", 10)
+		if not (humanoid and root) then return end
+		if humanoid.RigType ~= Enum.HumanoidRigType.R15 then
+			say("Your character is R6: DOORS' animations are for R15 characters")
+			return
+		end
+
+		-- Only the joints DOORS' animations move. When none of them is moving one,
+		-- it rests, as in DOORS; every other joint stays with the game's animations
+		local motors = {}
+		for name, motor in pairs(motorsOf(character)) do
+			for _, clip in pairs(clips) do
+				if clip.joints[name] then
+					motors[name] = motor
+					break
+				end
+			end
+		end
+		local animator = newAnimator(clips)
+		local crouching, sliding, wasMoving = false, false, false
+
+		-- Always on, as DOORS starts them
+		animator.play("Idle", 0.2, 1, 0.75)
+		animator.play("Forward", 0.2, 0.01, 0.75)
+
+		local function crouch(on)
+			crouching = on
+			if on then
+				animator.play("Crouch", 0.2, 1, 0)
+				local forward = animator.tracks.Forward
+				local crouchTrack = animator.tracks.Crouch
+				if forward and crouchTrack then crouchTrack.time = forward.time end
+			else
+				animator.stop("Crouch", 0.2)
+			end
+		end
+
+		local function slide()
+			sliding = true
+			animator.play("SlideEnter", 0.3, 1, 1)
+			animator.play("Slide", 0.3, 1, 1)
+			task.delay(SLIDE_TIME, function()
+				sliding = false
+				animator.stop("Slide", 0.2)
+				animator.stop("SlideEnter", 0.2)
+				crouch(true)
+			end)
+		end
+
+		local function horizontalSpeed()
+			-- DOORS: each part of the velocity capped at what your keys ask for
+			local limit = humanoid.MoveDirection.Magnitude * humanoid.WalkSpeed
+			local velocity = root.AssemblyLinearVelocity
+			return Vector3.new(math.clamp(velocity.X, -limit, limit), 0, math.clamp(velocity.Z, -limit, limit)).Magnitude
+		end
+
+		table.insert(perCharacter, humanoid.StateChanged:Connect(function(_, state)
+			if state == Enum.HumanoidStateType.Jumping then
+				if crouching then crouch(false) end
+				animator.play("Jump", 0.1, 1, 1)
+			elseif state == Enum.HumanoidStateType.Landed then
+				animator.stop("Jump", 0.05)
+				animator.play("Land", 0.05, 0.66, 1)
+			end
+		end))
+
+		table.insert(perCharacter, humanoid.Seated:Connect(function(active)
+			if active then
+				animator.play("Seated", 0.2, 1, 1)
+			else
+				animator.stop("Seated", 0.2)
+			end
+		end))
+
+		table.insert(perCharacter, ProximityPromptService.PromptTriggered:Connect(function(_, player)
+			if player == LocalPlayer then
+				animator.play("Interact", 0.1, 1, 1)
+			end
+		end))
+
+		table.insert(perCharacter, UserInputService.InputBegan:Connect(function(input, processed)
+			if processed or input.KeyCode ~= CROUCH_KEY or sliding then return end
+			if not crouching and horizontalSpeed() > SLIDE_SPEED and clips.Slide then
+				slide()
+			else
+				crouch(not crouching)
+			end
+		end))
+
+		-- After Roblox's animations have moved the joints, before physics: ours win on your screen
+		local step = RunService.PreSimulation or RunService.Stepped
+		table.insert(perCharacter, step:Connect(function(a, b)
+			local deltaTime = if type(b) == "number" then b else a
+			if not enabled or not character.Parent then return end
+
+			local speed = horizontalSpeed()
+			local moving = humanoid.MoveDirection.Magnitude > 0.1
+			local forward = animator.tracks.Forward
+			if moving and not wasMoving and forward then
+				forward.time = if math.random(1, 2) == 2 then 0.15 else 0.55
+				local crouchTrack = animator.tracks.Crouch
+				if crouching and crouchTrack then crouchTrack.time = forward.time end
+			end
+			wasMoving = moving
+
+			local pace = math.clamp(speed, 0.02, 30) / 15
+			if forward then
+				forward.speed = pace
+				forward.weight = if crouching then 0.02 else math.clamp(speed / 15, 0.02, 1)
+			end
+			local crouchTrack = animator.tracks.Crouch
+			if crouching and crouchTrack then
+				crouchTrack.speed = pace
+			end
+
+			animator.step(deltaTime)
+			for joint, motor in pairs(motors) do
+				motor.Transform = animator.pose(joint) or CFrame.identity
+			end
+		end))
+	end
+
+	track(UserInputService.InputBegan:Connect(function(input, processed)
+		if processed or input.KeyCode ~= TOGGLE_KEY then return end
+		enabled = not enabled
+		say(if enabled then "DOORS' animations on" else "DOORS' animations off")
+	end))
+	track(LocalPlayer.CharacterAdded:Connect(attach))
+	if LocalPlayer.Character then
+		task.spawn(attach, LocalPlayer.Character)
+	end
+
+	return forget
+end
+
+---====== WHICH STEP ======---
+
+local forgetCharacter = nil
+local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local inDoors = DOORS_PLACES[game.PlaceId] == true
+local folder = character:WaitForChild("Animations", if inDoors then 15 else 1)
+local isDoorsFolder = folder and folder:FindFirstChild("Forward") and folder:FindFirstChild("Idle")
+
+if isDoorsFolder then
+	record(character, folder)
+else
+	local ok, data = pcall(function()
+		return loadstring(readfile(FILE))()
+	end)
+	if not ok or type(data) ~= "table" or type(data.animations) ~= "table" then
+		say("First run this once inside DOORS: it records the animations into " .. FILE)
+		return
+	end
+	forgetCharacter = play(loadClips(data))
+	say("DOORS' animations on: C to crouch, F4 to switch off")
+end
+
+if getgenv then
+	getgenv().__DoorsAnimationsCleanup = function()
+		for _, connection in ipairs(connections) do
+			pcall(function() connection:Disconnect() end)
+		end
+		table.clear(connections)
+		if forgetCharacter then forgetCharacter() end
+	end
+end
