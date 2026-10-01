@@ -27,6 +27,8 @@ mod rather than playing it.
 | DOORS optimizer (max graphics, less lag) | `.../DoorsOptimizer` |
 | Hellish Time Ever (K = an entity, spam it) | `.../HellishTimeEver` |
 | DOORS' walk, run, crouch and jump in any game | `.../DoorsAnimations` |
+| Universal Custom Assets: animate DOORS' things and your own (Ctrl + U I O) | `.../UniversalAssets` |
+| The same, obfuscated | `.../UniversalAssets.obf` |
 
 ### Build (tools — not for players)
 
@@ -289,6 +291,34 @@ on with weight and speed = your speed / 15, which is DOORS' run; **C** to crouch
 prompt. **F4** switches it off and on. Only you see it — everybody else keeps
 seeing your normal animations. R15 characters only, like DOORS'.
 
+## Universal Custom Assets
+
+```lua
+loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/UniversalAssets"))()
+```
+
+An animator. Hold **Ctrl** and type **U I O** to open it.
+
+- **Insert** a preset — DOORS' Glitch, Screech, Spider, Dread, Figure, the
+  wardrobe, door, bookcase, table, chandelier or plant of the room you are in,
+  a few custom morph models — or any model by asset ID or `.rbxm` URL.
+- **Here** puts it in front of you, **Place** makes it follow the mouse (Q/E
+  turn, R/F up and down, click to drop).
+- **+ Key** remembers where it is at that time. Two keys = it moves from one to
+  the other in that many seconds, with the chosen easing. A key can also start
+  an animation and a sound: a name from the model, an ID, or `stop`.
+- **Play**, **Stop**, **Loop**; **Save** / **Load** keep the project in the
+  executor's `UniversalAssets` folder.
+
+Animations owned by the game's owner (in DOORS: LSPLASH) play normally. Any
+other one is converted when the model is inserted: its KeyframeSequence is
+downloaded and played by the script, joint by joint. A KeyframeSequence inside
+the model works the same way. Nothing is uploaded anywhere; only you see it.
+
+`UniversalAssets.obf` is the same script obfuscated with
+[Prometheus](https://github.com/prometheus-lua/Prometheus) (Medium preset, Luau).
+Regenerate it after every change to `UniversalAssets`.
+
 ## DOORS optimizer
 
 ```lua
@@ -422,6 +452,7 @@ Over 400 simulated seeds: no spacing violations, about 12 encounters per run.
 | `HellishGradient` | the moving black and white of its modifier row and title |
 | `HTE/` | the models Hellish Time Ever summons |
 | `DoorsAnimations` | DOORS' character animations, recorded in DOORS and played anywhere |
+| `UniversalAssets` / `.obf` | the animator for DOORS' things and custom assets, readable and obfuscated |
 | `GradishCheck` | the config report |
 | `ImagesA/` | one file per entity saying where its picture comes from |
 | `*.rbxm` | the models |
