@@ -8,7 +8,9 @@
                 ComboTime = 2,              -- seconds allowed between those keys
                 PlayKey = "P",              -- Ctrl + P: play / stop, also with the panel closed
                 FreeCamKey = "F",           -- Ctrl + F: free camera on / off
-                UIScale = 1.2,              -- size of the panel
+                UIScale = 1.2,              -- size of the panel on a PC
+                MobileScale = 0.8,          -- size of the panel on a phone
+                MobileButtons = "auto",     -- the bar for phones: "auto", true (always) or false
                 MoveSnap = 0.5,             -- studs   (0 = free)
                 RotateSnap = 15,            -- degrees (0 = free)
                 ScaleSnap = 0.05,           --         (0 = free)
@@ -27,6 +29,12 @@
             Ctrl+Z undo, Ctrl+Y redo; click a model to select it
             hold the right mouse button to look around
             Free cam: WASD, E up, Q down, Shift slow, wheel forward, Z / X zoom, right mouse to look
+
+        ON A PHONE
+            A small bar at the top: UCA opens the panel, Play plays / pauses, Cam is the
+            free camera (with its own arrows; drag a finger to look). Drag the panel by
+            its title and the bar by ::. Place: tap where it goes. Tap a model to select
+            it. The panel fits the screen and scrolls.
 
         THE CAMERA
             "Camera" is first in the list of models: its keys are where the camera is and
@@ -61,6 +69,8 @@ local CONFIG = {
 	PlayKey = "P",
 	FreeCamKey = "F",
 	UIScale = 1.2,
+	MobileScale = 0.8,
+	MobileButtons = "auto",
 	MoveSnap = 0.5,
 	RotateSnap = 15,
 	ScaleSnap = 0.05,
@@ -109,6 +119,8 @@ local TweenService = game:GetService("TweenService")
 local MarketplaceService = game:GetService("MarketplaceService")
 local KFSProvider = game:GetService("KeyframeSequenceProvider")
 local LocalPlayer = Players.LocalPlayer
+local touchOnly = UIS.TouchEnabled and not UIS.KeyboardEnabled -- a phone or a tablet
+local showMobile = if CONFIG.MobileButtons == "auto" then touchOnly else CONFIG.MobileButtons == true
 
 if getgenv and type(getgenv().__UniversalAssetsCleanup) == "function" then
 	pcall(getgenv().__UniversalAssetsCleanup)
@@ -121,6 +133,7 @@ local status, refresh, drawTimeline -- set with the UI
 local freecam, mouseWas, morph = nil, nil, nil
 local setFreeCam, freeCamOn, setMorph -- below, with the camera and the morph
 local flashFrame, shakeUntil = nil, 0
+local padHeld, toggle = {}, nil -- the free cam's arrows on a phone; opens / closes the panel
 
 local function on(signal, fn)
 	local c = signal:Connect(fn)
@@ -966,7 +979,9 @@ local placing = nil
 local rayParams = RaycastParams.new()
 rayParams.FilterType = Enum.RaycastFilterType.Exclude
 
+local pointer = nil -- on a phone: where the finger last touched
 local function mouseRay()
+	if pointer then return workspace.CurrentCamera:ScreenPointToRay(pointer.X, pointer.Y) end
 	local mouse = UIS:GetMouseLocation()
 	return workspace.CurrentCamera:ViewportPointToRay(mouse.X, mouse.Y)
 end
@@ -988,7 +1003,7 @@ local function startPlacing()
 	local pivot = obj.model:GetPivot()
 	local _, yaw = pivot:ToOrientation()
 	placing = { obj = obj, from = pivot, yaw = yaw, base = pivot.Y - (box.Y - size.Y / 2) }
-	status("Click to drop. R turns, Esc cancels")
+	status(if touchOnly then "Tap where it goes" else "Click to drop. R turns, Esc cancels")
 end
 
 ---====== THE PANEL ======---
@@ -1022,10 +1037,27 @@ end
 
 local panel = make("Frame", { Size = UDim2.fromOffset(W, 664), Position = UDim2.fromOffset(24, 70),
 	BackgroundColor3 = DARK, BackgroundTransparency = 0.06, BorderSizePixel = 0 }, gui)
-make("UIScale", { Scale = CONFIG.UIScale }, panel)
+local uiScale = make("UIScale", { Scale = CONFIG.UIScale }, panel)
 make("UICorner", { CornerRadius = UDim.new(0, 6) }, panel)
 make("UIStroke", { Color = CREAM, Transparency = 0.6 }, panel)
-local content = make("Frame", { Position = UDim2.fromOffset(0, 34), Size = UDim2.fromOffset(W, 630), BackgroundTransparency = 1 }, panel)
+local content = make("ScrollingFrame", { Name = "Content", Position = UDim2.fromOffset(0, 34), Size = UDim2.fromOffset(W, 630),
+	CanvasSize = UDim2.fromOffset(W, 630), BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 6,
+	ScrollingDirection = Enum.ScrollingDirection.Y, ScrollBarImageColor3 = CREAM }, panel)
+
+-- Fits the screen: smaller on a phone, and what does not fit scrolls
+local function fit()
+	local view = workspace.CurrentCamera.ViewportSize
+	local base = if touchOnly then CONFIG.MobileScale else CONFIG.UIScale
+	local scale = math.clamp(math.min(base, (view.X - 16) / W), 0.4, base)
+	uiScale.Scale = scale
+	local height = math.clamp((view.Y - 60) / scale, 120, 664)
+	panel.Size = UDim2.fromOffset(W, if content.Visible then height else 30)
+	content.Size = UDim2.fromOffset(W, height - 34)
+	-- Never left outside the screen
+	local x = math.clamp(panel.Position.X.Offset, 0, math.max(view.X - W * scale, 0))
+	local y = math.clamp(panel.Position.Y.Offset, 0, math.max(view.Y - 60 - 30 * scale, 0))
+	panel.Position = UDim2.fromOffset(x, y)
+end
 
 local function label(text, x, y, w, parent)
 	return make("TextLabel", { Text = text, Position = UDim2.fromOffset(x, y), Size = UDim2.fromOffset(w, 28),
@@ -1057,15 +1089,26 @@ title.Size, title.Modal, title.BackgroundColor3, title.TextColor3 = UDim2.fromOf
 local closeButton = button("Close", "X", W - 32, 0, 32, function() end, panel)
 local minimize = button("Minimize", "_", W - 66, 0, 32, function()
 	content.Visible = not content.Visible
-	panel.Size = UDim2.fromOffset(W, if content.Visible then 664 else 30)
+	fit()
 end, panel)
 for _, b in ipairs({ closeButton, minimize }) do b.BackgroundColor3, b.TextColor3, b.ZIndex, b.Size = RED, DARK, 2, UDim2.fromOffset(32, 30) end
+-- Dragging the panel (or the phone bar) with the mouse or a finger
 local dragging = nil
-title.InputBegan:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1 then
-		dragging = { from = input.Position, start = panel.Position }
+local function pressed(input)
+	return input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch
+end
+local function startDragging(frame, input)
+	if pressed(input) then
+		dragging = { frame = frame, from = input.Position, start = frame.Position,
+			touch = if input.UserInputType == Enum.UserInputType.Touch then input else nil }
 	end
-end)
+end
+-- The same finger, or the mouse moving
+local function follows(state, input)
+	if state.touch then return input == state.touch end
+	return input.UserInputType == Enum.UserInputType.MouseMovement
+end
+title.InputBegan:Connect(function(input) startDragging(panel, input) end)
 
 local preset = 1
 local presetLabel = label("", 40, row(1), 250)
@@ -1238,8 +1281,9 @@ local function scrub(x)
 	drawTimeline()
 end
 bar.InputBegan:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1 then
-		playing, scrubbing = nil, true
+	if pressed(input) then
+		playing = nil
+		scrubbing = { touch = if input.UserInputType == Enum.UserInputType.Touch then input else nil }
 		scrub(input.Position.X)
 	end
 end)
@@ -1408,8 +1452,10 @@ freeCamOn = function() return freecam ~= nil end
 local function stepFreeCam(dt)
 	local camera = workspace.CurrentCamera
 	local look = UIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton2)
-	UIS.MouseBehavior = if look then Enum.MouseBehavior.LockCurrentPosition else Enum.MouseBehavior.Default
-	title.Modal = not look
+	if not touchOnly then
+		UIS.MouseBehavior = if look then Enum.MouseBehavior.LockCurrentPosition else Enum.MouseBehavior.Default
+		title.Modal = not look
+	end
 	if look then
 		local delta = UIS:GetMouseDelta()
 		freecam.yaw -= math.rad(delta.X * CONFIG.LookSpeed)
@@ -1417,7 +1463,7 @@ local function stepFreeCam(dt)
 	end
 	local rotation = CFrame.fromOrientation(freecam.pitch, freecam.yaw, 0)
 	if not UIS:GetFocusedTextBox() then
-		local function held(key) return if UIS:IsKeyDown(Enum.KeyCode[key]) then 1 else 0 end
+		local function held(key) return if UIS:IsKeyDown(Enum.KeyCode[key]) or padHeld[key] then 1 else 0 end
 		local move = Vector3.new(held("D") - held("A"), held("E") - held("Q"), held("S") - held("W"))
 		local speed = CONFIG.FreeCamSpeed * (if UIS:IsKeyDown(Enum.KeyCode.LeftShift) then 0.25 else 1)
 		freecam.position += rotation:VectorToWorldSpace(move) * speed * dt
@@ -1454,6 +1500,51 @@ function setFreeCam(on)
 		status("Free cam off")
 	end
 	refresh()
+end
+
+---====== ON A PHONE: a small bar, and arrows for the free cam ======---
+
+local function playPause()
+	if playing then
+		stop()
+		status(("Paused at %.2fs"):format(preview))
+	else
+		play()
+	end
+end
+
+local mobileGui = make("ScreenGui", { Name = "UniversalAssetsMobile", ResetOnSpawn = false, DisplayOrder = 51, Enabled = showMobile }, hud)
+local miniBar = make("Frame", { Name = "MiniBar", Size = UDim2.fromOffset(212, 36), Position = UDim2.new(0.5, -106, 0, 6),
+	BackgroundColor3 = DARK, BackgroundTransparency = 0.1, BorderSizePixel = 0 }, mobileGui)
+make("UICorner", { CornerRadius = UDim.new(0, 6) }, miniBar)
+local grip = button("Grip", "::", 4, 4, 30, function() end, miniBar)
+grip.InputBegan:Connect(function(input) startDragging(miniBar, input) end)
+button("Open", "UCA", 38, 4, 56, function() toggle() end, miniBar)
+local playButton = button("PlayPause", "Play", 98, 4, 56, playPause, miniBar)
+button("Cam", "Cam", 158, 4, 50, function() setFreeCam(not freecam) end, miniBar)
+
+local pad = make("Frame", { Name = "CamPad", Size = UDim2.fromOffset(196, 132), Position = UDim2.new(1, -212, 1, -200),
+	BackgroundTransparency = 1, Visible = false }, mobileGui)
+for _, b in ipairs({
+	{ "E", "Up", 0, 0, 62 }, { "W", "Fwd", 66, 0, 62 }, { "Q", "Down", 132, 0, 62 },
+	{ "A", "Left", 0, 44, 62 }, { "S", "Back", 66, 44, 62 }, { "D", "Right", 132, 44, 62 },
+	{ "Z", "Zoom +", 0, 88, 96 }, { "X", "Zoom -", 100, 88, 94 },
+}) do
+	local key = b[1]
+	local held = button("Pad" .. key, b[2], b[3], b[4], b[5], function() end, pad)
+	held.Size = UDim2.fromOffset(b[5], 40)
+	held.InputBegan:Connect(function(input) if pressed(input) then padHeld[key] = true end end)
+	held.InputEnded:Connect(function(input) if pressed(input) then padHeld[key] = false end end)
+end
+
+local function stepMobile()
+	local text = if playing then "Pause" else "Play"
+	if playButton.Text ~= text then playButton.Text = text end
+	local showPad = showMobile and freecam ~= nil
+	if pad.Visible ~= showPad then
+		pad.Visible = showPad
+		table.clear(padHeld)
+	end
 end
 
 ---====== MORPH: the selected model becomes your body ======---
@@ -1511,18 +1602,24 @@ end
 
 showPreset()
 refresh()
-status("X or Ctrl " .. table.concat(CONFIG.Combo, " ") .. " closes. Ctrl " .. CONFIG.PlayKey .. " plays")
+status(if touchOnly then "UCA at the top opens and closes this. Drag the title to move it"
+	else "X or Ctrl " .. table.concat(CONFIG.Combo, " ") .. " closes. Ctrl " .. CONFIG.PlayKey .. " plays")
+fit()
+on(workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"), fit)
 gui.Parent = hud
 pcall(function()
 	game:GetService("StarterGui"):SetCore("SendNotification", { Title = "Universal Custom Assets",
-		Text = "Hold Ctrl and type " .. table.concat(CONFIG.Combo, " "), Duration = 6 })
+		Text = if showMobile then "Tap UCA at the top of the screen" else "Hold Ctrl and type " .. table.concat(CONFIG.Combo, " "), Duration = 6 })
 end)
 
 ---====== KEYS AND MOUSE ======---
 
-local function toggle()
+function toggle()
 	gui.Enabled = not gui.Enabled
-	if mainGame then -- DOORS keeps the mouse locked unless this is on, as in its cutscenes
+	if gui.Enabled then fit() end
+	-- On a PC DOORS keeps the mouse locked unless this is on, as in its cutscenes. On a
+	-- phone there is no mouse to free, and the switch would hide DOORS' own buttons
+	if mainGame and not touchOnly then
 		if gui.Enabled then mouseWas = mainGame.freemouse end
 		mainGame.freemouse = if gui.Enabled then true else mouseWas
 	end
@@ -1533,8 +1630,14 @@ closeButton.MouseButton1Click:Connect(toggle)
 local comboStep, comboAt = 1, 0
 on(UIS.InputBegan, function(input, processed)
 	local key, kind = input.KeyCode, input.UserInputType
+	if kind == Enum.UserInputType.Touch then pointer = input.Position end
 	if placing then
-		if kind == Enum.UserInputType.MouseButton1 and not processed then
+		if kind == Enum.UserInputType.Touch and not processed then -- a phone: one tap puts it there
+			stepPlacing()
+			placing = nil
+			status("Placed. Set a time and press + Key")
+			return
+		elseif kind == Enum.UserInputType.MouseButton1 and not processed then
 			placing = nil
 			status("Placed. Set a time and press + Key")
 			return
@@ -1546,22 +1649,19 @@ on(UIS.InputBegan, function(input, processed)
 		end
 	end
 	if gui.Enabled and not processed then
-		if kind == Enum.UserInputType.MouseButton1 then clickSelect() end
+		if pressed(input) then clickSelect() end
 		-- Right mouse: DOORS takes the mouse back while it is held, so the camera turns
 		if kind == Enum.UserInputType.MouseButton2 and not freecam then
 			title.Modal = false
 			if mainGame then mainGame.freemouse = mouseWas end
 		end
 	end
+	-- A finger on the screen turns the free cam
+	if freecam and kind == Enum.UserInputType.Touch and not processed then freecam.touch = input end
 	if processed or key == Enum.KeyCode.LeftControl or key == Enum.KeyCode.RightControl or key == Enum.KeyCode.Unknown then return end
 	local ctrl = UIS:IsKeyDown(Enum.KeyCode.LeftControl) or UIS:IsKeyDown(Enum.KeyCode.RightControl)
 	if ctrl and key == Enum.KeyCode[CONFIG.PlayKey] then
-		if playing then
-			stop()
-			status(("Paused at %.2fs: Ctrl %s goes on"):format(preview, CONFIG.PlayKey))
-		else
-			play()
-		end
+		playPause()
 		comboStep = 1
 		return
 	end
@@ -1597,20 +1697,31 @@ on(UIS.InputBegan, function(input, processed)
 	end
 end)
 on(UIS.InputChanged, function(input)
-	if input.UserInputType == Enum.UserInputType.MouseMovement then
-		if dragging then
+	local kind = input.UserInputType
+	if kind == Enum.UserInputType.Touch then pointer = input.Position end
+	if kind == Enum.UserInputType.MouseMovement or kind == Enum.UserInputType.Touch then
+		if dragging and follows(dragging, input) then
 			local d = input.Position - dragging.from
-			panel.Position = dragging.start + UDim2.fromOffset(d.X, d.Y)
+			dragging.frame.Position = dragging.start + UDim2.fromOffset(d.X, d.Y)
 		end
-		if scrubbing then scrub(input.Position.X) end
+		if scrubbing and follows(scrubbing, input) then scrub(input.Position.X) end
+		if freecam and freecam.touch == input then
+			freecam.yaw -= math.rad(input.Delta.X * CONFIG.LookSpeed)
+			freecam.pitch = math.clamp(freecam.pitch - math.rad(input.Delta.Y * CONFIG.LookSpeed), -1.5, 1.5)
+		end
 	elseif input.UserInputType == Enum.UserInputType.MouseWheel and freecam and not UIS:GetFocusedTextBox() then
 		local rotation = CFrame.fromOrientation(freecam.pitch, freecam.yaw, 0)
 		freecam.position += rotation.LookVector * (input.Position.Z * 4)
 	end
 end)
 on(UIS.InputEnded, function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1 then
-		dragging, scrubbing = nil, false
+	if pressed(input) then
+		if dragging and (dragging.touch == nil or dragging.touch == input) then
+			if dragging.frame == panel then fit() end
+			dragging = nil
+		end
+		if scrubbing and (scrubbing.touch == nil or scrubbing.touch == input) then scrubbing = nil end
+		if freecam and freecam.touch == input then freecam.touch = nil end
 		endDrag()
 	elseif input.UserInputType == Enum.UserInputType.MouseButton2 and not freecam then
 		title.Modal = true
@@ -1624,6 +1735,7 @@ on(RunService.RenderStepped, function(dt)
 	stepMovers(dt)
 	stepGizmo()
 	stepMorph()
+	stepMobile()
 end)
 -- Our own players write the joints after Roblox's animations, before physics
 on(RunService.PreSimulation or RunService.Stepped, function(a, b)
@@ -1639,7 +1751,7 @@ if getgenv then
 		for _, c in ipairs(connections) do c:Disconnect() end
 		for _, obj in ipairs(objects) do obj.model:Destroy() end
 		if mainGame and gui.Enabled then mainGame.freemouse = mouseWas end
-		for _, i in ipairs({ gui, fxGui, proxy, moveHandles, scaleHandles, rotateHandles }) do i:Destroy() end
+		for _, i in ipairs({ gui, fxGui, mobileGui, proxy, moveHandles, scaleHandles, rotateHandles }) do i:Destroy() end
 	end
 end
 

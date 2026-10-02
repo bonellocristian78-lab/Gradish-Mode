@@ -299,7 +299,9 @@ _G.UniversalAssets = {              -- all optional, these are the defaults
     ComboTime = 2,                  -- seconds allowed between those keys
     PlayKey = "P",                  -- Ctrl + P: play / stop, also with the panel closed
     FreeCamKey = "F",               -- Ctrl + F: free camera on / off
-    UIScale = 1.2,                  -- size of the panel
+    UIScale = 1.2,                  -- size of the panel on a PC
+    MobileScale = 0.8,              -- size of the panel on a phone
+    MobileButtons = "auto",         -- the phone bar: "auto", true (always) or false
     MoveSnap = 0.5,                 -- studs   (0 = free)
     RotateSnap = 15,                -- degrees (0 = free)
     ScaleSnap = 0.05,               --         (0 = free)
@@ -318,6 +320,11 @@ An animator. **Ctrl + U I O** opens it; the same combo or the **X** closes it an
 locks the mouse back; **_** folds it to its title bar. **Ctrl + P** plays or stops,
 with the panel closed too.
 
+- **On a phone**: a small bar at the top — **UCA** opens and closes the panel,
+  **Play** plays and pauses, **Cam** is the free camera with its own arrows (Up,
+  Fwd, Down, Left, Back, Right, Zoom) and a finger on the screen to look. Drag the
+  panel by its title and the bar by `::`. **Place**: tap where it goes; tap a model
+  to select it. The panel fits the screen and scrolls; DOORS' own buttons stay.
 - **Insert** a preset — DOORS' Glitch, Screech, Spider, Dread, Figure; the door,
   wardrobe, drawers, bookcase, table, chandelier, plant, clock or painting of the
   room you are in; a few custom morph models — or any asset ID or `.rbxm` URL.
