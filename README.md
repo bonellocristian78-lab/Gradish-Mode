@@ -325,6 +325,17 @@ with the panel closed too.
   Fwd, Down, Left, Back, Right, Zoom) and a finger on the screen to look. Drag the
   panel by its title and the bar by `::`. **Place**: tap where it goes; tap a model
   to select it. The panel fits the screen and scrolls; DOORS' own buttons stay.
+- **The toolbox**: type in the search box and press **Search** (or Enter): it
+  searches Roblox's Creator Store — the Studio toolbox — for models, with their
+  preview, author and number of animations. **Seek, Rush, Ambush, Figure, Halt,
+  Eyes, Screech, Jack** are one tap away; **Anims only** hides models without
+  animations; **More results** loads the next page. Tap a result to insert it:
+  its scripts are taken out and its animations converted when needed. Same on a
+  phone.
+- **Auto**: the selected model plays its own run / walk animation while its keys
+  move it and its idle one while it stands — Seek runs between the keys you put
+  down the hallway. (Without Auto, put its Run on the first key: the same
+  animation on the next keys keeps going.)
 - **Insert** a preset — DOORS' Glitch, Screech, Spider, Dread, Figure; the door,
   wardrobe, drawers, bookcase, table, chandelier, plant, clock or painting of the
   room you are in; a few custom morph models — or any asset ID or `.rbxm` URL.

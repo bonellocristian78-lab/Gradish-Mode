@@ -36,6 +36,17 @@
             its title and the bar by ::. Place: tap where it goes. Tap a model to select
             it. The panel fits the screen and scrolls.
 
+        THE TOOLBOX
+            Type in the search box and press Search (or Enter): it searches Roblox's
+            Creator Store, the Studio toolbox, for models. Seek, Rush, Ambush... are one
+            tap away. "Anims only" hides the models without animations. Tap a result to
+            insert it: its scripts are taken out, its animations converted if needed.
+
+        AUTO ANIM
+            With Auto on, the selected model plays its own walk / run animation while
+            its keys move it and its idle one while it stands (Seek runs between the
+            keys you put down the hallway). Its keys' animations are then ignored.
+
         THE CAMERA
             "Camera" is first in the list of models: its keys are where the camera is and
             its zoom (set them from the free cam). On Play it flies through them, as in a
@@ -118,6 +129,7 @@ local UIS = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 local MarketplaceService = game:GetService("MarketplaceService")
 local KFSProvider = game:GetService("KeyframeSequenceProvider")
+local HttpService = game:GetService("HttpService")
 local LocalPlayer = Players.LocalPlayer
 local touchOnly = UIS.TouchEnabled and not UIS.KeyboardEnabled -- a phone or a tablet
 local showMobile = if CONFIG.MobileButtons == "auto" then touchOnly else CONFIG.MobileButtons == true
@@ -133,7 +145,7 @@ local status, refresh, drawTimeline -- set with the UI
 local freecam, mouseWas, morph = nil, nil, nil
 local setFreeCam, freeCamOn, setMorph -- below, with the camera and the morph
 local flashFrame, shakeUntil = nil, 0
-local padHeld, toggle = {}, nil -- the free cam's arrows on a phone; opens / closes the panel
+local padHeld, toggle, toolboxFit = {}, nil, nil -- the free cam's arrows on a phone; opens / closes the panel
 
 local function on(signal, fn)
 	local c = signal:Connect(fn)
@@ -287,144 +299,158 @@ end
 
 ---====== ANIMATIONS ======---
 
-local owners = {}
-local function ownedHere(id) -- true / false / nil when unknown
-	if owners[id] == nil then
-		local ok, info = pcall(MarketplaceService.GetProductInfo, MarketplaceService, id)
-		local creator = ok and info ~= nil and type(info) == "table" and info.Creator
-		owners[id] = if creator
-			then creator.CreatorTargetId == 1
-				or (creator.CreatorTargetId == game.CreatorId and tostring(game.CreatorType):find(creator.CreatorType or "?") ~= nil)
-			else "unknown"
+local loadTrack
+do
+	local owners = {}
+	local function ownedHere(id) -- true / false / nil when unknown
+		if owners[id] == nil then
+			local ok, info = pcall(MarketplaceService.GetProductInfo, MarketplaceService, id)
+			local creator = ok and info ~= nil and type(info) == "table" and info.Creator
+			owners[id] = if creator
+				then creator.CreatorTargetId == 1
+					or (creator.CreatorTargetId == game.CreatorId and tostring(game.CreatorType):find(creator.CreatorType or "?") ~= nil)
+				else "unknown"
+		end
+		return if owners[id] == "unknown" then nil else owners[id]
 	end
-	return if owners[id] == "unknown" then nil else owners[id]
-end
 
-local function nativeTrack(animator, animation, timeout)
-	local ok, track = pcall(animator.LoadAnimation, animator, animation)
-	if not ok then return nil end
-	local deadline = os.clock() + timeout
-	while track.Length == 0 and os.clock() < deadline do task.wait(0.1) end
-	if track.Length == 0 then
-		track:Destroy()
+	local function nativeTrack(animator, animation, timeout)
+		local ok, track = pcall(animator.LoadAnimation, animator, animation)
+		if not ok then return nil end
+		local deadline = os.clock() + timeout
+		while track.Length == 0 and os.clock() < deadline do task.wait(0.1) end
+		if track.Length == 0 then
+			track:Destroy()
+			return nil
+		end
+		return track
+	end
+
+	local function sequenceOf(source)
+		if source:IsA("KeyframeSequence") then return source end
+		local id = tonumber(source.AnimationId:match("%d+") or "")
+		if not id then return nil end
+		for _, get in ipairs({
+			function() return game:GetObjects("rbxassetid://" .. id)[1] end,
+			function() return KFSProvider:GetKeyframeSequenceAsync("rbxassetid://" .. id) end,
+		}) do
+			local ok, kfs = pcall(get)
+			if ok and kfs ~= nil and typeof(kfs) == "Instance" and kfs:IsA("KeyframeSequence") then return kfs end
+		end
 		return nil
 	end
-	return track
-end
 
-local function sequenceOf(source)
-	if source:IsA("KeyframeSequence") then return source end
-	local id = tonumber(source.AnimationId:match("%d+") or "")
-	if not id then return nil end
-	for _, get in ipairs({
-		function() return game:GetObjects("rbxassetid://" .. id)[1] end,
-		function() return KFSProvider:GetKeyframeSequenceAsync("rbxassetid://" .. id) end,
-	}) do
-		local ok, kfs = pcall(get)
-		if ok and kfs ~= nil and typeof(kfs) == "Instance" and kfs:IsA("KeyframeSequence") then return kfs end
-	end
-	return nil
-end
-
---[[ Plays a KeyframeSequence by moving the joints itself, like an AnimationTrack.
-     The easing of a pose shapes the way to the next one; the old Cubic, Elastic
-     and Bounce styles have In and Out swapped, as in Roblox. ]]
-local STYLE = { Linear = "Linear", Cubic = "Cubic", CubicV2 = "Cubic", Elastic = "Elastic", Bounce = "Bounce" }
-local function sequencePlayer(model, kfs)
-	local motors, joints, length = {}, {}, 0
-	for _, m in ipairs(model:GetDescendants()) do
-		if m:IsA("Motor6D") and m.Part1 then motors[m.Part1.Name] = m end
-	end
-	local frames = kfs:GetKeyframes()
-	table.sort(frames, function(a, b) return a.Time < b.Time end)
-	for _, frame in ipairs(frames) do
-		length = math.max(length, frame.Time)
-		for _, pose in ipairs(frame:GetDescendants()) do
-			if pose:IsA("Pose") and pose.Weight > 0 and motors[pose.Name] then
-				joints[pose.Name] = joints[pose.Name] or {}
-				table.insert(joints[pose.Name], { t = frame.Time, cf = pose.CFrame, style = pose.EasingStyle.Name, dir = pose.EasingDirection.Name })
-			end
+	--[[ Plays a KeyframeSequence by moving the joints itself, like an AnimationTrack.
+	     The easing of a pose shapes the way to the next one; the old Cubic, Elastic
+	     and Bounce styles have In and Out swapped, as in Roblox. ]]
+	local STYLE = { Linear = "Linear", Cubic = "Cubic", CubicV2 = "Cubic", Elastic = "Elastic", Bounce = "Bounce" }
+	local function sequencePlayer(model, kfs)
+		local motors, joints, length = {}, {}, 0
+		for _, m in ipairs(model:GetDescendants()) do
+			if m:IsA("Motor6D") and m.Part1 then motors[m.Part1.Name] = m end
 		end
-	end
-	local player = { Length = length, Looped = kfs.Loop, IsPlaying = false, time = 0, speed = 1 }
-	function player:Play()
-		self.time, self.IsPlaying = 0, true
-		active[self] = true
-	end
-	function player:Stop()
-		self.IsPlaying, active[self] = false, nil
-		for name in pairs(joints) do motors[name].Transform = CFrame.identity end
-	end
-	function player:AdjustSpeed(speed) self.speed = speed end
-	player.Destroy = player.Stop
-	function player:step(dt)
-		self.time += dt * self.speed
-		if self.time >= length then
-			if not self.Looped or length <= 0 then
-				self:Stop()
-				return
-			end
-			self.time %= length
-		end
-		for name, list in pairs(joints) do
-			local a, b = list[1], nil
-			for i = 2, #list do
-				if list[i].t <= self.time then a = list[i] else b = list[i] break end
-			end
-			local cf = a.cf
-			if b and a.style ~= "Constant" and self.time > a.t then
-				local dir = a.dir
-				if a.style ~= "CubicV2" and a.style ~= "Linear" then
-					dir = if dir == "In" then "Out" elseif dir == "Out" then "In" else dir
+		local frames = kfs:GetKeyframes()
+		table.sort(frames, function(a, b) return a.Time < b.Time end)
+		for _, frame in ipairs(frames) do
+			length = math.max(length, frame.Time)
+			for _, pose in ipairs(frame:GetDescendants()) do
+				if pose:IsA("Pose") and pose.Weight > 0 and motors[pose.Name] then
+					joints[pose.Name] = joints[pose.Name] or {}
+					table.insert(joints[pose.Name], { t = frame.Time, cf = pose.CFrame, style = pose.EasingStyle.Name, dir = pose.EasingDirection.Name })
 				end
-				local alpha = TweenService:GetValue((self.time - a.t) / (b.t - a.t),
-					Enum.EasingStyle[STYLE[a.style] or "Linear"], Enum.EasingDirection[dir])
-				cf = a.cf:Lerp(b.cf, alpha)
 			end
-			motors[name].Transform = cf
 		end
+		local player = { Length = length, Looped = kfs.Loop, IsPlaying = false, time = 0, speed = 1 }
+		function player:Play()
+			self.time, self.IsPlaying = 0, true
+			active[self] = true
+		end
+		function player:Stop()
+			self.IsPlaying, active[self] = false, nil
+			for name in pairs(joints) do motors[name].Transform = CFrame.identity end
+		end
+		function player:AdjustSpeed(speed) self.speed = speed end
+		player.Destroy = player.Stop
+		function player:step(dt)
+			self.time += dt * self.speed
+			if self.time >= length then
+				if not self.Looped or length <= 0 then
+					self:Stop()
+					return
+				end
+				self.time %= length
+			end
+			for name, list in pairs(joints) do
+				local a, b = list[1], nil
+				for i = 2, #list do
+					if list[i].t <= self.time then a = list[i] else b = list[i] break end
+				end
+				local cf = a.cf
+				if b and a.style ~= "Constant" and self.time > a.t then
+					local dir = a.dir
+					if a.style ~= "CubicV2" and a.style ~= "Linear" then
+						dir = if dir == "In" then "Out" elseif dir == "Out" then "In" else dir
+					end
+					local alpha = TweenService:GetValue((self.time - a.t) / (b.t - a.t),
+						Enum.EasingStyle[STYLE[a.style] or "Linear"], Enum.EasingDirection[dir])
+					cf = a.cf:Lerp(b.cf, alpha)
+				end
+				motors[name].Transform = cf
+			end
+		end
+		return player
 	end
-	return player
-end
 
--- A track for `text`: a name in the model, an Anim_ attribute of a prompt, or an ID
-local function loadTrack(obj, text)
-	if obj.cache[text] ~= nil then return obj.cache[text] or nil end -- false: it failed once, not again
-	local source = obj.model:FindFirstChild(text, true)
-	if source and not isAnim(source) then source = nil end
-	local id = tonumber((obj.promptAnims[text] or text):match("%d+") or "")
-	if not source and id then
-		source = Instance.new("Animation")
-		source.AnimationId = "rbxassetid://" .. id
-	end
-	if not source then
-		obj.cache[text] = false
-		return nil
-	end
-	local track
-	if source:IsA("Animation") then
-		id = tonumber(source.AnimationId:match("%d+") or "")
-		if not id or ownedHere(id) ~= false then track = nativeTrack(obj.animator, source, 4) end
-	end
-	if not track then
-		status("Converting " .. text .. ": not owned by this game")
-		local kfs = sequenceOf(source)
-		if not kfs then
-			status(text .. " cannot be converted (private?)")
+	-- A track for `text`: a name in the model, an Anim_ attribute of a prompt, or an ID
+	function loadTrack(obj, text)
+		if obj.cache[text] ~= nil then return obj.cache[text] or nil end -- false: it failed once, not again
+		local source = obj.model:FindFirstChild(text, true)
+		if source and not isAnim(source) then source = nil end
+		local id = tonumber((obj.promptAnims[text] or text):match("%d+") or "")
+		if not source and id then
+			source = Instance.new("Animation")
+			source.AnimationId = "rbxassetid://" .. id
+		end
+		if not source then
 			obj.cache[text] = false
 			return nil
 		end
-		local ok, temp = pcall(KFSProvider.RegisterKeyframeSequence, KFSProvider, kfs)
-		if ok and type(temp) == "string" then
-			local animation = Instance.new("Animation")
-			animation.AnimationId = temp
-			track = nativeTrack(obj.animator, animation, 1.5)
+		local track
+		if source:IsA("Animation") then
+			id = tonumber(source.AnimationId:match("%d+") or "")
+			if not id or ownedHere(id) ~= false then track = nativeTrack(obj.animator, source, 4) end
 		end
-		track = track or sequencePlayer(obj.model, kfs)
+		if not track then
+			status("Converting " .. text .. ": not owned by this game")
+			local kfs = sequenceOf(source)
+			if not kfs then
+				status(text .. " cannot be converted (private?)")
+				obj.cache[text] = false
+				return nil
+			end
+			local ok, temp = pcall(KFSProvider.RegisterKeyframeSequence, KFSProvider, kfs)
+			if ok and type(temp) == "string" then
+				local animation = Instance.new("Animation")
+				animation.AnimationId = temp
+				track = nativeTrack(obj.animator, animation, 1.5)
+			end
+			track = track or sequencePlayer(obj.model, kfs)
+		end
+		obj.cache[text] = track
+		return track
 	end
-	obj.cache[text] = track
-	return track
 end
+
+-- The first of the model's animations whose name has one of these words
+local function animNamed(obj, words)
+	for _, name in ipairs(obj.anims) do
+		for _, w in ipairs(words) do
+			if name:lower():find(w) then return name end
+		end
+	end
+	return nil
+end
+local WALK_WORDS, IDLE_WORDS = { "run", "walk", "move", "chase" }, { "idle" }
 
 local function stopAnim(obj)
 	obj.token, obj.animName = nil, nil
@@ -790,7 +816,7 @@ local function stop()
 end
 
 local function fire(tr, k)
-	if k.anim and tr.model then playAnim(tr, k.anim, (k.speed or 1) * rate) end
+	if k.anim and tr.model and not tr.auto then playAnim(tr, k.anim, (k.speed or 1) * rate) end
 	if k.sound and tr.model then playSound(tr, k.sound) end
 	if k.action then doAction(tr, k.action) end
 end
@@ -820,7 +846,16 @@ local function stepPlayback()
 		for _, k in ipairs(tr.keys) do
 			if k.t > playing.last and k.t <= t then fire(tr, k) end
 		end
-		if not (morph and morph.obj == tr) then pose(tr, t) end
+		if not (morph and morph.obj == tr) then
+			local before = tr.model:GetPivot().Position
+			pose(tr, t)
+			-- Auto: its run while the keys move it, its idle while it stands
+			if tr.auto and t > playing.last then
+				local moving = (tr.model:GetPivot().Position - before).Magnitude / (t - playing.last) > 0.5
+				local anim = if moving then animNamed(tr, WALK_WORDS) or animNamed(tr, IDLE_WORDS) else animNamed(tr, IDLE_WORDS)
+				if anim then playAnim(tr, anim, rate) elseif not moving then stopAnim(tr) end
+			end
+		end
 	end
 	for _, k in ipairs(cameraTrack.keys) do
 		if k.t > playing.last and k.t <= t then fire(cameraTrack, k) end
@@ -833,6 +868,12 @@ local function stepPlayback()
 		else
 			playing = nil
 			releaseCamera()
+			for _, tr in ipairs(objects) do -- Auto: it stops running when the scene is over
+				if tr.auto then
+					local idle = animNamed(tr, IDLE_WORDS)
+					if idle then playAnim(tr, idle, 1) else stopAnim(tr) end
+				end
+			end
 			status("Done")
 		end
 	end
@@ -889,87 +930,90 @@ end
 
 ---====== SAVE / LOAD / COPY (a Lua table in the executor's folder) ======---
 
-local function serialize(v)
-	if type(v) == "number" then return string.format("%.17g", v) end
-	if type(v) == "string" then return string.format("%q", v) end
-	if type(v) ~= "table" then return tostring(v) end
-	local parts = {}
-	for k, x in pairs(v) do table.insert(parts, "[" .. serialize(k) .. "]=" .. serialize(x)) end
-	return "{" .. table.concat(parts, ",") .. "}"
-end
-
-local KEY_FIELDS = { "t", "scale", "ease", "dir", "anim", "speed", "sound", "action" }
-
-local function keysOut(keys)
-	local out = {}
-	for _, k in ipairs(keys) do
-		local saved = { cf = { k.cf:GetComponents() } }
-		for _, f in ipairs(KEY_FIELDS) do saved[f] = k[f] end
-		table.insert(out, saved)
+local serialize, saveProject, loadProjectData, loadProject, copyProject
+do
+	function serialize(v)
+		if type(v) == "number" then return string.format("%.17g", v) end
+		if type(v) == "string" then return string.format("%q", v) end
+		if type(v) ~= "table" then return tostring(v) end
+		local parts = {}
+		for k, x in pairs(v) do table.insert(parts, "[" .. serialize(k) .. "]=" .. serialize(x)) end
+		return "{" .. table.concat(parts, ",") .. "}"
 	end
-	return out
-end
 
-local function keysIn(saved)
-	local keys = {}
-	for _, k in ipairs(saved or {}) do
-		local key = { cf = CFrame.new(table.unpack(k.cf)) }
-		for _, f in ipairs(KEY_FIELDS) do key[f] = k[f] end
-		table.insert(keys, key)
+	local KEY_FIELDS = { "t", "scale", "ease", "dir", "anim", "speed", "sound", "action" }
+
+	local function keysOut(keys)
+		local out = {}
+		for _, k in ipairs(keys) do
+			local saved = { cf = { k.cf:GetComponents() } }
+			for _, f in ipairs(KEY_FIELDS) do saved[f] = k[f] end
+			table.insert(out, saved)
+		end
+		return out
 	end
-	return keys
-end
 
-local function projectData()
-	local project = { loop = loop, objects = {}, camera = keysOut(cameraTrack.keys) }
-	for _, obj in ipairs(objects) do
-		table.insert(project.objects, { label = obj.label, src = obj.src, keys = keysOut(obj.keys) })
+	local function keysIn(saved)
+		local keys = {}
+		for _, k in ipairs(saved or {}) do
+			local key = { cf = CFrame.new(table.unpack(k.cf)) }
+			for _, f in ipairs(KEY_FIELDS) do key[f] = k[f] end
+			table.insert(keys, key)
+		end
+		return keys
 	end
-	return project
-end
 
-local function writeFile(name, text)
-	return pcall(function()
-		if not isfolder(CONFIG.Folder) then makefolder(CONFIG.Folder) end
-		writefile(CONFIG.Folder .. "/" .. name, text)
-	end)
-end
-
-local function saveProject(name)
-	local ok = writeFile(name .. ".lua", "return " .. serialize(projectData()))
-	status(if ok then "Saved " .. name else "Cannot save: your executor has no writefile")
-end
-
-local function loadProjectData(project)
-	stop()
-	if morph then setMorph(nil) end
-	while #objects > 0 do remove(objects[1]) end
-	loop = project.loop == true
-	cameraTrack.keys = keysIn(project.camera)
-	for _, saved in ipairs(project.objects or {}) do insert(saved.label, saved.src, keysIn(saved.keys)) end
-	refresh()
-end
-
-local function loadProject(name)
-	local ok, project = pcall(function() return loadstring(readfile(CONFIG.Folder .. "/" .. name .. ".lua"))() end)
-	if not ok or type(project) ~= "table" then
-		status("Cannot read " .. name)
-		return
+	local function projectData()
+		local project = { loop = loop, objects = {}, camera = keysOut(cameraTrack.keys) }
+		for _, obj in ipairs(objects) do
+			table.insert(project.objects, { label = obj.label, src = obj.src, keys = keysOut(obj.keys) })
+		end
+		return project
 	end
-	loadProjectData(project)
-	status("Loaded " .. name)
-end
 
--- A loadstring with the whole scene inside: it builds it again and plays it
-local function copyProject(name)
-	local text = "_G.UniversalAssets = { Project = " .. serialize(projectData()) .. ", AutoPlay = true }\n"
-		.. "loadstring(game:HttpGet(" .. string.format("%q", CONFIG.SelfUrl) .. "))()\n"
-	if setclipboard then
-		setclipboard(text)
-		status("Copied: paste it in the executor and it plays")
-	else
-		local ok = writeFile(name .. "_play.lua", text)
-		status(if ok then "No clipboard: saved " .. name .. "_play.lua" else "Your executor cannot copy or write files")
+	local function writeFile(name, text)
+		return pcall(function()
+			if not isfolder(CONFIG.Folder) then makefolder(CONFIG.Folder) end
+			writefile(CONFIG.Folder .. "/" .. name, text)
+		end)
+	end
+
+	function saveProject(name)
+		local ok = writeFile(name .. ".lua", "return " .. serialize(projectData()))
+		status(if ok then "Saved " .. name else "Cannot save: your executor has no writefile")
+	end
+
+	function loadProjectData(project)
+		stop()
+		if morph then setMorph(nil) end
+		while #objects > 0 do remove(objects[1]) end
+		loop = project.loop == true
+		cameraTrack.keys = keysIn(project.camera)
+		for _, saved in ipairs(project.objects or {}) do insert(saved.label, saved.src, keysIn(saved.keys)) end
+		refresh()
+	end
+
+	function loadProject(name)
+		local ok, project = pcall(function() return loadstring(readfile(CONFIG.Folder .. "/" .. name .. ".lua"))() end)
+		if not ok or type(project) ~= "table" then
+			status("Cannot read " .. name)
+			return
+		end
+		loadProjectData(project)
+		status("Loaded " .. name)
+	end
+
+	-- A loadstring with the whole scene inside: it builds it again and plays it
+	function copyProject(name)
+		local text = "_G.UniversalAssets = { Project = " .. serialize(projectData()) .. ", AutoPlay = true }\n"
+			.. "loadstring(game:HttpGet(" .. string.format("%q", CONFIG.SelfUrl) .. "))()\n"
+		if setclipboard then
+			setclipboard(text)
+			status("Copied: paste it in the executor and it plays")
+		else
+			local ok = writeFile(name .. "_play.lua", text)
+			status(if ok then "No clipboard: saved " .. name .. "_play.lua" else "Your executor cannot copy or write files")
+		end
 	end
 end
 
@@ -1053,6 +1097,7 @@ local function fit()
 	local height = math.clamp((view.Y - 60) / scale, 120, 664)
 	panel.Size = UDim2.fromOffset(W, if content.Visible then height else 30)
 	content.Size = UDim2.fromOffset(W, height - 34)
+	if toolboxFit then toolboxFit(height - 34) end
 	-- Never left outside the screen
 	local x = math.clamp(panel.Position.X.Offset, 0, math.max(view.X - W * scale, 0))
 	local y = math.clamp(panel.Position.Y.Offset, 0, math.max(view.Y - 60 - 30 * scale, 0))
@@ -1119,19 +1164,35 @@ button("Insert", "Insert", 324, row(1), 86, function()
 	local p = CONFIG.Presets[preset]
 	task.spawn(insert, p[1], p[2])
 end)
-local idBox = box("Id", "asset ID or .rbxm URL", 10, row(2), 310)
+local idBox = box("Id", "search the toolbox, or an ID / URL", 10, row(2), 220)
+local runSearch -- below, with the toolbox
+button("Search", "Search", 234, row(2), 86, function() task.spawn(runSearch, idBox.Text, false) end)
+idBox.FocusLost:Connect(function(enter)
+	if enter and not tonumber(idBox.Text) and not idBox.Text:match("^https?://") then task.spawn(runSearch, idBox.Text, false) end
+end)
 button("InsertId", "Insert ID", 324, row(2), 86, function()
 	local text = idBox.Text:gsub("^%s+", ""):gsub("%s+$", "")
 	if text ~= "" then task.spawn(insert, tonumber(text) and ("Asset " .. text) or text:match("[^/]+$") or text, tonumber(text) or text) end
 end)
 
-local objectLabel = label("", 40, row(3), 250)
+local objectLabel = label("", 40, row(3), 170)
 local function pick(i)
 	selected, selectedKey = i % (#objects + 1), nil -- 0 is the camera
 	refresh()
 end
 button("ObjPrev", "<", 10, row(3), 26, function() pick(selected - 1) end)
-button("ObjNext", ">", 294, row(3), 26, function() pick(selected + 1) end)
+button("ObjNext", ">", 214, row(3), 26, function() pick(selected + 1) end)
+local autoButton = button("Auto", "Auto", 244, row(3), 76, function()
+	local obj = current()
+	if not obj then return end
+	obj.auto = not obj.auto
+	stopAnim(obj)
+	local walk = animNamed(obj, WALK_WORDS)
+	status(if not obj.auto then "Auto off: the keys' animations play"
+		elseif walk then "Auto: " .. walk .. " while it moves" .. (if animNamed(obj, IDLE_WORDS) then ", " .. animNamed(obj, IDLE_WORDS) .. " while it stands" else "")
+		else "Auto: no animation named run / walk in this model")
+	refresh()
+end)
 button("Remove", "Remove", 324, row(3), 86, function() if current() then remove(current()) end end)
 
 -- Studio's tools: 1 select, 2 move, 3 scale, 4 rotate
@@ -1313,7 +1374,7 @@ button("Save", "Save", 184, row(13) + 162, 74, function() saveProject(fileBox.Te
 button("Load", "Load", 262, row(13) + 162, 74, function() task.spawn(loadProject, fileBox.Text) end)
 button("Copy", "Copy", 340, row(13) + 162, 70, function() copyProject(fileBox.Text) end)
 local statusLabel = label("", 10, row(13) + 194, 400)
-statusLabel.TextSize = 15
+statusLabel.TextSize, statusLabel.Name = 15, "Status"
 
 function status(text)
 	statusLabel.Text = text
@@ -1341,6 +1402,7 @@ function refresh()
 	snapButton.Text = if snapOn then "Snap: on" else "Snap: off"
 	freeCamButton.BackgroundColor3 = if freeCamOn() then RED else BROWN
 	morphButton.BackgroundColor3 = if morph then RED else BROWN
+	autoButton.BackgroundColor3 = if current() and current().auto then RED else BROWN
 	for name, b in pairs(toolButtons) do b.BackgroundColor3 = if name == tool then RED else BROWN end
 	for _, child in ipairs(list:GetChildren()) do
 		if child:IsA("TextButton") then child:Destroy() end
@@ -1367,6 +1429,104 @@ function refresh()
 		table.insert(markers, make("Frame", { Size = UDim2.new(0, 6, 0, 14), AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = UDim2.new(k.t / total, 0, 0.5, 0), Rotation = 45, BorderSizePixel = 0, ZIndex = 2,
 			BackgroundColor3 = if k == selectedKey then RED else CREAM }, bar))
+	end
+end
+
+---====== THE TOOLBOX: Roblox's Creator Store, searched from here ======---
+
+do
+	local SEARCH_URL = "https://apis.roblox.com/toolbox-service/v2/assets:search?searchCategoryType=Model&maxPageSize=30&query="
+	local QUICK = { "Seek", "Rush", "Ambush", "Figure", "Halt", "Eyes", "Screech", "Jack" }
+
+	-- Over the panel's content, under its title
+	local toolbox = make("Frame", { Name = "Toolbox", Position = UDim2.fromOffset(0, 34), Size = UDim2.fromOffset(W, 630),
+		BackgroundColor3 = DARK, BorderSizePixel = 0, Visible = false }, panel)
+	local toolboxTitle = label("Toolbox", 10, 4, 200, toolbox)
+	local search = { query = "", token = nil, items = {}, total = 0, animsOnly = false }
+	local showResults -- below
+	local animsButton = button("AnimsOnly", "Anims only", 214, 4, 110, function()
+		search.animsOnly = not search.animsOnly
+		showResults()
+	end, toolbox)
+	button("Back", "Back", 328, 4, 82, function() toolbox.Visible = false end, toolbox)
+	for i, name in ipairs(QUICK) do
+		button("Quick" .. name, name, 10 + ((i - 1) % 4) * 101, 36 + math.floor((i - 1) / 4) * 32, 97, function()
+			idBox.Text = "doors " .. name:lower()
+			task.spawn(runSearch, idBox.Text, false)
+		end, toolbox)
+	end
+	local resultList = make("ScrollingFrame", { Name = "Results", Position = UDim2.fromOffset(10, 104), Size = UDim2.fromOffset(400, 480),
+		BackgroundColor3 = Color3.fromRGB(14, 10, 9), BorderSizePixel = 0, ScrollBarThickness = 6,
+		AutomaticCanvasSize = Enum.AutomaticSize.Y, CanvasSize = UDim2.new() }, toolbox)
+	make("UIListLayout", { Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder }, resultList)
+
+	function showResults()
+		animsButton.BackgroundColor3 = if search.animsOnly then RED else BROWN
+		toolboxTitle.Text = ("%s: %d"):format(search.query, search.total)
+		for _, child in ipairs(resultList:GetChildren()) do
+			if child:IsA("GuiObject") then child:Destroy() end
+		end
+		local shown = 0
+		for _, item in ipairs(search.items) do
+			if not search.animsOnly or item.anims > 0 then
+				shown += 1
+				-- The whole row is the button: tap it and the model is inserted
+				local rowButton = button("Result" .. shown, "", 0, 0, 388, function()
+					task.spawn(insert, item.name, item.id)
+					toolbox.Visible = false
+				end, resultList)
+				rowButton.Size, rowButton.LayoutOrder = UDim2.new(1, -8, 0, 60), shown
+				make("ImageLabel", { Name = "Thumb", Image = ("rbxthumb://type=Asset&id=%d&w=150&h=150"):format(item.id),
+					Position = UDim2.fromOffset(2, 2), Size = UDim2.fromOffset(56, 56), BackgroundTransparency = 1 }, rowButton)
+				local name = label(item.name, 64, 2, 320, rowButton)
+				name.Name = "ItemName"
+				local info = label(("by %s  ·  %d anims%s"):format(item.creator, item.anims,
+					if item.scripts > 0 then "  ·  scripts taken out" else ""), 64, 30, 320, rowButton)
+				info.Name, info.TextSize, info.TextColor3 = "Info", 14, Color3.fromRGB(200, 170, 140)
+			end
+		end
+		if search.token then
+			local more = button("More", "More results", 0, 0, 388, function() task.spawn(runSearch, search.query, true) end, resultList)
+			more.Size, more.LayoutOrder = UDim2.new(1, -8, 0, 32), 100000
+		end
+	end
+
+	function runSearch(query, more)
+		query = query:gsub("^%s+", ""):gsub("%s+$", "")
+		if query == "" then
+			toolbox.Visible = true
+			return
+		end
+		if not more then
+			search.query, search.token, search.items, search.total = query, nil, {}, 0
+		end
+		toolbox.Visible = true
+		status("Searching the toolbox: " .. query)
+		local ok, data = pcall(function()
+			local url = SEARCH_URL .. HttpService:UrlEncode(query)
+			if more and search.token then url ..= "&pageToken=" .. HttpService:UrlEncode(search.token) end
+			return HttpService:JSONDecode(game:HttpGet(url))
+		end)
+		if not ok or type(data) ~= "table" then
+			status("The toolbox did not answer: try again")
+			return
+		end
+		for _, entry in ipairs(data.creatorStoreAssets or {}) do
+			local asset = entry.asset or {}
+			if type(asset.id) == "number" then
+				table.insert(search.items, { id = asset.id, name = asset.name or ("Asset " .. asset.id),
+					creator = entry.creator and entry.creator.name or "?",
+					anims = asset.instanceCounts and asset.instanceCounts.animation or 0, scripts = asset.scriptCount or 0 })
+			end
+		end
+		search.token, search.total = data.nextPageToken, data.totalResults or #search.items
+		showResults()
+		status(("%d models found. Tap one to insert it"):format(search.total))
+	end
+
+	toolboxFit = function(height)
+		toolbox.Size = UDim2.fromOffset(W, height)
+		resultList.Size = UDim2.fromOffset(400, math.max(height - 110, 60))
 	end
 end
 
@@ -1504,46 +1664,49 @@ end
 
 ---====== ON A PHONE: a small bar, and arrows for the free cam ======---
 
-local function playPause()
-	if playing then
-		stop()
-		status(("Paused at %.2fs"):format(preview))
-	else
-		play()
+local playPause, stepMobile, mobileGui
+do
+	function playPause()
+		if playing then
+			stop()
+			status(("Paused at %.2fs"):format(preview))
+		else
+			play()
+		end
 	end
-end
 
-local mobileGui = make("ScreenGui", { Name = "UniversalAssetsMobile", ResetOnSpawn = false, DisplayOrder = 51, Enabled = showMobile }, hud)
-local miniBar = make("Frame", { Name = "MiniBar", Size = UDim2.fromOffset(212, 36), Position = UDim2.new(0.5, -106, 0, 6),
-	BackgroundColor3 = DARK, BackgroundTransparency = 0.1, BorderSizePixel = 0 }, mobileGui)
-make("UICorner", { CornerRadius = UDim.new(0, 6) }, miniBar)
-local grip = button("Grip", "::", 4, 4, 30, function() end, miniBar)
-grip.InputBegan:Connect(function(input) startDragging(miniBar, input) end)
-button("Open", "UCA", 38, 4, 56, function() toggle() end, miniBar)
-local playButton = button("PlayPause", "Play", 98, 4, 56, playPause, miniBar)
-button("Cam", "Cam", 158, 4, 50, function() setFreeCam(not freecam) end, miniBar)
+	mobileGui = make("ScreenGui", { Name = "UniversalAssetsMobile", ResetOnSpawn = false, DisplayOrder = 51, Enabled = showMobile }, hud)
+	local miniBar = make("Frame", { Name = "MiniBar", Size = UDim2.fromOffset(212, 36), Position = UDim2.new(0.5, -106, 0, 6),
+		BackgroundColor3 = DARK, BackgroundTransparency = 0.1, BorderSizePixel = 0 }, mobileGui)
+	make("UICorner", { CornerRadius = UDim.new(0, 6) }, miniBar)
+	local grip = button("Grip", "::", 4, 4, 30, function() end, miniBar)
+	grip.InputBegan:Connect(function(input) startDragging(miniBar, input) end)
+	button("Open", "UCA", 38, 4, 56, function() toggle() end, miniBar)
+	local playButton = button("PlayPause", "Play", 98, 4, 56, playPause, miniBar)
+	button("Cam", "Cam", 158, 4, 50, function() setFreeCam(not freecam) end, miniBar)
 
-local pad = make("Frame", { Name = "CamPad", Size = UDim2.fromOffset(196, 132), Position = UDim2.new(1, -212, 1, -200),
-	BackgroundTransparency = 1, Visible = false }, mobileGui)
-for _, b in ipairs({
-	{ "E", "Up", 0, 0, 62 }, { "W", "Fwd", 66, 0, 62 }, { "Q", "Down", 132, 0, 62 },
-	{ "A", "Left", 0, 44, 62 }, { "S", "Back", 66, 44, 62 }, { "D", "Right", 132, 44, 62 },
-	{ "Z", "Zoom +", 0, 88, 96 }, { "X", "Zoom -", 100, 88, 94 },
-}) do
-	local key = b[1]
-	local held = button("Pad" .. key, b[2], b[3], b[4], b[5], function() end, pad)
-	held.Size = UDim2.fromOffset(b[5], 40)
-	held.InputBegan:Connect(function(input) if pressed(input) then padHeld[key] = true end end)
-	held.InputEnded:Connect(function(input) if pressed(input) then padHeld[key] = false end end)
-end
+	local pad = make("Frame", { Name = "CamPad", Size = UDim2.fromOffset(196, 132), Position = UDim2.new(1, -212, 1, -200),
+		BackgroundTransparency = 1, Visible = false }, mobileGui)
+	for _, b in ipairs({
+		{ "E", "Up", 0, 0, 62 }, { "W", "Fwd", 66, 0, 62 }, { "Q", "Down", 132, 0, 62 },
+		{ "A", "Left", 0, 44, 62 }, { "S", "Back", 66, 44, 62 }, { "D", "Right", 132, 44, 62 },
+		{ "Z", "Zoom +", 0, 88, 96 }, { "X", "Zoom -", 100, 88, 94 },
+	}) do
+		local key = b[1]
+		local held = button("Pad" .. key, b[2], b[3], b[4], b[5], function() end, pad)
+		held.Size = UDim2.fromOffset(b[5], 40)
+		held.InputBegan:Connect(function(input) if pressed(input) then padHeld[key] = true end end)
+		held.InputEnded:Connect(function(input) if pressed(input) then padHeld[key] = false end end)
+	end
 
-local function stepMobile()
-	local text = if playing then "Pause" else "Play"
-	if playButton.Text ~= text then playButton.Text = text end
-	local showPad = showMobile and freecam ~= nil
-	if pad.Visible ~= showPad then
-		pad.Visible = showPad
-		table.clear(padHeld)
+	function stepMobile()
+		local text = if playing then "Pause" else "Play"
+		if playButton.Text ~= text then playButton.Text = text end
+		local showPad = showMobile and freecam ~= nil
+		if pad.Visible ~= showPad then
+			pad.Visible = showPad
+			table.clear(padHeld)
+		end
 	end
 end
 
@@ -1569,17 +1732,9 @@ function setMorph(obj)
 	if obj and root and humanoid then
 		local box, size = obj.model:GetBoundingBox()
 		local body, bodySize = character:GetBoundingBox()
-		local function named(words) -- the first animation whose name has one of these words
-			for _, name in ipairs(obj.anims) do
-				for _, w in ipairs(words) do
-					if name:lower():find(w) then return name end
-				end
-			end
-			return nil
-		end
 		morph = { obj = obj, root = root, humanoid = humanoid, character = character,
 			lift = (obj.model:GetPivot().Y - (box.Y - size.Y / 2)) - (root.Position.Y - (body.Y - bodySize.Y / 2)),
-			idle = named({ "idle" }), walk = named({ "walk", "run", "move" }) }
+			idle = animNamed(obj, IDLE_WORDS), walk = animNamed(obj, WALK_WORDS) }
 		status("Morph: you are " .. obj.label .. ". Morph again to stop")
 	end
 	refresh()
