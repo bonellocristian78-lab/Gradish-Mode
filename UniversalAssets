@@ -16,13 +16,30 @@
                 LookSpeed = 0.25,           -- degrees per pixel, right mouse in the free camera
                 OpenTime = 0.6,             -- seconds to open / close doors and drawers
                 Folder = "UniversalAssets", -- where projects are saved
+                SelfUrl = "...",            -- what Copy's loadstring loads (this script)
+                Project = nil,              -- a project (what Copy puts here): loaded at start
+                AutoPlay = false,           -- with Project: it plays as soon as it is loaded
             }
             loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/UniversalAssets"))()
 
         LIKE ROBLOX STUDIO
             Ctrl+1 select, Ctrl+2 move (arrows), Ctrl+3 scale, Ctrl+4 rotate (rings)
-            click a model to select it; hold the right mouse button to look around
-            Free cam: WASD, E up, Q down, Shift slow, wheel forward, right mouse to look
+            Ctrl+Z undo, Ctrl+Y redo; click a model to select it
+            hold the right mouse button to look around
+            Free cam: WASD, E up, Q down, Shift slow, wheel forward, Z / X zoom, right mouse to look
+
+        THE CAMERA
+            "Camera" is first in the list of models: its keys are where the camera is and
+            its zoom (set them from the free cam). On Play it flies through them, as in a
+            DOORS cutscene. Play starts from the timeline's red line; Ctrl+P pauses.
+
+        MORPH
+            The selected model becomes your body: it follows you, you disappear, and it
+            walks and stands with its own animations (the ones named walk / run / idle).
+
+        COPY
+            Copies a loadstring with the whole scene inside: pasted in the executor, it
+            builds it again and plays it.
 
         KEYS
             Two keys = the model goes from one to the other in that time, with that
@@ -51,6 +68,8 @@ local CONFIG = {
 	LookSpeed = 0.25,
 	OpenTime = 0.6,
 	Folder = "UniversalAssets",
+	SelfUrl = "https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/claude/sei-qui-con-noi-ye4k62/UniversalAssets",
+	AutoPlay = false,
 	Presets = {
 		{ "Glitch", "ReplicatedStorage.Entities.Glitch" },
 		{ "Screech", "ReplicatedStorage.Entities.Screech" },
@@ -99,6 +118,9 @@ local objects, selected, selectedKey = {}, 0, nil
 local connections, active = {}, {} -- active: our own sequence players
 local playing, loop, preview = nil, false, 0
 local status, refresh, drawTimeline -- set with the UI
+local freecam, mouseWas, morph = nil, nil, nil
+local setFreeCam, freeCamOn, setMorph -- below, with the camera and the morph
+local flashFrame, shakeUntil = nil, 0
 
 local function on(signal, fn)
 	local c = signal:Connect(fn)
@@ -354,7 +376,7 @@ end
 
 -- A track for `text`: a name in the model, an Anim_ attribute of a prompt, or an ID
 local function loadTrack(obj, text)
-	if obj.cache[text] then return obj.cache[text] end
+	if obj.cache[text] ~= nil then return obj.cache[text] or nil end -- false: it failed once, not again
 	local source = obj.model:FindFirstChild(text, true)
 	if source and not isAnim(source) then source = nil end
 	local id = tonumber((obj.promptAnims[text] or text):match("%d+") or "")
@@ -362,7 +384,10 @@ local function loadTrack(obj, text)
 		source = Instance.new("Animation")
 		source.AnimationId = "rbxassetid://" .. id
 	end
-	if not source then return nil end
+	if not source then
+		obj.cache[text] = false
+		return nil
+	end
 	local track
 	if source:IsA("Animation") then
 		id = tonumber(source.AnimationId:match("%d+") or "")
@@ -373,6 +398,7 @@ local function loadTrack(obj, text)
 		local kfs = sequenceOf(source)
 		if not kfs then
 			status(text .. " cannot be converted (private?)")
+			obj.cache[text] = false
 			return nil
 		end
 		local ok, temp = pcall(KFSProvider.RegisterKeyframeSequence, KFSProvider, kfs)
@@ -434,7 +460,57 @@ local function playSound(obj, text)
 	obj.sound = sound
 end
 
+---====== EFFECTS (DOORS' own when it is DOORS) ======---
+
+local EFFECTS = { "shake", "flash", "say ...", "room flicker", "room lights off", "room lights on", "room shatter" }
+
+local function caption(text)
+	local shown = mainGame ~= nil and pcall(mainGame.caption, text, true)
+	if not shown then
+		pcall(function() game:GetService("StarterGui"):SetCore("SendNotification", { Title = "", Text = text, Duration = 4 }) end)
+	end
+end
+
+-- DOORS' Module_Events (flicker, toggle, shatter) and the room you are in
+local function roomEvents()
+	local ok, events = pcall(function() return require(game:GetService("ReplicatedStorage").ModulesClient.Module_Events) end)
+	local rooms = workspace:FindFirstChild("CurrentRooms")
+	local room = rooms and rooms:FindFirstChild(tostring(LocalPlayer:GetAttribute("CurrentRoom") or ""))
+	if ok and events and room then return events, room end
+	return nil, nil
+end
+
+-- true when `action` is one of the effects
+local function effect(action)
+	local lower = action:lower()
+	if lower:sub(1, 4) == "say " then
+		caption(action:sub(5))
+		return true
+	elseif lower == "shake" then
+		shakeUntil = os.clock() + 1 -- the free cam and the camera track shake too
+		if mainGame and mainGame.camShaker then pcall(function() mainGame.camShaker:ShakeOnce(6, 12, 0, 1.2) end) end
+		return true
+	elseif lower == "flash" then
+		flashFrame.BackgroundTransparency = 0.15
+		TweenService:Create(flashFrame, TweenInfo.new(0.7), { BackgroundTransparency = 1 }):Play()
+		return true
+	end
+	local what = lower:match("^room (.+)")
+	if not what then return false end
+	local events, room = roomEvents()
+	if events then
+		pcall(function()
+			if what == "flicker" then events.flicker(room, 1)
+			elseif what == "lights off" then events.toggle(room, false)
+			elseif what == "lights on" then events.toggle(room, true, room:GetAttribute("Ambient"))
+			elseif what == "shatter" then events.shatter(room) end
+		end)
+	end
+	return true
+end
+
 local function doAction(obj, action)
+	if effect(action) or not obj.model then return end
 	action = action:lower()
 	if action == "open" or action == "close" or action == "open reverse" then
 		for _, m in ipairs(obj.movers) do
@@ -453,12 +529,19 @@ local function doAction(obj, action)
 		for _, d in ipairs(obj.model:GetDescendants()) do
 			if d:IsA("BasePart") or d:IsA("Decal") then d.LocalTransparencyModifier = if action == "hide" then 1 else 0 end
 		end
+	elseif action == "particles on" or action == "particles off" then
+		for _, e in ipairs(obj.emitters) do e.Enabled = action == "particles on" end
+	elseif action == "burst" then
+		for _, e in ipairs(obj.emitters) do e:Emit(20) end
 	end
 end
 
 ---====== OBJECTS ======---
 
-local function current() return objects[selected] end
+-- The camera track: always first in the list (selected = 0)
+local cameraTrack = { label = "Camera", isCamera = true, keys = {}, anims = {}, soundNames = {}, actions = EFFECTS }
+local function current() return objects[selected] end -- a model; nil when the camera is selected
+local function editing() return if selected == 0 then cameraTrack else objects[selected] end
 
 local function setup(model, label, src, keys, at)
 	for _, d in ipairs(model:GetDescendants()) do
@@ -526,19 +609,22 @@ local function setup(model, label, src, keys, at)
 			end
 		end
 	end
-	local lights = {}
+	local lights, emitters = {}, {}
 	for _, d in ipairs(model:GetDescendants()) do
 		if d:IsA("Light") then table.insert(lights, d) end
+		if d:IsA("ParticleEmitter") then table.insert(emitters, d) end
 	end
 	local actions = { "hide", "show" }
 	if #valid > 0 then
 		for i, a in ipairs({ "open", "close", "open reverse" }) do table.insert(actions, i, a) end
 	end
 	if #lights > 0 then for _, a in ipairs({ "lights off", "lights on", "flicker" }) do table.insert(actions, a) end end
+	if #emitters > 0 then for _, a in ipairs({ "particles on", "particles off", "burst" }) do table.insert(actions, a) end end
+	for _, a in ipairs(EFFECTS) do table.insert(actions, a) end
 
 	local obj = { label = label, src = src, model = model, root = root, animator = animator, keys = keys or {},
 		cache = {}, sounds = {}, anims = anims, promptAnims = promptAnims, soundNames = namesOf(model, isSound),
-		movers = valid, lights = lights, actions = actions, baseScale = model:GetScale() }
+		movers = valid, lights = lights, emitters = emitters, actions = actions, baseScale = model:GetScale() }
 	for _, k in ipairs(obj.keys) do k.scale = k.scale or obj.baseScale end
 	table.insert(objects, obj)
 	selected, selectedKey = #objects, nil
@@ -588,8 +674,11 @@ local function duplicate(obj)
 end
 
 local function remove(obj)
+	if morph and morph.obj == obj then setMorph(nil) end
 	stopAnim(obj)
-	for _, track in pairs(obj.cache) do active[track] = nil end
+	for _, track in pairs(obj.cache) do
+		if track then active[track] = nil end
+	end
 	obj.model:Destroy()
 	table.remove(objects, table.find(objects, obj))
 	selected, selectedKey = math.min(selected, #objects), nil
@@ -631,47 +720,106 @@ end
 
 local function length()
 	local total = 0
-	for _, obj in ipairs(objects) do
-		local keys = obj.keys
-		if #keys > 0 then total = math.max(total, keys[#keys].t) end
+	for _, tr in ipairs(objects) do
+		if #tr.keys > 0 then total = math.max(total, tr.keys[#tr.keys].t) end
 	end
+	if #cameraTrack.keys > 0 then total = math.max(total, cameraTrack.keys[#cameraTrack.keys].t) end
 	return total
+end
+
+local RATES = { 1, 0.5, 0.25, 2 }
+local rate = 1
+local function playTime() return playing.from + (os.clock() - playing.start) * rate end
+
+local function shakeOffset()
+	if os.clock() >= shakeUntil then return CFrame.identity end
+	return CFrame.Angles((math.random() - 0.5) * 0.03, (math.random() - 0.5) * 0.03, 0)
+end
+
+-- While the camera track plays the camera is the script's, as in a DOORS cutscene
+local cinema = nil
+local function stepCinema()
+	if not (cinema and playing) then return end
+	local camera = workspace.CurrentCamera
+	local cf, fov = poseAt(cameraTrack.keys, playTime())
+	camera.CFrame = cf * shakeOffset()
+	camera.FieldOfView = fov
+end
+
+local function takeCamera()
+	if cinema or #cameraTrack.keys == 0 then return end
+	local camera = workspace.CurrentCamera
+	cinema = { cameraType = camera.CameraType, fov = camera.FieldOfView, stopcam = mainGame and mainGame.stopcam }
+	if mainGame then mainGame.stopcam = true end
+	camera.CameraType = Enum.CameraType.Scriptable
+	RunService:BindToRenderStep("UniversalAssetsCinema", Enum.RenderPriority.Last.Value + 1, stepCinema)
+end
+
+local function releaseCamera()
+	if not cinema then return end
+	RunService:UnbindFromRenderStep("UniversalAssetsCinema")
+	local camera = workspace.CurrentCamera
+	camera.FieldOfView = cinema.fov
+	if not freecam then
+		camera.CameraType = cinema.cameraType
+		if mainGame then mainGame.stopcam = cinema.stopcam end
+	end
+	cinema = nil
 end
 
 local function stop()
 	playing = nil
+	releaseCamera()
 	for _, obj in ipairs(objects) do
 		stopAnim(obj)
 		if obj.sound then obj.sound:Stop() end
 	end
 end
 
+local function fire(tr, k)
+	if k.anim and tr.model then playAnim(tr, k.anim, (k.speed or 1) * rate) end
+	if k.sound and tr.model then playSound(tr, k.sound) end
+	if k.action then doAction(tr, k.action) end
+end
+
+-- From the timeline's red line (from the start once it is at the end)
 local function play()
+	local from = if preview > 0.01 and preview < length() - 0.01 then preview else 0
 	stop()
-	playing = { start = os.clock(), last = -1 }
-	status("Playing")
+	playing = { start = os.clock(), from = from, last = from - 1e-6 }
+	if from > 0 then -- the animation each model had at that moment
+		for _, obj in ipairs(objects) do
+			local latest = nil
+			for _, k in ipairs(obj.keys) do
+				if k.anim and k.t <= from then latest = k end
+			end
+			if latest then playAnim(obj, latest.anim, (latest.speed or 1) * rate) end
+		end
+	end
+	takeCamera()
+	status(("Playing from %.2fs at %gx"):format(from, rate))
 end
 
 local function stepPlayback()
 	if not playing then return end
-	local t = os.clock() - playing.start
-	for _, obj in ipairs(objects) do
-		for _, k in ipairs(obj.keys) do
-			if k.t > playing.last and k.t <= t then
-				if k.anim then playAnim(obj, k.anim, k.speed or 1) end
-				if k.sound then playSound(obj, k.sound) end
-				if k.action then doAction(obj, k.action) end
-			end
+	local t = playTime()
+	for _, tr in ipairs(objects) do
+		for _, k in ipairs(tr.keys) do
+			if k.t > playing.last and k.t <= t then fire(tr, k) end
 		end
-		pose(obj, t)
+		if not (morph and morph.obj == tr) then pose(tr, t) end
+	end
+	for _, k in ipairs(cameraTrack.keys) do
+		if k.t > playing.last and k.t <= t then fire(cameraTrack, k) end
 	end
 	playing.last, preview = t, t
 	drawTimeline()
 	if t >= length() then
 		if loop and length() > 0 then
-			playing = { start = os.clock(), last = -1 }
+			playing = { start = os.clock(), from = 0, last = -1e-6 }
 		else
 			playing = nil
+			releaseCamera()
 			status("Done")
 		end
 	end
@@ -689,7 +837,44 @@ local function stepMovers(dt)
 	end
 end
 
----====== SAVE / LOAD (a Lua table in the executor's folder) ======---
+---====== UNDO / REDO ======---
+
+local undoStack, redoStack = {}, {}
+
+local function snapshot(tr)
+	local keys = {}
+	for _, k in ipairs(tr.keys) do table.insert(keys, table.clone(k)) end
+	local shot = { track = tr, keys = keys }
+	if tr.model then shot.pivot, shot.scale = tr.model:GetPivot(), tr.model:GetScale() end
+	return shot
+end
+
+-- Before every change: moving, scaling, keys added, changed or deleted
+local function remember(tr)
+	if not tr then return end
+	table.insert(undoStack, snapshot(tr))
+	if #undoStack > 80 then table.remove(undoStack, 1) end
+	table.clear(redoStack)
+end
+
+local function undoRedo(from, to, word)
+	local shot = table.remove(from)
+	if not shot then
+		status("Nothing to " .. word)
+		return
+	end
+	table.insert(to, snapshot(shot.track))
+	shot.track.keys = shot.keys
+	if shot.pivot and shot.track.model.Parent then
+		shot.track.model:PivotTo(shot.pivot)
+		shot.track.model:ScaleTo(shot.scale)
+	end
+	selectedKey = nil
+	refresh()
+	status(if word == "undo" then "Undone" else "Redone")
+end
+
+---====== SAVE / LOAD / COPY (a Lua table in the executor's folder) ======---
 
 local function serialize(v)
 	if type(v) == "number" then return string.format("%.17g", v) end
@@ -702,22 +887,54 @@ end
 
 local KEY_FIELDS = { "t", "scale", "ease", "dir", "anim", "speed", "sound", "action" }
 
-local function saveProject(name)
-	local project = { loop = loop, objects = {} }
-	for _, obj in ipairs(objects) do
-		local keys = {}
-		for _, k in ipairs(obj.keys) do
-			local saved = { cf = { k.cf:GetComponents() } }
-			for _, f in ipairs(KEY_FIELDS) do saved[f] = k[f] end
-			table.insert(keys, saved)
-		end
-		table.insert(project.objects, { label = obj.label, src = obj.src, keys = keys })
+local function keysOut(keys)
+	local out = {}
+	for _, k in ipairs(keys) do
+		local saved = { cf = { k.cf:GetComponents() } }
+		for _, f in ipairs(KEY_FIELDS) do saved[f] = k[f] end
+		table.insert(out, saved)
 	end
-	local ok = pcall(function()
+	return out
+end
+
+local function keysIn(saved)
+	local keys = {}
+	for _, k in ipairs(saved or {}) do
+		local key = { cf = CFrame.new(table.unpack(k.cf)) }
+		for _, f in ipairs(KEY_FIELDS) do key[f] = k[f] end
+		table.insert(keys, key)
+	end
+	return keys
+end
+
+local function projectData()
+	local project = { loop = loop, objects = {}, camera = keysOut(cameraTrack.keys) }
+	for _, obj in ipairs(objects) do
+		table.insert(project.objects, { label = obj.label, src = obj.src, keys = keysOut(obj.keys) })
+	end
+	return project
+end
+
+local function writeFile(name, text)
+	return pcall(function()
 		if not isfolder(CONFIG.Folder) then makefolder(CONFIG.Folder) end
-		writefile(CONFIG.Folder .. "/" .. name .. ".lua", "return " .. serialize(project))
+		writefile(CONFIG.Folder .. "/" .. name, text)
 	end)
+end
+
+local function saveProject(name)
+	local ok = writeFile(name .. ".lua", "return " .. serialize(projectData()))
 	status(if ok then "Saved " .. name else "Cannot save: your executor has no writefile")
+end
+
+local function loadProjectData(project)
+	stop()
+	if morph then setMorph(nil) end
+	while #objects > 0 do remove(objects[1]) end
+	loop = project.loop == true
+	cameraTrack.keys = keysIn(project.camera)
+	for _, saved in ipairs(project.objects or {}) do insert(saved.label, saved.src, keysIn(saved.keys)) end
+	refresh()
 end
 
 local function loadProject(name)
@@ -726,19 +943,21 @@ local function loadProject(name)
 		status("Cannot read " .. name)
 		return
 	end
-	stop()
-	while #objects > 0 do remove(objects[1]) end
-	loop = project.loop == true
-	for _, saved in ipairs(project.objects) do
-		local keys = {}
-		for _, k in ipairs(saved.keys) do
-			local key = { cf = CFrame.new(table.unpack(k.cf)) }
-			for _, f in ipairs(KEY_FIELDS) do key[f] = k[f] end
-			table.insert(keys, key)
-		end
-		insert(saved.label, saved.src, keys)
-	end
+	loadProjectData(project)
 	status("Loaded " .. name)
+end
+
+-- A loadstring with the whole scene inside: it builds it again and plays it
+local function copyProject(name)
+	local text = "_G.UniversalAssets = { Project = " .. serialize(projectData()) .. ", AutoPlay = true }\n"
+		.. "loadstring(game:HttpGet(" .. string.format("%q", CONFIG.SelfUrl) .. "))()\n"
+	if setclipboard then
+		setclipboard(text)
+		status("Copied: paste it in the executor and it plays")
+	else
+		local ok = writeFile(name .. "_play.lua", text)
+		status(if ok then "No clipboard: saved " .. name .. "_play.lua" else "Your executor cannot copy or write files")
+	end
 end
 
 ---====== PLACING WITH THE MOUSE ======---
@@ -764,6 +983,7 @@ end
 local function startPlacing()
 	local obj = current()
 	if not obj then return end
+	remember(obj)
 	local box, size = obj.model:GetBoundingBox()
 	local pivot = obj.model:GetPivot()
 	local _, yaw = pivot:ToOrientation()
@@ -779,6 +999,15 @@ gui.Name = "UniversalAssets"
 gui.ResetOnSpawn = false
 gui.DisplayOrder = 50
 gui.Enabled = false
+
+-- The red flash lives on its own layer, so it shows with the panel closed
+local fxGui = Instance.new("ScreenGui")
+fxGui.Name, fxGui.ResetOnSpawn, fxGui.IgnoreGuiInset, fxGui.DisplayOrder = "UniversalAssetsFX", false, true, 49
+flashFrame = Instance.new("Frame")
+flashFrame.Name, flashFrame.Size, flashFrame.BorderSizePixel = "Flash", UDim2.fromScale(1, 1), 0
+flashFrame.BackgroundColor3, flashFrame.BackgroundTransparency = Color3.fromRGB(255, 0, 0), 1 -- DOORS' FlashFrame red
+flashFrame.Parent = fxGui
+fxGui.Parent = hud
 
 local FONT = Font.new("rbxasset://fonts/families/Oswald.json") -- DOORS' captions
 local CREAM, DARK, BROWN, RED = Color3.fromRGB(255, 222, 189), Color3.fromRGB(24, 18, 16), Color3.fromRGB(56, 42, 36), Color3.fromRGB(255, 81, 69)
@@ -855,8 +1084,7 @@ end)
 
 local objectLabel = label("", 40, row(3), 250)
 local function pick(i)
-	if #objects == 0 then return end
-	selected, selectedKey = (i - 1) % #objects + 1, nil
+	selected, selectedKey = i % (#objects + 1), nil -- 0 is the camera
 	refresh()
 end
 button("ObjPrev", "<", 10, row(3), 26, function() pick(selected - 1) end)
@@ -870,22 +1098,29 @@ local toolButtons = {}
 for i, name in ipairs(TOOLS) do
 	toolButtons[name] = button(name, i .. " " .. name, 10 + (i - 1) * 101, row(4), 97, function() tool = name; refresh() end)
 end
-button("Here", "Here", 10, row(5), 97, function() if current() then current().model:PivotTo(inFront()) end end)
+button("Here", "Here", 10, row(5), 97, function()
+	if current() then
+		remember(current())
+		current().model:PivotTo(inFront())
+	end
+end)
 button("Place", "Place", 111, row(5), 97, startPlacing)
 local spaceButton, snapButton
 spaceButton = button("Space", "Local", 212, row(5), 97, function() worldSpace = not worldSpace; refresh() end)
 snapButton = button("Snap", "Snap: on", 313, row(5), 97, function() snapOn = not snapOn; refresh() end)
-local freeCamButton
-local setFreeCam, freeCamOn -- below, with the camera
-freeCamButton = button("FreeCam", "Free cam: off", 10, row(6), 198, function() setFreeCam(not freeCamOn()) end)
-button("Duplicate", "Duplicate", 212, row(6), 198, function() if current() then duplicate(current()) end end)
+local freeCamButton = button("FreeCam", "Free cam", 10, row(6), 97, function() setFreeCam(not freeCamOn()) end)
+button("Duplicate", "Duplicate", 111, row(6), 97, function() if current() then duplicate(current()) end end)
+local morphButton = button("Morph", "Morph", 212, row(6), 97, function()
+	if current() then setMorph(if morph and morph.obj == current() then nil else current()) end
+end)
+button("Undo", "Undo", 313, row(6), 97, function() undoRedo(undoStack, redoStack, "undo") end)
 
 -- A box plus a > button that cycles through what the model has
 local function cycler(name, y, w, listOf)
 	label(name, 10, y, 56)
 	local b = box(name, "name, ID or stop", 66, y, w)
 	button(name .. "Next", ">", 70 + w, y, 30, function()
-		local list = current() and listOf(current()) or {}
+		local list = listOf(editing())
 		if #list == 0 then return end
 		b.Text = list[(table.find(list, b.Text) or 0) % #list + 1]
 	end)
@@ -914,9 +1149,13 @@ local actionBox = cycler("Action", row(10), 310, function(o) return o.actions en
 actionBox.PlaceholderText = "open, close, lights off, hide..."
 
 local function fromFields(k)
-	local obj = current()
+	local obj = editing()
 	k.t = math.max(tonumber(timeBox.Text) or 0, 0)
-	k.cf, k.scale = obj.model:GetPivot(), obj.model:GetScale()
+	if obj.isCamera then -- where the camera is, and its zoom
+		k.cf, k.scale = workspace.CurrentCamera.CFrame, workspace.CurrentCamera.FieldOfView
+	else
+		k.cf, k.scale = obj.model:GetPivot(), obj.model:GetScale()
+	end
 	k.ease, k.dir = CONFIG.Eases[ease], CONFIG.Directions[dir]
 	k.anim = if animBox.Text ~= "" then animBox.Text else nil
 	k.speed = tonumber(speedBox.Text) or 1
@@ -926,9 +1165,21 @@ local function fromFields(k)
 	refresh()
 end
 
+local function goTo(tr, k)
+	if tr.isCamera then
+		setFreeCam(true)
+		local pitch, yaw = k.cf:ToOrientation()
+		freecam.position, freecam.pitch, freecam.yaw = k.cf.Position, pitch, yaw
+		workspace.CurrentCamera.FieldOfView = k.scale
+	else
+		tr.model:PivotTo(k.cf)
+		tr.model:ScaleTo(k.scale)
+	end
+end
+
 button("AddKey", "+ Key", 10, row(11), 97, function()
-	local obj = current()
-	if not obj then return end
+	local obj = editing()
+	remember(obj)
 	local t = math.max(tonumber(timeBox.Text) or 0, 0)
 	local k
 	for _, other in ipairs(obj.keys) do
@@ -942,10 +1193,16 @@ button("AddKey", "+ Key", 10, row(11), 97, function()
 	fromFields(k)
 	timeBox.Text = tostring(t + 1)
 end)
-button("Update", "Update", 111, row(11), 97, function() if selectedKey then fromFields(selectedKey) end end)
+button("Update", "Update", 111, row(11), 97, function()
+	if selectedKey then
+		remember(editing())
+		fromFields(selectedKey)
+	end
+end)
 button("Delete", "Delete", 212, row(11), 97, function()
-	local obj = current()
-	if obj and selectedKey then
+	local obj = editing()
+	if selectedKey and table.find(obj.keys, selectedKey) then
+		remember(obj)
 		table.remove(obj.keys, table.find(obj.keys, selectedKey))
 		selectedKey = nil
 		refresh()
@@ -953,8 +1210,8 @@ button("Delete", "Delete", 212, row(11), 97, function()
 end)
 button("Go", "Go", 313, row(11), 97, function()
 	if selectedKey then
-		current().model:PivotTo(selectedKey.cf)
-		current().model:ScaleTo(selectedKey.scale)
+		remember(editing())
+		goTo(editing(), selectedKey)
 	end
 end)
 
@@ -992,14 +1249,25 @@ local list = make("ScrollingFrame", { Position = UDim2.fromOffset(10, row(13)), 
 	AutomaticCanvasSize = Enum.AutomaticSize.Y, CanvasSize = UDim2.new() }, content)
 make("UIListLayout", { Padding = UDim.new(0, 2) }, list)
 
-local loopButton
-button("Play", "Play", 10, row(13) + 130, 130, play)
-button("Stop", "Stop", 145, row(13) + 130, 130, function() stop(); status("Stopped") end)
-loopButton = button("Loop", "Loop: off", 280, row(13) + 130, 130, function() loop = not loop; refresh() end)
-local fileBox = box("File", "project name", 10, row(13) + 162, 222)
+local loopButton, rateButton
+button("Play", "Play", 10, row(13) + 130, 97, play)
+button("Stop", "Stop", 111, row(13) + 130, 97, function() -- back to the start, as in Studio
+	stop()
+	preview = 0
+	for _, obj in ipairs(objects) do pose(obj, 0) end
+	drawTimeline()
+	status("Stopped")
+end)
+loopButton = button("Loop", "Loop: off", 212, row(13) + 130, 97, function() loop = not loop; refresh() end)
+rateButton = button("Rate", "1x", 313, row(13) + 130, 97, function()
+	rate = RATES[(table.find(RATES, rate) or 0) % #RATES + 1]
+	refresh()
+end)
+local fileBox = box("File", "project name", 10, row(13) + 162, 170)
 fileBox.Text = "project"
-button("Save", "Save", 236, row(13) + 162, 85, function() saveProject(fileBox.Text) end)
-button("Load", "Load", 325, row(13) + 162, 85, function() task.spawn(loadProject, fileBox.Text) end)
+button("Save", "Save", 184, row(13) + 162, 74, function() saveProject(fileBox.Text) end)
+button("Load", "Load", 262, row(13) + 162, 74, function() task.spawn(loadProject, fileBox.Text) end)
+button("Copy", "Copy", 340, row(13) + 162, 70, function() copyProject(fileBox.Text) end)
 local statusLabel = label("", 10, row(13) + 194, 400)
 statusLabel.TextSize = 15
 
@@ -1007,22 +1275,28 @@ function status(text)
 	statusLabel.Text = text
 end
 
-local function keyText(k)
+local function keyText(k, isCamera)
 	local parts = { ("%5.2fs  %s %s"):format(k.t, k.ease, k.dir or "InOut") }
 	if k.anim then table.insert(parts, "anim " .. k.anim .. (if (k.speed or 1) ~= 1 then " x" .. k.speed else "")) end
 	if k.sound then table.insert(parts, "sound " .. k.sound) end
 	if k.action then table.insert(parts, k.action) end
-	if math.abs((k.scale or 1) - 1) > 1e-3 then table.insert(parts, ("scale %.2f"):format(k.scale)) end
+	if isCamera then
+		table.insert(parts, ("zoom %d"):format(math.floor(k.scale + 0.5)))
+	elseif math.abs((k.scale or 1) - 1) > 1e-3 then
+		table.insert(parts, ("scale %.2f"):format(k.scale))
+	end
 	return table.concat(parts, "  ")
 end
 
 function refresh()
-	local obj = current()
-	objectLabel.Text = if obj then ("%s (%d/%d)"):format(obj.label, selected, #objects) else "nothing inserted"
+	local obj = editing()
+	objectLabel.Text = if obj.isCamera then ("Camera (%d keys)"):format(#obj.keys) else ("%s (%d/%d)"):format(obj.label, selected, #objects)
 	loopButton.Text = if loop then "Loop: on" else "Loop: off"
+	rateButton.Text = rate .. "x"
 	spaceButton.Text = if worldSpace then "World" else "Local"
 	snapButton.Text = if snapOn then "Snap: on" else "Snap: off"
-	freeCamButton.Text = if freeCamOn() then "Free cam: on" else "Free cam: off"
+	freeCamButton.BackgroundColor3 = if freeCamOn() then RED else BROWN
+	morphButton.BackgroundColor3 = if morph then RED else BROWN
 	for name, b in pairs(toolButtons) do b.BackgroundColor3 = if name == tool then RED else BROWN end
 	for _, child in ipairs(list:GetChildren()) do
 		if child:IsA("TextButton") then child:Destroy() end
@@ -1030,17 +1304,16 @@ function refresh()
 	for _, m in ipairs(markers) do m:Destroy() end
 	table.clear(markers)
 	drawTimeline()
-	if not obj then return end
 	local total = math.max(length(), 1)
 	for i, k in ipairs(obj.keys) do
-		local r = button("Key" .. i, keyText(k), 0, 0, 390, function()
+		local r = button("Key" .. i, keyText(k, obj.isCamera), 0, 0, 390, function()
+			remember(obj)
 			selectedKey = k
 			timeBox.Text, animBox.Text, soundBox.Text, actionBox.Text = tostring(k.t), k.anim or "", k.sound or "", k.action or ""
 			speedBox.Text = tostring(k.speed or 1)
 			ease, dir = table.find(CONFIG.Eases, k.ease) or 1, table.find(CONFIG.Directions, k.dir or "InOut") or 1
 			easeButton.Text, dirButton.Text = CONFIG.Eases[ease], CONFIG.Directions[dir]
-			obj.model:PivotTo(k.cf)
-			obj.model:ScaleTo(k.scale)
+			goTo(obj, k)
 			preview = k.t
 			refresh()
 		end, list)
@@ -1082,6 +1355,7 @@ end
 
 local function beginDrag()
 	local obj = current()
+	if obj then remember(obj) end
 	if obj then drag = { obj = obj, pivot = obj.model:GetPivot(), box = proxy.CFrame, size = proxy.Size, scale = obj.model:GetScale() } end
 end
 local function endDrag() drag = nil end
@@ -1129,8 +1403,6 @@ end
 
 ---====== CAMERA: right mouse to look, and Studio's free camera ======---
 
-local freecam = nil
-local mouseWas = nil
 freeCamOn = function() return freecam ~= nil end
 
 local function stepFreeCam(dt)
@@ -1149,8 +1421,10 @@ local function stepFreeCam(dt)
 		local move = Vector3.new(held("D") - held("A"), held("E") - held("Q"), held("S") - held("W"))
 		local speed = CONFIG.FreeCamSpeed * (if UIS:IsKeyDown(Enum.KeyCode.LeftShift) then 0.25 else 1)
 		freecam.position += rotation:VectorToWorldSpace(move) * speed * dt
+		local zoom = held("X") - held("Z")
+		if zoom ~= 0 then camera.FieldOfView = math.clamp(camera.FieldOfView + zoom * 40 * dt, 5, 120) end
 	end
-	camera.CFrame = CFrame.new(freecam.position) * rotation
+	camera.CFrame = CFrame.new(freecam.position) * rotation * shakeOffset()
 end
 
 function setFreeCam(on)
@@ -1168,7 +1442,7 @@ function setFreeCam(on)
 		end
 		camera.CameraType = Enum.CameraType.Scriptable
 		RunService:BindToRenderStep("UniversalAssetsFreeCam", Enum.RenderPriority.Last.Value, stepFreeCam)
-		status("Free cam: WASD, E/Q up/down, Shift slow, right mouse to look")
+		status("Free cam: WASD, E/Q up/down, Z/X zoom, Shift slow, right mouse")
 	elseif not on and freecam then
 		RunService:UnbindFromRenderStep("UniversalAssetsFreeCam")
 		camera.CameraType = freecam.cameraType
@@ -1180,6 +1454,59 @@ function setFreeCam(on)
 		status("Free cam off")
 	end
 	refresh()
+end
+
+---====== MORPH: the selected model becomes your body ======---
+
+local function showBody(visible)
+	local character = LocalPlayer.Character
+	if not character then return end
+	for _, d in ipairs(character:GetDescendants()) do
+		if d:IsA("BasePart") or d:IsA("Decal") then d.LocalTransparencyModifier = if visible then 0 else 1 end
+	end
+end
+
+function setMorph(obj)
+	if morph then
+		stopAnim(morph.obj)
+		morph = nil
+		showBody(true)
+	end
+	local character = LocalPlayer.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	if obj and root and humanoid then
+		local box, size = obj.model:GetBoundingBox()
+		local body, bodySize = character:GetBoundingBox()
+		local function named(words) -- the first animation whose name has one of these words
+			for _, name in ipairs(obj.anims) do
+				for _, w in ipairs(words) do
+					if name:lower():find(w) then return name end
+				end
+			end
+			return nil
+		end
+		morph = { obj = obj, root = root, humanoid = humanoid, character = character,
+			lift = (obj.model:GetPivot().Y - (box.Y - size.Y / 2)) - (root.Position.Y - (body.Y - bodySize.Y / 2)),
+			idle = named({ "idle" }), walk = named({ "walk", "run", "move" }) }
+		status("Morph: you are " .. obj.label .. ". Morph again to stop")
+	end
+	refresh()
+end
+
+local function stepMorph()
+	local m = morph
+	if not m then return end
+	if not (m.obj.model.Parent and m.root.Parent) then
+		setMorph(nil)
+		return
+	end
+	local look = m.root.CFrame.LookVector * Vector3.new(1, 0, 1)
+	if look.Magnitude < 1e-3 then look = Vector3.new(0, 0, -1) end
+	m.obj.model:PivotTo(CFrame.lookAt(m.root.Position, m.root.Position + look) + Vector3.new(0, m.lift, 0))
+	showBody(false) -- every frame: the game may show the body again
+	local anim = if m.humanoid.MoveDirection.Magnitude > 0.1 then m.walk or m.idle else m.idle
+	if anim then playAnim(m.obj, anim, 1) end
 end
 
 showPreset()
@@ -1231,7 +1558,7 @@ on(UIS.InputBegan, function(input, processed)
 	if ctrl and key == Enum.KeyCode[CONFIG.PlayKey] then
 		if playing then
 			stop()
-			status("Stopped")
+			status(("Paused at %.2fs: Ctrl %s goes on"):format(preview, CONFIG.PlayKey))
 		else
 			play()
 		end
@@ -1240,6 +1567,11 @@ on(UIS.InputBegan, function(input, processed)
 	end
 	if ctrl and key == Enum.KeyCode[CONFIG.FreeCamKey] then
 		setFreeCam(not freecam)
+		comboStep = 1
+		return
+	end
+	if ctrl and gui.Enabled and (key == Enum.KeyCode.Z or key == Enum.KeyCode.Y) then
+		if key == Enum.KeyCode.Z then undoRedo(undoStack, redoStack, "undo") else undoRedo(redoStack, undoStack, "redo") end
 		comboStep = 1
 		return
 	end
@@ -1291,6 +1623,7 @@ on(RunService.RenderStepped, function(dt)
 	stepPlayback()
 	stepMovers(dt)
 	stepGizmo()
+	stepMorph()
 end)
 -- Our own players write the joints after Roblox's animations, before physics
 on(RunService.PreSimulation or RunService.Stepped, function(a, b)
@@ -1302,9 +1635,19 @@ if getgenv then
 	getgenv().__UniversalAssetsCleanup = function()
 		stop()
 		setFreeCam(false)
+		setMorph(nil)
 		for _, c in ipairs(connections) do c:Disconnect() end
 		for _, obj in ipairs(objects) do obj.model:Destroy() end
 		if mainGame and gui.Enabled then mainGame.freemouse = mouseWas end
-		for _, i in ipairs({ gui, proxy, moveHandles, scaleHandles, rotateHandles }) do i:Destroy() end
+		for _, i in ipairs({ gui, fxGui, proxy, moveHandles, scaleHandles, rotateHandles }) do i:Destroy() end
 	end
+end
+
+-- A scene from Copy: built again, and played if it asks to
+if type(CONFIG.Project) == "table" then
+	task.spawn(function()
+		loadProjectData(CONFIG.Project)
+		status("Scene loaded")
+		if CONFIG.AutoPlay then play() end
+	end)
 end

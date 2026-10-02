@@ -307,6 +307,9 @@ _G.UniversalAssets = {              -- all optional, these are the defaults
     LookSpeed = 0.25,               -- degrees per pixel, right mouse in the free camera
     OpenTime = 0.6,                 -- seconds to open / close doors and drawers
     Folder = "UniversalAssets",     -- where projects are saved
+    SelfUrl = "...",                -- what Copy's loadstring loads (this script)
+    Project = nil,                  -- a scene (what Copy puts here): built at start
+    AutoPlay = false,               -- with Project: it plays as soon as it is built
 }
 loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/UniversalAssets"))()
 ```
@@ -331,8 +334,22 @@ with the panel closed too.
   close / open reverse (anything on a hinge or a rail: DOORS' doors and drawers),
   lights off / on / flicker, hide / show. The wardrobe's own open and close
   animations (`Anim_EnterModel`, `Anim_ExitModel`) are in its animation list.
-- **Duplicate**, **Play**, **Stop**, **Loop**; **Save** / **Load** keep the project
-  in the executor's `UniversalAssets` folder.
+- **Camera**, first in the model list: its keys are where the camera is and its
+  zoom (set them from the free cam, Z / X to zoom). On Play the camera flies through
+  them, as in a DOORS cutscene.
+- **Effects** on any key: `shake` (DOORS' camera shake), `flash` (its red flash),
+  `say <text>` (its subtitle), `room flicker`, `room lights off`, `room lights on`,
+  `room shatter` (DOORS' own Module_Events on the room you are in), and
+  `particles on` / `particles off` / `burst` for a model's particles.
+- **Undo / Redo**: Ctrl+Z / Ctrl+Y (or Undo) for moving, scaling and keys.
+- **Play** starts from the timeline's red line, **Ctrl + P** pauses and goes on,
+  **Stop** goes back to the start; **1x** cycles 0.5x, 0.25x, 2x.
+- **Morph**: the selected model becomes your body — it follows you, you disappear,
+  and it walks and stands with its own animations (named walk / run / idle).
+- **Copy** puts a loadstring with the whole scene inside on the clipboard: pasted
+  in the executor, it builds the scene again and plays it.
+- **Duplicate**, **Loop**; **Save** / **Load** keep the project in the executor's
+  `UniversalAssets` folder.
 
 Animations owned by the game's owner (in DOORS: LSPLASH) play normally. Any
 other one is converted when the model is inserted: its KeyframeSequence is
