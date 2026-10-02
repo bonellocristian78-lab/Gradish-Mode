@@ -297,7 +297,9 @@ seeing your normal animations. R15 characters only, like DOORS'.
 loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/UniversalAssets"))()
 ```
 
-An animator. Hold **Ctrl** and type **U I O** to open it.
+An animator. Hold **Ctrl** and type **U I O** to open it; the same combo or the **X**
+closes it and locks the mouse back. **Ctrl + P** plays or stops, with the panel
+closed too.
 
 - **Insert** a preset — DOORS' Glitch, Screech, Spider, Dread, Figure, the
   wardrobe, door, bookcase, table, chandelier or plant of the room you are in,

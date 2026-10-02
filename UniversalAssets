@@ -3,7 +3,8 @@
 
             loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/UniversalAssets"))()
 
-        Hold Ctrl and type U, I, O: the panel opens (again to close it).
+        Hold Ctrl and type U, I, O: the panel opens (again, or X, to close it
+        and lock the mouse back). Ctrl + P plays or stops, with the panel closed too.
 
         1. Insert something: a preset (DOORS' entities and furniture, some
            custom models) or any model by asset ID or .rbxm URL.
@@ -28,6 +29,7 @@
 local CONFIG = {
 	Combo = { "U", "I", "O" }, -- hold Ctrl and type these
 	ComboTime = 2,             -- seconds allowed between the keys
+	PlayKey = "P",             -- Ctrl + this: Play, or Stop if playing. Works with the panel closed
 	Folder = "UniversalAssets",
 	Presets = {
 		{ "Glitch", "ReplicatedStorage.Entities.Glitch" },
@@ -554,6 +556,8 @@ end
 -- The title frees the mouse in first person (Modal) and drags the panel
 local title = button("Title", "UNIVERSAL CUSTOM ASSETS", 0, 0, 360, function() end)
 title.Modal, title.BackgroundColor3, title.TextColor3 = true, RED, DARK
+local closeButton = button("Close", "X", 330, 0, 30, function() end)
+closeButton.BackgroundColor3, closeButton.TextColor3, closeButton.ZIndex = RED, DARK, 2
 local dragging = nil
 title.InputBegan:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -706,7 +710,7 @@ end
 
 showPreset()
 refresh()
-status("Hold Ctrl and type " .. table.concat(CONFIG.Combo, " ") .. " to hide this")
+status("X or Ctrl " .. table.concat(CONFIG.Combo, " ") .. " closes. Ctrl " .. CONFIG.PlayKey .. " plays")
 gui.Parent = if gethui then gethui() else LocalPlayer:WaitForChild("PlayerGui")
 pcall(function()
 	game:GetService("StarterGui"):SetCore("SendNotification", { Title = "Universal Custom Assets",
@@ -727,6 +731,7 @@ local function toggle()
 	end
 	if not gui.Enabled then placing = nil end
 end
+closeButton.MouseButton1Click:Connect(toggle)
 
 local comboStep, comboAt = 1, 0
 on(UIS.InputBegan, function(input, processed)
@@ -746,6 +751,16 @@ on(UIS.InputBegan, function(input, processed)
 	end
 	if processed or key == Enum.KeyCode.LeftControl or key == Enum.KeyCode.RightControl or key == Enum.KeyCode.Unknown then return end
 	local ctrl = UIS:IsKeyDown(Enum.KeyCode.LeftControl) or UIS:IsKeyDown(Enum.KeyCode.RightControl)
+	if ctrl and key == Enum.KeyCode[CONFIG.PlayKey] then
+		if playing then
+			stop()
+			status("Stopped")
+		else
+			play()
+		end
+		comboStep = 1
+		return
+	end
 	if not ctrl or os.clock() - comboAt > CONFIG.ComboTime then comboStep = 1 end
 	if ctrl and key == Enum.KeyCode[CONFIG.Combo[comboStep]] then
 		comboStep, comboAt = comboStep + 1, os.clock()
