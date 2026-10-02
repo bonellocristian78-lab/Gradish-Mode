@@ -6,7 +6,7 @@
             _G.UniversalAssets = {
                 Combo = { "U", "I", "O" },  -- hold Ctrl and type these: opens / closes the panel
                 ComboTime = 2,              -- seconds allowed between those keys
-                PlayKey = "P",              -- Ctrl + P: play / stop, also with the panel closed
+                PlayKey = "P",              -- Ctrl + P: play / pause, also with the panel closed
                 FreeCamKey = "F",           -- Ctrl + F: free camera on / off
                 UIScale = 1.2,              -- size of the panel on a PC
                 MobileScale = 0.8,          -- size of the panel on a phone
@@ -24,6 +24,21 @@
             }
             loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/UniversalAssets"))()
 
+        THE PANEL (in Italian): four tabs, in the order you use them
+            1 Aggiungi: DOORS' things, the Roblox toolbox, an ID
+            2 Muovi: Studio's tools, place, duplicate, morph, undo / redo, free cam
+            3 Anima: the easy way (1 "start here", 2 "arrive here in N s") and the keys
+            4 Scena: save, load, your projects, copy as a loadstring, new scene
+            Always under them: the timeline, Play / pause, Stop, loop, speed, the status.
+            ? explains it all (it opens by itself until "Ho capito"). With the panel
+            open, red dots in the world show the way the selected thing goes.
+
+        THE EASY WAY
+            Put the thing where it starts and press 1. Drag it where it arrives and press
+            2: it gets there in the seconds written next to it. 2 again for more stretches.
+            A model with a run / walk animation looks where it goes and runs (Auto).
+            With the camera selected, 1 and 2 use the free camera.
+
         LIKE ROBLOX STUDIO
             Ctrl+1 select, Ctrl+2 move (arrows), Ctrl+3 scale, Ctrl+4 rotate (rings)
             Ctrl+Z undo, Ctrl+Y redo; click a model to select it
@@ -37,10 +52,10 @@
             it. The panel fits the screen and scrolls.
 
         THE TOOLBOX
-            Type in the search box and press Search (or Enter): it searches Roblox's
+            Type in the search box and press Cerca (or Enter): it searches Roblox's
             Creator Store, the Studio toolbox, for models. Seek, Rush, Ambush... are one
-            tap away. "Anims only" hides the models without animations. Tap a result to
-            insert it: its scripts are taken out, its animations converted if needed.
+            tap away. "Solo animati" hides the models without animations. Tap a result
+            to insert it: its scripts are taken out, its animations converted if needed.
 
         AUTO ANIM
             With Auto on, the selected model plays its own walk / run animation while
@@ -48,7 +63,7 @@
             keys you put down the hallway). Its keys' animations are then ignored.
 
         THE CAMERA
-            "Camera" is first in the list of models: its keys are where the camera is and
+            "Telecamera" is first in the list of models: its keys are where the camera is and
             its zoom (set them from the free cam). On Play it flies through them, as in a
             DOORS cutscene. Play starts from the timeline's red line; Ctrl+P pauses.
 
@@ -97,18 +112,18 @@ local CONFIG = {
 		{ "Spider", "ReplicatedStorage.Entities.Spider" },
 		{ "Dread", "ReplicatedStorage.Entities.Dread" },
 		{ "Figure", "ReplicatedStorage.JumpscareModels.Figure" },
-		{ "Figure (Library)", "ReplicatedStorage.JumpscareModels.FigureLibrary" },
-		{ "Door", "Room:Door" },
-		{ "Wardrobe", "Room:Wardrobe" },
-		{ "Drawers", "Room:DrawerContainer" },
-		{ "Bookcase", "Room:Bookcase" },
-		{ "Table", "Room:Table" },
-		{ "Chandelier", "Room:Chandelier" },
-		{ "Potted plant", "Room:Potted_Plant" },
-		{ "Wall clock", "Room:Wall_Clock" },
-		{ "Painting", "Room:Painting_Big" },
+		{ "Figure (biblioteca)", "ReplicatedStorage.JumpscareModels.FigureLibrary" },
+		{ "Porta", "Room:Door" },
+		{ "Armadio", "Room:Wardrobe" },
+		{ "Cassettiera", "Room:DrawerContainer" },
+		{ "Libreria", "Room:Bookcase" },
+		{ "Tavolo", "Room:Table" },
+		{ "Lampadario", "Room:Chandelier" },
+		{ "Pianta", "Room:Potted_Plant" },
+		{ "Orologio", "Room:Wall_Clock" },
+		{ "Quadro", "Room:Painting_Big" },
 		{ "Figure morph", 98266611233960 },
-		{ "Seek + pipe", 86341229891935 },
+		{ "Seek + tubo", 86341229891935 },
 		{ "Morph 100327482330650", 100327482330650 },
 		{ "Honcho (MorthenHubber)", 104515922403348 },
 	},
@@ -145,7 +160,7 @@ local status, refresh, drawTimeline -- set with the UI
 local freecam, mouseWas, morph = nil, nil, nil
 local setFreeCam, freeCamOn, setMorph -- below, with the camera and the morph
 local flashFrame, shakeUntil = nil, 0
-local padHeld, toggle, toolboxFit = {}, nil, nil -- the free cam's arrows on a phone; opens / closes the panel
+local padHeld, toggle = {}, nil -- the free cam's arrows on a phone; opens / closes the panel
 
 local function on(signal, fn)
 	local c = signal:Connect(fn)
@@ -421,10 +436,10 @@ do
 			if not id or ownedHere(id) ~= false then track = nativeTrack(obj.animator, source, 4) end
 		end
 		if not track then
-			status("Converting " .. text .. ": not owned by this game")
+			status("Converto " .. text .. ": non è di questo gioco")
 			local kfs = sequenceOf(source)
 			if not kfs then
-				status(text .. " cannot be converted (private?)")
+				status(text .. ": non si può convertire (privata?)")
 				obj.cache[text] = false
 				return nil
 			end
@@ -599,7 +614,7 @@ local function setup(model, label, src, keys, at)
 	end
 	if not root then
 		model:Destroy()
-		status(label .. " has no parts")
+		status(label .. ": non ha parti")
 		return nil
 	end
 	model.PrimaryPart = root
@@ -669,18 +684,18 @@ local function setup(model, label, src, keys, at)
 	selected, selectedKey = #objects, nil
 	refresh()
 	for i, name in ipairs(anims) do -- ready now, so Play does not wait: conversions take a while
-		status(("%s: preparing animations %d/%d"):format(label, i, #anims))
+		status(("%s: preparo le animazioni %d/%d"):format(label, i, #anims))
 		loadTrack(obj, name)
 	end
-	status(label .. " ready")
+	status(label .. " pronto. Ora 2 Muovi o 3 Anima")
 	return obj
 end
 
 local function insert(label, src, keys)
-	status("Loading " .. label .. "...")
+	status("Carico " .. label .. "...")
 	local source = fetch(src)
 	if not source then
-		status("Not found: " .. label)
+		status("Non trovato: " .. label)
 		return
 	end
 	local was = source.Archivable
@@ -688,7 +703,7 @@ local function insert(label, src, keys)
 	local model = source:Clone()
 	source.Archivable = was
 	if not model then
-		status("Cannot copy " .. label)
+		status("Non si può copiare " .. label)
 		return
 	end
 	if not model:IsA("Model") then
@@ -836,7 +851,16 @@ local function play()
 		end
 	end
 	takeCamera()
-	status(("Playing from %.2fs at %gx"):format(from, rate))
+	status(("Play da %.2f s, velocità %gx"):format(from, rate))
+end
+
+local function playPause()
+	if playing then
+		stop()
+		status(("In pausa a %.2f s"):format(preview))
+	else
+		play()
+	end
 end
 
 local function stepPlayback()
@@ -874,7 +898,7 @@ local function stepPlayback()
 					if idle then playAnim(tr, idle, 1) else stopAnim(tr) end
 				end
 			end
-			status("Done")
+			status("Finita")
 		end
 	end
 end
@@ -914,7 +938,7 @@ end
 local function undoRedo(from, to, word)
 	local shot = table.remove(from)
 	if not shot then
-		status("Nothing to " .. word)
+		status("Niente da " .. word)
 		return
 	end
 	table.insert(to, snapshot(shot.track))
@@ -925,7 +949,7 @@ local function undoRedo(from, to, word)
 	end
 	selectedKey = nil
 	refresh()
-	status(if word == "undo" then "Undone" else "Redone")
+	status(if word == "annullare" then "Annullato" else "Ripetuto")
 end
 
 ---====== SAVE / LOAD / COPY (a Lua table in the executor's folder) ======---
@@ -980,7 +1004,7 @@ do
 
 	function saveProject(name)
 		local ok = writeFile(name .. ".lua", "return " .. serialize(projectData()))
-		status(if ok then "Saved " .. name else "Cannot save: your executor has no writefile")
+		status(if ok then "Salvato " .. name else "Non posso salvare: il tuo executor non ha writefile")
 	end
 
 	function loadProjectData(project)
@@ -996,11 +1020,11 @@ do
 	function loadProject(name)
 		local ok, project = pcall(function() return loadstring(readfile(CONFIG.Folder .. "/" .. name .. ".lua"))() end)
 		if not ok or type(project) ~= "table" then
-			status("Cannot read " .. name)
+			status("Non riesco a leggere " .. name)
 			return
 		end
 		loadProjectData(project)
-		status("Loaded " .. name)
+		status("Caricato " .. name)
 	end
 
 	-- A loadstring with the whole scene inside: it builds it again and plays it
@@ -1009,10 +1033,10 @@ do
 			.. "loadstring(game:HttpGet(" .. string.format("%q", CONFIG.SelfUrl) .. "))()\n"
 		if setclipboard then
 			setclipboard(text)
-			status("Copied: paste it in the executor and it plays")
+			status("Copiato: incollalo nell'executor e la scena parte")
 		else
 			local ok = writeFile(name .. "_play.lua", text)
-			status(if ok then "No clipboard: saved " .. name .. "_play.lua" else "Your executor cannot copy or write files")
+			status(if ok then "Niente appunti: salvato " .. name .. "_play.lua" else "Il tuo executor non sa copiare né scrivere file")
 		end
 	end
 end
@@ -1047,10 +1071,10 @@ local function startPlacing()
 	local pivot = obj.model:GetPivot()
 	local _, yaw = pivot:ToOrientation()
 	placing = { obj = obj, from = pivot, yaw = yaw, base = pivot.Y - (box.Y - size.Y / 2) }
-	status(if touchOnly then "Tap where it goes" else "Click to drop. R turns, Esc cancels")
+	status(if touchOnly then "Tocca dove va" else "Clicca dove va. R la gira, Esc annulla")
 end
 
----====== THE PANEL ======---
+---====== THE PANEL: four tabs, in the order you use them ======---
 
 local hud = if gethui then gethui() else LocalPlayer:WaitForChild("PlayerGui")
 local gui = Instance.new("ScreenGui")
@@ -1058,6 +1082,7 @@ gui.Name = "UniversalAssets"
 gui.ResetOnSpawn = false
 gui.DisplayOrder = 50
 gui.Enabled = false
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling -- the toolbox and the guide cover the pages
 
 -- The red flash lives on its own layer, so it shows with the panel closed
 local fxGui = Instance.new("ScreenGui")
@@ -1070,7 +1095,9 @@ fxGui.Parent = hud
 
 local FONT = Font.new("rbxasset://fonts/families/Oswald.json") -- DOORS' captions
 local CREAM, DARK, BROWN, RED = Color3.fromRGB(255, 222, 189), Color3.fromRGB(24, 18, 16), Color3.fromRGB(56, 42, 36), Color3.fromRGB(255, 81, 69)
-local W = 420
+local GOLD, MUTED, FIELD = Color3.fromRGB(232, 184, 112), Color3.fromRGB(200, 170, 140), Color3.fromRGB(14, 10, 9) -- main buttons, hints, boxes
+-- The width; above the pages: the title, the tabs, the selected thing; below: the timeline, Play, the status
+local W, TOP, BOTTOM = 420, 100, 94
 
 local function make(class, props, parent)
 	local i = Instance.new(class)
@@ -1084,59 +1111,89 @@ local panel = make("Frame", { Size = UDim2.fromOffset(W, 664), Position = UDim2.
 local uiScale = make("UIScale", { Scale = CONFIG.UIScale }, panel)
 make("UICorner", { CornerRadius = UDim.new(0, 6) }, panel)
 make("UIStroke", { Color = CREAM, Transparency = 0.6 }, panel)
-local content = make("ScrollingFrame", { Name = "Content", Position = UDim2.fromOffset(0, 34), Size = UDim2.fromOffset(W, 630),
-	CanvasSize = UDim2.fromOffset(W, 630), BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 6,
-	ScrollingDirection = Enum.ScrollingDirection.Y, ScrollBarImageColor3 = CREAM }, panel)
+-- Everything under the title: hidden when the panel is minimized
+local body = make("Frame", { Name = "Body", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1 }, panel)
+local content = make("ScrollingFrame", { Name = "Content", Position = UDim2.fromOffset(0, TOP), Size = UDim2.fromOffset(W, 400),
+	CanvasSize = UDim2.fromOffset(W, 400), BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 6,
+	ScrollingDirection = Enum.ScrollingDirection.Y, ScrollBarImageColor3 = CREAM }, body)
+local bottom = make("Frame", { Name = "Bottom", Size = UDim2.fromOffset(W, BOTTOM), BackgroundTransparency = 1 }, body)
+local overlays = {} -- how the toolbox and the guide resize: they cover the tabs and the page
 
--- Fits the screen: smaller on a phone, and what does not fit scrolls
+-- Fits the screen: smaller on a phone, and a page that does not fit scrolls
 local function fit()
 	local view = workspace.CurrentCamera.ViewportSize
 	local base = if touchOnly then CONFIG.MobileScale else CONFIG.UIScale
 	local scale = math.clamp(math.min(base, (view.X - 16) / W), 0.4, base)
 	uiScale.Scale = scale
-	local height = math.clamp((view.Y - 60) / scale, 120, 664)
-	panel.Size = UDim2.fromOffset(W, if content.Visible then height else 30)
-	content.Size = UDim2.fromOffset(W, height - 34)
-	if toolboxFit then toolboxFit(height - 34) end
+	local height = math.clamp((view.Y - 60) / scale, TOP + BOTTOM + 64, 664)
+	panel.Size = UDim2.fromOffset(W, if body.Visible then height else 30)
+	content.Size = UDim2.fromOffset(W, height - TOP - BOTTOM)
+	bottom.Position = UDim2.fromOffset(0, height - BOTTOM)
+	for _, resize in ipairs(overlays) do resize(height - 34 - BOTTOM) end
 	-- Never left outside the screen
 	local x = math.clamp(panel.Position.X.Offset, 0, math.max(view.X - W * scale, 0))
 	local y = math.clamp(panel.Position.Y.Offset, 0, math.max(view.Y - 60 - 30 * scale, 0))
 	panel.Position = UDim2.fromOffset(x, y)
 end
 
+local into = content -- where label, button and box put things when no parent is given
+
 local function label(text, x, y, w, parent)
 	return make("TextLabel", { Text = text, Position = UDim2.fromOffset(x, y), Size = UDim2.fromOffset(w, 28),
 		BackgroundTransparency = 1, FontFace = FONT, TextSize = 18, TextColor3 = CREAM,
-		TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd }, parent or content)
+		TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd }, parent or into)
+end
+
+-- A line or two in a softer color: what to do here
+local function hint(text, y, h)
+	local l = label(text, 10, y, W - 20)
+	l.Size, l.TextSize, l.TextColor3, l.TextWrapped = UDim2.fromOffset(W - 20, h), 15, MUTED, true
+	l.TextTruncate, l.TextYAlignment = Enum.TextTruncate.None, Enum.TextYAlignment.Top
+	return l
+end
+
+local function header(text, y, parent)
+	local l = label(text, 10, y, W - 20, parent)
+	l.Size, l.TextSize, l.TextColor3 = UDim2.fromOffset(W - 20, 20), 15, RED
+	return l
 end
 
 local function button(name, text, x, y, w, fn, parent)
 	local b = make("TextButton", { Name = name, Text = text, Position = UDim2.fromOffset(x, y), Size = UDim2.fromOffset(w, 28),
-		BackgroundColor3 = BROWN, BorderSizePixel = 0, FontFace = FONT, TextSize = 18, TextColor3 = CREAM, AutoButtonColor = true }, parent or content)
+		BackgroundColor3 = BROWN, BorderSizePixel = 0, FontFace = FONT, TextSize = 18, TextScaled = true, TextColor3 = CREAM,
+		AutoButtonColor = true }, parent or into)
 	make("UICorner", { CornerRadius = UDim.new(0, 4) }, b)
+	make("UITextSizeConstraint", { MaxTextSize = 18 }, b) -- smaller only when it does not fit
 	b.MouseButton1Click:Connect(fn) -- gone with the panel
 	return b
 end
 
-local function box(name, hint, x, y, w)
-	local b = make("TextBox", { Name = name, Text = "", PlaceholderText = hint, Position = UDim2.fromOffset(x, y), Size = UDim2.fromOffset(w, 28),
-		BackgroundColor3 = Color3.fromRGB(14, 10, 9), BorderSizePixel = 0, FontFace = FONT, TextSize = 18, TextColor3 = CREAM,
-		PlaceholderColor3 = Color3.fromRGB(140, 120, 104), ClearTextOnFocus = false }, content)
+-- The buttons that do the main thing of a page
+local function primary(b)
+	b.BackgroundColor3, b.TextColor3 = GOLD, DARK
+	return b
+end
+
+local function box(name, placeholder, x, y, w)
+	local b = make("TextBox", { Name = name, Text = "", PlaceholderText = placeholder, Position = UDim2.fromOffset(x, y), Size = UDim2.fromOffset(w, 28),
+		BackgroundColor3 = FIELD, BorderSizePixel = 0, FontFace = FONT, TextSize = 18, TextColor3 = CREAM,
+		PlaceholderColor3 = Color3.fromRGB(140, 120, 104), ClearTextOnFocus = false }, into)
 	make("UICorner", { CornerRadius = UDim.new(0, 4) }, b)
 	return b
 end
 
-local function row(i) return 4 + (i - 1) * 32 end
-
 -- The title frees the mouse in first person (Modal) and drags the panel
 local title = button("Title", "UNIVERSAL CUSTOM ASSETS", 0, 0, W, function() end, panel)
 title.Size, title.Modal, title.BackgroundColor3, title.TextColor3 = UDim2.fromOffset(W, 30), true, RED, DARK
+title.TextXAlignment = Enum.TextXAlignment.Left -- clear of ? _ X
+make("UIPadding", { PaddingLeft = UDim.new(0, 10) }, title)
 local closeButton = button("Close", "X", W - 32, 0, 32, function() end, panel)
-local minimize = button("Minimize", "_", W - 66, 0, 32, function()
-	content.Visible = not content.Visible
+for _, b in ipairs({ closeButton, button("Minimize", "_", W - 66, 0, 32, function()
+	body.Visible = not body.Visible
 	fit()
-end, panel)
-for _, b in ipairs({ closeButton, minimize }) do b.BackgroundColor3, b.TextColor3, b.ZIndex, b.Size = RED, DARK, 2, UDim2.fromOffset(32, 30) end
+end, panel) }) do
+	b.BackgroundColor3, b.TextColor3, b.ZIndex, b.Size = RED, DARK, 2, UDim2.fromOffset(32, 30)
+end
 -- Dragging the panel (or the phone bar) with the mouse or a finger
 local dragging = nil
 local function pressed(input)
@@ -1155,308 +1212,511 @@ local function follows(state, input)
 end
 title.InputBegan:Connect(function(input) startDragging(panel, input) end)
 
-local preset = 1
-local presetLabel = label("", 40, row(1), 250)
-local function showPreset() presetLabel.Text = CONFIG.Presets[preset][1] end
-button("PresetPrev", "<", 10, row(1), 26, function() preset = (preset - 2) % #CONFIG.Presets + 1; showPreset() end)
-button("PresetNext", ">", 294, row(1), 26, function() preset = preset % #CONFIG.Presets + 1; showPreset() end)
-button("Insert", "Insert", 324, row(1), 86, function()
-	local p = CONFIG.Presets[preset]
-	task.spawn(insert, p[1], p[2])
-end)
-local idBox = box("Id", "search the toolbox, or an ID / URL", 10, row(2), 220)
-local runSearch -- below, with the toolbox
-button("Search", "Search", 234, row(2), 86, function() task.spawn(runSearch, idBox.Text, false) end)
-idBox.FocusLost:Connect(function(enter)
-	if enter and not tonumber(idBox.Text) and not idBox.Text:match("^https?://") then task.spawn(runSearch, idBox.Text, false) end
-end)
-button("InsertId", "Insert ID", 324, row(2), 86, function()
-	local text = idBox.Text:gsub("^%s+", ""):gsub("%s+$", "")
-	if text ~= "" then task.spawn(insert, tonumber(text) and ("Asset " .. text) or text:match("[^/]+$") or text, tonumber(text) or text) end
-end)
-
-local objectLabel = label("", 40, row(3), 170)
-local function pick(i)
-	selected, selectedKey = i % (#objects + 1), nil -- 0 is the camera
-	refresh()
+-- One page per tab; each one adds to refresh() what it shows of the selected thing
+local pages, onShow, refreshers = {}, {}, {}
+for i = 1, 4 do
+	pages[i] = make("Frame", { Name = "Page" .. i, Size = UDim2.fromOffset(W, 0), BackgroundTransparency = 1, Visible = false }, content)
 end
-button("ObjPrev", "<", 10, row(3), 26, function() pick(selected - 1) end)
-button("ObjNext", ">", 214, row(3), 26, function() pick(selected + 1) end)
-local autoButton = button("Auto", "Auto", 244, row(3), 76, function()
-	local obj = current()
-	if not obj then return end
-	obj.auto = not obj.auto
-	stopAnim(obj)
-	local walk = animNamed(obj, WALK_WORDS)
-	status(if not obj.auto then "Auto off: the keys' animations play"
-		elseif walk then "Auto: " .. walk .. " while it moves" .. (if animNamed(obj, IDLE_WORDS) then ", " .. animNamed(obj, IDLE_WORDS) .. " while it stands" else "")
-		else "Auto: no animation named run / walk in this model")
-	refresh()
-end)
-button("Remove", "Remove", 324, row(3), 86, function() if current() then remove(current()) end end)
-
--- Studio's tools: 1 select, 2 move, 3 scale, 4 rotate
+local runSearch -- below, with the toolbox
 local TOOLS = { "Select", "Move", "Scale", "Rotate" }
 local tool, worldSpace, snapOn = "Move", false, true
-local toolButtons = {}
-for i, name in ipairs(TOOLS) do
-	toolButtons[name] = button(name, i .. " " .. name, 10 + (i - 1) * 101, row(4), 97, function() tool = name; refresh() end)
-end
-button("Here", "Here", 10, row(5), 97, function()
-	if current() then
-		remember(current())
-		current().model:PivotTo(inFront())
-	end
-end)
-button("Place", "Place", 111, row(5), 97, startPlacing)
-local spaceButton, snapButton
-spaceButton = button("Space", "Local", 212, row(5), 97, function() worldSpace = not worldSpace; refresh() end)
-snapButton = button("Snap", "Snap: on", 313, row(5), 97, function() snapOn = not snapOn; refresh() end)
-local freeCamButton = button("FreeCam", "Free cam", 10, row(6), 97, function() setFreeCam(not freeCamOn()) end)
-button("Duplicate", "Duplicate", 111, row(6), 97, function() if current() then duplicate(current()) end end)
-local morphButton = button("Morph", "Morph", 212, row(6), 97, function()
-	if current() then setMorph(if morph and morph.obj == current() then nil else current()) end
-end)
-button("Undo", "Undo", 313, row(6), 97, function() undoRedo(undoStack, redoStack, "undo") end)
+local timeBox, scrub, panelPlay, scrubbing = nil, nil, nil, false -- the keys' time, the timeline, Play: with their pages
+local pathFolder = make("Folder", { Name = "UniversalAssetsPath" }, nil) -- the selected thing's way, in the world
 
--- A box plus a > button that cycles through what the model has
-local function cycler(name, y, w, listOf)
-	label(name, 10, y, 56)
-	local b = box(name, "name, ID or stop", 66, y, w)
-	button(name .. "Next", ">", 70 + w, y, 30, function()
-		local list = listOf(editing())
-		if #list == 0 then return end
-		b.Text = list[(table.find(list, b.Text) or 0) % #list + 1]
-	end)
-	return b
-end
+-- The tabs, and the selected thing under them: < > go through the camera and the models
+local pick, showPage
+do
+	local TABS = { { "TabAdd", "1 Aggiungi" }, { "TabMove", "2 Muovi" }, { "TabAnim", "3 Anima" }, { "TabScene", "4 Scena" } }
+	local tabButtons = {}
+	function showPage(i)
+		for j, page in ipairs(pages) do
+			local on = j == i
+			page.Visible = on
+			tabButtons[j].BackgroundColor3 = if on then RED else BROWN
+			tabButtons[j].TextColor3 = if on then DARK else CREAM
+		end
+		content.CanvasSize, content.CanvasPosition = UDim2.fromOffset(W, pages[i].Size.Y.Offset), Vector2.new(0, 0)
+		if onShow[i] then onShow[i]() end
+	end
+	for i, t in ipairs(TABS) do
+		tabButtons[i] = button(t[1], t[2], 10 + (i - 1) * 101, 34, 97, function() showPage(i) end, body)
+	end
 
-label("Time", 10, row(7), 40)
-local timeBox = box("Time", "s", 50, row(7), 60)
-timeBox.Text = "0"
-local ease, dir = 1, 1
-local easeButton, dirButton
-easeButton = button("Ease", CONFIG.Eases[ease], 118, row(7), 150, function()
-	ease = ease % #CONFIG.Eases + 1
-	easeButton.Text = CONFIG.Eases[ease]
-end)
-dirButton = button("Dir", CONFIG.Directions[dir], 272, row(7), 138, function()
-	dir = dir % #CONFIG.Directions + 1
-	dirButton.Text = CONFIG.Directions[dir]
-end)
-local animBox = cycler("Anim", row(8), 220, function(o) return o.anims end)
-label("speed", 322, row(8), 40)
-local speedBox = box("Speed", "1", 362, row(8), 48)
-speedBox.Text = "1"
-local soundBox = cycler("Sound", row(9), 310, function(o) return o.soundNames end)
-local actionBox = cycler("Action", row(10), 310, function(o) return o.actions end)
-actionBox.PlaceholderText = "open, close, lights off, hide..."
-
-local function fromFields(k)
-	local obj = editing()
-	k.t = math.max(tonumber(timeBox.Text) or 0, 0)
-	if obj.isCamera then -- where the camera is, and its zoom
-		k.cf, k.scale = workspace.CurrentCamera.CFrame, workspace.CurrentCamera.FieldOfView
-	else
-		k.cf, k.scale = obj.model:GetPivot(), obj.model:GetScale()
-	end
-	k.ease, k.dir = CONFIG.Eases[ease], CONFIG.Directions[dir]
-	k.anim = if animBox.Text ~= "" then animBox.Text else nil
-	k.speed = tonumber(speedBox.Text) or 1
-	k.sound = if soundBox.Text ~= "" then soundBox.Text else nil
-	k.action = if actionBox.Text ~= "" then actionBox.Text else nil
-	table.sort(obj.keys, function(a, b) return a.t < b.t end)
-	refresh()
-end
-
-local function goTo(tr, k)
-	if tr.isCamera then
-		setFreeCam(true)
-		local pitch, yaw = k.cf:ToOrientation()
-		freecam.position, freecam.pitch, freecam.yaw = k.cf.Position, pitch, yaw
-		workspace.CurrentCamera.FieldOfView = k.scale
-	else
-		tr.model:PivotTo(k.cf)
-		tr.model:ScaleTo(k.scale)
-	end
-end
-
-button("AddKey", "+ Key", 10, row(11), 97, function()
-	local obj = editing()
-	remember(obj)
-	local t = math.max(tonumber(timeBox.Text) or 0, 0)
-	local k
-	for _, other in ipairs(obj.keys) do
-		if math.abs(other.t - t) < 1e-3 then k = other end -- same time: replaced
-	end
-	if not k then
-		k = {}
-		table.insert(obj.keys, k)
-	end
-	selectedKey = k
-	fromFields(k)
-	timeBox.Text = tostring(t + 1)
-end)
-button("Update", "Update", 111, row(11), 97, function()
-	if selectedKey then
-		remember(editing())
-		fromFields(selectedKey)
-	end
-end)
-button("Delete", "Delete", 212, row(11), 97, function()
-	local obj = editing()
-	if selectedKey and table.find(obj.keys, selectedKey) then
-		remember(obj)
-		table.remove(obj.keys, table.find(obj.keys, selectedKey))
-		selectedKey = nil
+	local objectLabel = label("", 44, 68, 252, body)
+	objectLabel.BackgroundTransparency, objectLabel.BackgroundColor3, objectLabel.TextXAlignment = 0, FIELD, Enum.TextXAlignment.Center
+	make("UICorner", { CornerRadius = UDim.new(0, 4) }, objectLabel)
+	function pick(i)
+		selected, selectedKey = i % (#objects + 1), nil -- 0 is the camera
 		refresh()
 	end
-end)
-button("Go", "Go", 313, row(11), 97, function()
-	if selectedKey then
-		remember(editing())
-		goTo(editing(), selectedKey)
-	end
-end)
-
--- The timeline: the keys of the selected model; drag on it to see any moment
-local bar = make("Frame", { Name = "Timeline", Position = UDim2.fromOffset(10, row(12)), Size = UDim2.fromOffset(400, 28),
-	BackgroundColor3 = Color3.fromRGB(14, 10, 9), BorderSizePixel = 0 }, content)
-local playhead = make("Frame", { Size = UDim2.new(0, 2, 1, 0), BackgroundColor3 = RED, BorderSizePixel = 0, ZIndex = 3 }, bar)
-local timeText = label("", 0, 0, 396, bar)
-timeText.TextXAlignment, timeText.TextSize, timeText.ZIndex = Enum.TextXAlignment.Right, 15, 2
-local markers = {}
-local scrubbing = false
-
-function drawTimeline()
-	local total = math.max(length(), 1)
-	playhead.Position = UDim2.new(math.clamp(preview / total, 0, 1), -1, 0, 0)
-	timeText.Text = ("%.2f / %.2fs"):format(preview, length())
+	button("ObjPrev", "<", 10, 68, 30, function() pick(selected - 1) end, body)
+	button("ObjNext", ">", 300, 68, 30, function() pick(selected + 1) end, body)
+	button("Remove", "Togli", 334, 68, 76, function() if current() then remove(current()) end end, body)
+	table.insert(refreshers, function(obj)
+		objectLabel.Text = if obj.isCamera then ("Telecamera (%d chiavi)"):format(#obj.keys) else ("%s (%d/%d)"):format(obj.label, selected, #objects)
+	end)
 end
 
-local function scrub(x)
-	local t = math.clamp((x - bar.AbsolutePosition.X) / math.max(bar.AbsoluteSize.X, 1), 0, 1) * math.max(length(), 1)
-	preview = t
-	for _, obj in ipairs(objects) do pose(obj, t) end
-	timeBox.Text = ("%.2f"):format(t)
-	drawTimeline()
-end
-bar.InputBegan:Connect(function(input)
-	if pressed(input) then
-		playing = nil
-		scrubbing = { touch = if input.UserInputType == Enum.UserInputType.Touch then input else nil }
-		scrub(input.Position.X)
+---- 1 AGGIUNGI: DOORS' things, the toolbox, an ID ----
+do
+	into = pages[1]
+	hint("Scegli con < > e premi Inserisci: appare davanti a te. O cerca nel toolbox di Roblox (es. seek), o incolla un ID.", 4, 40)
+	local preset = 1
+	local presetLabel = label("", 44, 48, 228)
+	presetLabel.TextXAlignment = Enum.TextXAlignment.Center
+	local function showPreset() presetLabel.Text = CONFIG.Presets[preset][1] end
+	button("PresetPrev", "<", 10, 48, 30, function() preset = (preset - 2) % #CONFIG.Presets + 1; showPreset() end)
+	button("PresetNext", ">", 276, 48, 30, function() preset = preset % #CONFIG.Presets + 1; showPreset() end)
+	primary(button("Insert", "Inserisci", 310, 48, 100, function()
+		local p = CONFIG.Presets[preset]
+		task.spawn(insert, p[1], p[2])
+	end))
+	showPreset()
+
+	header("TOOLBOX DI ROBLOX", 86)
+	local idBox = box("Id", "es. seek, o un ID", 10, 108, 206)
+	button("Search", "Cerca", 220, 108, 92, function() task.spawn(runSearch, idBox.Text, false) end)
+	idBox.FocusLost:Connect(function(enter)
+		if enter and not tonumber(idBox.Text) and not idBox.Text:match("^https?://") then task.spawn(runSearch, idBox.Text, false) end
+	end)
+	button("InsertId", "Usa ID", 316, 108, 94, function()
+		local text = idBox.Text:gsub("^%s+", ""):gsub("%s+$", "")
+		if text ~= "" then task.spawn(insert, tonumber(text) and ("Asset " .. text) or text:match("[^/]+$") or text, tonumber(text) or text) end
+	end)
+	header("ENTITÀ DI DOORS: UN TOCCO E LE CERCA", 144)
+	for i, name in ipairs({ "Seek", "Rush", "Ambush", "Figure", "Halt", "Eyes", "Screech", "Jack" }) do
+		button("Quick" .. name, name, 10 + ((i - 1) % 4) * 101, 166 + math.floor((i - 1) / 4) * 32, 97, function()
+			idBox.Text = "doors " .. name:lower()
+			task.spawn(runSearch, idBox.Text, false)
+		end)
 	end
-end)
-
-local list = make("ScrollingFrame", { Position = UDim2.fromOffset(10, row(13)), Size = UDim2.fromOffset(400, 124),
-	BackgroundColor3 = Color3.fromRGB(14, 10, 9), BorderSizePixel = 0, ScrollBarThickness = 4,
-	AutomaticCanvasSize = Enum.AutomaticSize.Y, CanvasSize = UDim2.new() }, content)
-make("UIListLayout", { Padding = UDim.new(0, 2) }, list)
-
-local loopButton, rateButton
-button("Play", "Play", 10, row(13) + 130, 97, play)
-button("Stop", "Stop", 111, row(13) + 130, 97, function() -- back to the start, as in Studio
-	stop()
-	preview = 0
-	for _, obj in ipairs(objects) do pose(obj, 0) end
-	drawTimeline()
-	status("Stopped")
-end)
-loopButton = button("Loop", "Loop: off", 212, row(13) + 130, 97, function() loop = not loop; refresh() end)
-rateButton = button("Rate", "1x", 313, row(13) + 130, 97, function()
-	rate = RATES[(table.find(RATES, rate) or 0) % #RATES + 1]
-	refresh()
-end)
-local fileBox = box("File", "project name", 10, row(13) + 162, 170)
-fileBox.Text = "project"
-button("Save", "Save", 184, row(13) + 162, 74, function() saveProject(fileBox.Text) end)
-button("Load", "Load", 262, row(13) + 162, 74, function() task.spawn(loadProject, fileBox.Text) end)
-button("Copy", "Copy", 340, row(13) + 162, 70, function() copyProject(fileBox.Text) end)
-local statusLabel = label("", 10, row(13) + 194, 400)
-statusLabel.TextSize, statusLabel.Name = 15, "Status"
-
-function status(text)
-	statusLabel.Text = text
+	pages[1].Size = UDim2.fromOffset(W, 232)
 end
 
-local function keyText(k, isCamera)
-	local parts = { ("%5.2fs  %s %s"):format(k.t, k.ease, k.dir or "InOut") }
-	if k.anim then table.insert(parts, "anim " .. k.anim .. (if (k.speed or 1) ~= 1 then " x" .. k.speed else "")) end
-	if k.sound then table.insert(parts, "sound " .. k.sound) end
-	if k.action then table.insert(parts, k.action) end
-	if isCamera then
-		table.insert(parts, ("zoom %d"):format(math.floor(k.scale + 0.5)))
-	elseif math.abs((k.scale or 1) - 1) > 1e-3 then
-		table.insert(parts, ("scale %.2f"):format(k.scale))
+---- 2 MUOVI: Studio's tools ----
+do
+	into = pages[2]
+	hint((if touchOnly then "Tocca" else "Clicca") .. " una cosa per sceglierla. Frecce: la sposti. Anelli: la giri. Pallini: la ingrandisci."
+		.. (if touchOnly then "" else " Tasto destro: guardi intorno."), 4, 40)
+	local NAMES = { Select = "Seleziona", Move = "Sposta", Scale = "Scala", Rotate = "Ruota" }
+	local toolButtons = {}
+	for i, name in ipairs(TOOLS) do
+		toolButtons[name] = button(name, NAMES[name], 10 + (i - 1) * 101, 48, 97, function() tool = name; refresh() end)
 	end
-	return table.concat(parts, "  ")
+	button("Here", "Davanti a me", 10, 80, 97, function()
+		if current() then
+			remember(current())
+			current().model:PivotTo(inFront())
+		end
+	end)
+	button("Place", "Posiziona", 111, 80, 97, startPlacing)
+	local spaceButton = button("Space", "", 212, 80, 97, function() worldSpace = not worldSpace; refresh() end)
+	local snapButton = button("Snap", "", 313, 80, 97, function() snapOn = not snapOn; refresh() end)
+	button("Duplicate", "Duplica", 10, 112, 97, function() if current() then duplicate(current()) end end)
+	local morphButton = button("Morph", "Diventa lui", 111, 112, 97, function()
+		if current() then setMorph(if morph and morph.obj == current() then nil else current()) end
+	end)
+	button("Undo", "Annulla", 212, 112, 97, function() undoRedo(undoStack, redoStack, "annullare") end)
+	button("Redo", "Ripeti", 313, 112, 97, function() undoRedo(redoStack, undoStack, "ripetere") end)
+	local freeCamButton = button("FreeCam", "Camera libera", 10, 144, 198, function() setFreeCam(not freeCamOn()) end)
+	local note = label(if touchOnly then "si guida con le frecce in basso" else "WASD, E/Q, Z/X zoom", 216, 144, 194)
+	note.TextSize, note.TextColor3 = 15, MUTED
+	table.insert(refreshers, function()
+		spaceButton.Text = if worldSpace then "Mondo" else "Locale"
+		snapButton.Text = if snapOn then "Griglia: sì" else "Griglia: no"
+		freeCamButton.BackgroundColor3 = if freeCamOn() then RED else BROWN
+		morphButton.BackgroundColor3 = if morph then RED else BROWN
+		for name, b in pairs(toolButtons) do b.BackgroundColor3 = if name == tool then RED else BROWN end
+	end)
+	pages[2].Size = UDim2.fromOffset(W, 178)
+end
+
+---- 3 ANIMA: the easy way (start, arrive), and the keys ----
+do
+	into = pages[3]
+	hint("Metti la cosa dove parte e premi 1. Spostala dove arriva e premi 2: ci va in quei secondi. Ancora 2 = un altro tratto.", 4, 40)
+	header("MOVIMENTO FACILE", 46)
+	label("in", 320, 68, 18)
+	local quickBox = box("QuickTime", "s", 338, 68, 44)
+	quickBox.Text = "3"
+	label("s", 388, 68, 20)
+
+	-- A Linear key where the thing (or the camera) is now
+	local function quickKey(tr, t)
+		local camera = workspace.CurrentCamera
+		local k = { t = t, ease = "Linear", dir = "InOut", speed = 1 }
+		if tr.isCamera then
+			k.cf, k.scale = camera.CFrame, camera.FieldOfView
+		else
+			k.cf, k.scale = tr.model:GetPivot(), tr.model:GetScale()
+		end
+		return k
+	end
+	primary(button("QuickStart", "1. Parte da qui", 10, 68, 150, function()
+		local tr = editing()
+		if tr.isCamera and not freecam then setFreeCam(true) end
+		remember(tr)
+		selectedKey, preview = quickKey(tr, 0), 0
+		tr.keys = { selectedKey } -- it starts again from here (Annulla gives the old keys back)
+		refresh()
+		status(if tr.isCamera then "Partenza messa. Muovi la telecamera dove arriva e premi 2"
+			else "Partenza messa. Ora trascina le frecce fin dove arriva e premi 2")
+	end))
+	primary(button("QuickEnd", "2. Arriva qui", 164, 68, 150, function()
+		local tr = editing()
+		local last = tr.keys[#tr.keys]
+		if not last then
+			status("Prima la partenza: mettila dove parte e premi 1")
+			return
+		end
+		remember(tr)
+		local k = quickKey(tr, last.t + math.max(tonumber(quickBox.Text) or 3, 0.1))
+		-- A creature looks where it goes and runs with its own animation (Corsa auto)
+		local way = (k.cf.Position - last.cf.Position) * Vector3.new(1, 0, 1)
+		local runs = not tr.isCamera and animNamed(tr, WALK_WORDS) ~= nil and way.Magnitude > 0.5
+		if runs then
+			local function facing(cf) return CFrame.lookAt(cf.Position, cf.Position + way) end
+			k.cf = facing(k.cf)
+			if #tr.keys == 1 then last.cf = facing(last.cf) end
+			tr.model:PivotTo(k.cf)
+			tr.auto = true
+		end
+		table.insert(tr.keys, k)
+		selectedKey, preview = k, k.t
+		refresh()
+		status(("Arriva a %g s%s. Play per vederla, o spostala ancora e premi 2"):format(k.t, if runs then " correndo" else ""))
+	end))
+	local autoButton = button("Auto", "", 10, 100, 198, function()
+		local obj = current()
+		if not obj then return end
+		obj.auto = not obj.auto
+		stopAnim(obj)
+		local walk, idle = animNamed(obj, WALK_WORDS), animNamed(obj, IDLE_WORDS)
+		status(if not obj.auto then "Corsa auto spenta: valgono le animazioni delle chiavi"
+			elseif walk then "Corsa auto: " .. walk .. " mentre si muove" .. (if idle then ", " .. idle .. " da fermo" else "")
+			else "Corsa auto: questo modello non ha animazioni run / walk")
+		refresh()
+	end)
+	local pathOn = true
+	local pathButton = button("Path", "", 212, 100, 198, function() pathOn = not pathOn; refresh() end)
+
+	header("CHIAVI: CONTROLLO COMPLETO", 136)
+	-- A box plus a > button that cycles through what the model has
+	local function cycler(name, text, y, w, listOf)
+		label(text, 10, y, 56).TextSize = 16
+		local b = box(name, "nome, ID o stop", 66, y, w)
+		button(name .. "Next", ">", 70 + w, y, 30, function()
+			local list = listOf(editing())
+			if #list == 0 then return end
+			b.Text = list[(table.find(list, b.Text) or 0) % #list + 1]
+		end)
+		return b
+	end
+	label("Tempo", 10, 158, 50).TextSize = 16
+	timeBox = box("Time", "s", 60, 158, 56)
+	timeBox.Text = "0"
+	local ease, dir = 1, 1
+	local easeButton, dirButton
+	easeButton = button("Ease", CONFIG.Eases[ease], 120, 158, 146, function()
+		ease = ease % #CONFIG.Eases + 1
+		easeButton.Text = CONFIG.Eases[ease]
+	end)
+	dirButton = button("Dir", CONFIG.Directions[dir], 270, 158, 140, function()
+		dir = dir % #CONFIG.Directions + 1
+		dirButton.Text = CONFIG.Directions[dir]
+	end)
+	local animBox = cycler("Anim", "Anim", 190, 220, function(o) return o.anims end)
+	label("vel.", 324, 190, 36).TextSize = 16
+	local speedBox = box("Speed", "1", 360, 190, 50)
+	speedBox.Text = "1"
+	local soundBox = cycler("Sound", "Suono", 222, 310, function(o) return o.soundNames end)
+	local actionBox = cycler("Action", "Azione", 254, 310, function(o) return o.actions end)
+	actionBox.PlaceholderText = "open, close, lights off, hide, shake..."
+
+	local function fromFields(k)
+		local obj = editing()
+		k.t = math.max(tonumber(timeBox.Text) or 0, 0)
+		if obj.isCamera then -- where the camera is, and its zoom
+			k.cf, k.scale = workspace.CurrentCamera.CFrame, workspace.CurrentCamera.FieldOfView
+		else
+			k.cf, k.scale = obj.model:GetPivot(), obj.model:GetScale()
+		end
+		k.ease, k.dir = CONFIG.Eases[ease], CONFIG.Directions[dir]
+		k.anim = if animBox.Text ~= "" then animBox.Text else nil
+		k.speed = tonumber(speedBox.Text) or 1
+		k.sound = if soundBox.Text ~= "" then soundBox.Text else nil
+		k.action = if actionBox.Text ~= "" then actionBox.Text else nil
+		table.sort(obj.keys, function(a, b) return a.t < b.t end)
+		refresh()
+	end
+
+	local function goTo(tr, k)
+		if tr.isCamera then
+			setFreeCam(true)
+			local pitch, yaw = k.cf:ToOrientation()
+			freecam.position, freecam.pitch, freecam.yaw = k.cf.Position, pitch, yaw
+			workspace.CurrentCamera.FieldOfView = k.scale
+		else
+			tr.model:PivotTo(k.cf)
+			tr.model:ScaleTo(k.scale)
+		end
+	end
+
+	button("AddKey", "+ Chiave", 10, 286, 97, function()
+		local obj = editing()
+		remember(obj)
+		local t = math.max(tonumber(timeBox.Text) or 0, 0)
+		local k
+		for _, other in ipairs(obj.keys) do
+			if math.abs(other.t - t) < 1e-3 then k = other end -- same time: replaced
+		end
+		if not k then
+			k = {}
+			table.insert(obj.keys, k)
+		end
+		selectedKey = k
+		fromFields(k)
+		timeBox.Text = tostring(t + 1)
+	end)
+	button("Update", "Aggiorna", 111, 286, 97, function()
+		if selectedKey then
+			remember(editing())
+			fromFields(selectedKey)
+		end
+	end)
+	button("Delete", "Elimina", 212, 286, 97, function()
+		local obj = editing()
+		if selectedKey and table.find(obj.keys, selectedKey) then
+			remember(obj)
+			table.remove(obj.keys, table.find(obj.keys, selectedKey))
+			selectedKey = nil
+			refresh()
+		end
+	end)
+	button("Go", "Vai", 313, 286, 97, function()
+		if selectedKey then
+			remember(editing())
+			goTo(editing(), selectedKey)
+		end
+	end)
+
+	local list = make("ScrollingFrame", { Name = "Keys", Position = UDim2.fromOffset(10, 318), Size = UDim2.fromOffset(400, 124),
+		BackgroundColor3 = FIELD, BorderSizePixel = 0, ScrollBarThickness = 4,
+		AutomaticCanvasSize = Enum.AutomaticSize.Y, CanvasSize = UDim2.new() }, into)
+	make("UIListLayout", { Padding = UDim.new(0, 2) }, list)
+
+	local function keyText(k, isCamera)
+		local parts = { ("%5.2fs  %s %s"):format(k.t, k.ease, k.dir or "InOut") }
+		if k.anim then table.insert(parts, "anim " .. k.anim .. (if (k.speed or 1) ~= 1 then " x" .. k.speed else "")) end
+		if k.sound then table.insert(parts, "suono " .. k.sound) end
+		if k.action then table.insert(parts, k.action) end
+		if isCamera then
+			table.insert(parts, ("zoom %d"):format(math.floor(k.scale + 0.5)))
+		elseif math.abs((k.scale or 1) - 1) > 1e-3 then
+			table.insert(parts, ("scala %.2f"):format(k.scale))
+		end
+		return table.concat(parts, "  ")
+	end
+
+	-- The selected thing's way in the world, with the panel open: red dots, a numbered one on each key
+	local function dot(position, size, color)
+		return make("Part", { Shape = Enum.PartType.Ball, Size = Vector3.new(size, size, size), CFrame = CFrame.new(position),
+			Material = Enum.Material.Neon, Color = color, Anchored = true, CanCollide = false, CanTouch = false, CanQuery = false,
+			CastShadow = false }, pathFolder)
+	end
+	local function drawPath(tr)
+		pathFolder:ClearAllChildren()
+		local keys = tr.keys
+		pathFolder.Parent = if pathOn and gui.Enabled and #keys > 0 then workspace.CurrentCamera else nil
+		if not pathFolder.Parent then return end
+		local from, to = keys[1].t, keys[#keys].t
+		local stepSize = math.max((to - from) / 120, 0.05)
+		for t = from + stepSize, to - stepSize / 2, stepSize do
+			dot((poseAt(keys, t)).Position, 0.3, RED)
+		end
+		for i, k in ipairs(keys) do
+			local tag = make("BillboardGui", { Name = "Tag", Size = UDim2.fromOffset(90, 24), StudsOffset = Vector3.new(0, 1.3, 0),
+				AlwaysOnTop = true }, dot(k.cf.Position, 0.8, if k == selectedKey then GOLD else CREAM))
+			local text = label(("%d · %gs"):format(i, math.floor(k.t * 100 + 0.5) / 100), 0, 0, 90, tag)
+			text.Size, text.TextXAlignment, text.TextStrokeTransparency = UDim2.fromOffset(90, 24), Enum.TextXAlignment.Center, 0.2
+		end
+	end
+
+	table.insert(refreshers, function(obj)
+		local auto = current() ~= nil and current().auto == true
+		autoButton.Text = if auto then "Corsa auto: sì" else "Corsa auto: no"
+		autoButton.BackgroundColor3 = if auto then RED else BROWN
+		pathButton.Text = if pathOn then "Percorso: sì" else "Percorso: no"
+		for _, child in ipairs(list:GetChildren()) do
+			if child:IsA("TextButton") then child:Destroy() end
+		end
+		for i, k in ipairs(obj.keys) do
+			local r = button("Key" .. i, keyText(k, obj.isCamera), 0, 0, 390, function()
+				remember(obj)
+				selectedKey = k
+				timeBox.Text, animBox.Text, soundBox.Text, actionBox.Text = tostring(k.t), k.anim or "", k.sound or "", k.action or ""
+				speedBox.Text = tostring(k.speed or 1)
+				ease, dir = table.find(CONFIG.Eases, k.ease) or 1, table.find(CONFIG.Directions, k.dir or "InOut") or 1
+				easeButton.Text, dirButton.Text = CONFIG.Eases[ease], CONFIG.Directions[dir]
+				goTo(obj, k)
+				preview = k.t
+				refresh()
+			end, list)
+			r.Size, r.LayoutOrder = UDim2.new(1, -6, 0, 24), i
+			r.TextXAlignment = Enum.TextXAlignment.Left
+			r.BackgroundColor3 = if k == selectedKey then RED else BROWN
+		end
+		drawPath(obj)
+	end)
+	pages[3].Size = UDim2.fromOffset(W, 448)
+end
+
+---- 4 SCENA: save, load, copy, start again ----
+do
+	into = pages[4]
+	hint("Salva la scena per riaprirla. Copia: un loadstring che, incollato nell'executor, rifà la scena e la fa partire.", 4, 40)
+	local fileBox = box("File", "nome del progetto", 10, 48, 170)
+	fileBox.Text = "progetto"
+	local listProjects -- below
+	button("Save", "Salva", 184, 48, 74, function()
+		saveProject(fileBox.Text)
+		listProjects()
+	end)
+	button("Load", "Carica", 262, 48, 74, function() task.spawn(loadProject, fileBox.Text) end)
+	button("Copy", "Copia", 340, 48, 70, function() copyProject(fileBox.Text) end)
+
+	header("I TUOI PROGETTI: TOCCA PER CARICARE", 84)
+	local projectList = make("ScrollingFrame", { Name = "Projects", Position = UDim2.fromOffset(10, 106), Size = UDim2.fromOffset(400, 124),
+		BackgroundColor3 = FIELD, BorderSizePixel = 0, ScrollBarThickness = 4,
+		AutomaticCanvasSize = Enum.AutomaticSize.Y, CanvasSize = UDim2.new() }, into)
+	make("UIListLayout", { Padding = UDim.new(0, 2) }, projectList)
+	-- The executor's folder, read again each time the tab opens
+	function listProjects()
+		for _, child in ipairs(projectList:GetChildren()) do
+			if child:IsA("TextButton") then child:Destroy() end
+		end
+		local ok, files = pcall(function() return listfiles(CONFIG.Folder) end)
+		if not ok or type(files) ~= "table" then return end
+		for i, path in ipairs(files) do
+			local name = tostring(path):match("([^/\\]+)%.lua$")
+			if name and not name:match("_play$") then
+				local b = button("Project" .. i, name, 0, 0, 390, function()
+					fileBox.Text = name
+					task.spawn(loadProject, name)
+				end, projectList)
+				b.Size, b.LayoutOrder, b.TextXAlignment = UDim2.new(1, -6, 0, 26), i, Enum.TextXAlignment.Left
+			end
+		end
+	end
+	onShow[4] = listProjects
+
+	local armed = 0 -- a second press within 3 s: everything goes
+	button("NewScene", "Nuova scena", 10, 238, 198, function()
+		if os.clock() - armed > 3 then
+			armed = os.clock()
+			status("Togliere tutti i modelli e le chiavi? Premi ancora Nuova scena")
+			return
+		end
+		armed = 0
+		loadProjectData({})
+		status("Scena nuova: vuota")
+	end)
+	local note = label("toglie tutto: premilo due volte", 216, 238, 194)
+	note.TextSize, note.TextColor3 = 15, MUTED
+	pages[4].Size = UDim2.fromOffset(W, 272)
+end
+
+---- Under the pages, always: the timeline, Play, the status ----
+do
+	into = bottom
+	-- The timeline: the keys of the selected thing; drag on it to see any moment
+	local bar = make("Frame", { Name = "Timeline", Position = UDim2.fromOffset(10, 0), Size = UDim2.fromOffset(400, 24),
+		BackgroundColor3 = FIELD, BorderSizePixel = 0 }, bottom)
+	local playhead = make("Frame", { Size = UDim2.new(0, 2, 1, 0), BackgroundColor3 = RED, BorderSizePixel = 0, ZIndex = 3 }, bar)
+	local timeText = label("", 0, 0, 396, bar)
+	timeText.Size, timeText.TextXAlignment, timeText.TextSize, timeText.ZIndex = UDim2.fromOffset(396, 24), Enum.TextXAlignment.Right, 15, 2
+	local markers = {}
+
+	function drawTimeline()
+		local total = math.max(length(), 1)
+		playhead.Position = UDim2.new(math.clamp(preview / total, 0, 1), -1, 0, 0)
+		timeText.Text = ("%.2f / %.2fs"):format(preview, length())
+	end
+
+	function scrub(x)
+		local t = math.clamp((x - bar.AbsolutePosition.X) / math.max(bar.AbsoluteSize.X, 1), 0, 1) * math.max(length(), 1)
+		preview = t
+		for _, obj in ipairs(objects) do pose(obj, t) end
+		timeBox.Text = ("%.2f"):format(t)
+		drawTimeline()
+	end
+	bar.InputBegan:Connect(function(input)
+		if pressed(input) then
+			playing = nil
+			scrubbing = { touch = if input.UserInputType == Enum.UserInputType.Touch then input else nil }
+			scrub(input.Position.X)
+		end
+	end)
+
+	panelPlay = primary(button("Play", "Play", 10, 30, 97, playPause))
+	button("Stop", "Stop", 111, 30, 97, function() -- back to the start, as in Studio
+		stop()
+		preview = 0
+		for _, obj in ipairs(objects) do pose(obj, 0) end
+		drawTimeline()
+		status("Fermo: di nuovo all'inizio")
+	end)
+	local loopButton = button("Loop", "", 212, 30, 97, function() loop = not loop; refresh() end)
+	local rateButton = button("Rate", "", 313, 30, 97, function()
+		rate = RATES[(table.find(RATES, rate) or 0) % #RATES + 1]
+		refresh()
+	end)
+	local statusLabel = label("", 10, 60, 400)
+	statusLabel.Name, statusLabel.Size, statusLabel.TextSize, statusLabel.TextWrapped = "Status", UDim2.fromOffset(400, 32), 15, true
+	statusLabel.TextTruncate = Enum.TextTruncate.None
+
+	function status(text)
+		statusLabel.Text = text
+	end
+
+	table.insert(refreshers, function(obj)
+		loopButton.Text = if loop then "Loop: sì" else "Loop: no"
+		rateButton.Text = "Velocità " .. rate .. "x"
+		for _, m in ipairs(markers) do m:Destroy() end
+		table.clear(markers)
+		local total = math.max(length(), 1)
+		for _, k in ipairs(obj.keys) do
+			table.insert(markers, make("Frame", { Size = UDim2.new(0, 6, 0, 14), AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.new(k.t / total, 0, 0.5, 0), Rotation = 45, BorderSizePixel = 0, ZIndex = 2,
+				BackgroundColor3 = if k == selectedKey then RED else CREAM }, bar))
+		end
+		drawTimeline()
+	end)
 end
 
 function refresh()
 	local obj = editing()
-	objectLabel.Text = if obj.isCamera then ("Camera (%d keys)"):format(#obj.keys) else ("%s (%d/%d)"):format(obj.label, selected, #objects)
-	loopButton.Text = if loop then "Loop: on" else "Loop: off"
-	rateButton.Text = rate .. "x"
-	spaceButton.Text = if worldSpace then "World" else "Local"
-	snapButton.Text = if snapOn then "Snap: on" else "Snap: off"
-	freeCamButton.BackgroundColor3 = if freeCamOn() then RED else BROWN
-	morphButton.BackgroundColor3 = if morph then RED else BROWN
-	autoButton.BackgroundColor3 = if current() and current().auto then RED else BROWN
-	for name, b in pairs(toolButtons) do b.BackgroundColor3 = if name == tool then RED else BROWN end
-	for _, child in ipairs(list:GetChildren()) do
-		if child:IsA("TextButton") then child:Destroy() end
-	end
-	for _, m in ipairs(markers) do m:Destroy() end
-	table.clear(markers)
-	drawTimeline()
-	local total = math.max(length(), 1)
-	for i, k in ipairs(obj.keys) do
-		local r = button("Key" .. i, keyText(k, obj.isCamera), 0, 0, 390, function()
-			remember(obj)
-			selectedKey = k
-			timeBox.Text, animBox.Text, soundBox.Text, actionBox.Text = tostring(k.t), k.anim or "", k.sound or "", k.action or ""
-			speedBox.Text = tostring(k.speed or 1)
-			ease, dir = table.find(CONFIG.Eases, k.ease) or 1, table.find(CONFIG.Directions, k.dir or "InOut") or 1
-			easeButton.Text, dirButton.Text = CONFIG.Eases[ease], CONFIG.Directions[dir]
-			goTo(obj, k)
-			preview = k.t
-			refresh()
-		end, list)
-		r.Size, r.LayoutOrder, r.TextSize = UDim2.new(1, -6, 0, 24), i, 16
-		r.TextXAlignment = Enum.TextXAlignment.Left
-		r.BackgroundColor3 = if k == selectedKey then RED else BROWN
-		table.insert(markers, make("Frame", { Size = UDim2.new(0, 6, 0, 14), AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.new(k.t / total, 0, 0.5, 0), Rotation = 45, BorderSizePixel = 0, ZIndex = 2,
-			BackgroundColor3 = if k == selectedKey then RED else CREAM }, bar))
-	end
+	for _, show in ipairs(refreshers) do show(obj) end
 end
 
 ---====== THE TOOLBOX: Roblox's Creator Store, searched from here ======---
 
 do
 	local SEARCH_URL = "https://apis.roblox.com/toolbox-service/v2/assets:search?searchCategoryType=Model&maxPageSize=30&query="
-	local QUICK = { "Seek", "Rush", "Ambush", "Figure", "Halt", "Eyes", "Screech", "Jack" }
 
-	-- Over the panel's content, under its title
-	local toolbox = make("Frame", { Name = "Toolbox", Position = UDim2.fromOffset(0, 34), Size = UDim2.fromOffset(W, 630),
-		BackgroundColor3 = DARK, BorderSizePixel = 0, Visible = false }, panel)
+	-- Over the tabs and the page, under the title
+	local toolbox = make("Frame", { Name = "Toolbox", Position = UDim2.fromOffset(0, 34), Size = UDim2.fromOffset(W, 400),
+		BackgroundColor3 = DARK, BorderSizePixel = 0, ZIndex = 5, Active = true, Visible = false }, body)
 	local toolboxTitle = label("Toolbox", 10, 4, 200, toolbox)
 	local search = { query = "", token = nil, items = {}, total = 0, animsOnly = false }
 	local showResults -- below
-	local animsButton = button("AnimsOnly", "Anims only", 214, 4, 110, function()
+	local animsButton = button("AnimsOnly", "Solo animati", 214, 4, 110, function()
 		search.animsOnly = not search.animsOnly
 		showResults()
 	end, toolbox)
-	button("Back", "Back", 328, 4, 82, function() toolbox.Visible = false end, toolbox)
-	for i, name in ipairs(QUICK) do
-		button("Quick" .. name, name, 10 + ((i - 1) % 4) * 101, 36 + math.floor((i - 1) / 4) * 32, 97, function()
-			idBox.Text = "doors " .. name:lower()
-			task.spawn(runSearch, idBox.Text, false)
-		end, toolbox)
-	end
-	local resultList = make("ScrollingFrame", { Name = "Results", Position = UDim2.fromOffset(10, 104), Size = UDim2.fromOffset(400, 480),
-		BackgroundColor3 = Color3.fromRGB(14, 10, 9), BorderSizePixel = 0, ScrollBarThickness = 6,
+	button("Back", "Indietro", 328, 4, 82, function() toolbox.Visible = false end, toolbox)
+	local resultList = make("ScrollingFrame", { Name = "Results", Position = UDim2.fromOffset(10, 38), Size = UDim2.fromOffset(400, 300),
+		BackgroundColor3 = FIELD, BorderSizePixel = 0, ScrollBarThickness = 6,
 		AutomaticCanvasSize = Enum.AutomaticSize.Y, CanvasSize = UDim2.new() }, toolbox)
 	make("UIListLayout", { Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder }, resultList)
 
@@ -1480,13 +1740,13 @@ do
 					Position = UDim2.fromOffset(2, 2), Size = UDim2.fromOffset(56, 56), BackgroundTransparency = 1 }, rowButton)
 				local name = label(item.name, 64, 2, 320, rowButton)
 				name.Name = "ItemName"
-				local info = label(("by %s  ·  %d anims%s"):format(item.creator, item.anims,
-					if item.scripts > 0 then "  ·  scripts taken out" else ""), 64, 30, 320, rowButton)
-				info.Name, info.TextSize, info.TextColor3 = "Info", 14, Color3.fromRGB(200, 170, 140)
+				local info = label(("di %s  ·  %d animazioni%s"):format(item.creator, item.anims,
+					if item.scripts > 0 then "  ·  script tolti" else ""), 64, 30, 320, rowButton)
+				info.Name, info.TextSize, info.TextColor3 = "Info", 14, MUTED
 			end
 		end
 		if search.token then
-			local more = button("More", "More results", 0, 0, 388, function() task.spawn(runSearch, search.query, true) end, resultList)
+			local more = button("More", "Altri risultati", 0, 0, 388, function() task.spawn(runSearch, search.query, true) end, resultList)
 			more.Size, more.LayoutOrder = UDim2.new(1, -8, 0, 32), 100000
 		end
 	end
@@ -1501,14 +1761,14 @@ do
 			search.query, search.token, search.items, search.total = query, nil, {}, 0
 		end
 		toolbox.Visible = true
-		status("Searching the toolbox: " .. query)
+		status("Cerco nel toolbox: " .. query)
 		local ok, data = pcall(function()
 			local url = SEARCH_URL .. HttpService:UrlEncode(query)
 			if more and search.token then url ..= "&pageToken=" .. HttpService:UrlEncode(search.token) end
 			return HttpService:JSONDecode(game:HttpGet(url))
 		end)
 		if not ok or type(data) ~= "table" then
-			status("The toolbox did not answer: try again")
+			status("Il toolbox non risponde: riprova")
 			return
 		end
 		for _, entry in ipairs(data.creatorStoreAssets or {}) do
@@ -1521,13 +1781,65 @@ do
 		end
 		search.token, search.total = data.nextPageToken, data.totalResults or #search.items
 		showResults()
-		status(("%d models found. Tap one to insert it"):format(search.total))
+		status(("%d modelli trovati: tocca quello che vuoi"):format(search.total))
 	end
 
-	toolboxFit = function(height)
+	table.insert(overlays, function(height)
 		toolbox.Size = UDim2.fromOffset(W, height)
-		resultList.Size = UDim2.fromOffset(400, math.max(height - 110, 60))
-	end
+		resultList.Size = UDim2.fromOffset(400, math.max(height - 44, 60))
+	end)
+end
+
+---====== THE GUIDE: the ? button, open by itself until "Ho capito" ======---
+
+do
+	local GUIDE = {
+		"1 AGGIUNGI: scegli una cosa con < > (Glitch, una porta, un armadio...) e premi Inserisci: appare davanti a te. "
+			.. "Per Seek, Rush e gli altri tocca il loro nome: li cerca nel toolbox di Roblox. Tocca un risultato e arriva.",
+		"2 MUOVI: " .. (if touchOnly then "tocca" else "clicca") .. " una cosa per sceglierla (o usa < > in alto). Trascina le frecce "
+			.. "per spostarla, gli anelli per ruotarla, i pallini per ingrandirla. Posiziona: "
+			.. (if touchOnly then "tocca il punto dove va." else "clicca dove va (R la gira, Esc annulla)."),
+		"3 ANIMA, il modo facile: metti la cosa dove parte e premi 1. Spostala dove deve arrivare e premi 2: ci arriva nei secondi "
+			.. "scritti accanto. Spostala ancora e premi 2 per un altro tratto. Seek e gli altri mostri guardano dove vanno "
+			.. "e corrono con la loro animazione (Corsa auto). I pallini rossi nel mondo sono la strada che fa.",
+		"PLAY, in basso: la scena parte dalla linea rossa della barra (trascinala per vedere ogni momento). Premi di nuovo "
+			.. "per la pausa, Stop torna all'inizio.",
+		"LA TELECAMERA: scegli Telecamera con < > in alto e usa 1 e 2 come per le cose: si accende la camera libera, muovila e "
+			.. "premi 2. Al Play la telecamera vola da sola, come nei filmati di DOORS.",
+		"LE CHIAVI, per chi vuole tutto: ogni chiave è un momento, con la posizione, la curva (Ease) e cosa succede: "
+			.. "un'animazione, un suono o un'azione (open, close, lights off, hide, shake, flash, say ciao...).",
+		"4 SCENA: Salva e Carica, oppure Copia: un loadstring che rifà la scena e la fa partire. Nuova scena toglie tutto.",
+		if touchOnly
+			then "SUL TELEFONO: la barra in alto ha UCA (apre e chiude), Play e Cam (camera libera con le frecce, un dito "
+				.. "per guardare). Il pannello si sposta dal titolo, la barra da ::. _ lo rimpicciolisce."
+			else "TASTI: Ctrl+" .. table.concat(CONFIG.Combo, " ") .. " apre e chiude, Ctrl+" .. CONFIG.PlayKey .. " Play / pausa, Ctrl+"
+				.. CONFIG.FreeCamKey .. " camera libera (WASD, E/Q, Z/X zoom, tasto destro per guardare), Ctrl+Z annulla, "
+				.. "Ctrl+Y ripeti, Ctrl+1 2 3 4 gli strumenti.",
+	}
+	local guide = make("ScrollingFrame", { Name = "Guide", Position = UDim2.fromOffset(0, 34), Size = UDim2.fromOffset(W, 400),
+		BackgroundColor3 = DARK, BorderSizePixel = 0, ZIndex = 6, Active = true, ScrollBarThickness = 6, ScrollBarImageColor3 = CREAM,
+		AutomaticCanvasSize = Enum.AutomaticSize.Y, CanvasSize = UDim2.new(), Visible = false }, body)
+	header("COME SI USA", 10, guide)
+	local text = label(table.concat(GUIDE, "\n\n"), 10, 40, W - 30, guide)
+	text.Name, text.TextSize, text.TextWrapped, text.TextTruncate = "GuideText", 16, true, Enum.TextTruncate.None
+	text.AutomaticSize, text.TextYAlignment = Enum.AutomaticSize.Y, Enum.TextYAlignment.Top
+	local seenFile = CONFIG.Folder .. "/guide_seen"
+	primary(button("GuideClose", "Ho capito", W - 120, 6, 100, function()
+		guide.Visible = false
+		pcall(function()
+			if not isfolder(CONFIG.Folder) then makefolder(CONFIG.Folder) end
+			writefile(seenFile, "1")
+		end)
+	end, guide))
+	local help = button("Help", "?", W - 100, 0, 32, function()
+		guide.Visible = not guide.Visible or not body.Visible
+		body.Visible = true
+		fit()
+	end, panel)
+	help.BackgroundColor3, help.TextColor3, help.ZIndex, help.Size = RED, DARK, 2, UDim2.fromOffset(32, 30)
+	table.insert(overlays, function(height) guide.Size = UDim2.fromOffset(W, height) end)
+	-- The first times: open, so whoever has never seen it starts from here
+	guide.Visible = not pcall(function() assert(isfile(seenFile)) end)
 end
 
 ---====== STUDIO'S HANDLES ======---
@@ -1648,7 +1960,8 @@ function setFreeCam(on)
 		end
 		camera.CameraType = Enum.CameraType.Scriptable
 		RunService:BindToRenderStep("UniversalAssetsFreeCam", Enum.RenderPriority.Last.Value, stepFreeCam)
-		status("Free cam: WASD, E/Q up/down, Z/X zoom, Shift slow, right mouse")
+		status(if touchOnly then "Camera libera: le frecce in basso, un dito per guardare"
+			else "Camera libera: WASD, E/Q su e giù, Z/X zoom, Shift piano, tasto destro per guardare")
 	elseif not on and freecam then
 		RunService:UnbindFromRenderStep("UniversalAssetsFreeCam")
 		camera.CameraType = freecam.cameraType
@@ -1657,24 +1970,15 @@ function setFreeCam(on)
 		UIS.MouseBehavior = Enum.MouseBehavior.Default
 		title.Modal = true
 		freecam = nil
-		status("Free cam off")
+		status("Camera libera spenta")
 	end
 	refresh()
 end
 
 ---====== ON A PHONE: a small bar, and arrows for the free cam ======---
 
-local playPause, stepMobile, mobileGui
+local stepMobile, mobileGui
 do
-	function playPause()
-		if playing then
-			stop()
-			status(("Paused at %.2fs"):format(preview))
-		else
-			play()
-		end
-	end
-
 	mobileGui = make("ScreenGui", { Name = "UniversalAssetsMobile", ResetOnSpawn = false, DisplayOrder = 51, Enabled = showMobile }, hud)
 	local miniBar = make("Frame", { Name = "MiniBar", Size = UDim2.fromOffset(212, 36), Position = UDim2.new(0.5, -106, 0, 6),
 		BackgroundColor3 = DARK, BackgroundTransparency = 0.1, BorderSizePixel = 0 }, mobileGui)
@@ -1688,8 +1992,8 @@ do
 	local pad = make("Frame", { Name = "CamPad", Size = UDim2.fromOffset(196, 132), Position = UDim2.new(1, -212, 1, -200),
 		BackgroundTransparency = 1, Visible = false }, mobileGui)
 	for _, b in ipairs({
-		{ "E", "Up", 0, 0, 62 }, { "W", "Fwd", 66, 0, 62 }, { "Q", "Down", 132, 0, 62 },
-		{ "A", "Left", 0, 44, 62 }, { "S", "Back", 66, 44, 62 }, { "D", "Right", 132, 44, 62 },
+		{ "E", "Su", 0, 0, 62 }, { "W", "Avanti", 66, 0, 62 }, { "Q", "Giù", 132, 0, 62 },
+		{ "A", "Sinistra", 0, 44, 62 }, { "S", "Indietro", 66, 44, 62 }, { "D", "Destra", 132, 44, 62 },
 		{ "Z", "Zoom +", 0, 88, 96 }, { "X", "Zoom -", 100, 88, 94 },
 	}) do
 		local key = b[1]
@@ -1700,8 +2004,9 @@ do
 	end
 
 	function stepMobile()
-		local text = if playing then "Pause" else "Play"
+		local text = if playing then "Pausa" else "Play"
 		if playButton.Text ~= text then playButton.Text = text end
+		if panelPlay.Text ~= text then panelPlay.Text = text end
 		local showPad = showMobile and freecam ~= nil
 		if pad.Visible ~= showPad then
 			pad.Visible = showPad
@@ -1735,7 +2040,7 @@ function setMorph(obj)
 		morph = { obj = obj, root = root, humanoid = humanoid, character = character,
 			lift = (obj.model:GetPivot().Y - (box.Y - size.Y / 2)) - (root.Position.Y - (body.Y - bodySize.Y / 2)),
 			idle = animNamed(obj, IDLE_WORDS), walk = animNamed(obj, WALK_WORDS) }
-		status("Morph: you are " .. obj.label .. ". Morph again to stop")
+		status("Ora sei " .. obj.label .. ". Diventa lui di nuovo per tornare te")
 	end
 	refresh()
 end
@@ -1755,16 +2060,16 @@ local function stepMorph()
 	if anim then playAnim(m.obj, anim, 1) end
 end
 
-showPreset()
+showPage(1)
 refresh()
-status(if touchOnly then "UCA at the top opens and closes this. Drag the title to move it"
-	else "X or Ctrl " .. table.concat(CONFIG.Combo, " ") .. " closes. Ctrl " .. CONFIG.PlayKey .. " plays")
+status(if touchOnly then "Prima volta? Tocca ? in alto. UCA in alto apre e chiude"
+	else "Prima volta? Premi ? in alto. X o Ctrl " .. table.concat(CONFIG.Combo, " ") .. " chiude, Ctrl " .. CONFIG.PlayKey .. " Play")
 fit()
 on(workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"), fit)
 gui.Parent = hud
 pcall(function()
 	game:GetService("StarterGui"):SetCore("SendNotification", { Title = "Universal Custom Assets",
-		Text = if showMobile then "Tap UCA at the top of the screen" else "Hold Ctrl and type " .. table.concat(CONFIG.Combo, " "), Duration = 6 })
+		Text = if showMobile then "Tocca UCA in alto sullo schermo" else "Tieni premuto Ctrl e scrivi " .. table.concat(CONFIG.Combo, " "), Duration = 6 })
 end)
 
 ---====== KEYS AND MOUSE ======---
@@ -1779,6 +2084,7 @@ function toggle()
 		mainGame.freemouse = if gui.Enabled then true else mouseWas
 	end
 	if not gui.Enabled then placing, drag = nil, nil end
+	refresh() -- the path in the world: only with the panel open
 end
 closeButton.MouseButton1Click:Connect(toggle)
 
@@ -1790,11 +2096,11 @@ on(UIS.InputBegan, function(input, processed)
 		if kind == Enum.UserInputType.Touch and not processed then -- a phone: one tap puts it there
 			stepPlacing()
 			placing = nil
-			status("Placed. Set a time and press + Key")
+			status("Messo. Ora 3 Anima: 1 o 2")
 			return
 		elseif kind == Enum.UserInputType.MouseButton1 and not processed then
 			placing = nil
-			status("Placed. Set a time and press + Key")
+			status("Messo. Ora 3 Anima: 1 o 2")
 			return
 		elseif key == Enum.KeyCode.Escape then
 			placing.obj.model:PivotTo(placing.from)
@@ -1826,7 +2132,7 @@ on(UIS.InputBegan, function(input, processed)
 		return
 	end
 	if ctrl and gui.Enabled and (key == Enum.KeyCode.Z or key == Enum.KeyCode.Y) then
-		if key == Enum.KeyCode.Z then undoRedo(undoStack, redoStack, "undo") else undoRedo(redoStack, undoStack, "redo") end
+		if key == Enum.KeyCode.Z then undoRedo(undoStack, redoStack, "annullare") else undoRedo(redoStack, undoStack, "ripetere") end
 		comboStep = 1
 		return
 	end
@@ -1906,7 +2212,7 @@ if getgenv then
 		for _, c in ipairs(connections) do c:Disconnect() end
 		for _, obj in ipairs(objects) do obj.model:Destroy() end
 		if mainGame and gui.Enabled then mainGame.freemouse = mouseWas end
-		for _, i in ipairs({ gui, fxGui, mobileGui, proxy, moveHandles, scaleHandles, rotateHandles }) do i:Destroy() end
+		for _, i in ipairs({ gui, fxGui, mobileGui, proxy, moveHandles, scaleHandles, rotateHandles, pathFolder }) do i:Destroy() end
 	end
 end
 
@@ -1914,7 +2220,7 @@ end
 if type(CONFIG.Project) == "table" then
 	task.spawn(function()
 		loadProjectData(CONFIG.Project)
-		status("Scene loaded")
+		status("Scena caricata")
 		if CONFIG.AutoPlay then play() end
 	end)
 end

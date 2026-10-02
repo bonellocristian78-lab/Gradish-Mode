@@ -297,7 +297,7 @@ seeing your normal animations. R15 characters only, like DOORS'.
 _G.UniversalAssets = {              -- all optional, these are the defaults
     Combo = { "U", "I", "O" },      -- hold Ctrl and type these: opens / closes the panel
     ComboTime = 2,                  -- seconds allowed between those keys
-    PlayKey = "P",                  -- Ctrl + P: play / stop, also with the panel closed
+    PlayKey = "P",                  -- Ctrl + P: play / pause, also with the panel closed
     FreeCamKey = "F",               -- Ctrl + F: free camera on / off
     UIScale = 1.2,                  -- size of the panel on a PC
     MobileScale = 0.8,              -- size of the panel on a phone
@@ -316,58 +316,54 @@ _G.UniversalAssets = {              -- all optional, these are the defaults
 loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/UniversalAssets"))()
 ```
 
-An animator. **Ctrl + U I O** opens it; the same combo or the **X** closes it and
-locks the mouse back; **_** folds it to its title bar. **Ctrl + P** plays or stops,
-with the panel closed too.
+An animator, in Italian, the same on a PC and on a phone. **Ctrl + U I O** opens
+it (on a phone: **UCA** at the top); the same combo or the **X** closes it and
+locks the mouse back; **_** folds it to its title bar; **?** opens the guide,
+which also opens by itself until you press **Ho capito**.
 
-- **On a phone**: a small bar at the top — **UCA** opens and closes the panel,
-  **Play** plays and pauses, **Cam** is the free camera with its own arrows (Up,
-  Fwd, Down, Left, Back, Right, Zoom) and a finger on the screen to look. Drag the
-  panel by its title and the bar by `::`. **Place**: tap where it goes; tap a model
-  to select it. The panel fits the screen and scrolls; DOORS' own buttons stay.
-- **The toolbox**: type in the search box and press **Search** (or Enter): it
-  searches Roblox's Creator Store — the Studio toolbox — for models, with their
-  preview, author and number of animations. **Seek, Rush, Ambush, Figure, Halt,
-  Eyes, Screech, Jack** are one tap away; **Anims only** hides models without
-  animations; **More results** loads the next page. Tap a result to insert it:
-  its scripts are taken out and its animations converted when needed. Same on a
-  phone.
-- **Auto**: the selected model plays its own run / walk animation while its keys
-  move it and its idle one while it stands — Seek runs between the keys you put
-  down the hallway. (Without Auto, put its Run on the first key: the same
-  animation on the next keys keeps going.)
-- **Insert** a preset — DOORS' Glitch, Screech, Spider, Dread, Figure; the door,
-  wardrobe, drawers, bookcase, table, chandelier, plant, clock or painting of the
-  room you are in; a few custom morph models — or any asset ID or `.rbxm` URL.
-- **Like Roblox Studio**: Ctrl+1 select, Ctrl+2 move (arrows), Ctrl+3 scale,
-  Ctrl+4 rotate (rings), with snapping and local / world space. Click a model to
-  select it. Hold the **right mouse button** to look around while the panel is
-  open. **Free cam** (Ctrl + F): WASD, E up, Q down, Shift slow, wheel, right
-  mouse to look.
-- **+ Key** remembers where the model is, how big, and when. Between two keys it
-  moves with the chosen easing and direction; **Smooth** draws a curve through all
-  the keys. The **timeline** shows the keys; drag on it to see any moment.
-- A key can start an **animation** (with a speed; the same animation on the next
-  key keeps going instead of restarting), a **sound**, and an **action**: open /
-  close / open reverse (anything on a hinge or a rail: DOORS' doors and drawers),
-  lights off / on / flicker, hide / show. The wardrobe's own open and close
-  animations (`Anim_EnterModel`, `Anim_ExitModel`) are in its animation list.
-- **Camera**, first in the model list: its keys are where the camera is and its
-  zoom (set them from the free cam, Z / X to zoom). On Play the camera flies through
-  them, as in a DOORS cutscene.
-- **Effects** on any key: `shake` (DOORS' camera shake), `flash` (its red flash),
-  `say <text>` (its subtitle), `room flicker`, `room lights off`, `room lights on`,
-  `room shatter` (DOORS' own Module_Events on the room you are in), and
-  `particles on` / `particles off` / `burst` for a model's particles.
-- **Undo / Redo**: Ctrl+Z / Ctrl+Y (or Undo) for moving, scaling and keys.
-- **Play** starts from the timeline's red line, **Ctrl + P** pauses and goes on,
-  **Stop** goes back to the start; **1x** cycles 0.5x, 0.25x, 2x.
-- **Morph**: the selected model becomes your body — it follows you, you disappear,
-  and it walks and stands with its own animations (named walk / run / idle).
-- **Copy** puts a loadstring with the whole scene inside on the clipboard: pasted
-  in the executor, it builds the scene again and plays it.
-- **Duplicate**, **Loop**; **Save** / **Load** keep the project in the executor's
-  `UniversalAssets` folder.
+Four tabs, in the order you use them; each starts with a line saying what to do.
+Always under them: the timeline, **Play** (play / pause), **Stop**, **Loop**,
+**Velocità** (1x, 0.5x, 0.25x, 2x) and what is happening. Above them, **< >**
+picks the thing you are working on (the **Telecamera** first), **Togli** removes it.
+
+- **1 Aggiungi** — **Inserisci** a preset: DOORS' Glitch, Screech, Spider, Dread,
+  Figure; the door, wardrobe, drawers, bookcase, table, chandelier, plant, clock or
+  painting of the room you are in; a few custom morph models. **Cerca** searches
+  Roblox's Creator Store (the Studio toolbox) with preview, author and number of
+  animations; **Seek, Rush, Ambush, Figure, Halt, Eyes, Screech, Jack** are one tap
+  away; **Solo animati** hides models without animations, **Altri risultati** loads
+  more. Tap a result to insert it: its scripts are taken out, its animations
+  converted when needed. **Usa ID** inserts an asset ID or a `.rbxm` URL.
+- **2 Muovi** — Studio's tools: **Seleziona / Sposta / Scala / Ruota** (Ctrl+1..4)
+  with arrows, dots and rings, **Griglia** (snapping), **Locale / Mondo**. Click (or
+  tap) a model to select it; **Davanti a me** brings it in front of you,
+  **Posiziona** drops it where you click (tap). **Duplica**, **Diventa lui** (morph:
+  it becomes your body and walks with its own animations), **Annulla / Ripeti**
+  (Ctrl+Z / Ctrl+Y), **Camera libera** (Ctrl+F: WASD, E/Q, Z/X zoom, right mouse to
+  look; on a phone its own arrows and a finger to look).
+- **3 Anima** — the easy way: put the thing where it starts and press **1. Parte da
+  qui**; drag it where it arrives and press **2. Arriva qui**: it gets there in the
+  seconds written next to it (3). Press 2 again for more stretches. A model with a
+  run / walk animation looks where it goes and runs (**Corsa auto** turns on by
+  itself; idle when it stands). With the **Telecamera** selected, 1 and 2 use the
+  free camera: on Play it flies through those points, as in a DOORS cutscene.
+  **Percorso**: with the panel open, red dots in the world show the way, with a
+  numbered dot on each key. Below, the full keys: **Tempo**, easing and direction
+  (**Smooth** curves through all the keys), and what a key starts: an **Anim** (with
+  speed; the same one on the next key keeps going), a **Suono**, an **Azione** —
+  open / close / open reverse (doors, drawers: anything on a hinge or a rail),
+  lights off / on / flicker, hide / show, particles on / off / burst, and the
+  effects `shake`, `flash`, `say <text>`, `room flicker`, `room lights off`,
+  `room lights on`, `room shatter` (DOORS' own). **+ Chiave**, **Aggiorna**,
+  **Elimina**, **Vai**; tap a key in the list to edit it.
+- **4 Scena** — **Salva** / **Carica** (the executor's `UniversalAssets` folder),
+  **I tuoi progetti** (tap one to load it), **Copia** (a loadstring with the whole
+  scene inside: pasted in the executor, it builds it again and plays it), **Nuova
+  scena** (press twice: everything goes).
+
+**On a phone** the panel fits the screen (scale 0.8) and its pages scroll; drag
+it by its title, the top bar by `::`. Texts too long for a button get smaller
+instead of spilling out. DOORS' own buttons stay where they are.
 
 Animations owned by the game's owner (in DOORS: LSPLASH) play normally. Any
 other one is converted when the model is inserted: its KeyframeSequence is
@@ -375,8 +371,11 @@ downloaded and played by the script, joint by joint. A KeyframeSequence inside
 the model works the same way. Nothing is uploaded anywhere; only you see it.
 
 `UniversalAssets.obf` is the same script obfuscated with
-[Prometheus](https://github.com/prometheus-lua/Prometheus) (Medium preset, Luau).
-Regenerate it after every change to `UniversalAssets`.
+[Prometheus](https://github.com/prometheus-lua/Prometheus) (Luau): the Medium
+preset's steps — strings encrypted, names mangled, constants and numbers hidden,
+anti-tamper — without its VM step (Vmify). Vmify miscompiled this script at random
+(about one build in five crashed or misbehaved) and made it about 3.5 times slower.
+Regenerate it after every change to `UniversalAssets`, and run the tests on it.
 
 ## DOORS optimizer
 
