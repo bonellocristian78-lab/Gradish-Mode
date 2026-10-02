@@ -27,7 +27,7 @@ mod rather than playing it.
 | DOORS optimizer (max graphics, less lag) | `.../DoorsOptimizer` |
 | Hellish Time Ever (K = an entity, spam it) | `.../HellishTimeEver` |
 | DOORS' walk, run, crouch and jump in any game | `.../DoorsAnimations` |
-| Universal Custom Assets: animate DOORS' things and your own (Ctrl + U I O) | `.../UniversalAssets` |
+| Universal Custom Assets: animator with Studio controls (Ctrl + U I O) | `.../UniversalAssets` |
 | The same, obfuscated | `.../UniversalAssets.obf` |
 
 ### Build (tools — not for players)
@@ -294,23 +294,45 @@ seeing your normal animations. R15 characters only, like DOORS'.
 ## Universal Custom Assets
 
 ```lua
+_G.UniversalAssets = {              -- all optional, these are the defaults
+    Combo = { "U", "I", "O" },      -- hold Ctrl and type these: opens / closes the panel
+    ComboTime = 2,                  -- seconds allowed between those keys
+    PlayKey = "P",                  -- Ctrl + P: play / stop, also with the panel closed
+    FreeCamKey = "F",               -- Ctrl + F: free camera on / off
+    UIScale = 1.2,                  -- size of the panel
+    MoveSnap = 0.5,                 -- studs   (0 = free)
+    RotateSnap = 15,                -- degrees (0 = free)
+    ScaleSnap = 0.05,               --         (0 = free)
+    FreeCamSpeed = 24,              -- studs per second; Shift = a quarter
+    LookSpeed = 0.25,               -- degrees per pixel, right mouse in the free camera
+    OpenTime = 0.6,                 -- seconds to open / close doors and drawers
+    Folder = "UniversalAssets",     -- where projects are saved
+}
 loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/UniversalAssets"))()
 ```
 
-An animator. Hold **Ctrl** and type **U I O** to open it; the same combo or the **X**
-closes it and locks the mouse back. **Ctrl + P** plays or stops, with the panel
-closed too.
+An animator. **Ctrl + U I O** opens it; the same combo or the **X** closes it and
+locks the mouse back; **_** folds it to its title bar. **Ctrl + P** plays or stops,
+with the panel closed too.
 
-- **Insert** a preset — DOORS' Glitch, Screech, Spider, Dread, Figure, the
-  wardrobe, door, bookcase, table, chandelier or plant of the room you are in,
-  a few custom morph models — or any model by asset ID or `.rbxm` URL.
-- **Here** puts it in front of you, **Place** makes it follow the mouse (Q/E
-  turn, R/F up and down, click to drop).
-- **+ Key** remembers where it is at that time. Two keys = it moves from one to
-  the other in that many seconds, with the chosen easing. A key can also start
-  an animation and a sound: a name from the model, an ID, or `stop`.
-- **Play**, **Stop**, **Loop**; **Save** / **Load** keep the project in the
-  executor's `UniversalAssets` folder.
+- **Insert** a preset — DOORS' Glitch, Screech, Spider, Dread, Figure; the door,
+  wardrobe, drawers, bookcase, table, chandelier, plant, clock or painting of the
+  room you are in; a few custom morph models — or any asset ID or `.rbxm` URL.
+- **Like Roblox Studio**: Ctrl+1 select, Ctrl+2 move (arrows), Ctrl+3 scale,
+  Ctrl+4 rotate (rings), with snapping and local / world space. Click a model to
+  select it. Hold the **right mouse button** to look around while the panel is
+  open. **Free cam** (Ctrl + F): WASD, E up, Q down, Shift slow, wheel, right
+  mouse to look.
+- **+ Key** remembers where the model is, how big, and when. Between two keys it
+  moves with the chosen easing and direction; **Smooth** draws a curve through all
+  the keys. The **timeline** shows the keys; drag on it to see any moment.
+- A key can start an **animation** (with a speed; the same animation on the next
+  key keeps going instead of restarting), a **sound**, and an **action**: open /
+  close / open reverse (anything on a hinge or a rail: DOORS' doors and drawers),
+  lights off / on / flicker, hide / show. The wardrobe's own open and close
+  animations (`Anim_EnterModel`, `Anim_ExitModel`) are in its animation list.
+- **Duplicate**, **Play**, **Stop**, **Loop**; **Save** / **Load** keep the project
+  in the executor's `UniversalAssets` folder.
 
 Animations owned by the game's owner (in DOORS: LSPLASH) play normally. Any
 other one is converted when the model is inserted: its KeyframeSequence is

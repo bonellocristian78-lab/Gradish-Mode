@@ -1,35 +1,55 @@
 --[[
         UNIVERSAL CUSTOM ASSETS -- an animator for DOORS' things and your own
 
+        Every setting, with its default. All optional, before the loadstring:
+
+            _G.UniversalAssets = {
+                Combo = { "U", "I", "O" },  -- hold Ctrl and type these: opens / closes the panel
+                ComboTime = 2,              -- seconds allowed between those keys
+                PlayKey = "P",              -- Ctrl + P: play / stop, also with the panel closed
+                FreeCamKey = "F",           -- Ctrl + F: free camera on / off
+                UIScale = 1.2,              -- size of the panel
+                MoveSnap = 0.5,             -- studs   (0 = free)
+                RotateSnap = 15,            -- degrees (0 = free)
+                ScaleSnap = 0.05,           --         (0 = free)
+                FreeCamSpeed = 24,          -- studs per second; Shift = a quarter
+                LookSpeed = 0.25,           -- degrees per pixel, right mouse in the free camera
+                OpenTime = 0.6,             -- seconds to open / close doors and drawers
+                Folder = "UniversalAssets", -- where projects are saved
+            }
             loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/UniversalAssets"))()
 
-        Hold Ctrl and type U, I, O: the panel opens (again, or X, to close it
-        and lock the mouse back). Ctrl + P plays or stops, with the panel closed too.
+        LIKE ROBLOX STUDIO
+            Ctrl+1 select, Ctrl+2 move (arrows), Ctrl+3 scale, Ctrl+4 rotate (rings)
+            click a model to select it; hold the right mouse button to look around
+            Free cam: WASD, E up, Q down, Shift slow, wheel forward, right mouse to look
 
-        1. Insert something: a preset (DOORS' entities and furniture, some
-           custom models) or any model by asset ID or .rbxm URL.
-        2. Put it where you want (Here / Place), set a time and press + Key.
-           Move it, change the time, + Key again: it will go from one to the
-           other in that many seconds, with that easing.
-        3. A key can also start an animation (a name from the model, or an ID)
-           and a sound (a name from the model, or an ID). "stop" stops it.
-        4. Play. Save / Load keep the whole project in your executor's folder.
+        KEYS
+            Two keys = the model goes from one to the other in that time, with that
+            easing (Smooth = a curve through all the keys). A key can also start an
+            animation (kept going if the next key asks for the same one), a sound and
+            an action: open / close (doors, drawers: anything on a hinge or a rail),
+            lights off / on / flicker, hide / show.
 
         ANIMATIONS NOT OWNED BY THIS GAME
-        Roblox plays an animation only in games owned by whoever uploaded it
-        (in DOORS: LSPLASH). Those play normally. Any other one is converted
-        when the model is inserted: its KeyframeSequence is downloaded and
-        played by this script, joint by joint. Nothing is uploaded anywhere.
-        A KeyframeSequence inside the model works the same way.
-
-        Everything is local: only you see it.
-        Settings: _G.UniversalAssets = { Combo = { "J", "K" }, ... } before the loadstring.
+            Roblox plays an animation only in games owned by whoever uploaded it (in
+            DOORS: LSPLASH). Any other one is converted on insert: its KeyframeSequence
+            is downloaded and played by this script, joint by joint. Nothing is uploaded.
+            Everything is local: only you see it.
 ]]
 
 local CONFIG = {
-	Combo = { "U", "I", "O" }, -- hold Ctrl and type these
-	ComboTime = 2,             -- seconds allowed between the keys
-	PlayKey = "P",             -- Ctrl + this: Play, or Stop if playing. Works with the panel closed
+	Combo = { "U", "I", "O" },
+	ComboTime = 2,
+	PlayKey = "P",
+	FreeCamKey = "F",
+	UIScale = 1.2,
+	MoveSnap = 0.5,
+	RotateSnap = 15,
+	ScaleSnap = 0.05,
+	FreeCamSpeed = 24,
+	LookSpeed = 0.25,
+	OpenTime = 0.6,
 	Folder = "UniversalAssets",
 	Presets = {
 		{ "Glitch", "ReplicatedStorage.Entities.Glitch" },
@@ -38,18 +58,22 @@ local CONFIG = {
 		{ "Dread", "ReplicatedStorage.Entities.Dread" },
 		{ "Figure", "ReplicatedStorage.JumpscareModels.Figure" },
 		{ "Figure (Library)", "ReplicatedStorage.JumpscareModels.FigureLibrary" },
-		{ "Wardrobe", "Room:Wardrobe" },
 		{ "Door", "Room:Door" },
+		{ "Wardrobe", "Room:Wardrobe" },
+		{ "Drawers", "Room:DrawerContainer" },
 		{ "Bookcase", "Room:Bookcase" },
 		{ "Table", "Room:Table" },
 		{ "Chandelier", "Room:Chandelier" },
 		{ "Potted plant", "Room:Potted_Plant" },
+		{ "Wall clock", "Room:Wall_Clock" },
+		{ "Painting", "Room:Painting_Big" },
 		{ "Figure morph", 98266611233960 },
 		{ "Seek + pipe", 86341229891935 },
 		{ "Morph 100327482330650", 100327482330650 },
 		{ "Honcho (MorthenHubber)", 104515922403348 },
 	},
-	Eases = { "Linear", "Sine", "Quad", "Cubic", "Back", "Bounce", "Elastic", "Constant" },
+	Eases = { "Linear", "Smooth", "Sine", "Quad", "Cubic", "Back", "Bounce", "Elastic", "Constant" },
+	Directions = { "InOut", "In", "Out" },
 }
 local override = _G.UniversalAssets
 _G.UniversalAssets = nil
@@ -73,14 +97,17 @@ end
 
 local objects, selected, selectedKey = {}, 0, nil
 local connections, active = {}, {} -- active: our own sequence players
-local playing, loop = nil, false
-local status, refresh -- set with the UI
+local playing, loop, preview = nil, false, 0
+local status, refresh, drawTimeline -- set with the UI
 
 local function on(signal, fn)
 	local c = signal:Connect(fn)
 	table.insert(connections, c)
 	return c
 end
+
+local mainGame = nil -- DOORS' Main_Game: its camera and mouse switches
+pcall(function() mainGame = require(LocalPlayer.PlayerGui.MainUI.Initiator.Main_Game) end)
 
 ---====== LOADING ======---
 
@@ -123,7 +150,6 @@ local function inFront()
 	return base * CFrame.new(0, 0, -8) * CFrame.Angles(0, math.pi, 0)
 end
 
--- Names of what can be played in the model, for the ▶ buttons
 local function namesOf(model, test)
 	local names, seen = {}, {}
 	for _, d in ipairs(model:GetDescendants()) do
@@ -137,11 +163,97 @@ end
 local function isAnim(d) return d:IsA("Animation") or d:IsA("KeyframeSequence") end
 local function isSound(d) return d:IsA("Sound") end
 
+---====== JOINTS, HINGES AND RAILS ======---
+
+-- Parts held together inside the model: welds, motors, and constraints that do not
+-- open anything (the door's knob turns on its own hinge, but goes with the door)
+local function jointLinks(model, movers)
+	local skip = {}
+	for _, m in ipairs(movers) do skip[m.constraint] = true end
+	local links = {}
+	for _, j in ipairs(model:GetDescendants()) do
+		local a, b
+		if j:IsA("JointInstance") or j:IsA("WeldConstraint") then
+			a, b = j.Part0, j.Part1
+		elseif j:IsA("Constraint") and not skip[j] and j.Attachment0 and j.Attachment1 then
+			a, b = j.Attachment0.Parent, j.Attachment1.Parent
+		end
+		if a and b and a:IsA("BasePart") and b:IsA("BasePart") then
+			if a:IsDescendantOf(model) and b:IsDescendantOf(model) then
+				links[a] = links[a] or {}
+				links[b] = links[b] or {}
+				table.insert(links[a], b)
+				table.insert(links[b], a)
+			end
+		end
+	end
+	return links
+end
+
+local function groupOf(start, links, avoid)
+	local group, queue, i = { [start] = true }, { start }, 1
+	while queue[i] do
+		for _, other in ipairs(links[queue[i]] or {}) do
+			if not group[other] and not (avoid and avoid[other]) then
+				group[other] = true
+				table.insert(queue, other)
+			end
+		end
+		i += 1
+	end
+	return group
+end
+
+--[[ What opens: a HingeConstraint (DOORS' doors) or a PrismaticConstraint (its drawers).
+     The bigger of the two parts moves: the panel, not the hinge; the drawer, not the
+     rail. As far as the constraint's limits allow, the way Roblox measures them. ]]
+local function findMovers(model)
+	local movers = {}
+	for _, c in ipairs(model:GetDescendants()) do
+		local hinge = c:IsA("HingeConstraint")
+		if (hinge or c:IsA("PrismaticConstraint")) and not c.Name:find("Knob") then
+			local a0, a1 = c.Attachment0, c.Attachment1
+			local p0 = a0 and a0:IsDescendantOf(model) and a0.Parent:IsA("BasePart") and a0.Parent or nil
+			local p1 = a1 and a1:IsDescendantOf(model) and a1.Parent:IsA("BasePart") and a1.Parent or nil
+			local first = p0 and (not p1 or p0.Size.Magnitude >= p1.Size.Magnitude)
+			local moving = if first then p0 else p1
+			if moving then
+				local amount
+				if hinge then
+					amount = if not c.LimitsEnabled then 90
+						elseif math.abs(c.UpperAngle) >= math.abs(c.LowerAngle) then c.UpperAngle else c.LowerAngle
+				else
+					amount = if not c.LimitsEnabled then moving.Size.Z * 0.7
+						elseif math.abs(c.UpperLimit) >= math.abs(c.LowerLimit) then c.UpperLimit else c.LowerLimit
+				end
+				table.insert(movers, { constraint = c, hinge = hinge, part = moving, static = if first then p1 else p0,
+					att = if p0 then a0 else a1, amount = if first then -amount else amount, open = 0, target = 0 })
+			end
+		end
+	end
+	return movers
+end
+
+local function applyMover(obj, m)
+	local pivot = obj.model:GetPivot()
+	local k = obj.model:GetScale() / obj.baseScale
+	local eased = math.sign(m.open) * (1 - math.cos(math.pi * math.abs(m.open))) / 2
+	local offset
+	if m.hinge then
+		local point = m.point * k
+		offset = CFrame.new(point) * CFrame.fromAxisAngle(m.axis, math.rad(m.amount) * eased) * CFrame.new(-point)
+	else
+		offset = CFrame.new(m.axis * (m.amount * k * eased))
+	end
+	for part, rel in pairs(m.rel) do
+		part.CFrame = pivot * offset * (CFrame.new(rel.Position * k) * rel.Rotation)
+	end
+end
+
 ---====== ANIMATIONS ======---
 
--- true: this game's owner (or Roblox) uploaded it, so it plays. false: it will not. nil: unknown
 local owners = {}
-local function ownedHere(id)
+local function ownedHere(id) -- true / false / nil when unknown
 	if owners[id] == nil then
 		local ok, info = pcall(MarketplaceService.GetProductInfo, MarketplaceService, id)
 		local creator = ok and info ~= nil and type(info) == "table" and info.Creator
@@ -199,7 +311,7 @@ local function sequencePlayer(model, kfs)
 			end
 		end
 	end
-	local player = { Length = length, Looped = kfs.Loop, IsPlaying = false, time = 0 }
+	local player = { Length = length, Looped = kfs.Loop, IsPlaying = false, time = 0, speed = 1 }
 	function player:Play()
 		self.time, self.IsPlaying = 0, true
 		active[self] = true
@@ -208,11 +320,15 @@ local function sequencePlayer(model, kfs)
 		self.IsPlaying, active[self] = false, nil
 		for name in pairs(joints) do motors[name].Transform = CFrame.identity end
 	end
+	function player:AdjustSpeed(speed) self.speed = speed end
 	player.Destroy = player.Stop
 	function player:step(dt)
-		self.time += dt
+		self.time += dt * self.speed
 		if self.time >= length then
-			if not self.Looped or length <= 0 then self:Stop() return end
+			if not self.Looped or length <= 0 then
+				self:Stop()
+				return
+			end
 			self.time %= length
 		end
 		for name, list in pairs(joints) do
@@ -236,12 +352,12 @@ local function sequencePlayer(model, kfs)
 	return player
 end
 
--- A track for `text` (a name in the model or an ID), converted if this game cannot play it
+-- A track for `text`: a name in the model, an Anim_ attribute of a prompt, or an ID
 local function loadTrack(obj, text)
 	if obj.cache[text] then return obj.cache[text] end
 	local source = obj.model:FindFirstChild(text, true)
 	if source and not isAnim(source) then source = nil end
-	local id = tonumber(text:match("%d+") or "")
+	local id = tonumber((obj.promptAnims[text] or text):match("%d+") or "")
 	if not source and id then
 		source = Instance.new("Animation")
 		source.AnimationId = "rbxassetid://" .. id
@@ -272,21 +388,30 @@ local function loadTrack(obj, text)
 end
 
 local function stopAnim(obj)
-	obj.token = nil
+	obj.token, obj.animName = nil, nil
 	if obj.track then obj.track:Stop(0.2) end
 	obj.track = nil
 end
 
-local function playAnim(obj, text)
+-- The same animation as now, still playing: it carries on (only its speed changes)
+local function playAnim(obj, text, speed)
+	if text:lower() == "stop" then
+		stopAnim(obj)
+		return
+	end
+	if obj.animName == text and obj.track and obj.track.IsPlaying then
+		obj.track:AdjustSpeed(speed)
+		return
+	end
 	stopAnim(obj)
-	if text:lower() == "stop" then return end
 	local token = {}
-	obj.token = token
+	obj.token, obj.animName = token, text
 	task.spawn(function()
 		local track = loadTrack(obj, text)
 		if track and obj.token == token then
 			obj.track = track
 			track:Play(0.2)
+			track:AdjustSpeed(speed)
 		end
 	end)
 end
@@ -309,38 +434,59 @@ local function playSound(obj, text)
 	obj.sound = sound
 end
 
+local function doAction(obj, action)
+	action = action:lower()
+	if action == "open" or action == "close" or action == "open reverse" then
+		for _, m in ipairs(obj.movers) do
+			m.target = if action == "close" then 0 elseif action == "open reverse" and m.hinge then -1 else 1
+		end
+	elseif action == "lights off" or action == "lights on" then
+		for _, light in ipairs(obj.lights) do light.Enabled = action == "lights on" end
+	elseif action == "flicker" then
+		task.spawn(function()
+			for i = 1, 9 do
+				for _, light in ipairs(obj.lights) do light.Enabled = i % 2 == 0 end
+				task.wait(0.04 + math.random() * 0.1)
+			end
+		end)
+	elseif action == "hide" or action == "show" then
+		for _, d in ipairs(obj.model:GetDescendants()) do
+			if d:IsA("BasePart") or d:IsA("Decal") then d.LocalTransparencyModifier = if action == "hide" then 1 else 0 end
+		end
+	end
+end
+
 ---====== OBJECTS ======---
 
 local function current() return objects[selected] end
 
-local function insert(label, src, keys)
-	status("Loading " .. label .. "...")
-	local source = fetch(src)
-	if not source then status("Not found: " .. label) return end
-	local was = source.Archivable
-	source.Archivable = true
-	local model = source:Clone()
-	source.Archivable = was
-	if not model then status("Cannot copy " .. label) return end
-	if not model:IsA("Model") then
-		local holder = Instance.new("Model")
-		model.Parent = holder
-		model = holder
-	end
+local function setup(model, label, src, keys, at)
 	for _, d in ipairs(model:GetDescendants()) do
 		if d:IsA("LuaSourceContainer") then d:Destroy() end -- a puppet, not the real thing
 	end
+	local movers = findMovers(model)
+	local moving = {}
+	for _, m in ipairs(movers) do moving[m.part] = m end
 	local root = model.PrimaryPart or model:FindFirstChild("HumanoidRootPart", true)
 		or model:FindFirstChild("RootPart", true) or model:FindFirstChildWhichIsA("BasePart", true)
+	if root and moving[root] then root = moving[root].static end -- DOORS' door: its root is the panel
+	if not root then
+		for _, p in ipairs(model:GetDescendants()) do
+			if p:IsA("BasePart") and not moving[p] then root = p break end
+		end
+	end
 	if not root then
 		model:Destroy()
 		status(label .. " has no parts")
-		return
+		return nil
 	end
 	model.PrimaryPart = root
+	-- What is joined to the root moves with it and plays animations; the rest is anchored
+	local links = jointLinks(model, movers)
+	local body = groupOf(root, links)
 	for _, p in ipairs(model:GetDescendants()) do
 		if p:IsA("BasePart") then
-			p.Anchored, p.CanCollide, p.CanTouch, p.CanQuery = p == root, false, false, false
+			p.Anchored, p.CanCollide, p.CanTouch, p.CanQuery = p == root or not body[p], false, false, false
 		end
 	end
 	local animator = model:FindFirstChildWhichIsA("Animator", true)
@@ -353,24 +499,92 @@ local function insert(label, src, keys)
 		animator = Instance.new("Animator")
 		animator.Parent = holder
 	end
-	model:PivotTo(keys and keys[1] and keys[1].cf or inFront())
+	model:PivotTo(keys and keys[1] and keys[1].cf or at or inFront())
 	model.Name = "UCA_" .. label
 	model.Parent = workspace
-	RunService.Heartbeat:Wait()
-	for _, p in ipairs(model:GetDescendants()) do -- not held by any joint: it would fall
-		if p:IsA("BasePart") and not p.Anchored and not p:IsGrounded() then p.Anchored = true end
+
+	local pivot = model:GetPivot()
+	local valid = {}
+	for _, m in ipairs(movers) do
+		if not body[m.part] then
+			m.rel = {}
+			for part in pairs(groupOf(m.part, links, body)) do m.rel[part] = pivot:ToObjectSpace(part.CFrame) end
+			m.point = pivot:PointToObjectSpace(m.att.WorldPosition)
+			m.axis = pivot:VectorToObjectSpace(m.att.WorldAxis)
+			table.insert(valid, m)
+		end
 	end
-	local obj = { label = label, src = src, model = model, root = root, animator = animator,
-		keys = keys or {}, cache = {}, sounds = {}, anims = namesOf(model, isAnim), soundNames = namesOf(model, isSound) }
+	-- The wardrobe's own open / close animations live on its prompt (Anim_EnterModel...)
+	local promptAnims, anims = {}, namesOf(model, isAnim)
+	for _, prompt in ipairs(model:GetDescendants()) do
+		if prompt:IsA("ProximityPrompt") then
+			for name, value in pairs(prompt:GetAttributes()) do
+				if type(value) == "string" and value:match("^rbxassetid://%d+$") and not promptAnims[name] then
+					promptAnims[name] = value
+					table.insert(anims, name)
+				end
+			end
+		end
+	end
+	local lights = {}
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("Light") then table.insert(lights, d) end
+	end
+	local actions = { "hide", "show" }
+	if #valid > 0 then
+		for i, a in ipairs({ "open", "close", "open reverse" }) do table.insert(actions, i, a) end
+	end
+	if #lights > 0 then for _, a in ipairs({ "lights off", "lights on", "flicker" }) do table.insert(actions, a) end end
+
+	local obj = { label = label, src = src, model = model, root = root, animator = animator, keys = keys or {},
+		cache = {}, sounds = {}, anims = anims, promptAnims = promptAnims, soundNames = namesOf(model, isSound),
+		movers = valid, lights = lights, actions = actions, baseScale = model:GetScale() }
+	for _, k in ipairs(obj.keys) do k.scale = k.scale or obj.baseScale end
 	table.insert(objects, obj)
 	selected, selectedKey = #objects, nil
 	refresh()
-	-- Ready every animation now, so Play does not wait: the conversions take a while
-	for i, name in ipairs(obj.anims) do
-		status(("%s: preparing animations %d/%d"):format(label, i, #obj.anims))
+	for i, name in ipairs(anims) do -- ready now, so Play does not wait: conversions take a while
+		status(("%s: preparing animations %d/%d"):format(label, i, #anims))
 		loadTrack(obj, name)
 	end
 	status(label .. " ready")
+	return obj
+end
+
+local function insert(label, src, keys)
+	status("Loading " .. label .. "...")
+	local source = fetch(src)
+	if not source then
+		status("Not found: " .. label)
+		return
+	end
+	local was = source.Archivable
+	source.Archivable = true
+	local model = source:Clone()
+	source.Archivable = was
+	if not model then
+		status("Cannot copy " .. label)
+		return
+	end
+	if not model:IsA("Model") then
+		local holder = Instance.new("Model")
+		model.Parent = holder
+		model = holder
+	end
+	setup(model, label, src, keys)
+end
+
+local function duplicate(obj)
+	for _, m in ipairs(obj.movers) do -- copied closed, then put back
+		m.saved, m.open = m.open, 0
+		applyMover(obj, m)
+	end
+	local copy = obj.model:Clone()
+	for _, m in ipairs(obj.movers) do
+		m.open = m.saved
+		applyMover(obj, m)
+	end
+	task.spawn(setup, copy, obj.label .. "+", obj.src, {}, obj.model:GetPivot() * CFrame.new(4, 0, 0))
 end
 
 local function remove(obj)
@@ -384,17 +598,44 @@ end
 
 ---====== PLAYBACK ======---
 
+local function catmull(p0, p1, p2, p3, u)
+	return 0.5 * ((2 * p1) + (p2 - p0) * u + (2 * p0 - 5 * p1 + 4 * p2 - p3) * (u * u) + (3 * p1 - p0 - 3 * p2 + p3) * (u * u * u))
+end
+
 local function poseAt(keys, t)
-	if t <= keys[1].t then return keys[1].cf end
+	local first, last = keys[1], keys[#keys]
+	if t <= first.t then return first.cf, first.scale end
 	for i = 1, #keys - 1 do
 		local a, b = keys[i], keys[i + 1]
 		if t < b.t then
-			if b.ease == "Constant" then return a.cf end
-			local alpha = TweenService:GetValue((t - a.t) / (b.t - a.t), Enum.EasingStyle[b.ease], Enum.EasingDirection.InOut)
-			return a.cf:Lerp(b.cf, alpha)
+			local u = (t - a.t) / (b.t - a.t)
+			if b.ease == "Constant" then return a.cf, a.scale end
+			if b.ease == "Smooth" then -- a curve through the keys before and after
+				local s = u * u * (3 - 2 * u)
+				local position = catmull((keys[i - 1] or a).cf.Position, a.cf.Position, b.cf.Position, (keys[i + 2] or b).cf.Position, u)
+				return CFrame.new(position) * a.cf.Rotation:Lerp(b.cf.Rotation, s), a.scale + (b.scale - a.scale) * s
+			end
+			local alpha = TweenService:GetValue(u, Enum.EasingStyle[b.ease], Enum.EasingDirection[b.dir or "InOut"])
+			return a.cf:Lerp(b.cf, alpha), a.scale + (b.scale - a.scale) * alpha
 		end
 	end
-	return keys[#keys].cf
+	return last.cf, last.scale
+end
+
+local function pose(obj, t)
+	if #obj.keys == 0 then return end
+	local cf, scale = poseAt(obj.keys, t)
+	obj.model:PivotTo(cf)
+	if math.abs(obj.model:GetScale() - scale) > 1e-3 then obj.model:ScaleTo(scale) end
+end
+
+local function length()
+	local total = 0
+	for _, obj in ipairs(objects) do
+		local keys = obj.keys
+		if #keys > 0 then total = math.max(total, keys[#keys].t) end
+	end
+	return total
 end
 
 local function stop()
@@ -413,27 +654,37 @@ end
 
 local function stepPlayback()
 	if not playing then return end
-	local t, total = os.clock() - playing.start, 0
+	local t = os.clock() - playing.start
 	for _, obj in ipairs(objects) do
-		local keys = obj.keys
-		if #keys > 0 then
-			total = math.max(total, keys[#keys].t)
-			for _, k in ipairs(keys) do
-				if k.t > playing.last and k.t <= t then
-					if k.anim then playAnim(obj, k.anim) end
-					if k.sound then playSound(obj, k.sound) end
-				end
+		for _, k in ipairs(obj.keys) do
+			if k.t > playing.last and k.t <= t then
+				if k.anim then playAnim(obj, k.anim, k.speed or 1) end
+				if k.sound then playSound(obj, k.sound) end
+				if k.action then doAction(obj, k.action) end
 			end
-			obj.model:PivotTo(poseAt(keys, t))
 		end
+		pose(obj, t)
 	end
-	playing.last = t
-	if t >= total then
-		if loop and total > 0 then
+	playing.last, preview = t, t
+	drawTimeline()
+	if t >= length() then
+		if loop and length() > 0 then
 			playing = { start = os.clock(), last = -1 }
 		else
 			playing = nil
 			status("Done")
+		end
+	end
+end
+
+local function stepMovers(dt)
+	for _, obj in ipairs(objects) do
+		for _, m in ipairs(obj.movers) do
+			if m.open ~= m.target then
+				local stepSize = dt / math.max(CONFIG.OpenTime, 0.01)
+				m.open = if m.target > m.open then math.min(m.open + stepSize, m.target) else math.max(m.open - stepSize, m.target)
+				applyMover(obj, m)
+			end
 		end
 	end
 end
@@ -449,12 +700,16 @@ local function serialize(v)
 	return "{" .. table.concat(parts, ",") .. "}"
 end
 
+local KEY_FIELDS = { "t", "scale", "ease", "dir", "anim", "speed", "sound", "action" }
+
 local function saveProject(name)
 	local project = { loop = loop, objects = {} }
 	for _, obj in ipairs(objects) do
 		local keys = {}
 		for _, k in ipairs(obj.keys) do
-			table.insert(keys, { t = k.t, cf = { k.cf:GetComponents() }, ease = k.ease, anim = k.anim, sound = k.sound })
+			local saved = { cf = { k.cf:GetComponents() } }
+			for _, f in ipairs(KEY_FIELDS) do saved[f] = k[f] end
+			table.insert(keys, saved)
 		end
 		table.insert(project.objects, { label = obj.label, src = obj.src, keys = keys })
 	end
@@ -467,14 +722,19 @@ end
 
 local function loadProject(name)
 	local ok, project = pcall(function() return loadstring(readfile(CONFIG.Folder .. "/" .. name .. ".lua"))() end)
-	if not ok or type(project) ~= "table" then status("Cannot read " .. name) return end
+	if not ok or type(project) ~= "table" then
+		status("Cannot read " .. name)
+		return
+	end
 	stop()
 	while #objects > 0 do remove(objects[1]) end
 	loop = project.loop == true
 	for _, saved in ipairs(project.objects) do
 		local keys = {}
 		for _, k in ipairs(saved.keys) do
-			table.insert(keys, { t = k.t, cf = CFrame.new(table.unpack(k.cf)), ease = k.ease, anim = k.anim, sound = k.sound })
+			local key = { cf = CFrame.new(table.unpack(k.cf)) }
+			for _, f in ipairs(KEY_FIELDS) do key[f] = k[f] end
+			table.insert(keys, key)
 		end
 		insert(saved.label, saved.src, keys)
 	end
@@ -487,15 +747,18 @@ local placing = nil
 local rayParams = RaycastParams.new()
 rayParams.FilterType = Enum.RaycastFilterType.Exclude
 
+local function mouseRay()
+	local mouse = UIS:GetMouseLocation()
+	return workspace.CurrentCamera:ViewportPointToRay(mouse.X, mouse.Y)
+end
+
 local function stepPlacing()
 	if not placing then return end
-	local camera = workspace.CurrentCamera
-	local mouse = UIS:GetMouseLocation()
-	local ray = camera:ViewportPointToRay(mouse.X, mouse.Y)
+	local ray = mouseRay()
 	rayParams.FilterDescendantsInstances = { placing.obj.model, LocalPlayer.Character }
 	local hit = workspace:Raycast(ray.Origin, ray.Direction * 300, rayParams)
 	local spot = if hit then hit.Position else ray.Origin + ray.Direction * 20
-	placing.obj.model:PivotTo(CFrame.new(spot + Vector3.new(0, placing.base + placing.lift, 0)) * CFrame.Angles(0, placing.yaw, 0))
+	placing.obj.model:PivotTo(CFrame.new(spot + Vector3.new(0, placing.base, 0)) * CFrame.Angles(0, placing.yaw, 0))
 end
 
 local function startPlacing()
@@ -504,12 +767,13 @@ local function startPlacing()
 	local box, size = obj.model:GetBoundingBox()
 	local pivot = obj.model:GetPivot()
 	local _, yaw = pivot:ToOrientation()
-	placing = { obj = obj, from = pivot, yaw = yaw, lift = 0, base = pivot.Y - (box.Y - size.Y / 2) }
-	status("Click to drop. Q/E turn, R/F up/down, Esc cancel")
+	placing = { obj = obj, from = pivot, yaw = yaw, base = pivot.Y - (box.Y - size.Y / 2) }
+	status("Click to drop. R turns, Esc cancels")
 end
 
 ---====== THE PANEL ======---
 
+local hud = if gethui then gethui() else LocalPlayer:WaitForChild("PlayerGui")
 local gui = Instance.new("ScreenGui")
 gui.Name = "UniversalAssets"
 gui.ResetOnSpawn = false
@@ -518,6 +782,7 @@ gui.Enabled = false
 
 local FONT = Font.new("rbxasset://fonts/families/Oswald.json") -- DOORS' captions
 local CREAM, DARK, BROWN, RED = Color3.fromRGB(255, 222, 189), Color3.fromRGB(24, 18, 16), Color3.fromRGB(56, 42, 36), Color3.fromRGB(255, 81, 69)
+local W = 420
 
 local function make(class, props, parent)
 	local i = Instance.new(class)
@@ -526,113 +791,142 @@ local function make(class, props, parent)
 	return i
 end
 
-local panel = make("Frame", { Size = UDim2.fromOffset(360, 460), Position = UDim2.fromOffset(24, 120),
+local panel = make("Frame", { Size = UDim2.fromOffset(W, 664), Position = UDim2.fromOffset(24, 70),
 	BackgroundColor3 = DARK, BackgroundTransparency = 0.06, BorderSizePixel = 0 }, gui)
+make("UIScale", { Scale = CONFIG.UIScale }, panel)
 make("UICorner", { CornerRadius = UDim.new(0, 6) }, panel)
 make("UIStroke", { Color = CREAM, Transparency = 0.6 }, panel)
+local content = make("Frame", { Position = UDim2.fromOffset(0, 34), Size = UDim2.fromOffset(W, 630), BackgroundTransparency = 1 }, panel)
 
 local function label(text, x, y, w, parent)
-	return make("TextLabel", { Text = text, Position = UDim2.fromOffset(x, y), Size = UDim2.fromOffset(w, 26),
-		BackgroundTransparency = 1, FontFace = FONT, TextSize = 16, TextColor3 = CREAM,
-		TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd }, parent or panel)
+	return make("TextLabel", { Text = text, Position = UDim2.fromOffset(x, y), Size = UDim2.fromOffset(w, 28),
+		BackgroundTransparency = 1, FontFace = FONT, TextSize = 18, TextColor3 = CREAM,
+		TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd }, parent or content)
 end
 
 local function button(name, text, x, y, w, fn, parent)
-	local b = make("TextButton", { Name = name, Text = text, Position = UDim2.fromOffset(x, y), Size = UDim2.fromOffset(w, 26),
-		BackgroundColor3 = BROWN, BorderSizePixel = 0, FontFace = FONT, TextSize = 16, TextColor3 = CREAM, AutoButtonColor = true }, parent or panel)
+	local b = make("TextButton", { Name = name, Text = text, Position = UDim2.fromOffset(x, y), Size = UDim2.fromOffset(w, 28),
+		BackgroundColor3 = BROWN, BorderSizePixel = 0, FontFace = FONT, TextSize = 18, TextColor3 = CREAM, AutoButtonColor = true }, parent or content)
 	make("UICorner", { CornerRadius = UDim.new(0, 4) }, b)
 	b.MouseButton1Click:Connect(fn) -- gone with the panel
 	return b
 end
 
 local function box(name, hint, x, y, w)
-	local b = make("TextBox", { Name = name, Text = "", PlaceholderText = hint, Position = UDim2.fromOffset(x, y), Size = UDim2.fromOffset(w, 26),
-		BackgroundColor3 = Color3.fromRGB(14, 10, 9), BorderSizePixel = 0, FontFace = FONT, TextSize = 16, TextColor3 = CREAM,
-		PlaceholderColor3 = Color3.fromRGB(140, 120, 104), ClearTextOnFocus = false }, panel)
+	local b = make("TextBox", { Name = name, Text = "", PlaceholderText = hint, Position = UDim2.fromOffset(x, y), Size = UDim2.fromOffset(w, 28),
+		BackgroundColor3 = Color3.fromRGB(14, 10, 9), BorderSizePixel = 0, FontFace = FONT, TextSize = 18, TextColor3 = CREAM,
+		PlaceholderColor3 = Color3.fromRGB(140, 120, 104), ClearTextOnFocus = false }, content)
 	make("UICorner", { CornerRadius = UDim.new(0, 4) }, b)
 	return b
 end
 
+local function row(i) return 4 + (i - 1) * 32 end
+
 -- The title frees the mouse in first person (Modal) and drags the panel
-local title = button("Title", "UNIVERSAL CUSTOM ASSETS", 0, 0, 360, function() end)
-title.Modal, title.BackgroundColor3, title.TextColor3 = true, RED, DARK
-local closeButton = button("Close", "X", 330, 0, 30, function() end)
-closeButton.BackgroundColor3, closeButton.TextColor3, closeButton.ZIndex = RED, DARK, 2
+local title = button("Title", "UNIVERSAL CUSTOM ASSETS", 0, 0, W, function() end, panel)
+title.Size, title.Modal, title.BackgroundColor3, title.TextColor3 = UDim2.fromOffset(W, 30), true, RED, DARK
+local closeButton = button("Close", "X", W - 32, 0, 32, function() end, panel)
+local minimize = button("Minimize", "_", W - 66, 0, 32, function()
+	content.Visible = not content.Visible
+	panel.Size = UDim2.fromOffset(W, if content.Visible then 664 else 30)
+end, panel)
+for _, b in ipairs({ closeButton, minimize }) do b.BackgroundColor3, b.TextColor3, b.ZIndex, b.Size = RED, DARK, 2, UDim2.fromOffset(32, 30) end
 local dragging = nil
 title.InputBegan:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 then
 		dragging = { from = input.Position, start = panel.Position }
 	end
 end)
-on(UIS.InputChanged, function(input)
-	if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-		local d = input.Position - dragging.from
-		panel.Position = dragging.start + UDim2.fromOffset(d.X, d.Y)
-	end
-end)
-on(UIS.InputEnded, function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = nil end
-end)
 
 local preset = 1
-local presetLabel = label("", 40, 34, 160)
+local presetLabel = label("", 40, row(1), 250)
 local function showPreset() presetLabel.Text = CONFIG.Presets[preset][1] end
-button("PresetPrev", "<", 10, 34, 26, function() preset = (preset - 2) % #CONFIG.Presets + 1; showPreset() end)
-button("PresetNext", ">", 204, 34, 26, function() preset = preset % #CONFIG.Presets + 1; showPreset() end)
-button("Insert", "Insert", 236, 34, 114, function()
+button("PresetPrev", "<", 10, row(1), 26, function() preset = (preset - 2) % #CONFIG.Presets + 1; showPreset() end)
+button("PresetNext", ">", 294, row(1), 26, function() preset = preset % #CONFIG.Presets + 1; showPreset() end)
+button("Insert", "Insert", 324, row(1), 86, function()
 	local p = CONFIG.Presets[preset]
 	task.spawn(insert, p[1], p[2])
 end)
-local idBox = box("Id", "asset ID or .rbxm URL", 10, 64, 220)
-button("InsertId", "Insert ID", 236, 64, 114, function()
+local idBox = box("Id", "asset ID or .rbxm URL", 10, row(2), 310)
+button("InsertId", "Insert ID", 324, row(2), 86, function()
 	local text = idBox.Text:gsub("^%s+", ""):gsub("%s+$", "")
 	if text ~= "" then task.spawn(insert, tonumber(text) and ("Asset " .. text) or text:match("[^/]+$") or text, tonumber(text) or text) end
 end)
 
-local objectLabel = label("", 40, 98, 164)
-button("ObjPrev", "<", 10, 98, 26, function() if #objects > 0 then selected = (selected - 2) % #objects + 1; selectedKey = nil; refresh() end end)
-button("ObjNext", ">", 208, 98, 26, function() if #objects > 0 then selected = selected % #objects + 1; selectedKey = nil; refresh() end end)
-button("Remove", "Remove", 240, 98, 110, function() if current() then remove(current()) end end)
-button("Here", "Here", 10, 128, 165, function() if current() then current().model:PivotTo(inFront()) end end)
-button("Place", "Place", 185, 128, 165, startPlacing)
+local objectLabel = label("", 40, row(3), 250)
+local function pick(i)
+	if #objects == 0 then return end
+	selected, selectedKey = (i - 1) % #objects + 1, nil
+	refresh()
+end
+button("ObjPrev", "<", 10, row(3), 26, function() pick(selected - 1) end)
+button("ObjNext", ">", 294, row(3), 26, function() pick(selected + 1) end)
+button("Remove", "Remove", 324, row(3), 86, function() if current() then remove(current()) end end)
 
-label("Time", 10, 162, 40)
-local timeBox = box("Time", "s", 50, 162, 60)
-timeBox.Text = "0"
-label("Ease", 120, 162, 40)
-local ease = 2
-local easeButton
-easeButton = button("Ease", CONFIG.Eases[ease], 160, 162, 190, function()
-	ease = ease % #CONFIG.Eases + 1
-	easeButton.Text = CONFIG.Eases[ease]
-end)
+-- Studio's tools: 1 select, 2 move, 3 scale, 4 rotate
+local TOOLS = { "Select", "Move", "Scale", "Rotate" }
+local tool, worldSpace, snapOn = "Move", false, true
+local toolButtons = {}
+for i, name in ipairs(TOOLS) do
+	toolButtons[name] = button(name, i .. " " .. name, 10 + (i - 1) * 101, row(4), 97, function() tool = name; refresh() end)
+end
+button("Here", "Here", 10, row(5), 97, function() if current() then current().model:PivotTo(inFront()) end end)
+button("Place", "Place", 111, row(5), 97, startPlacing)
+local spaceButton, snapButton
+spaceButton = button("Space", "Local", 212, row(5), 97, function() worldSpace = not worldSpace; refresh() end)
+snapButton = button("Snap", "Snap: on", 313, row(5), 97, function() snapOn = not snapOn; refresh() end)
+local freeCamButton
+local setFreeCam, freeCamOn -- below, with the camera
+freeCamButton = button("FreeCam", "Free cam: off", 10, row(6), 198, function() setFreeCam(not freeCamOn()) end)
+button("Duplicate", "Duplicate", 212, row(6), 198, function() if current() then duplicate(current()) end end)
 
--- A box plus a > button that cycles through the model's own names
-local function cycler(name, y, listOf)
-	label(name, 10, y, 50)
-	local b = box(name, "name, ID or stop", 60, y, 254)
-	button(name .. "Next", ">", 320, y, 30, function()
+-- A box plus a > button that cycles through what the model has
+local function cycler(name, y, w, listOf)
+	label(name, 10, y, 56)
+	local b = box(name, "name, ID or stop", 66, y, w)
+	button(name .. "Next", ">", 70 + w, y, 30, function()
 		local list = current() and listOf(current()) or {}
 		if #list == 0 then return end
 		b.Text = list[(table.find(list, b.Text) or 0) % #list + 1]
 	end)
 	return b
 end
-local animBox = cycler("Anim", 192, function(o) return o.anims end)
-local soundBox = cycler("Sound", 222, function(o) return o.soundNames end)
+
+label("Time", 10, row(7), 40)
+local timeBox = box("Time", "s", 50, row(7), 60)
+timeBox.Text = "0"
+local ease, dir = 1, 1
+local easeButton, dirButton
+easeButton = button("Ease", CONFIG.Eases[ease], 118, row(7), 150, function()
+	ease = ease % #CONFIG.Eases + 1
+	easeButton.Text = CONFIG.Eases[ease]
+end)
+dirButton = button("Dir", CONFIG.Directions[dir], 272, row(7), 138, function()
+	dir = dir % #CONFIG.Directions + 1
+	dirButton.Text = CONFIG.Directions[dir]
+end)
+local animBox = cycler("Anim", row(8), 220, function(o) return o.anims end)
+label("speed", 322, row(8), 40)
+local speedBox = box("Speed", "1", 362, row(8), 48)
+speedBox.Text = "1"
+local soundBox = cycler("Sound", row(9), 310, function(o) return o.soundNames end)
+local actionBox = cycler("Action", row(10), 310, function(o) return o.actions end)
+actionBox.PlaceholderText = "open, close, lights off, hide..."
 
 local function fromFields(k)
 	local obj = current()
 	k.t = math.max(tonumber(timeBox.Text) or 0, 0)
-	k.cf = obj.model:GetPivot()
-	k.ease = CONFIG.Eases[ease]
+	k.cf, k.scale = obj.model:GetPivot(), obj.model:GetScale()
+	k.ease, k.dir = CONFIG.Eases[ease], CONFIG.Directions[dir]
 	k.anim = if animBox.Text ~= "" then animBox.Text else nil
+	k.speed = tonumber(speedBox.Text) or 1
 	k.sound = if soundBox.Text ~= "" then soundBox.Text else nil
+	k.action = if actionBox.Text ~= "" then actionBox.Text else nil
 	table.sort(obj.keys, function(a, b) return a.t < b.t end)
 	refresh()
 end
 
-button("AddKey", "+ Key", 10, 254, 80, function()
+button("AddKey", "+ Key", 10, row(11), 97, function()
 	local obj = current()
 	if not obj then return end
 	local t = math.max(tonumber(timeBox.Text) or 0, 0)
@@ -648,8 +942,8 @@ button("AddKey", "+ Key", 10, 254, 80, function()
 	fromFields(k)
 	timeBox.Text = tostring(t + 1)
 end)
-button("Update", "Update", 96, 254, 80, function() if selectedKey then fromFields(selectedKey) end end)
-button("Delete", "Delete", 182, 254, 80, function()
+button("Update", "Update", 111, row(11), 97, function() if selectedKey then fromFields(selectedKey) end end)
+button("Delete", "Delete", 212, row(11), 97, function()
 	local obj = current()
 	if obj and selectedKey then
 		table.remove(obj.keys, table.find(obj.keys, selectedKey))
@@ -657,71 +951,247 @@ button("Delete", "Delete", 182, 254, 80, function()
 		refresh()
 	end
 end)
-button("Go", "Go", 268, 254, 82, function() if selectedKey then current().model:PivotTo(selectedKey.cf) end end)
+button("Go", "Go", 313, row(11), 97, function()
+	if selectedKey then
+		current().model:PivotTo(selectedKey.cf)
+		current().model:ScaleTo(selectedKey.scale)
+	end
+end)
 
-local list = make("ScrollingFrame", { Position = UDim2.fromOffset(10, 286), Size = UDim2.fromOffset(340, 96),
+-- The timeline: the keys of the selected model; drag on it to see any moment
+local bar = make("Frame", { Name = "Timeline", Position = UDim2.fromOffset(10, row(12)), Size = UDim2.fromOffset(400, 28),
+	BackgroundColor3 = Color3.fromRGB(14, 10, 9), BorderSizePixel = 0 }, content)
+local playhead = make("Frame", { Size = UDim2.new(0, 2, 1, 0), BackgroundColor3 = RED, BorderSizePixel = 0, ZIndex = 3 }, bar)
+local timeText = label("", 0, 0, 396, bar)
+timeText.TextXAlignment, timeText.TextSize, timeText.ZIndex = Enum.TextXAlignment.Right, 15, 2
+local markers = {}
+local scrubbing = false
+
+function drawTimeline()
+	local total = math.max(length(), 1)
+	playhead.Position = UDim2.new(math.clamp(preview / total, 0, 1), -1, 0, 0)
+	timeText.Text = ("%.2f / %.2fs"):format(preview, length())
+end
+
+local function scrub(x)
+	local t = math.clamp((x - bar.AbsolutePosition.X) / math.max(bar.AbsoluteSize.X, 1), 0, 1) * math.max(length(), 1)
+	preview = t
+	for _, obj in ipairs(objects) do pose(obj, t) end
+	timeBox.Text = ("%.2f"):format(t)
+	drawTimeline()
+end
+bar.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		playing, scrubbing = nil, true
+		scrub(input.Position.X)
+	end
+end)
+
+local list = make("ScrollingFrame", { Position = UDim2.fromOffset(10, row(13)), Size = UDim2.fromOffset(400, 124),
 	BackgroundColor3 = Color3.fromRGB(14, 10, 9), BorderSizePixel = 0, ScrollBarThickness = 4,
-	AutomaticCanvasSize = Enum.AutomaticSize.Y, CanvasSize = UDim2.new() }, panel)
+	AutomaticCanvasSize = Enum.AutomaticSize.Y, CanvasSize = UDim2.new() }, content)
 make("UIListLayout", { Padding = UDim.new(0, 2) }, list)
 
 local loopButton
-button("Play", "Play", 10, 390, 108, play)
-button("Stop", "Stop", 126, 390, 108, function() stop(); status("Stopped") end)
-loopButton = button("Loop", "Loop: off", 242, 390, 108, function()
-	loop = not loop
-	loopButton.Text = if loop then "Loop: on" else "Loop: off"
-end)
-local fileBox = box("File", "project name", 10, 420, 172)
+button("Play", "Play", 10, row(13) + 130, 130, play)
+button("Stop", "Stop", 145, row(13) + 130, 130, function() stop(); status("Stopped") end)
+loopButton = button("Loop", "Loop: off", 280, row(13) + 130, 130, function() loop = not loop; refresh() end)
+local fileBox = box("File", "project name", 10, row(13) + 162, 222)
 fileBox.Text = "project"
-button("Save", "Save", 188, 420, 78, function() saveProject(fileBox.Text) end)
-button("Load", "Load", 272, 420, 78, function() task.spawn(loadProject, fileBox.Text) end)
-local statusLabel = label("", 10, 452, 340)
-statusLabel.Size = UDim2.fromOffset(340, 20)
-statusLabel.TextSize = 14
-panel.Size = UDim2.fromOffset(360, 478)
+button("Save", "Save", 236, row(13) + 162, 85, function() saveProject(fileBox.Text) end)
+button("Load", "Load", 325, row(13) + 162, 85, function() task.spawn(loadProject, fileBox.Text) end)
+local statusLabel = label("", 10, row(13) + 194, 400)
+statusLabel.TextSize = 15
 
 function status(text)
 	statusLabel.Text = text
+end
+
+local function keyText(k)
+	local parts = { ("%5.2fs  %s %s"):format(k.t, k.ease, k.dir or "InOut") }
+	if k.anim then table.insert(parts, "anim " .. k.anim .. (if (k.speed or 1) ~= 1 then " x" .. k.speed else "")) end
+	if k.sound then table.insert(parts, "sound " .. k.sound) end
+	if k.action then table.insert(parts, k.action) end
+	if math.abs((k.scale or 1) - 1) > 1e-3 then table.insert(parts, ("scale %.2f"):format(k.scale)) end
+	return table.concat(parts, "  ")
 end
 
 function refresh()
 	local obj = current()
 	objectLabel.Text = if obj then ("%s (%d/%d)"):format(obj.label, selected, #objects) else "nothing inserted"
 	loopButton.Text = if loop then "Loop: on" else "Loop: off"
-	for _, row in ipairs(list:GetChildren()) do
-		if row:IsA("TextButton") then row:Destroy() end
+	spaceButton.Text = if worldSpace then "World" else "Local"
+	snapButton.Text = if snapOn then "Snap: on" else "Snap: off"
+	freeCamButton.Text = if freeCamOn() then "Free cam: on" else "Free cam: off"
+	for name, b in pairs(toolButtons) do b.BackgroundColor3 = if name == tool then RED else BROWN end
+	for _, child in ipairs(list:GetChildren()) do
+		if child:IsA("TextButton") then child:Destroy() end
 	end
+	for _, m in ipairs(markers) do m:Destroy() end
+	table.clear(markers)
+	drawTimeline()
 	if not obj then return end
+	local total = math.max(length(), 1)
 	for i, k in ipairs(obj.keys) do
-		local text = ("%5.2fs  %s%s%s"):format(k.t, k.ease, k.anim and ("  anim " .. k.anim) or "", k.sound and ("  sound " .. k.sound) or "")
-		local row = button("Key" .. i, text, 0, 0, 330, function()
+		local r = button("Key" .. i, keyText(k), 0, 0, 390, function()
 			selectedKey = k
-			timeBox.Text, animBox.Text, soundBox.Text = tostring(k.t), k.anim or "", k.sound or ""
-			ease = table.find(CONFIG.Eases, k.ease) or 1
-			easeButton.Text = k.ease
+			timeBox.Text, animBox.Text, soundBox.Text, actionBox.Text = tostring(k.t), k.anim or "", k.sound or "", k.action or ""
+			speedBox.Text = tostring(k.speed or 1)
+			ease, dir = table.find(CONFIG.Eases, k.ease) or 1, table.find(CONFIG.Directions, k.dir or "InOut") or 1
+			easeButton.Text, dirButton.Text = CONFIG.Eases[ease], CONFIG.Directions[dir]
 			obj.model:PivotTo(k.cf)
+			obj.model:ScaleTo(k.scale)
+			preview = k.t
 			refresh()
 		end, list)
-		row.Size, row.LayoutOrder = UDim2.new(1, -6, 0, 22), i
-		row.TextXAlignment = Enum.TextXAlignment.Left
-		row.BackgroundColor3 = if k == selectedKey then RED else BROWN
+		r.Size, r.LayoutOrder, r.TextSize = UDim2.new(1, -6, 0, 24), i, 16
+		r.TextXAlignment = Enum.TextXAlignment.Left
+		r.BackgroundColor3 = if k == selectedKey then RED else BROWN
+		table.insert(markers, make("Frame", { Size = UDim2.new(0, 6, 0, 14), AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(k.t / total, 0, 0.5, 0), Rotation = 45, BorderSizePixel = 0, ZIndex = 2,
+			BackgroundColor3 = if k == selectedKey then RED else CREAM }, bar))
 	end
+end
+
+---====== STUDIO'S HANDLES ======---
+
+-- An invisible box around the selected model carries the arrows and the rings
+local proxy = make("Part", { Name = "UniversalAssetsGizmo", Anchored = true, CanCollide = false, CanTouch = false,
+	CanQuery = false, Transparency = 1, Size = Vector3.new(1, 1, 1) }, workspace.CurrentCamera)
+local moveHandles = make("Handles", { Style = Enum.HandlesStyle.Movement, Adornee = proxy, Color3 = Color3.fromRGB(255, 160, 60), Visible = false }, hud)
+local scaleHandles = make("Handles", { Style = Enum.HandlesStyle.Resize, Adornee = proxy, Color3 = Color3.fromRGB(120, 200, 255), Visible = false }, hud)
+local rotateHandles = make("ArcHandles", { Adornee = proxy, Visible = false }, hud)
+local drag = nil
+
+local function snap(value, step)
+	return if snapOn and step > 0 then math.round(value / step) * step else value
+end
+
+local function stepGizmo()
+	local obj = current()
+	local show = gui.Enabled and obj ~= nil and not placing
+	if obj then
+		local boxCFrame, size = obj.model:GetBoundingBox()
+		proxy.Size = Vector3.new(math.max(size.X, 0.5), math.max(size.Y, 0.5), math.max(size.Z, 0.5))
+		proxy.CFrame = if worldSpace then CFrame.new(boxCFrame.Position) else boxCFrame
+	end
+	moveHandles.Visible = show and tool == "Move"
+	scaleHandles.Visible = show and tool == "Scale"
+	rotateHandles.Visible = show and tool == "Rotate"
+end
+
+local function beginDrag()
+	local obj = current()
+	if obj then drag = { obj = obj, pivot = obj.model:GetPivot(), box = proxy.CFrame, size = proxy.Size, scale = obj.model:GetScale() } end
+end
+local function endDrag() drag = nil end
+for _, h in ipairs({ moveHandles, scaleHandles, rotateHandles }) do
+	h.MouseButton1Down:Connect(beginDrag)
+	h.MouseButton1Up:Connect(endDrag)
+end
+moveHandles.MouseDrag:Connect(function(face, distance)
+	if not drag then return end
+	local direction = drag.box:VectorToWorldSpace(Vector3.FromNormalId(face))
+	drag.obj.model:PivotTo(drag.pivot + direction * snap(distance, CONFIG.MoveSnap))
+end)
+rotateHandles.MouseDrag:Connect(function(axis, angle)
+	if not drag then return end
+	local worldAxis = drag.box:VectorToWorldSpace(Vector3.FromAxis(axis))
+	local center = drag.box.Position
+	local turn = math.rad(snap(math.deg(angle), CONFIG.RotateSnap))
+	drag.obj.model:PivotTo(CFrame.new(center) * CFrame.fromAxisAngle(worldAxis, turn) * CFrame.new(-center) * drag.pivot)
+end)
+scaleHandles.MouseDrag:Connect(function(face, distance)
+	if not drag then return end
+	local n = Vector3.FromNormalId(face)
+	local along = math.abs(n.X) * drag.size.X + math.abs(n.Y) * drag.size.Y + math.abs(n.Z) * drag.size.Z
+	local scale = snap(drag.scale * (along + distance) / along, CONFIG.ScaleSnap)
+	drag.obj.model:ScaleTo(math.max(scale, 0.05))
+end)
+
+-- Click on a model to select it, as in Studio (not when the click was on a handle)
+local function clickSelect()
+	task.delay(0.05, function()
+		if drag or placing then return end
+		local models = {}
+		for _, obj in ipairs(objects) do table.insert(models, obj.model) end
+		local params = RaycastParams.new()
+		params.FilterType = Enum.RaycastFilterType.Include
+		params.FilterDescendantsInstances = models
+		local ray = mouseRay()
+		local hit = workspace:Raycast(ray.Origin, ray.Direction * 500, params)
+		if not hit then return end
+		for i, obj in ipairs(objects) do
+			if hit.Instance:IsDescendantOf(obj.model) and i ~= selected then pick(i) end
+		end
+	end)
+end
+
+---====== CAMERA: right mouse to look, and Studio's free camera ======---
+
+local freecam = nil
+local mouseWas = nil
+freeCamOn = function() return freecam ~= nil end
+
+local function stepFreeCam(dt)
+	local camera = workspace.CurrentCamera
+	local look = UIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton2)
+	UIS.MouseBehavior = if look then Enum.MouseBehavior.LockCurrentPosition else Enum.MouseBehavior.Default
+	title.Modal = not look
+	if look then
+		local delta = UIS:GetMouseDelta()
+		freecam.yaw -= math.rad(delta.X * CONFIG.LookSpeed)
+		freecam.pitch = math.clamp(freecam.pitch - math.rad(delta.Y * CONFIG.LookSpeed), -1.5, 1.5)
+	end
+	local rotation = CFrame.fromOrientation(freecam.pitch, freecam.yaw, 0)
+	if not UIS:GetFocusedTextBox() then
+		local function held(key) return if UIS:IsKeyDown(Enum.KeyCode[key]) then 1 else 0 end
+		local move = Vector3.new(held("D") - held("A"), held("E") - held("Q"), held("S") - held("W"))
+		local speed = CONFIG.FreeCamSpeed * (if UIS:IsKeyDown(Enum.KeyCode.LeftShift) then 0.25 else 1)
+		freecam.position += rotation:VectorToWorldSpace(move) * speed * dt
+	end
+	camera.CFrame = CFrame.new(freecam.position) * rotation
+end
+
+function setFreeCam(on)
+	local camera = workspace.CurrentCamera
+	if on and not freecam then
+		local character = LocalPlayer.Character
+		local root = character and character:FindFirstChild("HumanoidRootPart")
+		local pitch, yaw = camera.CFrame:ToOrientation()
+		freecam = { position = camera.CFrame.Position, pitch = pitch, yaw = yaw, cameraType = camera.CameraType,
+			root = root, anchored = root and root.Anchored }
+		if root then root.Anchored = true end -- WASD flies the camera, not you
+		if mainGame then
+			freecam.stopcam = mainGame.stopcam
+			mainGame.stopcam = true -- DOORS stops drawing its camera, as in its cutscenes
+		end
+		camera.CameraType = Enum.CameraType.Scriptable
+		RunService:BindToRenderStep("UniversalAssetsFreeCam", Enum.RenderPriority.Last.Value, stepFreeCam)
+		status("Free cam: WASD, E/Q up/down, Shift slow, right mouse to look")
+	elseif not on and freecam then
+		RunService:UnbindFromRenderStep("UniversalAssetsFreeCam")
+		camera.CameraType = freecam.cameraType
+		if freecam.root then freecam.root.Anchored = freecam.anchored == true end
+		if mainGame then mainGame.stopcam = freecam.stopcam end
+		UIS.MouseBehavior = Enum.MouseBehavior.Default
+		title.Modal = true
+		freecam = nil
+		status("Free cam off")
+	end
+	refresh()
 end
 
 showPreset()
 refresh()
 status("X or Ctrl " .. table.concat(CONFIG.Combo, " ") .. " closes. Ctrl " .. CONFIG.PlayKey .. " plays")
-gui.Parent = if gethui then gethui() else LocalPlayer:WaitForChild("PlayerGui")
+gui.Parent = hud
 pcall(function()
 	game:GetService("StarterGui"):SetCore("SendNotification", { Title = "Universal Custom Assets",
 		Text = "Hold Ctrl and type " .. table.concat(CONFIG.Combo, " "), Duration = 6 })
 end)
 
----====== OPENING (Ctrl + the combo) ======---
-
-local mainGame = nil
-pcall(function() mainGame = require(LocalPlayer.PlayerGui.MainUI.Initiator.Main_Game) end)
-local mouseWas = nil
+---====== KEYS AND MOUSE ======---
 
 local function toggle()
 	gui.Enabled = not gui.Enabled
@@ -729,24 +1199,31 @@ local function toggle()
 		if gui.Enabled then mouseWas = mainGame.freemouse end
 		mainGame.freemouse = if gui.Enabled then true else mouseWas
 	end
-	if not gui.Enabled then placing = nil end
+	if not gui.Enabled then placing, drag = nil, nil end
 end
 closeButton.MouseButton1Click:Connect(toggle)
 
 local comboStep, comboAt = 1, 0
 on(UIS.InputBegan, function(input, processed)
-	local key = input.KeyCode
+	local key, kind = input.KeyCode, input.UserInputType
 	if placing then
-		if input.UserInputType == Enum.UserInputType.MouseButton1 and not processed then
+		if kind == Enum.UserInputType.MouseButton1 and not processed then
 			placing = nil
 			status("Placed. Set a time and press + Key")
+			return
 		elseif key == Enum.KeyCode.Escape then
 			placing.obj.model:PivotTo(placing.from)
 			placing = nil
-		elseif key == Enum.KeyCode.Q or key == Enum.KeyCode.E then
-			placing.yaw += math.rad(if key == Enum.KeyCode.Q then 15 else -15)
-		elseif key == Enum.KeyCode.R or key == Enum.KeyCode.F then
-			placing.lift += if key == Enum.KeyCode.R then 0.5 else -0.5
+		elseif key == Enum.KeyCode.R then
+			placing.yaw += math.rad(15)
+		end
+	end
+	if gui.Enabled and not processed then
+		if kind == Enum.UserInputType.MouseButton1 then clickSelect() end
+		-- Right mouse: DOORS takes the mouse back while it is held, so the camera turns
+		if kind == Enum.UserInputType.MouseButton2 and not freecam then
+			title.Modal = false
+			if mainGame then mainGame.freemouse = mouseWas end
 		end
 	end
 	if processed or key == Enum.KeyCode.LeftControl or key == Enum.KeyCode.RightControl or key == Enum.KeyCode.Unknown then return end
@@ -761,6 +1238,20 @@ on(UIS.InputBegan, function(input, processed)
 		comboStep = 1
 		return
 	end
+	if ctrl and key == Enum.KeyCode[CONFIG.FreeCamKey] then
+		setFreeCam(not freecam)
+		comboStep = 1
+		return
+	end
+	if ctrl and gui.Enabled then
+		for i, name in ipairs(TOOLS) do
+			if key == Enum.KeyCode[({ "One", "Two", "Three", "Four" })[i]] then
+				tool = name
+				refresh()
+				return
+			end
+		end
+	end
 	if not ctrl or os.clock() - comboAt > CONFIG.ComboTime then comboStep = 1 end
 	if ctrl and key == Enum.KeyCode[CONFIG.Combo[comboStep]] then
 		comboStep, comboAt = comboStep + 1, os.clock()
@@ -773,10 +1264,33 @@ on(UIS.InputBegan, function(input, processed)
 		comboAt = os.clock()
 	end
 end)
+on(UIS.InputChanged, function(input)
+	if input.UserInputType == Enum.UserInputType.MouseMovement then
+		if dragging then
+			local d = input.Position - dragging.from
+			panel.Position = dragging.start + UDim2.fromOffset(d.X, d.Y)
+		end
+		if scrubbing then scrub(input.Position.X) end
+	elseif input.UserInputType == Enum.UserInputType.MouseWheel and freecam and not UIS:GetFocusedTextBox() then
+		local rotation = CFrame.fromOrientation(freecam.pitch, freecam.yaw, 0)
+		freecam.position += rotation.LookVector * (input.Position.Z * 4)
+	end
+end)
+on(UIS.InputEnded, function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		dragging, scrubbing = nil, false
+		endDrag()
+	elseif input.UserInputType == Enum.UserInputType.MouseButton2 and not freecam then
+		title.Modal = true
+		if mainGame and gui.Enabled then mainGame.freemouse = true end
+	end
+end)
 
-on(RunService.RenderStepped, function()
+on(RunService.RenderStepped, function(dt)
 	stepPlacing()
 	stepPlayback()
+	stepMovers(dt)
+	stepGizmo()
 end)
 -- Our own players write the joints after Roblox's animations, before physics
 on(RunService.PreSimulation or RunService.Stepped, function(a, b)
@@ -787,9 +1301,10 @@ end)
 if getgenv then
 	getgenv().__UniversalAssetsCleanup = function()
 		stop()
+		setFreeCam(false)
 		for _, c in ipairs(connections) do c:Disconnect() end
 		for _, obj in ipairs(objects) do obj.model:Destroy() end
 		if mainGame and gui.Enabled then mainGame.freemouse = mouseWas end
-		gui:Destroy()
+		for _, i in ipairs({ gui, proxy, moveHandles, scaleHandles, rotateHandles }) do i:Destroy() end
 	end
 end
