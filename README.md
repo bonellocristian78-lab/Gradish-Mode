@@ -317,21 +317,19 @@ animations (`assets/noise/NoiseKitV2.rbxm`).
   its own way out in front of you.
 - **The crucifix:** `_G.CrucifixGive = true` (the default) puts one in your
   inventory (the mod's own, from `CrucifixRitual`; two planks if it cannot be
-  loaded). Hold it up to Noise, within 25 studs with nothing in between (any
-  crucifix works, the game's too), and a 13-second film plays, after DOORS'
-  own Noise crucifixion:
-  1. a chain shoots from the crucifix, catches it, and drags it back under
-     its TV in three pulls, Noise clawing towards you;
-  2. the circle (the kit's Repentance) opens under it, it rises with its arms
-     wide, the crucifix flies up into the kit's Rift above;
-  3. **B-90 is torn out of it**: one smooth curve, no cuts, the camera pulling
-     back in one move. The circle divides in two and slides under B-90, the
-     body B-90 wore fades into it, the one it leaves behind turns white (the
-     kit's Noise without B-90), the last threads between them thin out and
-     snap; the rift's chains split between the two as they part;
-  4. two crucifixions at once: three pulls, both shaking, B-90 flashing its
-     STOP; then both are pulled down into their circles, a flash, the circles
-     close, the TV goes dark.
+  loaded). It works only when Noise **catches** you with it in your hand (any
+  crucifix, the game's too): instead of dying you watch, with your own camera,
+  free to move:
+  1. a chain shoots from the crucifix and catches it; it **rewinds** back away
+     from you, its own walk played backwards, with the tape's rewind sound;
+  2. your crucifix flies up above it, the circle (the kit's Repentance) opens
+     under it, and it rises into its rest pose from the kit: arms wide;
+  3. **B-90 is pulled out of its head** along one smooth curve while the
+     circle divides in two and slides under B-90, and the body it wore turns
+     white (the kit's Noise without B-90); the crucifix moves above both, a
+     chain down to each;
+  4. three pulls, both at once, B-90 flashing its STOP; then both go down into
+     their circles, a flash, the circles close, the TV goes dark.
 - The kit and the tape are downloaded once into
   the executor's `Noise` folder. Without the kit a plain TV, Noise and hammer
   stand in. Every setting is at the top of the script (`_G.Noise = { ... }`).
