@@ -26,6 +26,7 @@ mod rather than playing it.
 | **The mod** | `.../MainScript` |
 | DOORS optimizer (max graphics, less lag) | `.../DoorsOptimizer` |
 | Hellish Time Ever (K = an entity, spam it) | `.../HellishTimeEver` |
+| Noise: a TV above the door, a blue tape, a hammer | `.../Noise` |
 | DOORS' walk, run, crouch and jump in any game | `.../DoorsAnimations` |
 | Universal Custom Assets: animator with Studio controls (Ctrl + U I O) | `.../UniversalAssets` |
 | The same, obfuscated | `.../UniversalAssets.obf` |
@@ -264,6 +265,37 @@ seconds. `_G.Time` delays the start by that many seconds from the loadstring.
 - It gives nothing away: it switches off `CrucifixGiver`, `CorrodedCrucifixGiver`
   and `CrucifixAll`, mutes the mod's badges while it runs, and Honcho V2 comes
   without his crucifix and badges.
+
+## Noise
+
+```lua
+loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/Noise"))()
+```
+
+Noise (B-90), with the kit's own TV, Noise, hammer and animations, everything
+red turned blue.
+
+- **The TV:** the kit's TV alone (no feet, no cart), on two brackets above the
+  way out of your room, facing in. Static on its screen. It moves to each new
+  room until you look at it.
+- **Look at it for 3.5 s:** the world turns blue and the tape plays **on the
+  TV's screen** (its own `VideoGui`), not on yours. You hear it from the TV and
+  you can keep moving.
+- **When the tape ends:** Noise crawls out of the screen with its Emerge
+  animation and walks your steps at your speed minus 0.1 (20 → 19.9). Stand
+  still and it is 3.5 slower, but it never stops (its pause icon shows). Leave
+  it more than 70 studs behind and it screams (the tape's scream), turns bluer
+  and fast-forwards at your speed + 8 until it is close again. It catches you
+  at 4.5 studs: its jumpscare, and you die.
+- **The hammer** lies on the floor of the room. Use it and a cutscene plays:
+  black bars, you bend down and pick it up, turn, wind up and throw it; the
+  camera follows it spinning through the air into the screen, the glass
+  breaks and the hammer stays stuck in the TV as in the kit's broken one.
+  Before the tape nothing comes out any more; during the tape Noise never
+  comes; during the chase Noise fizzles out in front of you.
+- The kit (`assets/noise/NoiseKit.rbxm`) and the tape are downloaded once into
+  the executor's `Noise` folder. Without the kit a plain TV, Noise and hammer
+  stand in. Every setting is at the top of the script (`_G.Noise = { ... }`).
 
 ## DOORS animations in any game
 
