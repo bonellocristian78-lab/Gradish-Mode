@@ -281,18 +281,36 @@ red turned blue.
 - **Look at it for 3.5 s:** the world turns blue and the tape plays **on the
   TV's screen** (its own `VideoGui`), not on yours. You hear it from the TV and
   you can keep moving.
-- **When the tape ends:** Noise crawls out of the screen with its Emerge
-  animation and walks your steps at your speed minus 0.1 (20 → 19.9). Stand
-  still and it is 3.5 slower, but it never stops (its pause icon shows). Leave
-  it more than 70 studs behind and it screams (the tape's scream), turns bluer
-  and fast-forwards at your speed + 8 until it is close again. It catches you
-  at 4.5 studs: its jumpscare, and you die.
-- **The hammer** lies on the floor of the room. Use it and a cutscene plays:
-  black bars, you bend down and pick it up, turn, wind up and throw it; the
-  camera follows it spinning through the air into the screen, the glass
-  breaks and the hammer stays stuck in the TV as in the kit's broken one.
+- **When the tape ends:** Noise crawls out of the screen itself (its Emerge
+  animation starts with the body lying in the screen; since this TV hangs above
+  the door, its root comes down with the fall) and walks your steps at your
+  speed minus 0.1 (20 → 19.9). Stand still and it is 3.5 slower, but it never
+  stops (its pause icon shows). Leave it more than 70 studs behind and it
+  screams (the tape's scream), turns bluer and fast-forwards at your speed + 8
+  until it is close again. It catches you at 4.5 studs: its jumpscare, and you
+  die.
+- **Its own way out:** when it goes (you got away, it got you, or the TV
+  broke) it freezes, its tape goes bad (torn poses, jumps, see-through ghosts,
+  missing pieces) and it shuts off like an old TV: a bright line, a dot,
+  nothing.
+- **The hammer** lies on the floor of the room, never in a wall, under a
+  table or against one. In DOORS only DOORS' own prompt shows. Use it and a
+  cutscene plays, with black bars:
+  1. low on the floor, you walk to it, bend down and take it;
+  2. you toss it once in the air and catch it, the camera going round you;
+  3. you turn and point at the TV: the camera pulls back while it narrows,
+     the TV stays the same size and the room stretches around it;
+  4. the wind-up from below, colours draining; the throw from behind, with a
+     punch and a blur;
+  5. it flies end over end in slow motion, the camera turning round it, and
+     hits the screen: a blink of stillness, the glass bursts;
+  6. the TV shakes, one bracket gives and it dangles from the other, sparking;
+     the other gives, it falls on its back with the hammer still in it,
+     bounces, and its back and buttons come off in a cloud of dust and glass.
+
   Before the tape nothing comes out any more; during the tape Noise never
-  comes; during the chase Noise fizzles out in front of you.
+  comes; during the chase Noise freezes as you pick the hammer up, and goes
+  its own way out in front of you.
 - The kit (`assets/noise/NoiseKit.rbxm`) and the tape are downloaded once into
   the executor's `Noise` folder. Without the kit a plain TV, Noise and hammer
   stand in. Every setting is at the top of the script (`_G.Noise = { ... }`).
