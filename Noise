@@ -1714,17 +1714,18 @@ do
 			elseif d:IsA("Highlight") then d.OutlineTransparency, d.FillTransparency = alpha, math.max(d.FillTransparency, alpha) end
 		end
 	end
-	-- Its joints, from wherever they are to the kit's rest (arms wide: a T), with a slow struggle on top. The same for both bodies,
-	-- so that while one turns into the other they move as one
-	local STRUGGLE = { Head = 12, Neck = 5, UpperTorso = 5, MiddleTorso = 3, RightUpperArm = 14, LeftUpperArm = 14, RightLowerArm = 9,
-		LeftLowerArm = 9, RightUpperLeg = 7, LeftUpperLeg = 7, RightLowerLeg = 6, LeftLowerLeg = 6 }
+	-- Its joints, from wherever they are to the kit's rest (arms wide: a T; its joints have no turn of their own), with a slow
+	-- struggle on top: each joint on one axis only, so nothing twists or tilts sideways. X: the head nods, the legs swing;
+	-- Z: the arms rise and fall
+	local STRUGGLE = { Head = { "X", 5 }, UpperTorso = { "X", 2.5 }, RightUpperArm = { "Z", 7 }, LeftUpperArm = { "Z", 7 },
+		RightLowerArm = { "Z", 5 }, LeftLowerArm = { "Z", 5 }, RightUpperLeg = { "X", 3 }, LeftUpperLeg = { "X", 3 } }
 	local function rest(noise, from, u, t, pain)
 		for name, motor in pairs(noise.rig.motors) do
-			local amount = (STRUGGLE[name] or 0) * pain
+			local s = STRUGGLE[name]
 			local wobble = CFrame.new()
-			if amount > 0 then
-				local function wave(k) return math.rad(math.noise(t * 1.2, k * 3.1, #name * 0.37) * 2 * amount) end
-				wobble = CFrame.Angles(wave(1), wave(2), wave(3))
+			if s then
+				local a = math.rad(math.noise(t * 0.8, #name * 0.73, 0.5) * 2 * s[2] * pain)
+				wobble = if s[1] == "X" then CFrame.Angles(a, 0, 0) else CFrame.Angles(0, 0, a)
 			end
 			motor.Transform = (from[name] or CFrame.new()):Lerp(wobble, u)
 		end
@@ -1874,7 +1875,8 @@ do
 		make("Highlight", { FillColor = LIGHT, OutlineColor = Color3.new(1, 1, 1), FillTransparency = 0.4, OutlineTransparency = 0.2 }, model)
 		make("ParticleEmitter", { Name = "Shine", Rate = 25, Lifetime = NumberRange.new(0.4, 0.9), Speed = NumberRange.new(0.5, 2), LightEmission = 1,
 			Size = NumberSequence.new(0.35, 0), Color = ColorSequence.new(LIGHT), SpreadAngle = Vector2.new(180, 180) }, core)
-		local chainFrom = make("Attachment", { Name = "ChainFrom", Position = Vector3.new(0, 0.42, 0) }, core)
+		local box = model:GetBoundingBox()
+		local chainFrom = make("Attachment", { Name = "ChainFrom", Position = core.CFrame:PointToObjectSpace(box.Position) }, core) -- its middle
 		model.Parent = folder
 		if tool:GetAttribute("GradishCrucifix") then tool:Destroy() end -- ours is used up; the game's own stays the game's
 		return model, core, chainFrom
@@ -1935,14 +1937,27 @@ do
 		local handle = tool:FindFirstChild("Handle")
 		local grip = if handle and handle:IsA("BasePart") then hand.CFrame:ToObjectSpace(handle.CFrame) else CFrame.new(0, -0.4, -0.5)
 		local cross, crossCore, chainFrom = floating(tool, hand)
-		local white = makeNoise(if piece("NoiseModel(WithoutB-90)") then "NoiseModel(WithoutB-90)" else nil)
-		white.model.Name = "NoiseWhite"
-		for _, d in ipairs(white.model:GetDescendants()) do
-			if d:IsA("Texture") then d.Color3 = Color3.new(0, 0, 0) -- its static black on white
-			elseif d:IsA("ParticleEmitter") then d.Enabled = false
-			elseif d:IsA("BasePart") and not piece("NoiseModel(WithoutB-90)") and d ~= white.root then d.Color = Color3.fromRGB(205, 205, 205) end
+		-- Upright and facing you whatever its model's axes: its longest side up (the way you held it), its thinnest toward you
+		local _, crossSize = cross:GetBoundingBox()
+		local axes = { { v = Vector3.new(1, 0, 0), s = crossSize.X }, { v = Vector3.new(0, 1, 0), s = crossSize.Y }, { v = Vector3.new(0, 0, 1), s = crossSize.Z } }
+		table.sort(axes, function(a, b) return a.s > b.s end)
+		local long, thin = axes[1].v, axes[3].v
+		if crossCore.CFrame:VectorToWorldSpace(long).Y < 0 then long = -long end
+		local shape = CFrame.fromMatrix(Vector3.new(), long, thin, long:Cross(thin)):Inverse()
+		local function upright(at)
+			local toward = flatDir(at, root.Position)
+			return CFrame.fromMatrix(at, up, toward, up:Cross(toward)) * shape
 		end
-		fade(white.model, white.root, 1)
+		-- What it turns into when B-90 leaves: the kit's Noise without B-90, white, part by part (one body, no second one over it)
+		local whiteSource = piece("NoiseModel(WithoutB-90)")
+		local paints = {}
+		for _, p in ipairs(noise.model:GetDescendants()) do
+			if p:IsA("BasePart") and p ~= noise.root then
+				local twin = whiteSource and whiteSource:FindFirstChild(p.Name, true)
+				table.insert(paints, { part = p, from = p.Color, to = if twin and twin:IsA("BasePart") then twin.Color else Color3.fromRGB(205, 205, 205) })
+			end
+		end
+		local glowFill, glowOutline = noise.glow.FillTransparency, noise.glow.OutlineColor
 		local b90 = newB90()
 		b90.grow(0.08)
 		local circles = { newCircle(), nil }
@@ -1974,7 +1989,6 @@ do
 			local sink = span(t, 8.0, 8.5) ^ 2 * 7
 			local at = start:Lerp(C1 + up * h, back) + up * (lift * smoother(span(t, 2.0, 3.0)) - pull - sink)
 			noise.root.CFrame = CFrame.lookAt(at, at + face)
-			white.root.CFrame = noise.root.CFrame
 			local chestAt = at + up * 1.2
 			chest.CFrame = CFrame.new(chestAt)
 
@@ -1994,7 +2008,6 @@ do
 				local u = smoother(span(t, 1.85, 2.8))
 				local pain = 0.35 + 0.65 * span(t, 3, 8)
 				rest(noise, from, u, t, pain)
-				if white.model.Parent then rest(white, from, u, t, pain) end
 			end
 
 			-- The crucifix: in your hand, then up above it, then above both
@@ -2004,9 +2017,9 @@ do
 			else
 				local f = smoother(span(t, 1.85, 2.75))
 				local hold = hand.CFrame * grip
-				local above = C1:Lerp(mid, smoother(span(t, 3.0, 6.0))) + up * high
+				local above = C1:Lerp(mid, smoother(span(t, 3.0, 6.0))) + up * (high + math.sin((t - 1.85) * 2) * 0.12 * f)
 				local p = bezier(hold.Position, hold.Position + up * 2, above + up * 1, above, f)
-				crossAt = CFrame.new(p) * CFrame.Angles(0, (t - 1.85) * 1.5 * f, 0)
+				crossAt = CFrame.new(p) * hold.Rotation:Lerp(upright(above).Rotation, f)
 			end
 			cross:PivotTo(crossAt)
 			-- Its chain flies out and holds it
@@ -2037,7 +2050,6 @@ do
 			if t >= 3.0 then
 				if once("split") then
 					b90.model.Parent = folder
-					white.model.Parent = folder
 					circles[2] = newCircle()
 					toB90.Enabled = true
 					oneShot(GLITCH, b90.core, { Volume = CONFIG.Volume })
@@ -2046,16 +2058,9 @@ do
 				end
 				b90.grow(lerpNum(0.08, 1, smoother(span(t, 3.0, 5.0))))
 				local change = smoother(span(t, 3.2, 5.2))
-				fade(noise.model, noise.root, change)
-				fade(white.model, white.root, 1 - change)
-				if change >= 1 and once("white") then
-					for _, d in ipairs(noise.model:GetDescendants()) do
-						if d:IsA("ParticleEmitter") then d.Enabled = false end
-					end
-					for _, d in ipairs(white.model:GetDescendants()) do
-						if d:IsA("ParticleEmitter") and d.Name == "NoiseStatic" then d.Enabled = true end
-					end
-				end
+				for _, item in ipairs(paints) do item.part.Color = item.from:Lerp(item.to, change) end
+				noise.glow.FillTransparency = lerpNum(glowFill, 1, change) -- a white body with the kit's black outline
+				noise.glow.OutlineColor = glowOutline:Lerp(Color3.new(0, 0, 0), change)
 				circles[2].speed = spin
 				circles[2].place(C1:Lerp(C2, u), open, dt, b90At)
 			end
@@ -2088,15 +2093,15 @@ do
 					end
 					if hum then hum:Stop() end
 				end
-				fade(white.model, white.root, span(t, 8.0, 8.5))
+				fade(noise.model, noise.root, span(t, 8.0, 8.5))
 				b90.grow(math.max(0.01, 1 - span(t, 8.0, 8.5)))
 			end
 			RunService.Heartbeat:Wait()
 		end
 
 		-- Gone, both
-		noise.gone, white.gone = true, true
-		for _, thing in ipairs({ noise.model, white.model, b90.model, cross, chest, b90Point, tip }) do thing:Destroy() end
+		noise.gone = true
+		for _, thing in ipairs({ noise.model, b90.model, cross, chest, b90Point, tip }) do thing:Destroy() end
 		for _, circle in ipairs(circles) do circle.model:Destroy() end
 		if current == noise then current = nil end
 		state = "done"
