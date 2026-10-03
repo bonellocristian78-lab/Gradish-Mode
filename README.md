@@ -26,7 +26,7 @@ mod rather than playing it.
 | **The mod** | `.../MainScript` |
 | DOORS optimizer (max graphics, less lag) | `.../DoorsOptimizer` |
 | Hellish Time Ever (K = an entity, spam it) | `.../HellishTimeEver` |
-| Noise: a TV above the door, a blue tape, a hammer | `.../Noise` |
+| Noise: a TV above the door, a blue tape, a hammer, a crucifix | `.../Noise` |
 | DOORS' walk, run, crouch and jump in any game | `.../DoorsAnimations` |
 | Universal Custom Assets: animator with Studio controls (Ctrl + U I O) | `.../UniversalAssets` |
 | The same, obfuscated | `.../UniversalAssets.obf` |
@@ -269,15 +269,17 @@ seconds. `_G.Time` delays the start by that many seconds from the loadstring.
 ## Noise
 
 ```lua
+_G.CrucifixGive = true   -- optional: false = no crucifix
 loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/Noise"))()
 ```
 
-Noise (B-90), with the kit's own TV, Noise, hammer and animations, everything
-red turned blue.
+Noise (B-90), with the kit's own TV, Noise, B-90, hammer, crucifix circle and
+animations (`assets/noise/NoiseKitV2.rbxm`).
 
-- **The TV:** the kit's TV alone (no feet, no cart), on two brackets above the
-  way out of your room, facing in. Static on its screen. It moves to each new
-  room until you look at it.
+- **The TV:** the kit's TV (no feet, no cart) hanging from the ceiling on its
+  arm, above the way out of your room, facing in. Under a high ceiling its bar
+  stretches up to it; under a low one the TV comes down. Static on its screen.
+  It moves to each new room until you look at it.
 - **Look at it for 3.5 s:** the world turns blue and the tape plays **on the
   TV's screen** (its own `VideoGui`), not on yours. You hear it from the TV and
   you can keep moving.
@@ -304,14 +306,33 @@ red turned blue.
      punch and a blur;
   5. it flies end over end in slow motion, the camera turning round it, and
      hits the screen: a blink of stillness, the glass bursts;
-  6. the TV shakes, one bracket gives and it dangles from the other, sparking;
-     the other gives, it falls on its back with the hammer still in it,
-     bounces, and its back and buttons come off in a cloud of dust and glass.
+  6. the TV swings on its arm, sparking; dust falls from the ceiling as the
+     arm starts to give, then it tears out: the TV falls on its back with the
+     hammer still in it, and the arm, its bar and its plate fall too, now that
+     nothing holds them; the TV bounces, and its back and buttons come off in
+     a cloud of dust and glass.
 
   Before the tape nothing comes out any more; during the tape Noise never
   comes; during the chase Noise freezes as you pick the hammer up, and goes
   its own way out in front of you.
-- The kit (`assets/noise/NoiseKit.rbxm`) and the tape are downloaded once into
+- **The crucifix:** `_G.CrucifixGive = true` (the default) puts one in your
+  inventory (the mod's own, from `CrucifixRitual`; two planks if it cannot be
+  loaded). Hold it up to Noise, within 25 studs with nothing in between (any
+  crucifix works, the game's too), and a 13-second film plays, after DOORS'
+  own Noise crucifixion:
+  1. a chain shoots from the crucifix, catches it, and drags it back under
+     its TV in three pulls, Noise clawing towards you;
+  2. the circle (the kit's Repentance) opens under it, it rises with its arms
+     wide, the crucifix flies up into the kit's Rift above;
+  3. **B-90 is torn out of it**: one smooth curve, no cuts, the camera pulling
+     back in one move. The circle divides in two and slides under B-90, the
+     body B-90 wore fades into it, the one it leaves behind turns white (the
+     kit's Noise without B-90), the last threads between them thin out and
+     snap; the rift's chains split between the two as they part;
+  4. two crucifixions at once: three pulls, both shaking, B-90 flashing its
+     STOP; then both are pulled down into their circles, a flash, the circles
+     close, the TV goes dark.
+- The kit and the tape are downloaded once into
   the executor's `Noise` folder. Without the kit a plain TV, Noise and hammer
   stand in. Every setting is at the top of the script (`_G.Noise = { ... }`).
 

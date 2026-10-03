@@ -2,7 +2,8 @@
         NOISE (B-90) -- a TV above the door, a tape on its screen, a blue thing that follows you,
         and a hammer to stop it
 
-        A TV appears above the door of the room you are in. Stare at it for a few seconds:
+        A TV appears above the door of the room you are in, hanging from the ceiling on its
+        arm (the arm stretches up to a high ceiling). Stare at it for a few seconds:
         the tape plays on its screen and you hear it from there. When it ends, Noise crawls
         out of the TV and walks your steps, almost as fast as you (your speed minus 0.1).
         Stand still and it slows down a little, but it keeps coming. Leave it too far behind
@@ -10,8 +11,9 @@
 
         A hammer lies on the floor of the room. Use it and a cutscene plays: you walk to it,
         pick it up, toss it once in the air, turn, wind up and throw it; it flies end over end
-        in slow motion into the screen. The TV dangles from one bracket, the other gives, it
-        falls on its back and breaks more. Before the tape, nothing comes out any more; during
+        in slow motion into the screen. The TV swings on its arm, the arm tears out of the
+        ceiling, and the TV falls on its back with the arm, its bar and its plate falling too;
+        it breaks more on the floor. Before the tape, nothing comes out any more; during
         the tape, Noise never comes; during the chase, Noise freezes, glitches and shuts off
         like an old TV (the same way it goes when the chase ends).
 
@@ -34,10 +36,23 @@
                 ChaseRooms = 3,         -- DOORS: the chase ends after this many new rooms
                 ChaseTime = 90,         -- the chase ends after this many seconds anyway
                 Hammer = true,          -- a hammer on the floor to break the TV
+                CrucifixGive = true,    -- a crucifix in your inventory (also _G.CrucifixGive = true / false)
+                CrucifixRange = 25,     -- studs: hold a crucifix up to it this close
                 Volume = 1,
                 Folder = "Noise",       -- where the kit and the tape are kept
                 AssetsUrl = "...",      -- where they are downloaded from
             }
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/Noise"))()
+
+        THE CRUCIFIX. With _G.CrucifixGive = true (the default) you get a crucifix. Hold it up
+        to Noise (any crucifix: yours, the mod's, the game's). A 13-second film: a chain from
+        the crucifix catches it and drags it back under its TV in three pulls; the circle
+        opens under it, it rises with its arms wide, the crucifix flies up into the rift; B-90
+        is torn out of it along one smooth curve while the circle divides in two, the body
+        it wore fading into it and the one left behind turning white; three pulls, both at
+        once, and both go down into their circles. The TV goes dark.
+
+            _G.CrucifixGive = true
             loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/Noise"))()
 
         The kit (TV, Noise, hammer and their animations) and the tape are downloaded once
@@ -62,6 +77,9 @@ local CONFIG = {
 	ChaseRooms = 3,
 	ChaseTime = 90,
 	Hammer = true,
+	CrucifixGive = true,
+	CrucifixRange = 25,
+	CrucifixUrl = "https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/CrucifixRitual",
 	Volume = 1,
 	Folder = "Noise",
 	AssetsUrl = "https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/claude/sei-qui-con-noi-ye4k62/assets/noise/",
@@ -70,6 +88,10 @@ local override = _G.Noise
 _G.Noise = nil
 if type(override) == "table" then
 	for k, v in pairs(override) do CONFIG[k] = v end
+end
+if _G.CrucifixGive ~= nil then
+	CONFIG.CrucifixGive = _G.CrucifixGive == true
+	_G.CrucifixGive = nil
 end
 
 -- The tape: 179 frames at 15 per second, 12 to a sheet (3 x 4 of 320 x 240)
@@ -134,10 +156,10 @@ local function asset(name)
 end
 
 local files = { sheets = {} }
-local kit = nil -- the Noise (B-90) kit: its TV, Noise, the hammer
+local kit = nil -- the Noise (B-90) kit: its TV, Noise, B-90, the hammer, the crucifix's circle
 local filesReady = false
 task.spawn(function() -- all of it now, so nothing waits later
-	local kitId = asset("NoiseKit.rbxm")
+	local kitId = asset("NoiseKitV2.rbxm")
 	if kitId then
 		local ok, objects = pcall(function() return game:GetObjects(kitId) end)
 		if ok and type(objects) == "table" and objects[1] then kit = objects[1] end
@@ -223,9 +245,7 @@ local function paint(model, level)
 			d.Color3 = if level > 0 then BLUE else DEEP
 		elseif d:IsA("Decal") then
 			d.Color3 = blueOf(d.Color3, level)
-		elseif d:IsA("BasePart") then
-			d.Color = blueOf(d.Color, level)
-		end
+		end -- its body keeps the kit's colours
 	end
 end
 
@@ -246,9 +266,27 @@ local function clean(model, keepPhysics)
 	return model
 end
 
-local function piece(name) return kit and kit:FindFirstChild(name) end
+-- A piece of the kit: at its top, or in its "Noise (B-90)" model (the TV, the hammer)
+local function piece(name)
+	local inner = kit and kit:FindFirstChild("Noise (B-90)")
+	return kit and (kit:FindFirstChild(name) or (inner and inner:FindFirstChild(name))) or nil
+end
 
--- The TV alone (no feet, no cart): its screen with the VideoGui, the broken glass hidden
+-- The arm that holds it from the ceiling, as in the kit: a bracket on its back, a bar leaning back, a plate on the ceiling
+local function addArm(tv, main)
+	local arm = make("Model", { Name = "ArchivesCeilingMonitor" }, tv)
+	local monitor = make("Model", { Name = "Monitor" }, arm)
+	local tilt = CFrame.Angles(math.rad(15), 0, 0)
+	for _, p in ipairs({ { "Bar", Vector3.new(1.26, 1.26, 0.88), CFrame.new(-0.08, -0.1, 1.83), Color3.fromRGB(70, 72, 83), monitor },
+		{ "Wire", Vector3.new(0.35, 1.48, 0.38), CFrame.new(-0.06, -0.88, 1.69), Color3.fromRGB(36, 35, 36), monitor },
+		{ "Bar", Vector3.new(0.45, 2.2, 0.52), CFrame.new(-0.09, 0.61, 2.4) * tilt, Color3.fromRGB(70, 72, 83), arm },
+		{ "Base", Vector3.new(1.47, 0.59, 1.19), CFrame.new(-0.09, 1.53, 2.64) * tilt, Color3.fromRGB(35, 37, 54), arm } }) do
+		make("Part", { Name = p[1], Size = p[2], CFrame = main.CFrame * p[3], Color = p[4], Anchored = true, CanCollide = false,
+			CanQuery = false, CanTouch = false }, p[5])
+	end
+end
+
+-- The TV alone (no feet, no cart) on its ceiling arm: its screen with the VideoGui, the broken glass hidden
 local function makeTV()
 	local stand = piece("TV_Stand")
 	if stand then
@@ -258,6 +296,7 @@ local function makeTV()
 		if feet then feet:Destroy() end
 		if main and main:FindFirstChild("TVScreen") then
 			tv.PrimaryPart = main
+			if not tv:FindFirstChild("ArchivesCeilingMonitor") then addArm(tv, main) end
 			return tv, main, main.TVScreen
 		end
 	end
@@ -274,6 +313,7 @@ local function makeTV()
 	local broken = make("Part", { Name = "BrokenScreen", Size = Vector3.new(2.88, 2, 0.29), Transparency = 1, CFrame = CFrame.new(0, 0.1, -0.82) }, main)
 	make("Decal", { Name = "Decal", Face = Enum.NormalId.Front, Transparency = 1, Texture = "rbxassetid://132427210649216" }, broken)
 	tv.PrimaryPart = main
+	addArm(tv, main)
 	return clean(tv), main, screen
 end
 
@@ -373,8 +413,9 @@ end
 
 local current = nil -- the Noise of now
 
-local function makeNoise()
-	local source = piece("NoiseModel")
+-- Noise as it chases you ("NoiseModel", B-90 in it), or another of the kit's bodies ("NoiseModel(WithoutB-90)")
+local function makeNoise(name)
+	local source = piece(name or "NoiseModel")
 	local anims = {}
 	local model
 	if source then
@@ -607,6 +648,7 @@ end)
 ---====== THE TV ABOVE THE DOOR ======---
 
 local tv, tvMain, screen = nil, nil, nil
+local arm, armRest = nil, {} -- its ceiling arm, and the arm's plate and bar as in the kit
 local state = "waiting" -- waiting, tape, emerging, chase, broken, done
 local picture, video, hum = nil, nil, nil
 
@@ -634,16 +676,39 @@ local function buildTV()
 	for _, light in ipairs(screen:GetDescendants()) do
 		if light:IsA("Light") then light.Color, light.Brightness = PALE, 0.4 end
 	end
-	-- Two dark brackets from the top of its back to the wall: it will hang from them
-	local box, size = tv:GetBoundingBox()
-	local back = tvMain.CFrame:PointToObjectSpace(box.Position) + Vector3.new(0, size.Y / 2 - 0.35, size.Z / 2 + 0.3)
-	for i, x in ipairs({ -1, 1 }) do
-		make("Part", { Name = "Mount" .. i, Size = Vector3.new(0.3, 0.3, 0.7), Color = Color3.fromRGB(30, 30, 33), Anchored = true,
-			CanCollide = false, CanQuery = false, CanTouch = false, CFrame = tvMain.CFrame * CFrame.new(back + Vector3.new(x * (size.X / 2 - 0.45), 0, 0)) }, tv)
+	arm = tv:FindFirstChild("ArchivesCeilingMonitor")
+	for _, name in ipairs({ "Base", "Bar" }) do
+		local part = arm and arm:FindFirstChild(name)
+		if part and part:IsA("BasePart") then armRest[name] = { part = part, cf = tvMain.CFrame:ToObjectSpace(part.CFrame), size = part.Size } end
 	end
 end
 
--- Above the way out of your room, facing into it; elsewhere in front of you
+-- Its arm reaches the ceiling: the bar stretches under a high one; under a low one the TV comes down
+local function hangFromCeiling()
+	local base, bar = armRest.Base, armRest.Bar
+	if not (base and bar) then return end
+	base.part.CFrame, base.part.Size = tvMain.CFrame * base.cf, base.size -- the kit's shape again first
+	bar.part.CFrame, bar.part.Size = tvMain.CFrame * bar.cf, bar.size
+	local cf, size = base.part.CFrame, base.part.Size
+	local top = cf.Y + 0.5 * (math.abs(cf.RightVector.Y) * size.X + math.abs(cf.UpVector.Y) * size.Y + math.abs(cf.LookVector.Y) * size.Z)
+	local ceiling = cast(cf.Position, Vector3.new(0, 40, 0))
+	if not ceiling then return end
+	local gap = ceiling.Position.Y - top
+	if gap < 0 then
+		tv:PivotTo(tv:GetPivot() + Vector3.new(0, gap, 0))
+		return
+	end
+	local low = bar.part.CFrame:PointToWorldSpace(Vector3.new(0, -bar.size.Y / 2, 0))
+	local high = bar.part.CFrame:PointToWorldSpace(Vector3.new(0, bar.size.Y / 2, 0)) + Vector3.new(0, gap, 0)
+	base.part.CFrame = cf + Vector3.new(0, gap, 0)
+	local up = (high - low).Unit
+	local right = bar.part.CFrame.RightVector
+	right = (right - up * right:Dot(up)).Unit
+	bar.part.Size = Vector3.new(bar.size.X, (high - low).Magnitude, bar.size.Z)
+	bar.part.CFrame = CFrame.fromMatrix((high + low) * 0.5, right, up)
+end
+
+-- In front of the way out of your room, above the door, hanging from the ceiling and facing into the room; elsewhere in front of you
 local function placeTV()
 	local room = roomModel()
 	local exit = room and (room:FindFirstChild("RoomExit") or (room:FindFirstChild("Door") and room.Door:FindFirstChild("Door")))
@@ -653,7 +718,9 @@ local function placeTV()
 		local entrance = room:FindFirstChild("RoomEntrance")
 		local inside = if entrance then entrance.Position else room:GetPivot().Position
 		if (inside - exit.Position):Dot(inward) < 0 then inward = -inward end
-		local position = exit.Position + Vector3.new(0, exit.Size.Y / 2 + 1.9, 0) + inward * 1.9 -- its back against the wall
+		local box, size = tv:GetBoundingBox()
+		local back = tvMain.CFrame:PointToObjectSpace(box.Position).Z + size.Z / 2 -- its arm, behind it
+		local position = exit.Position + Vector3.new(0, exit.Size.Y / 2 + 1.9, 0) + inward * (back + 1.1) -- the arm clear of the wall
 		spot = CFrame.lookAt(position, position + inward)
 	else
 		local _, _, root = body()
@@ -662,6 +729,7 @@ local function placeTV()
 		spot = CFrame.lookAt(position, Vector3.new(root.Position.X, position.Y, root.Position.Z))
 	end
 	tv:PivotTo(spot)
+	hangFromCeiling()
 	tv.Parent = folder
 	return true
 end
@@ -800,6 +868,27 @@ end
 
 ---====== THE CHASE ======---
 
+local crucify -- below: what a crucifix does to it
+
+-- A crucifix in your hand (yours, the mod's, the game's: a Tool called Crucifix or tagged so)
+local function heldCrucifix()
+	local character = LocalPlayer.Character
+	local tool = character and character:FindFirstChildOfClass("Tool")
+	if not tool then return nil end
+	if tool.Name == "Crucifix" then return tool end
+	local ok, tagged = pcall(function() return tool:HasTag("Crucifix") end)
+	return if ok and tagged then tool else nil
+end
+-- That crucifix, when you hold it up to Noise: close enough, nothing in between
+local function crucifixOn(noise)
+	local tool = heldCrucifix()
+	local _, _, root = body()
+	if not (tool and root) then return nil end
+	local to = noise.root.Position - root.Position
+	if to.Magnitude > CONFIG.CrucifixRange or cast(root.Position, to) then return nil end
+	return tool
+end
+
 -- It walks your steps: every stud you move is a crumb, and it goes from crumb to crumb
 local function chase(noise)
 	local _, _, root = body()
@@ -883,6 +972,12 @@ local function chase(noise)
 		local at = Vector3.new(noise.position.X, noise.position.Y - root.Size.Y / 2 - legs + noise.hip, noise.position.Z)
 		noise.root.CFrame = CFrame.lookAt(at, at + (noise.look or Vector3.new(0, 0, -1)))
 
+		local cross = crucifixOn(noise)
+		if cross then
+			state = "crucified"
+			task.spawn(crucify, noise, cross)
+			break
+		end
 		if (here - noise.position).Magnitude < CONFIG.KillDistance then
 			-- Caught: it turns to you, the jumpscare, and you are gone
 			state = "done"
@@ -943,6 +1038,12 @@ local function emerge()
 		noise.rig:play(anim, CONFIG.EmergeSpeed)
 		local fallen = 0
 		while alive and state == "emerging" and not noise.rig.done and os.clock() - t0 < 12 do
+			local cross = crucifixOn(noise)
+			if cross then
+				state = "crucified"
+				task.spawn(crucify, noise, cross)
+				break
+			end
 			-- How far its body has fallen out of the screen, from its own animation: the root comes down as much
 			fallen = if top > low then math.max(fallen, math.clamp((top - poseOf(torso, noise.rig.time).Y) / (top - low), 0, 1)) else 1
 			place(standing + (startY - standing) * (1 - fallen))
@@ -962,12 +1063,156 @@ local function emerge()
 	end
 end
 
----====== THE HAMMER: a cutscene; the TV breaks, dangles from one bracket and falls ======---
+---====== A FILM: black bars, your camera and your body for a cutscene, all given back at the end ======---
+
+local restoreCutscene = nil -- while a film runs: gives you back your camera and your body
+local cutShake = 0 -- the film camera's shake, dying down
+local function kick(amount) cutShake = math.max(cutShake, amount) end
+
+local JOINTS = { root = { "Root", "RootJoint" }, waist = { "Waist" }, neck = { "Neck" }, rS = { "RightShoulder", "Right Shoulder" },
+	rE = { "RightElbow" }, rW = { "RightWrist" }, lS = { "LeftShoulder", "Left Shoulder" }, lE = { "LeftElbow" },
+	rH = { "RightHip", "Right Hip" }, rK = { "RightKnee" }, lH = { "LeftHip", "Left Hip" }, lK = { "LeftKnee" } }
+local ZERO = { 0, 0, 0 }
+local function ease(u) return u * u * (3 - 2 * u) end
+local function smoother(u) return u * u * u * (u * (u * 6 - 15) + 10) end -- no jolt at either end
+local EASE = { smooth = ease, out = function(u) return 1 - (1 - u) ^ 3 end, ["in"] = function(u) return u ^ 3 end }
+local function lerpNum(a, b, u) return a + (b - a) * u end
+local function flatDir(from, to)
+	local d = (to - from) * Vector3.new(1, 0, 1)
+	return if d.Magnitude > 0.01 then d.Unit else Vector3.new(0, 0, -1)
+end
+-- The camera stays on this side of any wall
+local function safe(from, eye)
+	if (eye - from).Magnitude < 0.05 then return eye end
+	local hit = cast(from, eye - from)
+	return if hit then hit.Position + (from - eye).Unit * 0.6 else eye
+end
+-- A pose between two of a list of poses { t, ease, pose = { joint = { pitch, yaw, roll } } }
+local function poseAt(list, t)
+	local a, b = list[#list], list[#list]
+	for i = 2, #list do
+		if list[i].t > t then
+			a, b = list[i - 1], list[i]
+			break
+		end
+	end
+	local u = if b.t > a.t then (EASE[b.ease] or ease)(math.clamp((t - a.t) / (b.t - a.t), 0, 1)) else 1
+	local out = {}
+	for name in pairs(JOINTS) do
+		local p, q = a.pose[name] or ZERO, b.pose[name] or ZERO
+		out[name] = { lerpNum(p[1], q[1], u), lerpNum(p[2], q[2], u), lerpNum(p[3], q[3], u) }
+	end
+	return out
+end
+
+--[[ film.shot(now) -> camera CFrame, FOV. film.bodyAt(now) -> your pose (degrees in each joint's parent, { pitch, yaw, roll }:
+     pitch > 0 lifts an arm or a leg forward, < 0 bows the waist or bends a knee; yaw > 0 turns left; roll > 0 opens the right
+     arm), where you stand, where you face. film.every(now): anything else, each frame. Your feet stay on the floor (R15) ]]
+local function newFilm(character, root)
+	local camera = workspace.CurrentCamera
+	local film = { shot = nil, bodyAt = nil, every = nil, done = false, startPos = root.Position,
+		saved = { type = camera.CameraType, fov = camera.FieldOfView, cframe = camera.CFrame, anchored = root.Anchored,
+			stopcam = mainGame and mainGame.stopcam } }
+	if mainGame then mainGame.stopcam = true end
+	root.Anchored = true
+	camera.CameraType = Enum.CameraType.Scriptable
+
+	local bars = make("ScreenGui", { Name = "NoiseCutscene", IgnoreGuiInset = true, DisplayOrder = 99998, ResetOnSpawn = false }, hud)
+	local top = make("Frame", { Size = UDim2.fromScale(1, 0), BackgroundColor3 = Color3.new(0, 0, 0), BorderSizePixel = 0 }, bars)
+	local bottom = make("Frame", { AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1), Size = UDim2.fromScale(1, 0),
+		BackgroundColor3 = Color3.new(0, 0, 0), BorderSizePixel = 0 }, bars)
+	local function barsTo(height, seconds)
+		for _, bar in ipairs({ top, bottom }) do TweenService:Create(bar, TweenInfo.new(seconds), { Size = UDim2.fromScale(1, height) }):Play() end
+	end
+	barsTo(0.11, 0.35)
+
+	local joints = {}
+	for name, names in pairs(JOINTS) do
+		for _, n in ipairs(names) do
+			local m = character:FindFirstChild(n, true)
+			if m and m:IsA("Motor6D") then
+				local q = m.C0.Rotation
+				joints[name] = { motor = m, q = q, qi = q:Inverse() }
+				break
+			end
+		end
+	end
+	local legs = nil -- thigh and shin: how much lower you are when you bend
+	if joints.rH and joints.rK then
+		local ankle = character:FindFirstChild("RightAnkle", true)
+		local a = (joints.rK.motor.C0.Position - joints.rH.motor.C1.Position).Magnitude
+		local b = if ankle and ankle:IsA("Motor6D") then (ankle.C0.Position - joints.rK.motor.C1.Position).Magnitude else a
+		legs = function(hip, knee) return a * math.cos(math.rad(hip)) + b * math.cos(math.rad(hip + knee)) - (a + b) end
+	end
+	film.hand = character:FindFirstChild("RightHand") or character:FindFirstChild("Right Arm") or root
+	film.joints = joints
+
+	-- The body, after Roblox's animations, before physics
+	local writer = on(RunService.PreSimulation or RunService.Stepped, function()
+		if not film.bodyAt then return end
+		local pose, at, face = film.bodyAt(os.clock())
+		local dy = if legs and pose.lH and pose.rH then math.max(legs(pose.lH[1], pose.lK[1]), legs(pose.rH[1], pose.rK[1])) else 0
+		for name, j in pairs(joints) do
+			local a = pose[name] or ZERO
+			local r = CFrame.fromEulerAnglesYXZ(math.rad(a[1]), math.rad(a[2]), math.rad(a[3]))
+			if name == "root" then r = CFrame.new(0, dy, 0) * r end
+			j.motor.Transform = j.qi * r * j.q
+		end
+		root.CFrame = CFrame.lookAt(at, at + face)
+	end)
+	-- The picture
+	RunService:BindToRenderStep("NoiseCutscene", Enum.RenderPriority.Last.Value + 2, function(dt)
+		local now = os.clock()
+		for _, d in ipairs(character:GetDescendants()) do -- seen from outside, even in first person
+			if d:IsA("BasePart") or d:IsA("Decal") then d.LocalTransparencyModifier = 0 end
+		end
+		if film.every then film.every(now) end
+		if film.shot then
+			local cf, fov = film.shot(now)
+			cutShake *= math.exp(-6 * (dt or 1 / 60))
+			if cutShake > 0.001 then cf = cf * CFrame.Angles(rnd(cutShake), rnd(cutShake), rnd(cutShake * 0.5)) end
+			camera.CFrame, camera.FieldOfView = cf, fov
+		end
+	end)
+
+	function film.finish()
+		if film.done then return end
+		film.done = true
+		restoreCutscene = nil
+		RunService:UnbindFromRenderStep("NoiseCutscene")
+		writer:Disconnect()
+		for _, j in pairs(joints) do j.motor.Transform = CFrame.new() end
+		camera.CameraType = film.saved.type
+		camera.FieldOfView = film.saved.fov
+		if mainGame then mainGame.stopcam = film.saved.stopcam end
+		if root.Parent then root.Anchored = film.saved.anchored end
+		bars:Destroy()
+		tint.Saturation, tint.Contrast, tint.TintColor = 0, 0, Color3.new(1, 1, 1)
+		blur.Size = 0
+	end
+	function film.hold(seconds) -- false: the event was stopped meanwhile
+		task.wait(seconds)
+		return alive and not film.done
+	end
+	-- Back to you, wherever you are now, and the bars go
+	function film.home(at, seconds)
+		local leaving, fov, from = camera.CFrame, camera.FieldOfView, os.clock()
+		local home = film.saved.cframe + (at - film.startPos)
+		film.shot = function(now)
+			local u = ease(math.clamp((now - from) / seconds, 0, 1))
+			return leaving:Lerp(home, u), lerpNum(fov, film.saved.fov, u)
+		end
+		barsTo(0, seconds * 0.85)
+		TweenService:Create(tint, TweenInfo.new(seconds), { Saturation = 0, Contrast = 0, TintColor = Color3.new(1, 1, 1) }):Play()
+		if film.hold(seconds + 0.05) then film.finish() end
+	end
+	restoreCutscene = film.finish
+	return film
+end
+
+---====== THE HAMMER: a film; the TV breaks, swings on its arm, and falls with it ======---
 
 local sparks = nil -- the broken TV's
-local cutShake = 0 -- the cutscene camera's shake, dying down
-local function kick(amount) cutShake = math.max(cutShake, amount) end
-local restoreCutscene = nil -- while the cutscene runs: gives you back your camera and your body
 
 local function breakTV()
 	local glass = tvMain:FindFirstChild("BrokenScreen")
@@ -1045,64 +1290,76 @@ local function crash(at, inward)
 	kick(0.09)
 end
 
--- After the hit it shakes; the left bracket gives and it swings from the right one; after `dangle` seconds that one gives too,
--- it falls, turning onto its back, lands, bounces and breaks more. The hammer stays in it
+-- After the hit it swings on its arm, pushed back by the blow; the arm starts to give (dust from the ceiling), then tears
+-- out: the TV falls, turning onto its back, and the arm, its bar and its plate fall too, now that nothing holds them. On the
+-- floor it bounces and breaks more. The hammer stays in it. `dangle`: seconds it swings
 local function dropTV(dangle)
 	local drop = { landed = false }
 	local start = tvMain.CFrame
-	local box, size = tv:GetBoundingBox()
-	local center = start:PointToObjectSpace(box.Position)
-	local sx, sy = size.X / 2 - 0.45, size.Y / 2 - 0.35
-	local hinge = start * CFrame.new(center + Vector3.new(sx, sy, size.Z / 2)) -- where the right bracket holds it
+	local base = arm and arm:FindFirstChild("Base")
+	local hinge = if base then CFrame.new(base.Position) * start.Rotation else start * CFrame.new(0, 2.5, 1.5)
+	if base then base.Parent = folder end -- the plate stays on the ceiling while the rest swings from it
 	local held = hinge:ToObjectSpace(start)
-	local hang = math.atan2(sx, sy) -- its middle right under that bracket
+	local back = 0 -- how far its back is behind its middle: it lies on it
+	for _, p in ipairs(tvMain:GetDescendants()) do
+		if p:IsA("BasePart") then back = math.max(back, start:PointToObjectSpace(p.Position).Z + p.Size.Z / 2) end
+	end
+	back = math.max(back, tvMain.Size.Z / 2)
 	local inward = start.LookVector * Vector3.new(1, 0, 1)
 	inward = if inward.Magnitude > 0.01 then inward.Unit else Vector3.new(0, 0, -1)
 	local lying = CFrame.Angles(0, rnd(0.4), 0) * CFrame.lookAt(Vector3.new(), inward) * CFrame.Angles(math.pi / 2, 0, 0) -- screen up
 	local stuck = stuckOffset()
-	local function swing(s) return hang * (1 - math.exp(-1.5 * s) * math.cos(5.4 * s)) end
-	local first, fall, creaked, sparkAt = false, nil, false, 0
+	local function swing(s) -- back and forth on its arm, a little sideways too, less and less
+		return math.rad(-24) * math.exp(-0.9 * s) * math.sin(5 * s), math.rad(5) * math.exp(-1.2 * s) * math.sin(3.3 * s + 0.6)
+	end
+	local function hanging(s)
+		local pitch, roll = swing(s)
+		return hinge * CFrame.Angles(pitch, 0, roll) * held
+	end
+	local fall, creaked, giving, sparkAt = nil, false, false, 0
 	local t0 = os.clock()
 	local connection
 	connection = on(RunService.Heartbeat, function()
 		local s = os.clock() - t0
 		local cf
-		if s < 0.5 then -- the blow
-			local k = math.exp(-7 * s)
-			cf = start * CFrame.Angles(0.06 * k * math.sin(s * 47), 0, 0.04 * k * math.sin(s * 39))
-		elseif s < 0.5 + dangle then -- hanging from one bracket
-			if not first then
-				first = true
-				local mount = folder:FindFirstChild("Mount1")
-				if mount then oneShot(SOUNDS.crack, mount, { Volume = CONFIG.Volume, PlaybackSpeed = 1.5 }) end
-				loose(mount, Vector3.new(rnd(3), 2, rnd(3)))
-				if sparks then sparks:Emit(20) end
-			end
-			cf = hinge * CFrame.Angles(0, 0, swing(s - 0.5)) * held
+		if s < dangle then
+			cf = hanging(s)
 			if sparks and os.clock() >= sparkAt then
 				sparkAt = os.clock() + 0.2 + math.random() * 0.3
 				sparks:Emit(math.random(3, 8))
 			end
-			if not creaked and s > 1.1 then
+			if not creaked and s > 0.7 then
 				creaked = true
 				oneShot(SOUNDS.crack, tvMain, { Volume = CONFIG.Volume * 0.35, PlaybackSpeed = 0.45 })
 			end
+			if not giving and base and s > dangle - 0.45 then -- the plate starts to come off the ceiling
+				giving = true
+				oneShot(SOUNDS.crack, base, { Volume = CONFIG.Volume, PlaybackSpeed = 1.2 })
+				local dust = make("Part", { Name = "CeilingDust", Anchored = true, CanCollide = false, CanQuery = false, CanTouch = false,
+					Transparency = 1, Size = Vector3.new(1, 1, 1), CFrame = CFrame.new(base.Position) }, folder)
+				make("ParticleEmitter", { Texture = SMOKE, Rate = 0, Lifetime = NumberRange.new(1, 2), Speed = NumberRange.new(1, 3),
+					SpreadAngle = Vector2.new(60, 60), Acceleration = Vector3.new(0, -6, 0), EmissionDirection = Enum.NormalId.Bottom,
+					Size = NumberSequence.new(0.6, 2.2), Transparency = NumberSequence.new(0.4, 1), Color = ColorSequence.new(Color3.fromRGB(140, 140, 150)) }, dust):Emit(18)
+				task.delay(3, function() dust:Destroy() end)
+			end
 		else
-			if not fall then -- the other bracket gives
-				local mount = folder:FindFirstChild("Mount2")
-				if mount then oneShot(SOUNDS.crack, mount, { Volume = CONFIG.Volume, PlaybackSpeed = 1.3 }) end
-				loose(mount, Vector3.new(rnd(3), 2, rnd(3)))
-				local from = hinge * CFrame.Angles(0, 0, swing(dangle)) * held
+			if not fall then -- torn out: the TV falls, and the arm with it
+				oneShot(SOUNDS.crack, tvMain, { Volume = CONFIG.Volume, PlaybackSpeed = 0.9 })
+				local from = hanging(dangle)
+				for _, part in ipairs(if arm then arm:GetDescendants() else {}) do
+					if part:IsA("BasePart") then loose(part, inward * 2 + Vector3.new(rnd(3), 1, rnd(3))) end
+				end
+				if base then loose(base, inward * 2 + Vector3.new(rnd(2), 0, rnd(2))) end
 				local below = from.Position + inward * 1.6
 				local floor = floorUnder(below) or (below - Vector3.new(0, 9, 0))
-				local to = Vector3.new(below.X, floor.Y + center.Z + size.Z / 2, below.Z) -- its back on the floor
-				fall = { from = from, to = to, floor = Vector3.new(below.X, floor.Y, below.Z), time = math.sqrt(2 * math.max(from.Y - to.Y, 0.2) / 80) }
+				local to = Vector3.new(below.X, floor.Y + back, below.Z)
+				fall = { from = from, to = to, floor = Vector3.new(below.X, floor.Y, below.Z), time = math.sqrt(2 * math.max(from.Y - to.Y, 0.2) / 120) }
 			end
-			local f = s - 0.5 - dangle
+			local f = s - dangle
 			if f < fall.time then -- falling, turning onto its back
 				local u = f / fall.time
 				local p = fall.from.Position:Lerp(fall.to, u)
-				cf = CFrame.new(p.X, fall.from.Y - 40 * f * f, p.Z) * fall.from.Rotation:Lerp(lying, u * u)
+				cf = CFrame.new(p.X, fall.from.Y - 60 * f * f, p.Z) * fall.from.Rotation:Lerp(lying, u * u)
 			else
 				if not drop.landed then
 					drop.landed = true
@@ -1124,24 +1381,6 @@ local function dropTV(dangle)
 end
 
 do
-	local JOINTS = { root = { "Root", "RootJoint" }, waist = { "Waist" }, neck = { "Neck" }, rS = { "RightShoulder", "Right Shoulder" },
-		rE = { "RightElbow" }, rW = { "RightWrist" }, lS = { "LeftShoulder", "Left Shoulder" }, lE = { "LeftElbow" },
-		rH = { "RightHip", "Right Hip" }, rK = { "RightKnee" }, lH = { "LeftHip", "Left Hip" }, lK = { "LeftKnee" } }
-	local ZERO = { 0, 0, 0 }
-	local function ease(u) return u * u * (3 - 2 * u) end
-	local EASE = { smooth = ease, out = function(u) return 1 - (1 - u) ^ 3 end, ["in"] = function(u) return u ^ 3 end }
-	local function lerpNum(a, b, u) return a + (b - a) * u end
-	local function flatDir(from, to)
-		local d = (to - from) * Vector3.new(1, 0, 1)
-		return if d.Magnitude > 0.01 then d.Unit else Vector3.new(0, 0, -1)
-	end
-	-- The camera stays on this side of any wall
-	local function safe(from, eye)
-		if (eye - from).Magnitude < 0.05 then return eye end
-		local hit = cast(from, eye - from)
-		return if hit then hit.Position + (from - eye).Unit * 0.6 else eye
-	end
-
 	-- Your body, pose by pose. Seconds; degrees in each joint's parent, { pitch, yaw, roll }: pitch > 0 lifts an arm or a leg
 	-- forward (< 0 bows the waist, bends a knee); yaw > 0 turns left; roll > 0 opens the right arm. `aim`: your head up to the TV
 	local GRAB, TOSS, CATCH, TURN, RELEASE = 0.62, 1.15, 1.6, 2.15, 3.195
@@ -1180,28 +1419,11 @@ do
 				lE = { 14, 0, 0 }, rH = { -10, 0, 0 }, rK = { -12, 0, 0 }, lH = { 20, 0, 0 }, lK = { -22, 0, 0 } } },
 		}
 	end
-	local function poseAt(list, t)
-		local a, b = list[#list], list[#list]
-		for i = 2, #list do
-			if list[i].t > t then
-				a, b = list[i - 1], list[i]
-				break
-			end
-		end
-		local u = if b.t > a.t then (EASE[b.ease] or ease)(math.clamp((t - a.t) / (b.t - a.t), 0, 1)) else 1
-		local out = {}
-		for name in pairs(JOINTS) do
-			local p, q = a.pose[name] or ZERO, b.pose[name] or ZERO
-			out[name] = { lerpNum(p[1], q[1], u), lerpNum(p[2], q[2], u), lerpNum(p[3], q[3], u) }
-		end
-		return out
-	end
-
 	-- You walk to it, pick it up, toss it once in the air, turn to the TV, wind up and throw it; it flies spinning in slow
 	-- motion and hits the screen. The camera tells it like a film
 	function throwHammer()
 		local character, _, root = body()
-		if not character or not hammer or not tvMain or state == "broken" then return end
+		if not character or not hammer or not tvMain or state == "broken" or state == "crucified" then return end
 		local wasState = state
 		state = "broken"
 		if hammerPrompt then hammerPrompt.Enabled = false end
@@ -1217,47 +1439,15 @@ do
 		if video then pcall(function() video:Pause() end) video.Visible = false end
 		if picture then picture.Visible = true end
 
-		local camera = workspace.CurrentCamera
+		local film = newFilm(character, root)
 		local up = Vector3.new(0, 1, 0)
 		local startPos = root.Position
-		local saved = { type = camera.CameraType, fov = camera.FieldOfView, cframe = camera.CFrame, anchored = root.Anchored,
-			stopcam = mainGame and mainGame.stopcam }
-		if mainGame then mainGame.stopcam = true end
-		root.Anchored = true
-		camera.CameraType = Enum.CameraType.Scriptable
-
-		-- Black bars, as in a film
-		local bars = make("ScreenGui", { Name = "NoiseCutscene", IgnoreGuiInset = true, DisplayOrder = 99998, ResetOnSpawn = false }, hud)
-		local top = make("Frame", { Size = UDim2.fromScale(1, 0), BackgroundColor3 = Color3.new(0, 0, 0), BorderSizePixel = 0 }, bars)
-		local bottomBar = make("Frame", { AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1), Size = UDim2.fromScale(1, 0),
-			BackgroundColor3 = Color3.new(0, 0, 0), BorderSizePixel = 0 }, bars)
-		for _, bar in ipairs({ top, bottomBar }) do TweenService:Create(bar, TweenInfo.new(0.35), { Size = UDim2.fromScale(1, 0.11) }):Play() end
-
-		-- Your joints, and your legs' lengths to keep your feet on the floor when you bend (R15)
-		local joints = {}
-		for name, names in pairs(JOINTS) do
-			for _, n in ipairs(names) do
-				local m = character:FindFirstChild(n, true)
-				if m and m:IsA("Motor6D") then
-					local q = m.C0.Rotation
-					joints[name] = { motor = m, q = q, qi = q:Inverse() }
-					break
-				end
-			end
-		end
-		local legs = nil
-		if joints.rH and joints.rK then
-			local ankle = character:FindFirstChild("RightAnkle", true)
-			local a = (joints.rK.motor.C0.Position - joints.rH.motor.C1.Position).Magnitude
-			local b = if ankle and ankle:IsA("Motor6D") then (ankle.C0.Position - joints.rK.motor.C1.Position).Magnitude else a
-			legs = function(hip, knee) return a * math.cos(math.rad(hip)) + b * math.cos(math.rad(hip + knee)) - (a + b) end
-		end
-		local hand = character:FindFirstChild("RightHand") or character:FindFirstChild("Right Arm") or root
+		local hand = film.hand
 		local GRIP = CFrame.new(0, if hand.Name == "Right Arm" then -0.9 else -0.2, 0) * CFrame.Angles(-math.pi / 2, 0, 0) * CFrame.new(0, 0.6, 0)
 
 		local hammerAt = hammer.Position
 		local toHammer = flatDir(startPos, hammerAt)
-		local rootPos, face, pose = startPos, toHammer, {}
+		local rootPos, face = startPos, toHammer
 		local standAt = Vector3.new(hammerAt.X, startPos.Y, hammerAt.Z) - toHammer * 2
 		local walk = (standAt - startPos) * Vector3.new(1, 0, 1)
 		if walk:Dot(toHammer) <= 0.05 or cast(startPos, walk) then standAt = startPos end -- already there, or something in the way
@@ -1269,89 +1459,43 @@ do
 		local list = keys(aim)
 		local t0, seq = os.clock(), math.huge
 
-		-- The body: where it stands, where it faces, its pose; written after Roblox's animations, before physics
-		local function bodyAt(now)
+		film.bodyAt = function(now)
 			if now < seq then -- walking to the hammer
 				local u = if approach > 0 then math.clamp((now - t0) / approach, 0, 1) else 1
 				rootPos = startPos:Lerp(standAt, u)
 				local step = math.sin(u * approach * 10) * (1 - u ^ 4)
-				pose = { waist = { -8, 0, 0 }, neck = { -20, 0, 0 }, rH = { 30 * step, 0, 0 }, lH = { -30 * step, 0, 0 },
+				return { waist = { -8, 0, 0 }, neck = { -20, 0, 0 }, rH = { 30 * step, 0, 0 }, lH = { -30 * step, 0, 0 },
 					rK = { -40 * math.max(step, 0), 0, 0 }, lK = { -40 * math.max(-step, 0), 0, 0 }, rS = { -22 * step, 0, 0 },
-					lS = { 22 * step, 0, 0 }, rE = { 15, 0, 0 }, lE = { 15, 0, 0 } }
-				return
+					lS = { 22 * step, 0, 0 }, rE = { 15, 0, 0 }, lE = { 15, 0, 0 } }, rootPos, face
 			end
 			local t = now - seq
-			pose = poseAt(list, t)
 			face = toHammer:Lerp(toTV, ease(math.clamp((t - CATCH) / (TURN - CATCH), 0, 1))).Unit
 			local lunge = ease(math.clamp((t - 3.1) / 0.3, 0, 1)) * 0.9 -- a step into the throw
 			rootPos = if lunge > 0 and not cast(standAt, toTV * 1.4) then standAt + toTV * lunge else standAt
+			return poseAt(list, t), rootPos, face
 		end
-		local writer = on(RunService.PreSimulation or RunService.Stepped, function()
-			bodyAt(os.clock())
-			local dy = if legs and pose.lH then math.max(legs(pose.lH[1], pose.lK[1]), legs(pose.rH[1], pose.rK[1])) else 0
-			for name, j in pairs(joints) do
-				local a = pose[name] or ZERO
-				local r = CFrame.fromEulerAnglesYXZ(math.rad(a[1]), math.rad(a[2]), math.rad(a[3]))
-				if name == "root" then r = CFrame.new(0, dy, 0) * r end
-				j.motor.Transform = j.qi * r * j.q
-			end
-			root.CFrame = CFrame.lookAt(rootPos, rootPos + face)
-		end)
-
-		-- The picture: the camera of the moment, the hammer where it is, the TV's static until it breaks
-		local shot, carry, broken, staticAt = nil, nil, false, 0
-		RunService:BindToRenderStep("NoiseCutscene", Enum.RenderPriority.Last.Value + 2, function(dt)
-			local now = os.clock()
-			for _, d in ipairs(character:GetDescendants()) do -- seen from outside, even in first person
-				if d:IsA("BasePart") or d:IsA("Decal") then d.LocalTransparencyModifier = 0 end
-			end
+		-- The hammer where it is, the TV's static until it breaks
+		local carry, broken, staticAt = nil, false, 0
+		film.every = function(now)
 			if carry then setHammer(carry(now)) end
 			if not broken and picture and now >= staticAt then
 				staticAt = now + 1 / 15
 				sheetFrame(picture, math.random(0, 19))
 			end
-			if shot then
-				local cf, fov = shot(now)
-				cutShake *= math.exp(-6 * (dt or 1 / 60))
-				if cutShake > 0.001 then cf = cf * CFrame.Angles(rnd(cutShake), rnd(cutShake), rnd(cutShake * 0.5)) end
-				camera.CFrame, camera.FieldOfView = cf, fov
-			end
-		end)
-
-		local done = false
-		local function restore()
-			if done then return end
-			done = true
-			restoreCutscene = nil
-			RunService:UnbindFromRenderStep("NoiseCutscene")
-			writer:Disconnect()
-			for _, j in pairs(joints) do j.motor.Transform = CFrame.new() end
-			camera.CameraType = saved.type
-			camera.FieldOfView = saved.fov
-			if mainGame then mainGame.stopcam = saved.stopcam end
-			if root.Parent then root.Anchored = saved.anchored end
-			bars:Destroy()
-			tint.Saturation, tint.Contrast = 0, 0
-			blur.Size = 0
-		end
-		restoreCutscene = restore
-		local function hold(seconds) -- false: the event was stopped meanwhile
-			task.wait(seconds)
-			return alive and not done
 		end
 		local function till(t) -- until that moment of the throw
-			while alive and not done and os.clock() - seq < t do RunService.RenderStepped:Wait() end
-			return alive and not done
+			while alive and not film.done and os.clock() - seq < t do RunService.RenderStepped:Wait() end
+			return alive and not film.done
 		end
 
 		-- 1. Low on the floor beyond the hammer: you come to it, bend down and take it
 		local sideH = toHammer:Cross(up)
-		shot = function(now)
+		film.shot = function(now)
 			local k = math.clamp((now - t0) / (approach + 1), 0, 1)
 			local eye = safe(hammerAt + up * 0.5, hammerAt + toHammer * lerpNum(2.6, 1.9, k) + sideH * 1.7 + up * lerpNum(0.4, 0.7, k))
 			return CFrame.lookAt(eye, hammerAt:Lerp(rootPos + up * 0.5, 0.45)) * CFrame.Angles(0, 0, math.rad(9)), lerpNum(64, 54, k)
 		end
-		if not hold(approach) then return end
+		if not film.hold(approach) then return end
 		seq = os.clock()
 		if not till(GRAB) then return end
 		carry = function() return hand.CFrame * GRIP end
@@ -1360,7 +1504,7 @@ do
 		-- 2. Up, and it goes up in the air, turning once, and back into your hand: the camera goes round you
 		if not till(1.0) then return end
 		local around = os.clock()
-		shot = function(now)
+		film.shot = function(now)
 			local u = ease(math.clamp((now - around) / 0.75, 0, 1))
 			local chest = rootPos + up * 1.6
 			local side = CFrame.fromAxisAngle(up, math.rad(lerpNum(40, 10, u))):VectorToWorldSpace(face)
@@ -1388,7 +1532,7 @@ do
 		local wall = cast(shoulder, -toScreen * 7)
 		local back = if wall then math.max((wall.Position - shoulder).Magnitude - 0.6, 0) else 7
 		local dolly = os.clock()
-		shot = function(now)
+		film.shot = function(now)
 			local u = ease(math.clamp((now - dolly) / 0.85, 0, 1))
 			local distance = base + back * u
 			return CFrame.lookAt(screen.Position - toScreen * distance, screen.Position), 2 * math.deg(math.atan(math.tan(math.rad(30)) * base / distance))
@@ -1398,7 +1542,7 @@ do
 		-- 4. The wind-up, from below; the colours drain
 		if not till(2.6) then return end
 		local hero = os.clock()
-		shot = function(now)
+		film.shot = function(now)
 			local u = math.clamp((now - hero) / 0.5, 0, 1)
 			local eye = safe(standAt + up * 2, standAt + toTV * lerpNum(3.6, 3.2, u) - rightTV * 2.1 + up * 0.35)
 			return CFrame.lookAt(eye, rootPos + up * 2.3 - toTV * 0.2) * CFrame.Angles(0, 0, math.rad(-6)), lerpNum(52, 46, u)
@@ -1407,7 +1551,7 @@ do
 
 		-- 5. The throw, from behind you: a punch, a blur
 		if not till(3.1) then return end
-		shot = function(now)
+		film.shot = function(now)
 			local eye = safe(standAt + up * 2, standAt - toTV * 3.4 + rightTV * 1.2 + up * 2.6)
 			return CFrame.lookAt(eye, screen.Position), lerpNum(50, 76, math.clamp((now - seq - RELEASE) / 0.12, 0, 1))
 		end
@@ -1447,18 +1591,18 @@ do
 			if u < 0.1 then turn = from.Rotation:Lerp(turn, u / 0.1) end
 			return CFrame.new(p) * turn
 		end
-		shot = function(now)
+		film.shot = function(now)
 			local s = math.clamp((now - launched) / duration, 0, 1)
 			local p = hammer.Position
 			local ring = CFrame.fromAxisAngle(dir, math.rad(lerpNum(35, -130, ease(s)))):VectorToWorldSpace(axis * 3.2 + up * 0.5)
 			return CFrame.lookAt(safe(p, p + ring - dir * lerpNum(2.2, 0.8, s)), p + dir * 1.2), lerpNum(64, 44, s)
 		end
-		while alive and not done and os.clock() - launched < duration * 0.86 do RunService.RenderStepped:Wait() end
+		while alive and not film.done and os.clock() - launched < duration * 0.86 do RunService.RenderStepped:Wait() end
 		local tvLook, tvRight = tvMain.CFrame.LookVector, tvMain.CFrame.RightVector
 		local beside = safe(screen.Position + tvLook, screen.Position + tvLook * 4.8 + tvRight * 2.8 - up * 0.9)
-		shot = function() return CFrame.lookAt(beside, screen.Position), 50 end
-		while alive and not done and os.clock() - launched < duration do RunService.RenderStepped:Wait() end
-		if not (alive and not done) then return end
+		film.shot = function() return CFrame.lookAt(beside, screen.Position), 50 end
+		while alive and not film.done and os.clock() - launched < duration do RunService.RenderStepped:Wait() end
+		if not (alive and not film.done) then return end
 		carry = nil
 		setHammer(target)
 		if trail then trail.Enabled = false end
@@ -1470,23 +1614,19 @@ do
 		blueFlash(0.9)
 		kick(0.05)
 		tint.Contrast = 0.45
-		if not hold(0.12) then return end
+		if not film.hold(0.12) then return end
 		TweenService:Create(tint, TweenInfo.new(0.6), { Contrast = 0.2 }):Play()
 		shards(screen.Position + tvLook * 0.4, tvLook, 18)
-		for _, name in ipairs({ "Mount1", "Mount2" }) do
-			local mount = tv:FindFirstChild(name)
-			if mount then mount.Parent = folder end -- they stay on the wall, the TV moves without them
-		end
 		local tvStart = tvMain.Position
 		local drop = dropTV(if noiseOut then 3.2 else 1.8)
 		local hit = os.clock()
-		shot = function(now)
+		film.shot = function(now)
 			local u = ease(math.clamp((now - hit) / 1.1, 0, 1))
 			local p = tvMain.Position
 			local eye = safe(tvStart + tvLook * 1.5, p + tvLook * lerpNum(4.8, 6.6, u) + tvRight * lerpNum(2.8, 3.2, u) - up * lerpNum(0.9, 1.4, u))
 			return CFrame.lookAt(eye, p), lerpNum(50, 58, u)
 		end
-		if not hold(1.1) then return end
+		if not film.hold(1.1) then return end
 
 		-- 8. Noise, if it was out: its own end, before your eyes
 		if noiseOut and noise.model.Parent then
@@ -1495,35 +1635,708 @@ do
 			local toYou = flatDir(spot, rootPos)
 			local side = toYou:Cross(up)
 			fizzle(noise)
-			shot = function(now)
+			film.shot = function(now)
 				local u = ease(math.clamp((now - seen) / 2, 0, 1))
 				local eye = safe(spot, spot + toYou * lerpNum(6.5, 5, u) + side * 1.4 + up * 0.5)
 				return CFrame.lookAt(eye, spot) * CFrame.Angles(math.noise(now * 3, 1) * 0.03, math.noise(now * 3, 2) * 0.03, 0), 55
 			end
-			if not hold(2.1) then return end
+			if not film.hold(2.1) then return end
 		end
 
-		-- 9. The TV, from the floor of the room: it hangs from one bracket, the other gives, it falls and breaks
+		-- 9. The TV, from the floor of the room: it swings on its arm, the arm tears out of the ceiling, it falls and breaks
 		local flatLook = flatDir(Vector3.new(), tvLook)
 		local base9 = tvStart + flatLook * 8 + tvRight * 2.5
 		local ground = floorUnder(base9) or (base9 - Vector3.new(0, 8, 0))
 		local wide = safe(tvStart + flatLook * 1.5, Vector3.new(base9.X, ground.Y + 1.4, base9.Z))
-		shot = function() return CFrame.lookAt(wide, tvMain.Position), 60 end
+		film.shot = function() return CFrame.lookAt(wide, tvMain.Position), 60 end
 		local waited = os.clock()
-		while alive and not done and not drop.landed and os.clock() - waited < 6 do RunService.RenderStepped:Wait() end
-		if not hold(1.3) then return end
+		while alive and not film.done and not drop.landed and os.clock() - waited < 6 do RunService.RenderStepped:Wait() end
+		if not film.hold(1.3) then return end
 
 		-- 10. Back to you
-		local leaving, fov, back10 = camera.CFrame, camera.FieldOfView, os.clock()
-		local home = saved.cframe + (rootPos - startPos)
-		shot = function(now)
-			local u = ease(math.clamp((now - back10) / 0.6, 0, 1))
-			return leaving:Lerp(home, u), lerpNum(fov, saved.fov, u)
+		film.home(rootPos, 0.6)
+	end
+end
+
+---====== THE CRUCIFIX: B-90 torn out of Noise, two crucifixions in one ======---
+
+-- Your crucifix: the mod's own (CrucifixRitual), or two planks when it cannot be loaded
+local function giveCrucifix()
+	if not CONFIG.CrucifixGive then return end
+	for _, holder in ipairs({ LocalPlayer:FindFirstChildOfClass("Backpack"), LocalPlayer.Character }) do
+		for _, item in ipairs(holder and holder:GetChildren() or {}) do
+			if item:IsA("Tool") and item.Name == "Crucifix" then return end -- you have one already
 		end
-		for _, bar in ipairs({ top, bottomBar }) do TweenService:Create(bar, TweenInfo.new(0.5), { Size = UDim2.fromScale(1, 0) }):Play() end
-		TweenService:Create(tint, TweenInfo.new(0.6), { Saturation = 0, Contrast = 0 }):Play()
-		if not hold(0.65) then return end
-		restore()
+	end
+	task.spawn(function()
+		local given = pcall(function()
+			local Ritual = loadstring(game:HttpGet(CONFIG.CrucifixUrl))()
+			assert(Ritual.Give("Guiding", false))
+		end)
+		if given or not alive then return end
+		local wood = Color3.fromRGB(92, 64, 42)
+		local tool = make("Tool", { Name = "Crucifix", CanBeDropped = false, RequiresHandle = true, ToolTip = "Hold it up to Noise",
+			Grip = CFrame.new(0, -0.45, 0) * CFrame.Angles(math.rad(-90), 0, 0) }, nil)
+		local handle = make("Part", { Name = "Handle", Size = Vector3.new(0.22, 1.7, 0.22), Color = wood, Material = Enum.Material.Wood,
+			CanCollide = false, Massless = true }, tool)
+		local bar = make("Part", { Name = "Crossbar", Size = Vector3.new(0.95, 0.22, 0.22), Color = wood, Material = Enum.Material.Wood,
+			CanCollide = false, Massless = true, CFrame = CFrame.new(0, 0.42, 0) }, tool)
+		make("WeldConstraint", { Part0 = handle, Part1 = bar }, handle)
+		tool:SetAttribute("GradishCrucifix", true)
+		tool.Parent = LocalPlayer:FindFirstChildOfClass("Backpack") or LocalPlayer.Character
+	end)
+end
+
+do
+	local CHAIN = "rbxassetid://11517174215" -- the chain of DOORS' crucifix
+	local CRUCIFIX, SLAM, RUMBLE, GLITCH = "rbxassetid://6555668806", "rbxassetid://74149238738530", "rbxassetid://9114219876", "rbxassetid://10237953274"
+	local LIGHT = Color3.fromRGB(137, 208, 255) -- the circle's blue
+	local up = Vector3.new(0, 1, 0)
+	local function clamp01(x) return math.clamp(x, 0, 1) end
+	local function span(t, from, to) return clamp01((t - from) / (to - from)) end
+	local function bezier(a, b, c, d, u)
+		local v = 1 - u
+		return a * (v * v * v) + b * (3 * v * v * u) + c * (3 * v * u * u) + d * (u * u * u)
+	end
+	local function holder(name, at)
+		return make("Part", { Name = name, Anchored = true, CanCollide = false, CanQuery = false, CanTouch = false, Transparency = 1,
+			Size = Vector3.new(0.2, 0.2, 0.2), CFrame = CFrame.new(at) }, folder)
+	end
+	-- A chain of light between two attachments
+	local function chain(a0, a1, width)
+		return make("Beam", { Name = "Chain", Attachment0 = a0, Attachment1 = a1, Texture = CHAIN, TextureMode = Enum.TextureMode.Static,
+			TextureLength = 1, TextureSpeed = -2, Width0 = width or 0.9, Width1 = (width or 0.9) * 0.75, FaceCamera = true, Segments = 10,
+			LightEmission = 1, LightInfluence = 0, Color = ColorSequence.new(LIGHT), Transparency = NumberSequence.new(0) }, a0.Parent)
+	end
+	-- Every emitter's size, times k (they grow out of Noise)
+	local function sizer(model)
+		local list = {}
+		for _, e in ipairs(model:GetDescendants()) do
+			if e:IsA("ParticleEmitter") then table.insert(list, { e = e, size = e.Size }) end
+		end
+		return function(k)
+			for _, item in ipairs(list) do
+				local points = {}
+				for _, p in ipairs(item.size.Keypoints) do table.insert(points, NumberSequenceKeypoint.new(p.Time, p.Value * k, p.Envelope * k)) end
+				item.e.Size = NumberSequence.new(points)
+			end
+		end
+	end
+	-- How see-through a body is: its parts, its static and its outline together
+	local function fade(model, root, alpha)
+		for _, d in ipairs(model:GetDescendants()) do
+			if d:IsA("BasePart") and d ~= root then d.Transparency = alpha
+			elseif d:IsA("Texture") then d.Transparency = alpha
+			elseif d:IsA("Highlight") then d.OutlineTransparency, d.FillTransparency = alpha, math.max(d.FillTransparency, alpha) end
+		end
+	end
+	-- Noise's joints, posed by hand: { [part] = { pitch, yaw, roll } } in degrees, in each joint's parent
+	local function pose(noise, angles)
+		noise.rig.anim = nil
+		for name, a in pairs(angles) do
+			local motor = noise.rig.motors[name]
+			if motor then
+				local q = motor.C0.Rotation
+				motor.Transform = q:Inverse() * CFrame.fromEulerAnglesYXZ(math.rad(a[1]), math.rad(a[2]), math.rad(a[3])) * q
+			end
+		end
+	end
+	local function blend(a, b, u)
+		local out = {}
+		for name, p in pairs(a) do
+			local q = b[name] or { 0, 0, 0 }
+			out[name] = { lerpNum(p[1], q[1], u), lerpNum(p[2], q[2], u), lerpNum(p[3], q[3], u) }
+		end
+		for name, q in pairs(b) do
+			if not out[name] then out[name] = { q[1] * u, q[2] * u, q[3] * u } end
+		end
+		return out
+	end
+	-- Its poses: caught (arms up, recoiling), dragged (reaching for you, legs trailing), crucified (arms wide), torn (arched, as B-90 leaves)
+	local function caught(t)
+		local s = math.sin(t * 31) * 3
+		return { UpperTorso = { 18 + s, 0, 0 }, Head = { 25, s * 2, 0 }, RightUpperArm = { 125, 0, 25 }, RightLowerArm = { 70, 0, 0 },
+			LeftUpperArm = { 125, 0, -25 }, LeftLowerArm = { 70, 0, 0 }, RightUpperLeg = { 15, 0, 0 }, RightLowerLeg = { -25, 0, 0 },
+			LeftUpperLeg = { 5, 0, 0 }, LeftLowerLeg = { -10, 0, 0 } }
+	end
+	local function dragged(t)
+		local claw = math.sin(t * 9)
+		return { LowerTorso = { -28, 0, 0 }, UpperTorso = { -12, 0, 0 }, Head = { 15 + claw * 5, math.sin(t * 13) * 12, 0 },
+			RightUpperArm = { 100 + 28 * claw, 0, 12 }, RightLowerArm = { 20 - 15 * claw, 0, 0 },
+			LeftUpperArm = { 100 - 28 * claw, 0, -12 }, LeftLowerArm = { 20 + 15 * claw, 0, 0 },
+			RightUpperLeg = { -30 + 10 * claw, 0, 0 }, RightLowerLeg = { -40, 0, 0 }, LeftUpperLeg = { -30 - 10 * claw, 0, 0 }, LeftLowerLeg = { -35, 0, 0 } }
+	end
+	local function crucified(t, pain)
+		local j = (pain or 0) * 6
+		return { UpperTorso = { 12 + rnd(j), 0, 0 }, Head = { 22 + 5 * math.sin(t * 3) + rnd(j), rnd(j), 0 },
+			RightUpperArm = { rnd(j), 0, 86 + 4 * math.sin(t * 7) }, RightLowerArm = { 6, 0, 0 },
+			LeftUpperArm = { rnd(j), 0, -86 - 4 * math.sin(t * 7 + 1) }, LeftLowerArm = { 6, 0, 0 },
+			RightUpperLeg = { 0, 0, 8 }, RightLowerLeg = { -8, 0, 0 }, RightFoot = { -30, 0, 0 },
+			LeftUpperLeg = { 0, 0, -8 }, LeftLowerLeg = { -8, 0, 0 }, LeftFoot = { -30, 0, 0 } }
+	end
+	local function torn(t)
+		return { MiddleTorso = { 12, 0, 0 }, UpperTorso = { 30 + rnd(4), 0, 0 }, Head = { 38 + rnd(5), rnd(6), 0 },
+			RightUpperArm = { rnd(4), 0, 112 }, RightLowerArm = { 15, 0, 0 }, LeftUpperArm = { rnd(4), 0, -112 }, LeftLowerArm = { 15, 0, 0 },
+			RightUpperLeg = { 0, 0, 12 }, RightLowerLeg = { -15, 0, 0 }, LeftUpperLeg = { 0, 0, -12 }, LeftLowerLeg = { -15, 0, 0 } }
+	end
+
+	--[[ The circle: the kit's Repentance (its pentagram on the floor, its three turning rings, its curtains of light, six chains
+	     from the first ring up to its Entity). It opens from nothing (k from 0 to 1), its rings turn, it slides on the floor,
+	     and it closes ]]
+	local function newCircle()
+		local source = piece("Repentance")
+		local model
+		if source then
+			model = clean(source:Clone())
+		else -- a plain one: a disc of light, six chains
+			model = make("Model", { Name = "Repentance" }, nil)
+			local pentagram = make("Model", { Name = "Pentagram" }, model)
+			local mark = make("Part", { Name = "Mark", Size = Vector3.new(10, 0.125, 10), Transparency = 1 }, pentagram)
+			make("Beam", { Name = "BeamFlat", Attachment0 = make("Attachment", { Name = "PentagramFlat", Position = Vector3.new(0, 0, -5.1) }, mark),
+				Attachment1 = make("Attachment", { Name = "PentagramFlat", Position = Vector3.new(0, 0, 5.1) }, mark), Width0 = 10.2, Width1 = 10.2,
+				LightEmission = 1, Color = ColorSequence.new(LIGHT), Transparency = NumberSequence.new(0.5) }, pentagram)
+			local ringPart = make("Part", { Name = "RingAddon", Size = Vector3.new(10, 0.125, 10), Transparency = 1 }, pentagram)
+			local entity = make("Part", { Name = "Entity", Size = Vector3.new(1, 1, 1), Transparency = 1, CFrame = CFrame.new(0, 7, 0) }, model)
+			local finish = make("Attachment", { Name = "ChainEnd", Position = Vector3.new(0, 3, 0) }, entity)
+			for i = 1, 6 do
+				local a = i / 6 * math.pi * 2
+				make("Beam", { Name = "BeamChain", Attachment0 = make("Attachment", { Name = "ChainOrigin", Position = Vector3.new(math.cos(a) * 4.3, 0, math.sin(a) * 4.3) }, ringPart),
+					Attachment1 = finish, Texture = CHAIN, Width0 = 1, Width1 = 0.75, FaceCamera = true, LightEmission = 1, Color = ColorSequence.new(LIGHT),
+					TextureMode = Enum.TextureMode.Static, TextureSpeed = -2 }, pentagram)
+			end
+			clean(model)
+		end
+		for _, d in ipairs(model:GetDescendants()) do
+			if d:IsA("Constraint") then d:Destroy() end -- its rings turn by script, not by physics
+		end
+		local pentagram = model:FindFirstChild("Pentagram") or model
+		local mark = pentagram:FindFirstChild("Mark") or pentagram:FindFirstChild("Base") or pentagram:FindFirstChildWhichIsA("BasePart")
+		local entity = model:FindFirstChild("Entity")
+		local finish = entity and entity:FindFirstChild("ChainEnd")
+		local origin = CFrame.new(mark.Position)
+		local circle = { model = model, parts = {}, attachments = {}, beams = {}, lights = {}, spin = 0, speed = 1 }
+		local turns = { 1, -1, 0.25 }
+		for _, p in ipairs(pentagram:GetChildren()) do
+			if p:IsA("BasePart") then
+				local turn = 0
+				if p.Name == "RingAddon" then turn = table.remove(turns, 1) or 0.5 end
+				table.insert(circle.parts, { part = p, rel = origin:ToObjectSpace(p.CFrame), turn = turn })
+			end
+		end
+		for _, d in ipairs(pentagram:GetDescendants()) do
+			if d:IsA("Attachment") then table.insert(circle.attachments, { a = d, at = d.Position })
+			elseif d:IsA("Beam") then table.insert(circle.beams, { b = d, w0 = d.Width0, w1 = d.Width1, c0 = d.CurveSize0, c1 = d.CurveSize1, chain = d.Name == "BeamChain" })
+			elseif d:IsA("Light") then table.insert(circle.lights, { l = d, brightness = d.Brightness }) end
+		end
+		-- At a point on the floor, k open; its chains reach `hold` (where they hold the body)
+		function circle.place(at, k, dt, hold)
+			circle.spin += (dt or 0) * circle.speed
+			local base = CFrame.new(at + Vector3.new(0, 0.06, 0))
+			for _, item in ipairs(circle.parts) do
+				item.part.CFrame = base * CFrame.Angles(0, item.turn * circle.spin, 0) * item.rel
+			end
+			for _, item in ipairs(circle.attachments) do
+				item.a.Position = Vector3.new(item.at.X * k, item.at.Y, item.at.Z * k)
+			end
+			for _, item in ipairs(circle.beams) do
+				if not item.chain then
+					item.b.Width0, item.b.Width1 = item.w0 * k, item.w1 * k
+					item.b.CurveSize0, item.b.CurveSize1 = item.c0 * k, item.c1 * k
+				end
+				item.b.Enabled = k > 0.02
+			end
+			for _, item in ipairs(circle.lights) do item.l.Brightness = item.brightness * k end
+			if entity and hold then entity.CFrame = CFrame.new(hold - (if finish then finish.Position else Vector3.new())) end
+		end
+		function circle.burst(count)
+			for _, e in ipairs(model:GetDescendants()) do
+				if e:IsA("ParticleEmitter") then e:Emit(count) end
+			end
+		end
+		model.Name = "NoiseCircle"
+		model.Parent = folder
+		return circle
+	end
+
+	-- The rift in the air above both, where the crucifix shines: the kit's Rift (its spark, its music), chains down to both
+	local function newRift(at)
+		local source = piece("Rift")
+		local model = if source then clean(source:Clone()) else make("Model", { Name = "Rift" }, nil)
+		for _, d in ipairs(model:GetDescendants()) do
+			if d:IsA("Constraint") or (d:IsA("BasePart") and (d.Name == "RingAddon" or d.Name == "Entity")) then d:Destroy() end
+		end
+		local center = model:FindFirstChild("Center")
+		if not center then
+			center = make("Part", { Name = "Center", Size = Vector3.new(1, 1, 1), Transparency = 1, Anchored = true, CanCollide = false, CanQuery = false }, model)
+			make("ParticleEmitter", { Name = "Core", Rate = 40, Lifetime = NumberRange.new(0.3, 0.6), Speed = NumberRange.new(0, 1), LightEmission = 1,
+				Size = NumberSequence.new(1.6, 0), Color = ColorSequence.new(LIGHT) }, make("Attachment", { Name = "ParticlesIn" }, center))
+		end
+		local rel = {}
+		for _, p in ipairs(model:GetDescendants()) do
+			if p:IsA("BasePart") then rel[p] = { cf = center.CFrame:ToObjectSpace(p.CFrame), size = p.Size } end
+		end
+		local chains = {}
+		for _, b in ipairs(model:GetChildren()) do
+			if b:IsA("Beam") then table.insert(chains, b) end
+		end
+		local music = center:FindFirstChild("Music", true)
+		local rift = { model = model, center = center, chains = chains, music = music }
+		function rift.place(position, k)
+			local base = CFrame.new(position)
+			for p, r in pairs(rel) do
+				p.CFrame = base * r.cf
+				if p ~= center then p.Size = r.size * math.max(k, 0.01) end
+			end
+		end
+		-- Its chains: half to one body, half to the other
+		function rift.bind(a, b)
+			for i = 1, 6 do
+				local beam = chains[i]
+				local from = make("Attachment", { Name = "RiftChain", Position = Vector3.new(rnd(0.4), rnd(0.3), rnd(0.4)) }, center)
+				if beam then
+					beam.Attachment0, beam.Attachment1 = from, if i <= 3 then a else b
+				else
+					beam = chain(from, if i <= 3 then a else b, 0.8)
+					table.insert(chains, beam)
+				end
+				beam.Enabled = true
+			end
+		end
+		function rift.emit(on)
+			for _, e in ipairs(model:GetDescendants()) do
+				if e:IsA("ParticleEmitter") and e.Name ~= "Explosion" then e.Enabled = on end
+			end
+		end
+		rift.emit(false)
+		for _, beam in ipairs(chains) do beam.Enabled = false end
+		model.Name = "NoiseRift"
+		rift.place(at, 0.01)
+		model.Parent = folder
+		return rift
+	end
+
+	-- B-90: the kit's face that does not stop (its face, its angry face, its STOP, its glitch)
+	local function newB90()
+		local source = piece("B90Moving")
+		local model
+		if source then
+			model = clean(source:Clone())
+		else
+			model = make("Model", { Name = "B90Moving" }, nil)
+			local core = make("Part", { Name = "A90New", Size = Vector3.new(6, 6, 6), Transparency = 1 }, model)
+			local holderAt = make("Attachment", { Name = "Attachment" }, core)
+			make("ParticleEmitter", { Name = "Face", Texture = "rbxassetid://11924478218", Rate = 30, Lifetime = NumberRange.new(0.2), LockedToPart = true,
+				Size = NumberSequence.new(3), Color = ColorSequence.new(Color3.new(0, 0, 0)), Speed = NumberRange.new(0.5) }, holderAt)
+			make("ParticleEmitter", { Name = "FaceAngry", Texture = "rbxassetid://11924266902", Rate = 30, Lifetime = NumberRange.new(0.2), LockedToPart = true,
+				Size = NumberSequence.new(5), Color = ColorSequence.new(Color3.fromRGB(35, 138, 255)), Speed = NumberRange.new(0.5), ZOffset = 2 }, holderAt)
+			make("ParticleEmitter", { Name = "StopIcon", Texture = "rbxassetid://12246141362", Enabled = false, Rate = 30, Lifetime = NumberRange.new(0.2),
+				LockedToPart = true, Size = NumberSequence.new(3), Color = ColorSequence.new(Color3.fromRGB(0, 0, 255)), ZOffset = 1 }, holderAt)
+			clean(model)
+		end
+		local core = model:FindFirstChild("A90New") or model:FindFirstChildWhichIsA("BasePart")
+		model.PrimaryPart = core
+		local rel = {}
+		for _, p in ipairs(model:GetDescendants()) do
+			if p:IsA("BasePart") then rel[p] = core.CFrame:ToObjectSpace(p.CFrame) end
+		end
+		local b90 = { model = model, core = core, grow = sizer(model) }
+		function b90.place(position)
+			for p, r in pairs(rel) do p.CFrame = CFrame.new(position) * r end
+		end
+		function b90.emitter(name, on, burst)
+			for _, e in ipairs(model:GetDescendants()) do
+				if e:IsA("ParticleEmitter") and e.Name == name then
+					if on ~= nil then e.Enabled = on end
+					if burst then e:Emit(burst) end
+				end
+			end
+		end
+		model.Name = "B90"
+		return b90
+	end
+
+	-- The crucifix in the air: a copy of the one in your hand (yours is used up), glowing
+	local function floating(tool, hand)
+		local model = make("Model", { Name = "NoiseCrucifix" }, nil)
+		pcall(function()
+			tool.Archivable = true
+			for _, d in ipairs(tool:GetDescendants()) do pcall(function() d.Archivable = true end) end
+			local copy = tool:Clone()
+			for _, child in ipairs(copy:GetChildren()) do child.Parent = model end
+			copy:Destroy()
+		end)
+		for _, d in ipairs(model:GetDescendants()) do
+			if d:IsA("Sound") or d:IsA("TouchTransmitter") then d:Destroy() end
+		end
+		clean(model)
+		local core = model:FindFirstChild("Handle") or model:FindFirstChildWhichIsA("BasePart", true)
+		if not core then
+			core = make("Part", { Name = "Handle", Size = Vector3.new(0.22, 1.7, 0.22), Color = Color3.fromRGB(92, 64, 42), Material = Enum.Material.Wood,
+				CFrame = hand.CFrame, Anchored = true, CanCollide = false, CanQuery = false }, model)
+			make("Part", { Name = "Crossbar", Size = Vector3.new(0.95, 0.22, 0.22), Color = Color3.fromRGB(92, 64, 42), Material = Enum.Material.Wood,
+				CFrame = hand.CFrame * CFrame.new(0, 0.42, 0), Anchored = true, CanCollide = false, CanQuery = false }, model)
+		end
+		model.PrimaryPart = core
+		make("PointLight", { Color = LIGHT, Brightness = 3, Range = 14 }, core)
+		make("Highlight", { FillColor = LIGHT, OutlineColor = Color3.new(1, 1, 1), FillTransparency = 0.4, OutlineTransparency = 0.2 }, model)
+		make("ParticleEmitter", { Name = "Shine", Rate = 25, Lifetime = NumberRange.new(0.4, 0.9), Speed = NumberRange.new(0.5, 2), LightEmission = 1,
+			Size = NumberSequence.new(0.35, 0), Color = ColorSequence.new(LIGHT), SpreadAngle = Vector2.new(180, 180) }, core)
+		local chainFrom = make("Attachment", { Name = "ChainFrom", Position = Vector3.new(0, 0.42, 0) }, core)
+		model.Parent = folder
+		if tool:GetAttribute("GradishCrucifix") then tool:Destroy() end -- ours is used up; the game's own stays the game's
+		return model, core, chainFrom
+	end
+
+	-- Hold up a crucifix to it: a chain from the crucifix catches it and drags it back to its TV; the circle opens under it; B-90
+	-- is torn out of it and the circle divides in two; each is crucified in its own circle, chained to the crucifix's rift above
+	function crucify(noise, tool)
+		local character, _, root = body()
+		if not character or noise.gone then
+			state = "done"
+			return
+		end
+		state = "crucified"
+		shimmer(0)
+		for _, name in ipairs({ "Idle", "EnragedIdle", "FastForward", "Footstep", "EnragedFootstep" }) do
+			local s = noise:sound(name)
+			if s then s:Stop() end
+		end
+		noise:emitter("PauseIcon", true)
+		noise:emitter("FFIcon", false)
+		local pause = noise:sound("Pause")
+		if pause then pause:Play() end
+		pose(noise, caught(0))
+		oneShot(CRUCIFIX, root, { Volume = CONFIG.Volume * 1.5 })
+
+		local film = newFilm(character, root)
+		local hand = film.hand
+		local me = root.Position
+		local P0 = noise.root.Position
+		local floor0 = floorUnder(P0 + up) or (P0 - Vector3.new(0, noise.hip, 0))
+		local h = P0.Y - floor0.Y -- how high its root stands
+		-- Where it is dragged: under its TV when the way there is clear, else back, away from you
+		local dragTo = nil
+		if screen and screen.Parent then
+			local under = floorUnder(screen.Position + flatDir(Vector3.new(), screen.CFrame.LookVector) * 3)
+			if under and ((under - floor0) * Vector3.new(1, 0, 1)).Magnitude < 30 and not cast(floor0 + up * 2, under - floor0) then dragTo = under end
+		end
+		if not dragTo then
+			local away = flatDir(me, P0)
+			local wall = cast(floor0 + up * 2, away * 10)
+			local room = if wall then math.max((wall.Position - (floor0 + up * 2)).Magnitude - 2, 0) else 8
+			dragTo = floor0 + away * math.min(room, 8)
+		end
+		-- The second circle: to the side with the most room
+		local toThem = flatDir(me, dragTo)
+		local best, bestRoom = toThem:Cross(up), -1
+		for _, dir in ipairs({ toThem:Cross(up), -toThem:Cross(up), toThem }) do
+			local wall = cast(dragTo + up * 2, dir * 10)
+			local room = if wall then (wall.Position - (dragTo + up * 2)).Magnitude else 10
+			if room > bestRoom then best, bestRoom = dir, room end
+		end
+		local C1 = dragTo
+		local C2guess = C1 + best * math.clamp(bestRoom - 1.5, 4, 8.5)
+		local C2 = Vector3.new(C2guess.X, (floorUnder(C2guess + up * 3) or C2guess).Y, C2guess.Z)
+		local mid = (C1 + C2) * 0.5
+		local ceiling = cast(mid + up * 2, up * 20)
+		local R = Vector3.new(mid.X, if ceiling then math.min(mid.Y + 8.5, ceiling.Position.Y - 1.5) else mid.Y + 8.5, mid.Z)
+		local lift = 1.6
+		local toMe = flatDir(mid, me)
+		local side = toMe:Cross(up)
+
+		-- The pieces
+		local white = makeNoise(if piece("NoiseModel(WithoutB-90)") then "NoiseModel(WithoutB-90)" else nil)
+		white.model.Name = "NoiseWhite"
+		for _, d in ipairs(white.model:GetDescendants()) do
+			if d:IsA("Texture") then d.Color3 = Color3.new(0, 0, 0) -- its static black on white
+			elseif d:IsA("ParticleEmitter") then d.Enabled = false
+			elseif d:IsA("BasePart") and not piece("NoiseModel(WithoutB-90)") and d ~= white.root then d.Color = Color3.fromRGB(205, 205, 205) end
+		end
+		fade(white.model, white.root, 1)
+		local b90 = newB90()
+		b90.grow(0.05)
+		b90.place(P0)
+		local circles = { newCircle(), nil }
+		circles[1].place(dragTo, 0, 0, nil)
+		local rift = newRift(R)
+		local cross, crossCore, chainFrom = floating(tool, hand)
+		local whiteChest = holder("WhiteChest", P0 + up * 1.5)
+		local b90Point = holder("B90Point", P0 + up * 1.5)
+		local whiteHit = make("Attachment", { Name = "Hit" }, whiteChest)
+		local b90Hit = make("Attachment", { Name = "Hit" }, b90Point)
+		local tips = {}
+		local drags = {}
+		for i = 1, 3 do -- the crucifix's chains: their tips fly from the crucifix to it
+			local tip = holder("ChainTip", crossCore.Position)
+			tips[i] = { part = tip, a = make("Attachment", { Name = "Tip" }, tip), offset = Vector3.new(rnd(0.5), rnd(0.6), rnd(0.5)), at = 0.9 + (i - 1) * 0.22 }
+			drags[i] = chain(chainFrom, tips[i].a, 0.85)
+			drags[i].Enabled = false
+		end
+		local tendrils = {}
+		for i = 1, 3 do -- what still ties B-90 to the body as it leaves
+			local a0 = make("Attachment", { Name = "Tendril", Position = Vector3.new(rnd(0.4), rnd(0.8), 0) }, whiteChest)
+			local a1 = make("Attachment", { Name = "Tendril", Position = Vector3.new(rnd(0.4), rnd(0.8), 0) }, b90Point)
+			tendrils[i] = make("Beam", { Name = "Tendril", Attachment0 = a0, Attachment1 = a1, Width0 = 0.5, Width1 = 0.5, Segments = 12,
+				CurveSize0 = rnd(2), CurveSize1 = rnd(2), FaceCamera = true, LightEmission = 1, Enabled = false, Texture = "rbxassetid://80974595029690",
+				TextureSpeed = 3, Color = ColorSequence.new(Color3.fromRGB(36, 16, 255), LIGHT), Transparency = NumberSequence.new(0.2) }, whiteChest)
+		end
+
+		-- The whole thing is a function of time: everything is placed every frame from t
+		local t0, last = os.clock(), os.clock()
+		local done = {}
+		local function once(name) if done[name] then return false end done[name] = true return true end
+		local yank = 0 -- where along the drag it is
+		local function dragAt(t) -- three pulls: quick, then a pause
+			local total = 0
+			for i = 0, 2 do total += ease(span(t, 1.9 + i * 0.8, 2.25 + i * 0.8)) / 3 end
+			return total
+		end
+		local pain, jolt = 0, 0
+		local noisePos, b90Pos = P0, P0 + up * 1.5
+		local camEye = nil
+
+		film.bodyAt = function(now)
+			local t = now - t0
+			local raise = ease(span(t, 0, 0.5))
+			local pull = 0
+			for i = 0, 2 do pull = math.max(pull, math.sin(math.pi * span(t, 1.9 + i * 0.8, 2.3 + i * 0.8))) end
+			local away = ease(span(t, 4.3, 5.2))
+			local rest = ease(span(t, 5.2, 6.6))
+			local look = math.deg(math.atan2((noisePos.Y + 1) - (me.Y + 1.5), math.max(((noisePos - me) * Vector3.new(1, 0, 1)).Magnitude, 1)))
+			local rS = lerpNum(lerpNum(0, 100, raise) - 22 * pull, 150, away)
+			rS = lerpNum(rS, 18, rest)
+			return { rS = { rS + math.sin(now * 23) * 1.5 * raise * (1 - rest), 0, 8 }, rE = { lerpNum(10 + 55 * pull, 12, rest), 0, 0 },
+				waist = { 6 * pull - 4 * rest, 0, 0 }, neck = { math.clamp(look, -20, 45), 0, 0 }, lS = { 8 * rest, 0, -6 },
+				rH = { -8 * pull, 0, 0 }, lH = { 10 * pull, 0, 0 }, lK = { -12 * pull, 0, 0 } }, me, flatDir(me, if t < 5.6 then noisePos else mid)
+		end
+
+		local function chestOf(position) return position + up * 1.2 end
+		film.shot = function(now)
+			local t = now - t0
+			local eye, look, fov
+			if t < 0.9 then -- over your shoulder, the crucifix up
+				local face = flatDir(me, P0)
+				eye = safe(me + up * 2, me + up * 2.3 + face:Cross(up) * 1.4 - face * 2.6)
+				look, fov = chestOf(noisePos), lerpNum(58, 52, ease(span(t, 0, 0.9)))
+			elseif t < 1.9 then -- from the side, along the chain
+				local m = (me + P0) * 0.5
+				local face = flatDir(me, P0)
+				eye = safe(m + up * 1.5, m + face:Cross(up) * 7 + up * 1.4)
+				look, fov = hand.Position:Lerp(chestOf(noisePos), 0.6), 55
+			elseif t < 4.3 then -- low beside it as it is dragged
+				local dir = flatDir(P0, C1)
+				local want = chestOf(noisePos) + dir:Cross(up) * 5.5 - up * 0.6 + dir * 2.5
+				camEye = if camEye then camEye:Lerp(want, 0.12) else want
+				eye, look, fov = safe(chestOf(noisePos), camEye), chestOf(noisePos), 60
+			elseif t < 5.6 then -- the circle opens: low, in front
+				eye = safe(C1 + up * 2, C1 + toMe * 7.5 + up * 0.8 + side * 1.5)
+				look, fov = C1 + up * (h + lift + 1), lerpNum(66, 60, span(t, 4.3, 5.6))
+			elseif t < 8.6 then -- B-90 torn out: one slow move back, until both fit
+				local u = smoother(span(t, 5.6, 8.6))
+				local from = safe(C1 + up * 2, C1 + toMe * 7.5 + up * 0.8 + side * 1.5)
+				local to = safe(mid + up * 3, mid + toMe * 13 + up * 4.5)
+				eye = from:Lerp(to, u)
+				look, fov = (C1 + up * (h + lift + 1)):Lerp(mid + up * 3.5, u), lerpNum(60, 58, u)
+			elseif t < 9.6 then -- close on B-90
+				local toward = flatDir(b90Pos, me)
+				eye = safe(b90Pos, b90Pos + toward * 5 + up * 0.3 + toward:Cross(up) * 1.2)
+				look, fov = b90Pos, 50
+			elseif t < 10.6 then -- close on Noise
+				local c = chestOf(noisePos)
+				local toward = flatDir(c, me)
+				eye = safe(c, c + toward * 5.5 + up * 0.5 - toward:Cross(up) * 1.2)
+				look, fov = c, 50
+			else -- both, the end
+				eye = safe(mid + up * 3, mid + toMe * 13 + up * (4.5 + 1.5 * ease(span(t, 10.6, 12.4))))
+				look, fov = mid + up * 3.5, 60
+			end
+			if t >= 8.6 and t < 10.6 then -- by hand
+				look += Vector3.new(math.noise(now * 2, 1), math.noise(now * 2, 2), math.noise(now * 2, 3)) * 0.15
+			end
+			return CFrame.lookAt(eye, look), fov
+		end
+
+		TweenService:Create(tint, TweenInfo.new(1.2), { TintColor = Color3.fromRGB(215, 230, 255), Contrast = 0.15, Saturation = -0.2 }):Play()
+		local splitDir = flatDir(C1, C2) -- B-90 leaves toward its own circle
+		local H0 = C1 + up * (h + lift + 1) -- its head, in the circle
+		while alive and not film.done do
+			local now = os.clock()
+			local t, dt = now - t0, now - last
+			last = now
+			if t >= 12.4 then break end
+
+			-- Noise (B-90): caught, dragged, lifted, torn
+			local dragged01 = dragAt(t)
+			local ground = P0:Lerp(C1 + up * h, dragged01)
+			local liftNow = lift * ease(span(t, 4.4, 5.4)) + math.sin(t * 2) * 0.15 * span(t, 5.4, 6)
+			noisePos = ground + up * liftNow
+			if t < 1.9 then
+				pose(noise, caught(t))
+			elseif t < 4.3 then
+				pose(noise, dragged(t))
+				if dragged01 > yank + 0.3 then -- each pull: dust at its feet, the chain jerks
+					yank = dragged01
+					noise:burst("BlackSmoke", 12)
+					kick(0.025)
+				end
+			else
+				pose(noise, blend(dragged(t), torn(t), ease(span(t, 4.3, 5.6))))
+			end
+
+			-- The split: B-90 leaves along one smooth curve, the circle divides, the body underneath turns white
+			local u = smoother(span(t, 5.6, 8.6))
+			local C2now = C1:Lerp(C2, u)
+			local B90top = C2 + up * (h + lift + 2)
+			b90Pos = if t < 5.6 then chestOf(noisePos) + up * 0.6 else bezier(chestOf(noisePos) + up * 0.6, H0 + splitDir * 1.5 + up * 1.2, B90top + up * 0.8, B90top, u)
+			if t >= 8.6 then -- there, shaking more and more
+				local shaking = span(t, 8.6, 9.4)
+				b90Pos = B90top + Vector3.new(rnd(0.08) * shaking, math.sin((t - 8.6) * 2.3) * 0.2 * shaking - jolt, rnd(0.08) * shaking)
+			end
+			if t >= 5.6 then
+				if once("split") then
+					b90.model.Parent = folder
+					white.model.Parent = folder
+					circles[2] = newCircle()
+					oneShot(GLITCH, b90.core, { Volume = CONFIG.Volume * 1.3 })
+					oneShot(files.scream, b90.core, { Volume = CONFIG.Volume * 1.6, RollOffMinDistance = 60 })
+					for _, name in ipairs({ "Rays_Thin", "Rays_Thick", "Core", "Wave", "HijackFace", "HijackFaceGlitch" }) do noise:emitter(name, false) end
+					for _, tendril in ipairs(tendrils) do tendril.Enabled = true end
+					kick(0.04)
+				end
+				b90.grow(lerpNum(0.15, 1, smoother(math.min(1, u * 1.4))))
+				-- The body B-90 wore goes with it, and fades into it; the one it leaves behind is white
+				local ghost = bezier(noisePos, H0 + splitDir * 1.5, B90top, B90top, u * 0.4) - up * 1.2
+				noise.root.CFrame = CFrame.lookAt(ghost, ghost + toMe)
+				fade(noise.model, noise.root, smoother(clamp01((u - 0.05) / 0.55)))
+				fade(white.model, white.root, 1 - smoother(clamp01((u - 0.1) / 0.5)))
+				local thin = 1 - smoother(clamp01((u - 0.2) / 0.5))
+				for _, tendril in ipairs(tendrils) do
+					tendril.Width0, tendril.Width1 = 0.5 * thin, 0.35 * thin
+					if thin <= 0.01 and tendril.Enabled then tendril.Enabled = false end
+				end
+				if u > 0.7 and once("snap") then -- the last thread between them breaks
+					oneShot(SOUNDS.crack, b90.core, { Volume = CONFIG.Volume * 0.8, PlaybackSpeed = 1.4 })
+					blueFlash(0.35)
+					kick(0.03)
+					for _, d in ipairs(white.model:GetDescendants()) do
+						if d:IsA("ParticleEmitter") and d.Name == "NoiseStatic" then d.Enabled = true end
+					end
+				end
+				pose(white, if t < 8.6 then blend(torn(t), crucified(t, 0.5), u) else crucified(t, pain))
+				pose(noise, torn(t))
+			else
+				noise.root.CFrame = CFrame.lookAt(noisePos, noisePos + flatDir(noisePos, me))
+			end
+			white.root.CFrame = CFrame.lookAt(noisePos - up * jolt, noisePos - up * jolt + toMe)
+			b90.place(b90Pos)
+
+			-- The crucifix: in your hand, then up to the rift above them
+			local crossAt
+			if t < 4.3 then
+				crossAt = hand.CFrame * CFrame.new(0, -0.25, -0.5) * CFrame.Angles(-math.pi / 2, 0, 0)
+			else
+				local f = smoother(span(t, 4.3, 5.4))
+				local from = hand.Position
+				local p = bezier(from, from + up * 3, R + up * 2, R, f)
+				crossAt = CFrame.new(p) * CFrame.Angles(0, t * 2.5 * f, 0)
+			end
+			cross:PivotTo(crossAt)
+			-- Its chains fly, catch it, drag it; then the rift's chains take over
+			whiteChest.CFrame = CFrame.new(chestOf(noisePos) - up * jolt)
+			b90Point.CFrame = CFrame.new(b90Pos)
+			for i, tip in ipairs(tips) do
+				local f = ease(span(t, tip.at, tip.at + 0.35))
+				if f > 0 then drags[i].Enabled = true end
+				tip.part.CFrame = CFrame.new(crossCore.Position:Lerp(chestOf(noisePos) + tip.offset, f))
+				if f >= 1 and once("caught" .. i) then
+					oneShot(SLAM, noise.root, { Volume = CONFIG.Volume * 0.4, PlaybackSpeed = 1.6 })
+					kick(0.02)
+				end
+				drags[i].Transparency = NumberSequence.new(smoother(span(t, 6.2, 7.4)))
+			end
+
+			-- The circles: the first opens under it, the second divides from it and slides under B-90
+			if t >= 4.3 then
+				if once("open") then oneShot(RUMBLE, root, { Volume = CONFIG.Volume * 0.9 }) end
+				local open = EASE.out(span(t, 4.3, 5.3))
+				local close = 1 - ease(span(t, 11.25, 11.85))
+				circles[1].speed = 1 + 4 * span(t, 8.6, 11.2) + 8 * span(t, 11.2, 11.6)
+				circles[1].place(C1, open * close, dt, chestOf(noisePos) - up * jolt)
+				if circles[2] then
+					circles[2].speed = circles[1].speed
+					circles[2].place(C2now, close, dt, b90Pos)
+				end
+			end
+			-- The rift: it opens where the crucifix goes, its chains split between the two
+			if t >= 5.0 then
+				if once("rift") then
+					rift.emit(true)
+					rift.bind(whiteHit, b90Hit)
+					if rift.music then
+						rift.music.Volume = 0
+						rift.music:Play()
+						TweenService:Create(rift.music, TweenInfo.new(2), { Volume = 0.8 * CONFIG.Volume }):Play()
+					end
+				end
+				rift.place(R, ease(span(t, 5.0, 6.0)) * (1 - ease(span(t, 11.2, 11.7))))
+			end
+
+			-- Two crucifixions: three pulls down, together
+			if t >= 8.6 then
+				pain = 0.4 + 0.6 * span(t, 8.6, 11.2)
+				jolt = 0
+				for i, at in ipairs({ 9.0, 9.7, 10.4 }) do
+					jolt = math.max(jolt, 0.6 * math.sin(math.pi * span(t, at, at + 0.35)))
+					if t >= at and once("jolt" .. i) then
+						oneShot(SLAM, root, { Volume = CONFIG.Volume * 0.7, PlaybackSpeed = 0.9 + i * 0.1 })
+						blueFlash(0.25)
+						kick(0.035)
+						b90.emitter("StopIcon", nil, 6)
+						for _, circle in ipairs(circles) do circle.burst(4) end
+					end
+				end
+				b90.emitter("FaceAngry", math.random() < 0.7)
+			end
+
+			-- The end: both are pulled down into their circles, a flash, the circles close
+			if t >= 11.2 then
+				jolt = ease(span(t, 11.2, 11.65)) * 8 -- down into the floor, both
+				if once("slam") then
+					oneShot(SLAM, root, { Volume = CONFIG.Volume * 1.6 })
+					blueFlash(1)
+					kick(0.1)
+					b90.emitter("AttackScreen", nil, 2)
+					for _, e in ipairs(rift.model:GetDescendants()) do
+						if e:IsA("ParticleEmitter") and e.Name == "Explosion" then e:Emit(30) end
+					end
+					if rift.music then TweenService:Create(rift.music, TweenInfo.new(1.2), { Volume = 0 }):Play() end
+					for _, circle in ipairs(circles) do circle.burst(20) end
+					for _, d in ipairs(cross:GetDescendants()) do
+						if d:IsA("BasePart") then TweenService:Create(d, TweenInfo.new(0.5), { Transparency = 1 }):Play() end
+					end
+					for _, beam in ipairs(drags) do beam.Enabled = false end
+					for _, beam in ipairs(rift.chains) do beam.Enabled = false end
+					-- The tape is over: the TV's screen goes dark
+					if picture then picture.Visible = true picture.Image = "" end
+					for _, light in ipairs(screen and screen:GetDescendants() or {}) do
+						if light:IsA("Light") then light.Enabled = false end
+					end
+					if hum then hum:Stop() end
+				end
+				fade(white.model, white.root, ease(span(t, 11.4, 11.8)))
+				b90.grow(math.max(0.01, 1 - ease(span(t, 11.2, 11.6))))
+			end
+			RunService.Heartbeat:Wait()
+		end
+
+		-- Gone, both
+		noise.gone, white.gone = true, true
+		for _, thing in ipairs({ noise.model, white.model, b90.model, rift.model, cross, whiteChest, b90Point }) do thing:Destroy() end
+		for _, circle in ipairs(circles) do circle.model:Destroy() end
+		for _, tip in ipairs(tips) do tip.part:Destroy() end
+		if current == noise then current = nil end
+		state = "done"
+		if alive and not film.done then film.home(root.Position, 0.6) end
 	end
 end
 
@@ -1533,6 +2346,7 @@ local function run()
 	if CONFIG.Time > 0 then task.wait(CONFIG.Time) end
 	local t0 = os.clock()
 	while not filesReady and os.clock() - t0 < 20 do task.wait(0.1) end
+	giveCrucifix()
 	buildTV()
 	if CONFIG.Hammer then
 		hammer = makeHammer()
