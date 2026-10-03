@@ -27,6 +27,7 @@ mod rather than playing it.
 | DOORS optimizer (max graphics, less lag) | `.../DoorsOptimizer` |
 | Hellish Time Ever (K = an entity, spam it) | `.../HellishTimeEver` |
 | Noise: a TV above the door, a blue tape, a hammer, a crucifix | `.../Noise` |
+| Noise 90: every "-90" as a Noise (`_G.Type = "A-90"`, ...), all in one | `.../Noise90` |
 | DOORS' walk, run, crouch and jump in any game | `.../DoorsAnimations` |
 | Universal Custom Assets: animator with Studio controls (Ctrl + U I O) | `.../UniversalAssets` |
 | The same, obfuscated | `.../UniversalAssets.obf` |
@@ -341,6 +342,57 @@ animations (`assets/noise/NoiseKitV2.rbxm`).
   the executor's `Noise` folder. Without the kit a plain TV, Noise and hammer
   stand in. Every setting is at the top of the script (`_G.Noise = { ... }`).
 
+## Noise 90
+
+```lua
+_G.Type = "A-90"     -- which one (below); B-90 if left out
+_G.Setup = "Auto"    -- where its TV is (below)
+_G.Disc = "Look"     -- B-90 only: "Look" or "DontLook"
+loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/Noise90"))()
+```
+
+One script, every "-90" (the entities you must stand still for) as a version of
+Noise. Each starts from a TV; its tape is tinted in its colour, with its face in
+the middle of the picture (where the light is while it loads, and big at the end);
+Noise comes out in its colours, with its face on its head. Only B-90 can be
+crucified. `B-90` here is exactly the `Noise` script (hammer and crucifix included).
+
+| Type | What sets the tape off | What it does |
+|---|---|---|
+| `B-90` | you stare at it (disc "Don't Look": it plays by itself, do not look) | walks your steps; hammer, crucifix |
+| `C-90` | it plays only while you look **away** | walks only while you stand still, stops when you move |
+| `Ransom//90` | you open a drawer | red, Ransom in its tape. Every drawer: it climbs out, comes for you, hits 90, walks backwards into its TV |
+| `A-90` | you come close | green-yellow face, no pupils. 10 rebounds: its face on your screen (freeze, or 90), then it runs the room and back and checks the lockers |
+| `X-90` | you come close | cyan face: 40 rebounds, faster, checks lockers **and** tables |
+| `G-90` | you stare at it | two dark blue eyes and a smile. Out of a paper (checks the tables) or out of a computer (checks the tables, fakes it is gone for 5 s, comes back behind you and checks the lockers) |
+| `Pix-90` | you stare at it | pixels: a choppy tape, a choppy walk on a grid; its pixel face pops up as it walks: freeze |
+| `Trollface-90` | you stare at it | its face on your screen: stop moving, or the Rage Guy face jumps all over it, red and white, 90. Pass: red, white, gone, with A-90's sound |
+| `XTrollface-90` | you come close | inverted, bloodshot, a giggle first, flashes yellow: if you do **not** move, 90 to 100 |
+| `S-90` | you stare at it | three TVs (blue, red, green). A colour is named, written in another colour: choose its TV in time. Wrong: "LEARN THE COLORS OF THE RAINBOW. FOOL." and you are kicked (`Kick = false`: you die) |
+| `XS-90` | you come close | S-90 inverted and angry, red pupils: much less time, but hiding also saves you |
+| `X-60` | you stare at it | its own tape (7.4 s, its name, its face coming closer); then it rushes the room twice: hide |
+
+| Setup | Where the TV is |
+|---|---|
+| `Ceiling` | above the door on its ceiling arm (the hammer only here) |
+| `Table` | on the Archives' wooden table by the far wall |
+| `Cart` | the Stairwell's TV cart with its disc player: the discs (one per type, two for B-90) lie in the room; take one, put it in |
+| `Pedestal` | a pedestal by the far wall, the TV on the floor: pick it up, put it on. The pedestal may give way (`PedestalFall`): the TV falls, cracks, and keeps playing |
+| `Teller` | the Teller's screen (it says NOW SERVING until the tape covers it) |
+| `Computer` | a computer on a table (G-90's) |
+| `Screens` | the room's own screens (the Archives' monitors, the Teller's, the terminals): every one plays the tape, and Noise comes out of them in pieces — a leg from one, an arm from another — that fly together |
+
+`Auto` takes the type's own setups at random, `Screens` in the Archives; with
+any setup, the room's own screens play the tape too. The TV is a little bigger
+or smaller each time (`TVScale`). Every setting is at the top of the script
+(`_G.Noise90 = { ... }`). The props come from `assets/noise/NoiseWorld.rbxm`,
+the faces from `assets/noise/Face_*.png` (drawn for it), the tinted tape from
+`assets/noise/NoiseFramesGray_*.jpg`.
+
+Still to come: X-60's model in its tape (a drawn face stands in), C-90's own
+details (it is the "contrary" one for now), the troll laugh (any sound id in
+`Laugh`; A-90's sound sped up without one).
+
 ## DOORS animations in any game
 
 ```lua
@@ -586,6 +638,8 @@ Over 400 simulated seeds: no spacing violations, about 12 encounters per run.
 | `HellishGradient` | the moving black and white of its modifier row and title |
 | `HTE/` | the models Hellish Time Ever summons |
 | `DoorsAnimations` | DOORS' character animations, recorded in DOORS and played anywhere |
+| `Noise` / `Noise90` | Noise (B-90); every "-90" as a Noise, `_G.Type` |
+| `assets/noise/` | Noise's kit, tape and sheets; Noise 90's props kit, grey sheets and faces |
 | `UniversalAssets` / `.obf` | the animator for DOORS' things and custom assets, readable and obfuscated |
 | `GradishCheck` | the config report |
 | `ImagesA/` | one file per entity saying where its picture comes from |
