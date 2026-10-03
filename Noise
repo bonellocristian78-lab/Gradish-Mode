@@ -48,8 +48,10 @@
         dying you watch, with your own camera: a chain from the crucifix catches it and it
         rewinds back, its walk played backwards; the crucifix flies up above it, the circle
         opens, it rises with its arms wide; B-90 is pulled out of its head along one smooth
-        curve while the circle divides in two, the body it wore turning white; three pulls,
-        both at once, and both go down into their circles. The TV goes dark.
+        curve while the circle divides in two, the body it wore turning white; on their
+        chains both fight (Noise pulls, throws itself back, twists, kicks; B-90 thrashes and
+        lunges at you); three pulls, both at once, and both go down into their circles.
+        The TV goes dark.
 
             _G.CrucifixGive = true
             loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/Noise"))()
@@ -1714,20 +1716,104 @@ do
 			elseif d:IsA("Highlight") then d.OutlineTransparency, d.FillTransparency = alpha, math.max(d.FillTransparency, alpha) end
 		end
 	end
-	-- Its joints, from wherever they are to the kit's rest (arms wide: a T; its joints have no turn of their own), with a slow
-	-- struggle on top: each joint on one axis only, so nothing twists or tilts sideways. X: the head nods, the legs swing;
-	-- Z: the arms rise and fall
-	local STRUGGLE = { Head = { "X", 5 }, UpperTorso = { "X", 2.5 }, RightUpperArm = { "Z", 7 }, LeftUpperArm = { "Z", 7 },
-		RightLowerArm = { "Z", 5 }, LeftLowerArm = { "Z", 5 }, RightUpperLeg = { "X", 3 }, LeftUpperLeg = { "X", 3 } }
-	local function rest(noise, from, u, t, pain)
+	--[[ Its animation on the cross, keyframed on its own joints. The kit's rest is arms wide (a T) and its joints have no turn of
+	     their own, so in degrees { X, Y, Z } in each joint: the right arm rises with Z+ and goes forward with Y+ (the left one the
+	     other way round), elbows bend forward with Y, the head and the spine look up and arch back with X+, a leg goes forward
+	     with X+ and its knee bends with X-, the toes point with X-. Between keyframes everything eases in and out ]]
+	local function mixPose(a, b, w)
+		local out = {}
+		for name, p in pairs(a) do
+			local q = b[name] or ZERO
+			out[name] = { lerpNum(p[1], q[1], w), lerpNum(p[2], q[2], w), lerpNum(p[3], q[3], w) }
+		end
+		for name, q in pairs(b) do
+			if not out[name] then out[name] = { q[1] * w, q[2] * w, q[3] * w } end
+		end
+		return out
+	end
+	-- Its fingers: 1 clawing, 0 open, below 0 spread
+	local function claws(pose, amount)
+		for _, side in ipairs({ { "Right", -1 }, { "Left", 1 } }) do
+			for _, finger in ipairs({ "Finger1", "Finger2", "Finger3" }) do pose[side[1] .. finger] = { 0, 0, 55 * amount * side[2] } end
+			pose[side[1] .. "Thumb"] = { 0, -25 * amount * side[2], 0 }
+		end
+		return pose
+	end
+	-- Hanging from the chains: arms up a little, head down, toes pointing
+	local HANG = claws({ RightUpperArm = { 0, 0, 12 }, LeftUpperArm = { 0, 0, -12 }, RightLowerArm = { 0, 12, 0 }, LeftLowerArm = { 0, -12, 0 },
+		Head = { -18, 0, 0 }, UpperTorso = { -6, 0, 0 }, RightUpperLeg = { 5, 0, 3 }, LeftUpperLeg = { 5, 0, -3 }, RightLowerLeg = { -12, 0, 0 },
+		LeftLowerLeg = { -12, 0, 0 }, RightFoot = { -30, 0, 0 }, LeftFoot = { -30, 0, 0 } }, 0.3)
+	-- The fight: it pulls forward against the chains, throws itself back, twists one way, then the other, kicking
+	local FIGHT = {
+		{ d = 0.55, pose = claws({ RightUpperArm = { 0, 30, 0 }, LeftUpperArm = { 0, -30, 0 }, RightLowerArm = { 0, 45, 0 }, LeftLowerArm = { 0, -45, 0 },
+			Head = { -32, 0, 0 }, UpperTorso = { -16, 0, 0 }, MiddleTorso = { -7, 0, 0 }, RightUpperLeg = { 38, 0, 0 }, RightLowerLeg = { -60, 0, 0 },
+			LeftUpperLeg = { -6, 0, 0 }, LeftLowerLeg = { -15, 0, 0 }, RightFoot = { -20, 0, 0 }, LeftFoot = { -35, 0, 0 } }, 0.9) },
+		{ d = 0.7, pose = claws({ RightUpperArm = { 0, -18, 32 }, LeftUpperArm = { 0, 18, -32 }, RightLowerArm = { 0, 6, 15 }, LeftLowerArm = { 0, -6, -15 },
+			Head = { 38, 0, 0 }, UpperTorso = { 20, 0, 0 }, MiddleTorso = { 8, 0, 0 }, RightUpperLeg = { -10, 0, 0 }, RightLowerLeg = { -10, 0, 0 },
+			LeftUpperLeg = { 32, 0, 0 }, LeftLowerLeg = { -52, 0, 0 }, RightFoot = { -35, 0, 0 }, LeftFoot = { -20, 0, 0 } }, 0.1) },
+		{ d = 0.5, pose = claws({ UpperTorso = { 0, 22, 0 }, MiddleTorso = { 0, 8, 0 }, Head = { 6, -30, 0 }, RightUpperArm = { 0, 26, 6 },
+			LeftUpperArm = { 0, 20, -16 }, RightLowerArm = { 0, 32, 0 }, LeftLowerArm = { 0, -10, 0 }, RightUpperLeg = { 22, 0, 6 },
+			RightLowerLeg = { -38, 0, 0 }, LeftUpperLeg = { 0, 0, -6 }, LeftLowerLeg = { -10, 0, 0 }, RightFoot = { -25, 0, 0 }, LeftFoot = { -30, 0, 0 } }, 1) },
+		{ d = 0.65, pose = claws({ UpperTorso = { 0, -22, 0 }, MiddleTorso = { 0, -8, 0 }, Head = { 6, 30, 0 }, RightUpperArm = { 0, -20, 16 },
+			LeftUpperArm = { 0, -26, -6 }, RightLowerArm = { 0, 10, 0 }, LeftLowerArm = { 0, -32, 0 }, RightUpperLeg = { 0, 0, 6 },
+			RightLowerLeg = { -10, 0, 0 }, LeftUpperLeg = { 22, 0, -6 }, LeftLowerLeg = { -38, 0, 0 }, RightFoot = { -30, 0, 0 }, LeftFoot = { -25, 0, 0 } }, 0.6) },
+	}
+	local FIGHT_LENGTH = 0
+	for _, k in ipairs(FIGHT) do FIGHT_LENGTH += k.d end
+	local function fightAt(t)
+		local x = t % FIGHT_LENGTH
+		for i, k in ipairs(FIGHT) do
+			if x < k.d or i == #FIGHT then return mixPose(k.pose, FIGHT[i % #FIGHT + 1].pose, smoother(math.clamp(x / k.d, 0, 1))) end
+			x -= k.d
+		end
+		return FIGHT[1].pose
+	end
+	-- While B-90 is torn out of its head: thrown back, arms rigid, fingers spread, shaking
+	local TORN = claws({ Head = { 50, 0, 0 }, UpperTorso = { 28, 0, 0 }, MiddleTorso = { 10, 0, 0 }, RightUpperArm = { 0, 0, 25 }, LeftUpperArm = { 0, 0, -25 },
+		RightLowerArm = { 0, 4, 0 }, LeftLowerArm = { 0, -4, 0 }, RightUpperLeg = { -4, 0, 4 }, LeftUpperLeg = { -4, 0, -4 }, RightFoot = { -40, 0, 0 },
+		LeftFoot = { -40, 0, 0 } }, -0.4)
+	-- Emptied: B-90 is out, it hangs limp for a moment
+	local SPENT = claws({ Head = { -42, 0, 0 }, UpperTorso = { -12, 0, 0 }, RightUpperArm = { 0, 0, 6 }, LeftUpperArm = { 0, 0, -6 },
+		RightLowerArm = { 0, 20, 0 }, LeftLowerArm = { 0, -20, 0 }, RightFoot = { -30, 0, 0 }, LeftFoot = { -30, 0, 0 } }, 0.2)
+	-- Each pull yanks it down: arms jerked up, head back, legs stretched
+	local YANKED = claws({ RightUpperArm = { 0, 0, 45 }, LeftUpperArm = { 0, 0, -45 }, Head = { 40, 0, 0 }, UpperTorso = { 18, 0, 0 },
+		RightUpperLeg = { -6, 0, 0 }, LeftUpperLeg = { -6, 0, 0 }, RightFoot = { -45, 0, 0 }, LeftFoot = { -45, 0, 0 } }, -0.2)
+	-- The last one: it reaches up as it goes down
+	local REACH = claws({ RightUpperArm = { 0, 8, 80 }, LeftUpperArm = { 0, -8, -80 }, RightLowerArm = { 0, 0, 10 }, LeftLowerArm = { 0, 0, -10 },
+		Head = { 45, 0, 0 }, UpperTorso = { 15, 0, 0 } }, -0.5)
+	local function shaking(pose, t, amount)
+		local out = {}
+		for name, a in pairs(pose) do
+			local n = math.noise(t * 7, #name * 0.53, 0.25) * amount
+			out[name] = { a[1] + n, a[2], a[3] + n }
+		end
+		return out
+	end
+	local PULLS, LUNGES, SLAM_AT, END_AT = { 6.8, 7.6, 8.4 }, { 7.15, 7.95 }, 9.2, 10.2
+	local function hit(t, at) -- a jolt: up fast, down slower
+		return smoother(span(t, at, at + 0.16)) * (1 - smoother(span(t, at + 0.16, at + 0.65)))
+	end
+	-- Its pose at t, from the start of the crucifixion
+	local function crossPose(t)
+		local fight = smoother(span(t, 5.6, 6.4))
+		local pain = 0.6 + 0.4 * span(t, 6.4, SLAM_AT)
+		local pose = mixPose(HANG, fightAt(t - 5.6), fight * pain)
+		local spent = smoother(span(t, 4.9, 5.3)) * (1 - smoother(span(t, 5.5, 6.2)))
+		if spent > 0 then pose = mixPose(pose, SPENT, spent) end
+		local torn = smoother(span(t, 2.9, 3.4)) * (1 - smoother(span(t, 4.8, 5.3)))
+		if torn > 0 then pose = mixPose(pose, shaking(TORN, t, 4), torn) end
+		for _, at in ipairs(PULLS) do
+			local w = hit(t, at)
+			if w > 0 then pose = mixPose(pose, YANKED, w) end
+		end
+		local reach = smoother(span(t, SLAM_AT - 0.15, SLAM_AT + 0.15))
+		if reach > 0 then pose = mixPose(pose, REACH, reach) end
+		return pose
+	end
+	local function apply(noise, from, u, pose)
 		for name, motor in pairs(noise.rig.motors) do
-			local s = STRUGGLE[name]
-			local wobble = CFrame.new()
-			if s then
-				local a = math.rad(math.noise(t * 0.8, #name * 0.73, 0.5) * 2 * s[2] * pain)
-				wobble = if s[1] == "X" then CFrame.Angles(a, 0, 0) else CFrame.Angles(0, 0, a)
-			end
-			motor.Transform = (from[name] or CFrame.new()):Lerp(wobble, u)
+			local a = pose[name] or ZERO
+			motor.Transform = (from[name] or CFrame.new()):Lerp(CFrame.Angles(math.rad(a[1]), math.rad(a[2]), math.rad(a[3])), u)
 		end
 	end
 
@@ -1975,18 +2061,19 @@ do
 		local done = {}
 		local function once(name) if done[name] then return false end done[name] = true return true end
 		local from = nil -- its joints when it stops rewinding
+		local stopUntil, showingStop = 0, false
 		local B90top = C2 + up * (h + lift + 1.6)
 		while alive do
 			local now = os.clock()
 			local t, dt = now - t0, now - last
 			last = now
-			if t >= 9 then break end
+			if t >= END_AT then break end
 
 			-- Where the body is: rewound back, lifted, pulled three times, pulled down
 			local back = smoother(span(t, 0.45, 1.85))
 			local pull = 0
-			for _, at in ipairs({ 6.2, 6.8, 7.4 }) do pull = math.max(pull, 0.5 * math.sin(math.pi * span(t, at, at + 0.4))) end
-			local sink = span(t, 8.0, 8.5) ^ 2 * 7
+			for _, pullAt in ipairs(PULLS) do pull = math.max(pull, 0.6 * hit(t, pullAt)) end
+			local sink = span(t, SLAM_AT, SLAM_AT + 0.5) ^ 2 * 7
 			local at = start:Lerp(C1 + up * h, back) + up * (lift * smoother(span(t, 2.0, 3.0)) - pull - sink)
 			noise.root.CFrame = CFrame.lookAt(at, at + face)
 			local chestAt = at + up * 1.2
@@ -2004,11 +2091,7 @@ do
 				from = {}
 				for name, motor in pairs(noise.rig.motors) do from[name] = motor.Transform end
 			end
-			if from then -- into its rest, arms wide, struggling more and more
-				local u = smoother(span(t, 1.85, 2.8))
-				local pain = 0.35 + 0.65 * span(t, 3, 8)
-				rest(noise, from, u, t, pain)
-			end
+			if from then apply(noise, from, smoother(span(t, 1.85, 2.8)), crossPose(t)) end -- from its rewind into its animation
 
 			-- The crucifix: in your hand, then up above it, then above both
 			local crossAt
@@ -2029,9 +2112,9 @@ do
 			if fly >= 1 and once("caught") then oneShot(SLAM, noise.root, { Volume = CONFIG.Volume * 0.35, PlaybackSpeed = 1.5 }) end
 
 			-- The circle opens under it; at the split a second one divides from it and slides under B-90
-			local open = EASE.out(span(t, 2.0, 2.9)) * (1 - smoother(span(t, 8.05, 8.6)))
+			local open = EASE.out(span(t, 2.0, 2.9)) * (1 - smoother(span(t, SLAM_AT + 0.05, SLAM_AT + 0.6)))
 			if t >= 2.0 and once("open") then oneShot(RUMBLE, root, { Volume = CONFIG.Volume * 0.8 }) end
-			local spin = 1 + 3 * span(t, 6, 8) + 6 * span(t, 8, 8.4)
+			local spin = 1 + 3 * span(t, 6, SLAM_AT) + 6 * span(t, SLAM_AT, SLAM_AT + 0.4)
 			circles[1].speed = spin
 			circles[1].place(C1, open, dt, chestAt)
 
@@ -2044,8 +2127,15 @@ do
 			elseif t < 6.0 then
 				b90At = bezier(headAt, headAt + up * 1.2 + splitDir, B90top + up * 0.6, B90top, u)
 			else
-				local calm = span(t, 6.0, 6.8)
-				b90At = B90top + Vector3.new(math.noise(t, 1, 0), math.noise(t, 2, 0), math.noise(t, 3, 0)) * 0.3 * calm - up * (pull + sink)
+				-- B-90 on its chains: it thrashes, lunges at you and is yanked back
+				local wake = smoother(span(t, 6.0, 6.8))
+				local thrash = Vector3.new(math.noise(t * 2.2, 1, 0), math.noise(t * 2.2, 2, 0) * 0.6, math.noise(t * 2.2, 3, 0)) * 0.8 * wake
+				local lunge = 0
+				for _, lungeAt in ipairs(LUNGES) do
+					lunge = math.max(lunge, smoother(span(t, lungeAt, lungeAt + 0.18)) * (1 - smoother(span(t, lungeAt + 0.18, lungeAt + 0.65))))
+				end
+				b90At = B90top + thrash + flatDir(B90top, root.Position) * 2.4 * lunge - up * (pull + sink)
+				if t < SLAM_AT then b90.grow(1 + 0.12 * math.sin((t - 6) * 6) * wake + 0.35 * lunge) end -- it breathes, and swells as it lunges
 			end
 			if t >= 3.0 then
 				if once("split") then
@@ -2056,7 +2146,7 @@ do
 					oneShot(files.scream, b90.core, { Volume = CONFIG.Volume * 1.3, RollOffMinDistance = 60 })
 					for _, name in ipairs({ "Rays_Thin", "Rays_Thick", "Core", "Wave", "HijackFace", "HijackFaceGlitch" }) do noise:emitter(name, false) end
 				end
-				b90.grow(lerpNum(0.08, 1, smoother(span(t, 3.0, 5.0))))
+				if t < 6.0 then b90.grow(lerpNum(0.08, 1, smoother(span(t, 3.0, 5.0)))) end
 				local change = smoother(span(t, 3.2, 5.2))
 				for _, item in ipairs(paints) do item.part.Color = item.from:Lerp(item.to, change) end
 				noise.glow.FillTransparency = lerpNum(glowFill, 1, change) -- a white body with the kit's black outline
@@ -2067,17 +2157,33 @@ do
 			b90.place(b90At)
 			b90Point.CFrame = CFrame.new(b90At)
 
-			-- Three pulls, both at once
-			for i, pullAt in ipairs({ 6.2, 6.8, 7.4 }) do
+			-- Three pulls, both at once; at each one B-90 shows its STOP
+			for i, pullAt in ipairs(PULLS) do
 				if t >= pullAt and once("pull" .. i) then
 					oneShot(SLAM, root, { Volume = CONFIG.Volume * 0.45, PlaybackSpeed = 0.9 + i * 0.1 })
 					blueFlash(0.15)
-					b90.emitter("StopIcon", nil, 5)
 					for _, circle in ipairs(circles) do circle.burst(3) end
+					stopUntil = t + 0.35
+				end
+			end
+			for i, lungeAt in ipairs(LUNGES) do
+				if t >= lungeAt and once("lunge" .. i) then
+					b90.emitter("FaceAngry", nil, 10)
+					oneShot(GLITCH, b90.core, { Volume = CONFIG.Volume * 0.6, PlaybackSpeed = 1.3 })
+					shake(2)
+				end
+			end
+			if t >= 3.0 then
+				local stopping = t < stopUntil
+				if stopping ~= showingStop then
+					showingStop = stopping
+					b90.emitter("StopIcon", stopping)
+					b90.emitter("Face", not stopping)
+					b90.emitter("FaceAngry", not stopping)
 				end
 			end
 			-- Down into their circles: a flash, the circles close, the TV goes dark
-			if t >= 8.0 then
+			if t >= SLAM_AT then
 				if once("slam") then
 					oneShot(SLAM, root, { Volume = CONFIG.Volume * 1.3 })
 					blueFlash(0.8)
@@ -2093,8 +2199,8 @@ do
 					end
 					if hum then hum:Stop() end
 				end
-				fade(noise.model, noise.root, span(t, 8.0, 8.5))
-				b90.grow(math.max(0.01, 1 - span(t, 8.0, 8.5)))
+				fade(noise.model, noise.root, span(t, SLAM_AT, SLAM_AT + 0.5))
+				b90.grow(math.max(0.01, 1 - span(t, SLAM_AT, SLAM_AT + 0.5)))
 			end
 			RunService.Heartbeat:Wait()
 		end

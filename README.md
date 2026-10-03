@@ -328,8 +328,15 @@ animations (`assets/noise/NoiseKitV2.rbxm`).
      circle divides in two and slides under B-90, and the body it wore turns
      white (the kit's Noise without B-90); the crucifix moves above both, a
      chain down to each;
-  4. three pulls, both at once, B-90 flashing its STOP; then both go down into
-     their circles, a flash, the circles close, the TV goes dark.
+  4. on their chains both fight, each with its own animation. Noise (keyframed
+     on the kit's joints, easing from pose to pose) pulls forward against the
+     chains, throws itself back, twists one way and the other, kicks and
+     claws; while B-90 is torn out of it it is thrown back, rigid and shaking,
+     then hangs limp for a moment before it fights. B-90 thrashes, breathes,
+     and twice lunges at you before its chain yanks it back;
+  5. three pulls, both at once: Noise is jerked down, arms up, B-90 shows its
+     STOP; then both go down into their circles, Noise reaching up, a flash,
+     the circles close, the TV goes dark.
 - The kit and the tape are downloaded once into
   the executor's `Noise` folder. Without the kit a plain TV, Noise and hammer
   stand in. Every setting is at the top of the script (`_G.Noise = { ... }`).
