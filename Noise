@@ -1,0 +1,565 @@
+--[[
+        NOISE -- a TV above the door, a tape, and something blue that follows you
+
+        A TV appears above the door of the room you are in. Look at it for a few
+        seconds: the tape plays. When it ends, Noise comes out of the TV and follows
+        your steps, almost as fast as you (your speed minus 0.1). Stand still and it
+        slows down a little, but it keeps coming. Leave it too far behind and it
+        screams, turns bluer and rushes until it is close again.
+
+        Every setting, with its default. All optional, before the loadstring:
+
+            _G.Noise = {
+                Time = 0,               -- seconds after running before the TV appears
+                LookTime = 3.5,         -- seconds you must look at the TV
+                LookAngle = 14,         -- degrees from the middle of your view
+                LookDistance = 70,      -- studs
+                FollowDoors = true,     -- the TV moves to each new door until you look at it
+                SpeedOffset = -0.1,     -- its speed = yours + this
+                StillSlowdown = 3.5,    -- this much slower while you stand still
+                FarDistance = 70,       -- studs along your path: farther, it screams and rushes
+                CloseDistance = 25,     -- it rushes until it is this close again
+                Rush = 8,               -- rushing speed = yours + this
+                ScreamCooldown = 6,     -- seconds between two screams
+                KillDistance = 4.5,     -- studs
+                ChaseRooms = 3,         -- DOORS: the chase ends after this many new rooms
+                ChaseTime = 90,         -- the chase ends after this many seconds anyway
+                Volume = 1,
+                Model = 78880768516893, -- Noise (a built one if it does not load)
+                TVModel = 91675698813854, -- the TV (a built one if it does not load)
+                VideoFrame = false,     -- true: try Roblox's video player first (webm)
+                Folder = "Noise",       -- where the tape's files are kept
+                AssetsUrl = "...",      -- where they are downloaded from
+            }
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/Noise"))()
+
+        The tape, its sound and its scream are downloaded once into the executor's
+        folder and played from there (getcustomasset): nothing is uploaded, only
+        you see and hear it.
+]]
+
+local CONFIG = {
+	Time = 0,
+	LookTime = 3.5,
+	LookAngle = 14,
+	LookDistance = 70,
+	FollowDoors = true,
+	SpeedOffset = -0.1,
+	StillSlowdown = 3.5,
+	FarDistance = 70,
+	CloseDistance = 25,
+	Rush = 8,
+	ScreamCooldown = 6,
+	KillDistance = 4.5,
+	ChaseRooms = 3,
+	ChaseTime = 90,
+	Volume = 1,
+	Model = 78880768516893,
+	TVModel = 91675698813854,
+	VideoFrame = false,
+	Folder = "Noise",
+	AssetsUrl = "https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/claude/sei-qui-con-noi-ye4k62/assets/noise/",
+}
+local override = _G.Noise
+_G.Noise = nil
+if type(override) == "table" then
+	for k, v in pairs(override) do CONFIG[k] = v end
+end
+
+-- The tape: 179 frames at 15 per second, 12 to a sheet (3 x 4 of 320 x 240)
+local TAPE = { frames = 179, fps = 15, sheets = 15, columns = 3, rows = 4, width = 320, height = 240 }
+local BLUE, DEEP = Color3.fromRGB(60, 120, 255), Color3.fromRGB(10, 40, 210)
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Lighting = game:GetService("Lighting")
+local TweenService = game:GetService("TweenService")
+local LocalPlayer = Players.LocalPlayer
+local hud = if gethui then gethui() else LocalPlayer:WaitForChild("PlayerGui")
+
+if getgenv and type(getgenv().__NoiseCleanup) == "function" then
+	pcall(getgenv().__NoiseCleanup)
+end
+
+local connections, alive = {}, true
+local function on(signal, fn)
+	local c = signal:Connect(fn)
+	table.insert(connections, c)
+	return c
+end
+
+local function make(class, props, parent)
+	local i = Instance.new(class)
+	for k, v in pairs(props) do i[k] = v end
+	i.Parent = parent
+	return i
+end
+
+local folder = make("Folder", { Name = "NoiseEvent" }, workspace)
+
+---====== THE TAPE'S FILES (downloaded once, then read from the executor's folder) ======---
+
+local MAGIC = { jpg = { "\255\216" }, mp3 = { "ID3", "\255\251", "\255\243", "\255\242" }, webm = { "\26\69\223\163" } }
+
+local function valid(name, data)
+	if type(data) ~= "string" or #data < 16 then return false end
+	for _, start in ipairs(MAGIC[name:match("%.(%w+)$")] or {}) do
+		if data:sub(1, #start) == start then return true end
+	end
+	return false
+end
+
+-- A content ID for a file of the tape, or nil (no executor support, no internet)
+local function asset(name)
+	local path = CONFIG.Folder .. "/" .. name
+	pcall(function()
+		if not isfolder(CONFIG.Folder) then makefolder(CONFIG.Folder) end
+		if isfile(path) and valid(name, readfile(path)) then return end
+		local data = game:HttpGet(CONFIG.AssetsUrl .. name)
+		if valid(name, data) then writefile(path, data) end -- an error page is never kept
+	end)
+	local ok, id = pcall(function() return isfile(path) and getcustomasset(path) end)
+	return if ok and type(id) == "string" then id else nil
+end
+
+local files = { sheets = {} }
+local filesReady = false
+task.spawn(function() -- all of it now, so the tape starts at once
+	files.tape, files.scream, files.static = asset("NoiseTape.mp3"), asset("NoiseScream.mp3"), asset("NoiseStatic.mp3")
+	for i = 1, TAPE.sheets do files.sheets[i] = asset(("NoiseFrames_%02d.jpg"):format(i)) end
+	if CONFIG.VideoFrame then files.webm = asset("NoiseTape.webm") end
+	filesReady = true
+end)
+
+local function sound(id, props, parent)
+	if not id then return nil end
+	local s = make("Sound", { SoundId = id, Volume = CONFIG.Volume }, parent)
+	for k, v in pairs(props or {}) do s[k] = v end
+	return s
+end
+
+---====== THE CHARACTER ======---
+
+local function body()
+	local character = LocalPlayer.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	if humanoid and root and humanoid.Health > 0 then return character, humanoid, root end
+	return nil, nil, nil
+end
+
+local frozen = nil
+local function freeze(on)
+	local _, _, root = body()
+	if on and root and not frozen then
+		frozen = { root = root, anchored = root.Anchored }
+		root.Anchored = true
+	elseif not on and frozen then
+		if frozen.root.Parent then frozen.root.Anchored = frozen.anchored end
+		frozen = nil
+	end
+end
+
+-- DOORS: the room you have reached and its way out
+local function latestRoom()
+	local data = game:GetService("ReplicatedStorage"):FindFirstChild("GameData")
+	local latest = data and data:FindFirstChild("LatestRoom")
+	return latest and latest.Value or nil
+end
+
+---====== THE TV ======---
+
+local function stripScripts(model)
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("LuaSourceContainer") then d:Destroy() end
+	end
+end
+
+local function solid(model)
+	for _, p in ipairs(model:GetDescendants()) do
+		if p:IsA("BasePart") then p.Anchored, p.CanCollide, p.CanTouch, p.CanQuery = true, false, false, false end
+	end
+end
+
+-- Roblox's model, or nil
+local function load(id)
+	local ok, objects = pcall(function() return game:GetObjects("rbxassetid://" .. tostring(id)) end)
+	local object = ok and type(objects) == "table" and objects[1]
+	if not object then return nil end
+	if not object:IsA("Model") then
+		local holder = Instance.new("Model")
+		object.Parent = holder
+		object = holder
+	end
+	stripScripts(object)
+	solid(object)
+	return object
+end
+
+-- When the TV does not load: a small dark set with the tape's static on the screen
+local function builtTV()
+	local tv = Instance.new("Model")
+	local box = make("Part", { Name = "Body", Size = Vector3.new(3.4, 2.6, 2), Color = Color3.fromRGB(28, 26, 30), Material = Enum.Material.SmoothPlastic }, tv)
+	local screen = make("Part", { Name = "Screen", Size = Vector3.new(2.8, 2, 0.1), Material = Enum.Material.Neon, Color = DEEP,
+		CFrame = CFrame.new(0, 0.05, -1.02) }, tv)
+	local gui = make("SurfaceGui", { Name = "Static", Face = Enum.NormalId.Front, LightInfluence = 0, CanvasSize = Vector2.new(320, 240) }, screen)
+	make("ImageLabel", { Name = "Picture", Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(0, 0, 0), BorderSizePixel = 0,
+		ImageRectSize = Vector2.new(TAPE.width, TAPE.height) }, gui)
+	make("SurfaceLight", { Face = Enum.NormalId.Front, Color = BLUE, Brightness = 2, Range = 10 }, screen)
+	for i, x in ipairs({ -0.5, 0.5 }) do
+		make("Part", { Name = "Antenna" .. i, Size = Vector3.new(0.08, 1.4, 0.08), Color = Color3.fromRGB(60, 60, 64),
+			CFrame = CFrame.new(x, 1.8, 0.2) * CFrame.Angles(0, 0, math.rad(-x * 50)) }, tv)
+	end
+	tv.PrimaryPart = box
+	solid(tv)
+	return tv
+end
+
+local tv = load(CONFIG.TVModel) or builtTV()
+tv.Name = "NoiseTV"
+local hum = nil -- the TV's static, louder while you look
+
+-- Above the way out of your room, facing into it; elsewhere in front of you
+local function placeTV()
+	local room = workspace:FindFirstChild("CurrentRooms") and workspace.CurrentRooms:FindFirstChild(tostring(latestRoom() or ""))
+	local exit = room and (room:FindFirstChild("RoomExit") or (room:FindFirstChild("Door") and room.Door:FindFirstChild("Door")))
+	local spot
+	if exit and exit:IsA("BasePart") then
+		local inward = exit.CFrame.LookVector
+		local entrance = room:FindFirstChild("RoomEntrance")
+		local inside = if entrance then entrance.Position else room:GetPivot().Position
+		if (inside - exit.Position):Dot(inward) < 0 then inward = -inward end
+		local position = exit.Position + Vector3.new(0, exit.Size.Y / 2 + 1.8, 0) + inward * 0.8
+		spot = CFrame.lookAt(position, position + inward)
+	else
+		local _, _, root = body()
+		if not root then return false end
+		local position = (root.CFrame * CFrame.new(0, 3, -12)).Position
+		spot = CFrame.lookAt(position, root.Position + Vector3.new(0, 3, 0))
+	end
+	tv:PivotTo(spot)
+	tv.Parent = folder
+	return true
+end
+
+---====== THE TAPE ON SCREEN ======---
+
+local function sheetFrame(label, frame)
+	local index = math.clamp(frame, 0, TAPE.frames - 1)
+	local perSheet = TAPE.columns * TAPE.rows
+	local sheet = files.sheets[index // perSheet + 1]
+	local inSheet = index % perSheet
+	if sheet then label.Image = sheet end
+	label.ImageRectOffset = Vector2.new((inSheet % TAPE.columns) * TAPE.width, (inSheet // TAPE.columns) * TAPE.height)
+end
+
+-- The whole tape, full screen, you frozen; returns when it is over
+local function playTape()
+	local t0 = os.clock()
+	while not filesReady and os.clock() - t0 < 8 do task.wait(0.1) end
+	freeze(true)
+	local gui = make("ScreenGui", { Name = "NoiseTape", IgnoreGuiInset = true, DisplayOrder = 100000, ResetOnSpawn = false }, hud)
+	local black = make("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(0, 0, 0), BorderSizePixel = 0 }, gui)
+	local picture = make("ImageLabel", { Name = "Picture", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, ImageRectSize = Vector2.new(TAPE.width, TAPE.height) }, black)
+	make("UIAspectRatioConstraint", { AspectRatio = TAPE.width / TAPE.height }, picture)
+	local length = TAPE.frames / TAPE.fps
+
+	local video = nil
+	if CONFIG.VideoFrame and files.webm then -- Roblox's own player, when the executor can feed it
+		video = make("VideoFrame", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Video = files.webm, Volume = CONFIG.Volume }, picture)
+		local t1 = os.clock()
+		while not video.IsLoaded and os.clock() - t1 < 2 do task.wait(0.05) end
+		if video.IsLoaded then video:Play() else video:Destroy() video = nil end
+	end
+	local audio = nil
+	if not video then
+		pcall(function() game:GetService("ContentProvider"):PreloadAsync({ picture }) end)
+		audio = sound(files.tape, {}, gui)
+		if audio then
+			local t1 = os.clock()
+			while not audio.IsLoaded and os.clock() - t1 < 2 do task.wait(0.05) end
+			audio:Play()
+		end
+	end
+	local start = os.clock()
+	while alive and os.clock() - start < length do
+		if video then
+			-- Roblox plays it
+		elseif files.sheets[1] then
+			sheetFrame(picture, math.floor((os.clock() - start) * TAPE.fps))
+		else -- no frames: a blue flicker in their place
+			black.BackgroundColor3 = Color3.fromHSV(0.62, 0.9, math.random() * 0.5)
+		end
+		RunService.RenderStepped:Wait()
+	end
+	gui:Destroy()
+	freeze(false)
+end
+
+---====== NOISE ======---
+
+-- Red (and the white of its flash) turned blue; "level" makes it bluer
+local function blueOf(color, level)
+	local _, s, v = color:ToHSV()
+	if s < 0.15 and v < 0.85 then return color end -- greys and blacks stay
+	return Color3.fromHSV(0.62 - level * 0.02, math.clamp(math.max(s, 0.6) + level * 0.1, 0, 1), math.max(v, 0.5))
+end
+
+local function sequenceOf(seq, level)
+	local points = {}
+	for _, k in ipairs(seq.Keypoints) do table.insert(points, ColorSequenceKeypoint.new(k.Time, blueOf(k.Value, level))) end
+	return ColorSequence.new(points)
+end
+
+local function paint(model, level)
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("BasePart") then
+			d.Color = blueOf(d.Color, level)
+		elseif d:IsA("Light") then
+			d.Color = blueOf(d.Color, level)
+		elseif d:IsA("ParticleEmitter") or d:IsA("Beam") or d:IsA("Trail") then
+			d.Color = sequenceOf(d.Color, level)
+		elseif d:IsA("Decal") then
+			d.Color3 = blueOf(d.Color3, level)
+		elseif d:IsA("ImageLabel") or d:IsA("ImageButton") then
+			d.ImageColor3 = blueOf(d.ImageColor3, level)
+		end
+	end
+end
+
+-- When Noise does not load: a black shape in blue light, with sparks
+local function builtNoise()
+	local m = Instance.new("Model")
+	local core = make("Part", { Name = "Core", Size = Vector3.new(2.4, 5, 1.2), Color = Color3.new(0, 0, 0), Material = Enum.Material.Neon }, m)
+	make("ParticleEmitter", { Rate = 60, Lifetime = NumberRange.new(0.2, 0.5), Speed = NumberRange.new(2, 6), SpreadAngle = Vector2.new(180, 180),
+		Size = NumberSequence.new(0.25, 0), Color = ColorSequence.new(BLUE), LightEmission = 1 }, core)
+	m.PrimaryPart = core
+	solid(m)
+	return m
+end
+
+local function spawnNoise(at)
+	local model = load(CONFIG.Model) or builtNoise()
+	model.Name = "Noise"
+	paint(model, 0)
+	local box = model:GetBoundingBox()
+	local root = model.PrimaryPart or model:FindFirstChildWhichIsA("BasePart", true)
+	local glow = make("Highlight", { FillColor = DEEP, OutlineColor = BLUE, FillTransparency = 0.55, OutlineTransparency = 0,
+		DepthMode = Enum.HighlightDepthMode.Occluded }, model)
+	local light = make("PointLight", { Color = BLUE, Brightness = 3, Range = 18, Shadows = false }, root)
+	local noise = { model = model, center = model:GetPivot():ToObjectSpace(box), glow = glow, light = light, level = 0 }
+	noise.position = at
+	model:PivotTo(CFrame.new(at) * noise.center:Inverse())
+	model.Parent = folder
+	noise.static = sound(files.static, { Looped = true, Volume = CONFIG.Volume * 0.6, RollOffMaxDistance = 60 }, root)
+	if noise.static then noise.static:Play() end
+	return noise
+end
+
+local function setLevel(noise, rushing)
+	local target = if rushing then 1 else 0
+	if noise.level == target then return end
+	noise.level = target
+	paint(noise.model, target) -- bluer while it rushes
+	noise.glow.FillTransparency = if rushing then 0.2 else 0.55
+	noise.glow.FillColor = if rushing then BLUE else DEEP
+	noise.light.Brightness = if rushing then 8 else 3
+	noise.light.Range = if rushing then 30 else 18
+end
+
+-- Blue static over the screen, thicker as it gets closer
+local overlay = make("ScreenGui", { Name = "NoiseStatic", IgnoreGuiInset = true, DisplayOrder = 99999, ResetOnSpawn = false, Enabled = false }, hud)
+local flash = make("Frame", { Name = "Flash", Size = UDim2.fromScale(1, 1), BackgroundColor3 = BLUE, BackgroundTransparency = 1, BorderSizePixel = 0 }, overlay)
+local dots = {}
+for i = 1, 60 do
+	dots[i] = make("Frame", { Size = UDim2.fromOffset(math.random(2, 7), math.random(2, 4)), BackgroundColor3 = BLUE, BorderSizePixel = 0,
+		BackgroundTransparency = 1 }, overlay)
+end
+local function shimmer(closeness) -- 0 far, 1 on you
+	overlay.Enabled = closeness > 0
+	for _, d in ipairs(dots) do
+		d.Position = UDim2.fromScale(math.random(), math.random())
+		d.BackgroundTransparency = 1 - closeness * math.random(30, 90) / 100
+	end
+end
+local function blueFlash()
+	overlay.Enabled = true
+	flash.BackgroundTransparency = 0.2
+	TweenService:Create(flash, TweenInfo.new(0.8), { BackgroundTransparency = 1 }):Play()
+end
+
+local function scream(noise)
+	local root = noise.model.PrimaryPart or noise.model:FindFirstChildWhichIsA("BasePart", true)
+	-- It screams when you are far: loud up to 80 studs, still loud well beyond
+	local s = sound(files.scream, { Volume = CONFIG.Volume * 2, RollOffMinDistance = 80, RollOffMaxDistance = 600 }, root)
+	if s then
+		s:Play()
+		s.Ended:Connect(function() s:Destroy() end)
+	end
+	blueFlash()
+end
+
+local function despawn(noise)
+	if noise.gone then return end
+	noise.gone = true
+	if noise.static then noise.static:Stop() end
+	TweenService:Create(noise.glow, TweenInfo.new(1.5), { FillTransparency = 1, OutlineTransparency = 1 }):Play()
+	local from = noise.model:GetPivot()
+	local value = make("CFrameValue", { Value = from }, nil)
+	value.Changed:Connect(function(cf) if noise.model.Parent then noise.model:PivotTo(cf) end end)
+	local sink = TweenService:Create(value, TweenInfo.new(2.5, Enum.EasingStyle.Quad, Enum.EasingDirection.In), { Value = from * CFrame.new(0, -60, 0) })
+	sink:Play()
+	sink.Completed:Connect(function()
+		value:Destroy()
+		noise.model:Destroy()
+	end)
+	shimmer(0)
+end
+
+-- It walks your steps: every stud you move is a crumb, and it goes from crumb to crumb
+local function chase(from)
+	local _, _, root = body()
+	if not root then return end
+	local noise = spawnNoise(from)
+	local crumbs, cursor = { root.Position }, 1
+	local started, startRoom = os.clock(), latestRoom()
+	local rushing, lastScream, shimmerAt = false, -math.huge, 0
+
+	local function pathLength(target)
+		local total, last = 0, noise.position
+		for i = cursor, #crumbs do
+			total += (crumbs[i] - last).Magnitude
+			last = crumbs[i]
+		end
+		return total + (target - last).Magnitude
+	end
+
+	while alive and not noise.gone do
+		local dt = RunService.Heartbeat:Wait()
+		local _, humanoid, liveRoot = body()
+		local room = latestRoom()
+		if not liveRoot or liveRoot ~= root or os.clock() - started > CONFIG.ChaseTime
+			or (room and startRoom and room >= startRoom + CONFIG.ChaseRooms) then
+			despawn(noise) -- you died, or got away
+			break
+		end
+		local here = root.Position
+		if (here - crumbs[#crumbs]).Magnitude > 1 then table.insert(crumbs, here) end
+		if cursor > 200 then -- forget the steps it has already walked
+			crumbs = table.move(crumbs, cursor, #crumbs, 1, {})
+			cursor = 1
+		end
+
+		local distance = pathLength(here)
+		if not rushing and distance > CONFIG.FarDistance and os.clock() - lastScream > CONFIG.ScreamCooldown then
+			rushing, lastScream = true, os.clock()
+			scream(noise)
+		elseif rushing and distance < CONFIG.CloseDistance then
+			rushing = false
+		end
+		setLevel(noise, rushing)
+
+		-- As fast as you, a hair slower; slower still while you stand still; faster when it rushes
+		local yours = humanoid.WalkSpeed
+		local moving = humanoid.MoveDirection.Magnitude > 0.1 or (root.AssemblyLinearVelocity * Vector3.new(1, 0, 1)).Magnitude > 1
+		local speed = if rushing then yours + CONFIG.Rush
+			elseif moving then yours + CONFIG.SpeedOffset
+			else yours + CONFIG.SpeedOffset - CONFIG.StillSlowdown
+		local budget = math.max(speed, 1) * dt
+		local facing = nil
+		while budget > 0 do
+			local target = crumbs[cursor] or here
+			local step = target - noise.position
+			if step.Magnitude <= budget then
+				noise.position = target
+				budget -= step.Magnitude
+				if not crumbs[cursor] then break end
+				cursor += 1
+			else
+				noise.position += step.Unit * budget
+				budget = 0
+			end
+			if step.Magnitude > 0.05 then facing = step end
+		end
+		local flat = facing and facing * Vector3.new(1, 0, 1)
+		local turn = if flat and flat.Magnitude > 0.05 then CFrame.lookAt(noise.position, noise.position + flat) else CFrame.new(noise.position)
+		noise.model:PivotTo(turn * noise.center:Inverse())
+
+		if (here - noise.position).Magnitude < CONFIG.KillDistance then
+			if os.clock() - lastScream > 1 then scream(noise) end
+			humanoid.Health = 0
+			task.delay(1.5, despawn, noise)
+			break
+		end
+		if os.clock() >= shimmerAt then -- 20 times a second is plenty for static
+			shimmerAt = os.clock() + 0.05
+			shimmer(math.clamp(1 - distance / 40, 0, 1) * 0.8)
+		end
+	end
+end
+
+---====== LOOKING AT THE TV ======---
+
+local tint = make("ColorCorrectionEffect", { Name = "NoiseTint", TintColor = Color3.new(1, 1, 1), Enabled = true }, Lighting)
+local rayParams = RaycastParams.new()
+rayParams.FilterType = Enum.RaycastFilterType.Exclude
+
+local function lookingAt(part)
+	local camera = workspace.CurrentCamera
+	local to = part.Position - camera.CFrame.Position
+	local distance = to.Magnitude
+	if distance > CONFIG.LookDistance or distance < 0.5 then return false end
+	if camera.CFrame.LookVector:Dot(to.Unit) < math.cos(math.rad(CONFIG.LookAngle)) then return false end
+	rayParams.FilterDescendantsInstances = { tv, LocalPlayer.Character }
+	local hit = workspace:Raycast(camera.CFrame.Position, to, rayParams)
+	return not hit or (hit.Position - camera.CFrame.Position).Magnitude > distance - 1.5
+end
+
+local function run()
+	if CONFIG.Time > 0 then task.wait(CONFIG.Time) end
+	local t0 = os.clock()
+	while not filesReady and os.clock() - t0 < 10 do task.wait(0.1) end
+	while alive and not placeTV() do task.wait(1) end
+	local screenPart = tv:FindFirstChild("Screen", true) or tv.PrimaryPart or tv:FindFirstChildWhichIsA("BasePart", true)
+	local picture = tv:FindFirstChild("Picture", true)
+	hum = sound(files.static, { Looped = true, Volume = 0.15 * CONFIG.Volume, RollOffMaxDistance = 50 }, screenPart)
+	if hum then hum:Play() end
+	local seen, room, frame = 0, latestRoom(), 0
+	while alive do
+		local dt = RunService.RenderStepped:Wait()
+		if CONFIG.FollowDoors and latestRoom() ~= room then -- a new room: the TV is above its door now
+			room = latestRoom()
+			placeTV()
+			seen = 0
+		end
+		if picture and files.sheets[1] then -- the tape's first second, static, over and over
+			frame = (frame + dt * TAPE.fps) % 20
+			sheetFrame(picture, math.floor(frame))
+		end
+		seen = if lookingAt(screenPart) then seen + dt else math.max(seen - dt * 0.5, 0)
+		local p = math.clamp(seen / CONFIG.LookTime, 0, 1)
+		if hum then hum.Volume = (0.15 + p * 0.85) * CONFIG.Volume end
+		tint.TintColor = Color3.new(1 - p * 0.45, 1 - p * 0.3, 1) -- the world turns blue while you stare
+		if seen >= CONFIG.LookTime then break end
+	end
+	if not alive then return end
+	if hum then hum:Stop() end
+	tint.TintColor = Color3.new(1, 1, 1)
+	playTape()
+	if alive then chase((screenPart.CFrame * CFrame.new(0, 0, -1.5)).Position) end
+	if alive then tv:Destroy() end
+end
+
+local cleanup = function()
+	alive = false
+	for _, c in ipairs(connections) do c:Disconnect() end
+	freeze(false)
+	for _, i in ipairs({ folder, overlay, tint }) do i:Destroy() end
+	local tape = hud:FindFirstChild("NoiseTape")
+	if tape then tape:Destroy() end
+end
+if getgenv then getgenv().__NoiseCleanup = cleanup end
+on(LocalPlayer.CharacterAdded, function() freeze(false) end)
+
+task.spawn(run)
