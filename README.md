@@ -64,6 +64,7 @@ mod rather than playing it.
 | Honcho | `.../Honcho.lua` |
 | Honcho V2 | `.../HonchoV2.lua` |
 | J-518 | `.../J-518` |
+| 3rr0rbu2h (Errorbush): a broken Ambush, 5-10 rebounds, two forms | `.../Errorbush` |
 | Crucifixes in drawers | `.../CrucifixSpawner` |
 
 `...` is `https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main`
@@ -485,6 +486,27 @@ the faces from `assets/noise/Wiki_*.png` (the wikis'; G-90's `Face_G90.png`), th
 Still to come: the troll laugh (any sound id in `Laugh`; A-90's sound sped up
 without one). C-90 is on no wiki: it is the "contrary" one for now.
 
+## 3rr0rbu2h (Errorbush)
+
+```lua
+loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/Errorbush"))()
+```
+
+Ambush, broken. It comes through like Ambush and keeps coming back, 5 to 10
+rebounds. At every rebound it glitches into its other form, red and yellow or
+blue: its face, its light, the colour of the rooms and the pitch of its scream
+change with it. The scream is Ambush's own sound, distorted, chopped and
+skipping; between two forms, a glitch and a burst of shards. A faint copy of its
+other face jitters behind the one it has, and now and then flashes over it.
+
+The crucifix stops it with DOORS' own ritual (the blue pentagram and its chains,
+no colour of its own); it uses the crucifix you have. It is only this
+loadstring: it is not in `MainScript`'s schedule or in `GradishDev`.
+
+Its model is `Errorbush.rbxm`; its two faces are `assets/errorbush/Errorbush_Ember.png`
+and `Errorbush_Azure.png`, downloaded once into the executor's folder (`Errorbush/`).
+Until it is on `main`, the script takes them from the branch it is made on.
+
 ## DOORS animations in any game
 
 ```lua
@@ -732,6 +754,8 @@ Over 400 simulated seeds: no spacing violations, about 12 encounters per run.
 | `DoorsAnimations` | DOORS' character animations, recorded in DOORS and played anywhere |
 | `Noise` / `Noise90` | Noise (B-90); every "-90" as a Noise, `_G.Type` |
 | `Noise90All` | every Noise 90, a new one every 10 s (fills the Noise Journal) |
+| `Errorbush` / `Errorbush.rbxm` | 3rr0rbu2h, the broken Ambush; its model |
+| `assets/errorbush/` | 3rr0rbu2h's two faces |
 | `assets/noise/` | Noise's kit, tape and sheets; Noise 90's props kit, grey sheets and faces |
 | `UniversalAssets` / `.obf` | the animator for DOORS' things and custom assets, readable and obfuscated |
 | `GradishCheck` | the config report |

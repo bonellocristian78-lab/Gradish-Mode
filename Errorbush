@@ -1,0 +1,221 @@
+--[[
+================================================================================
+
+        3 R R 0 R B U 2 H        (Errorbush)
+
+        Ambush, broken. It comes through like Ambush and keeps coming back:
+        5 to 10 rebounds. Every rebound it glitches into its other form --
+        red and yellow, or blue -- and its face, its light, the colour of the
+        rooms and the pitch of its scream change with it. The scream is
+        Ambush's own, distorted, chopped and skipping like a broken file.
+
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/Errorbush"))()
+
+        Hide, and stay hidden until it is really gone.
+
+        The crucifix stops it with DOORS' own ritual: the blue pentagram and
+        its chains, nothing of its own colour. Hold it up when it comes.
+
+        Its model is Errorbush.rbxm; its two faces, assets/errorbush/
+        Errorbush_Ember.png and Errorbush_Azure.png, are downloaded once into
+        the executor's folder (Errorbush/).
+
+================================================================================
+]]
+
+if game.Workspace:FindFirstChild("SeekMovingNewClone") then return end
+
+local RunService   = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+
+-- The repo: main; until 3rr0rbu2h is there, the branch it is made on
+local REPO = "https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/"
+local BRANCHES = { "main", "claude/sei-qui-con-noi-ye4k62" }
+
+-- A file of the repo: its URL and what it holds, from the first branch that has it (not a "404: Not Found" page)
+local function fromRepo(path)
+	for _, branch in ipairs(BRANCHES) do
+		local url = REPO .. branch .. "/" .. path
+		local ok, body = pcall(function() return game:HttpGet(url) end)
+		if ok and type(body) == "string" and #body > 100 and not body:find("^404") then return url, body end
+	end
+	return nil, nil
+end
+
+local asset = fromRepo("Errorbush.rbxm")
+if not asset then
+	warn("[3rr0rbu2h] its model could not be downloaded")
+	return
+end
+
+-- One of its faces, as a content ID: downloaded once into the executor's folder (nil without file support)
+local FOLDER = "Errorbush"
+local function faceImage(file)
+	local path = FOLDER .. "/" .. file
+	local ok, id = pcall(function()
+		if not isfolder(FOLDER) then makefolder(FOLDER) end
+		if not isfile(path) then
+			local _, body = fromRepo("assets/errorbush/" .. file)
+			if body and body:sub(2, 4) == "PNG" then writefile(path, body) end
+		end
+		return getcustomasset(path)
+	end)
+	return if ok and type(id) == "string" then id else nil
+end
+
+-- Its two forms: the one it has, and the one it glitches into at every rebound
+local FORMS = {
+	{ file = "Errorbush_Ember.png", color = Color3.fromRGB(255, 70, 10), static = Color3.fromRGB(255, 200, 0), octave = 1, speed = 0.95 },
+	{ file = "Errorbush_Azure.png", color = Color3.fromRGB(20, 40, 255), static = Color3.fromRGB(0, 220, 255), octave = 0.82, speed = 0.8 },
+}
+for _, form in ipairs(FORMS) do form.image = faceImage(form.file) end
+
+-- The rooms take its colour, all the way (so a new form can find them and repaint them)
+local TELL = { Color = FORMS[1].color, Falloff = false, FadeIn = 0.6, FadeOut = 0.8, BrightnessBoost = 1.2 }
+
+-- Its pieces, by name (the model: Errorbush.rbxm)
+local function piecesOf(model)
+	local p = { pitches = {} }
+	for _, d in ipairs(model:GetDescendants()) do
+		if p[d.Name] == nil then p[d.Name] = d end
+		if d.Name == "FormPitch" then table.insert(p.pitches, d) end
+	end
+	return p
+end
+
+local function near(a, b) return math.abs(a.R - b.R) + math.abs(a.G - b.G) + math.abs(a.B - b.B) < 0.08 end
+
+-- The rooms it has painted, painted again in the new colour; and the rooms still to come
+local function repaint(from, to)
+	TELL.Color = to
+	local rooms = workspace:FindFirstChild("CurrentRooms")
+	for _, room in ipairs(rooms and rooms:GetChildren() or {}) do
+		for _, d in ipairs(room:GetDescendants()) do
+			if (d:IsA("Light") or (d:IsA("BasePart") and d.Name == "Neon")) and near(d.Color, from) then
+				TweenService:Create(d, TweenInfo.new(0.25), { Color = to }):Play()
+			end
+		end
+	end
+end
+
+-- Wears a form: its face (the other one as its ghost), its light, its static, its scream's pitch
+local function wear(p, form, other)
+	if p.Face then p.Face.Texture = form.image or "" end
+	if p.Ghost then p.Ghost.Texture = other.image or "" end
+	if p.Light then p.Light.Color = form.color end
+	for _, name in ipairs({ "Static", "Snow" }) do
+		if p[name] then p[name].Color = ColorSequence.new(form.static) end
+	end
+	for _, pitch in ipairs(p.pitches) do pitch.Octave = form.octave end
+end
+
+local Core = loadstring(game:HttpGet(REPO .. "main/GradishCore"))()
+
+local state = { form = 1 } -- the form it has now
+local p = nil -- its pieces, once it is out
+
+Core:Spawn({
+	Name  = "3rr0rbu2h",
+	Asset = asset,
+
+	Speed       = 300,
+	Delay       = 4,
+	Damage      = 125,
+	DamageRange = 30,
+
+	-- What it was made for: Ambush's way, but 5 to 10 times
+	Rebounds     = { 5, 10 },
+	ReboundType  = "Ambush",
+	ReboundDelay = 0.5,
+
+	Lights = {
+		Flicker         = true,
+		FlickerDuration = 1.5,
+		Shatter         = false,
+	},
+
+	CameraShake = {
+		Enabled = true,
+		Range   = 60,
+		Values  = { 25, 30, 0.1, 1 },
+	},
+
+	-- DOORS' own ritual: the blue pentagram and its chains, no colour of its own
+	Crucifixion = { Type = "Guiding" },
+
+	DeathType = "Glitch",
+
+	DeathHints = {
+		"You died to 3rr0rbu2h.",
+		"It is Ambush, but broken: it comes back 5 to 10 times.",
+		"Every time it comes back it is something else. Its scream does not change: listen for it.",
+		"Hide, and stay hidden until the static is gone.",
+	},
+
+	Tell = TELL,
+
+	OnSpawned = function(session)
+		local model = session.entity and session.entity.Model
+		if not model then return end
+		p = piecesOf(model)
+		wear(p, FORMS[state.form], FORMS[3 - state.form])
+
+		--[[ The glitch, all the time: its ghost (the other form) jitters off its face, its scream skips, drops out and
+		     warbles, and now and then its face is the other one for a frame ]]
+		local nextSound, nextFlash, nextJitter = os.clock() + 0.5, os.clock() + 2, 0
+		local restore = nil
+		session.janitor:Give(RunService.Heartbeat:Connect(function()
+			if not model.Parent then return end
+			local now = os.clock()
+			if restore and now >= restore.at then
+				restore.undo()
+				restore = nil
+			end
+			local form = FORMS[state.form]
+			if now >= nextJitter and p.GhostAttachment then
+				nextJitter = now + 0.05
+				p.GhostAttachment.Position = Vector3.new(math.random(-40, 40) / 100, math.random(-25, 25) / 100, 0)
+			end
+			if not restore and now >= nextSound and p.Ambience then
+				nextSound = now + 0.25 + math.random() * 0.85
+				local roll, sound = math.random(), p.Ambience
+				if roll < 0.35 then -- it skips
+					sound.TimePosition = math.max(sound.TimePosition + (math.random() - 0.4), 0)
+				elseif roll < 0.65 then -- it drops out
+					local volume = sound.Volume
+					sound.Volume = 0
+					restore = { at = now + 0.06, undo = function() sound.Volume = volume end }
+				else -- it warbles
+					sound.PlaybackSpeed = form.speed * (0.6 + math.random() * 0.9)
+					restore = { at = now + 0.08 + math.random() * 0.07, undo = function() sound.PlaybackSpeed = FORMS[state.form].speed end }
+				end
+			end
+			if now >= nextFlash and p.Face then
+				nextFlash = now + 1.5 + math.random() * 2.5
+				p.Face.Texture = FORMS[3 - state.form].image or ""
+				task.delay(0.05, function() if p.Face then p.Face.Texture = FORMS[state.form].image or "" end end)
+			end
+		end))
+	end,
+
+	-- Every rebound: it glitches into its other form
+	OnRebounding = function(_, startOfRebound)
+		if not startOfRebound or not p then return end
+		local from = FORMS[state.form]
+		state.form = 3 - state.form
+		local to = FORMS[state.form]
+		if p.Glitch then
+			p.Glitch.PlaybackSpeed = 0.8 + math.random() * 0.5
+			p.Glitch:Play()
+		end
+		if p.Burst then p.Burst:Emit(25) end
+		task.spawn(function() -- a few frames of both, then the new one
+			for i = 1, 6 do
+				if p.Face then p.Face.Texture = (if i % 2 == 0 then from else to).image or "" end
+				task.wait(0.04)
+			end
+			wear(p, to, from)
+		end)
+		repaint(from.color, to.color)
+	end,
+})
