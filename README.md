@@ -389,6 +389,20 @@ description.
 A remote lies in every room: take it, and it pauses the tape or the entity for
 3 seconds, 4 times.
 
+**The discs** (`Cart`): each lies in its case — front cover, back cover (the
+wiki's words and how to survive), spine, the disc and its label, a clear lid. Take
+one and **right-click** it (or **Inspect**, `R`, on the floor; a button on touch
+screens) to look at it close: drag to turn it, wheel to zoom, open the case, flip
+it. A disc may be **dirty** (the player reads it, says `DISC ERR` and gives it back:
+hold **Wipe** while you inspect it) or **scratched** (the tape skips, and what
+comes out is angrier); `DiscWear = false` keeps them clean, `"dirty"` or
+`"scratched"` makes them all so. The player: its tray slides out, the case goes
+down on it and opens, the disc goes in; its display says `NO DISC`, `READ`,
+`PLAY 00:07`, `PAUSE`, `DISC ERR`, `EJECT`; **Pause** (`F`) holds the tape for 2.5 s
+(then 10 s to rest); once it is out, **Eject** throws the disc out and pulls it back
+into its TV. The TV has a power light (red in standby, green on) and switches on
+and off like an old tube.
+
 `Auto` takes the type's own setups at random, `Screens` in the Archives; with
 any setup, the room's own screens play the tape too. The TV is a little bigger
 or smaller each time (`TVScale`). Every setting is at the top of the script

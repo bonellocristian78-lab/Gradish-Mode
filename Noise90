@@ -44,7 +44,13 @@
             Ceiling        above the door, hanging from the ceiling on its arm (the hammer works here)
             Table          on a table against the far wall: plug it in, turn its antenna
             Cart           the Stairwell's TV cart with its disc player: plug it in, find the disc, put it in;
-                           once it is out, hold "Eject" and the disc pulls it back into its TV
+                           once it is out, hold "Eject" and the disc pulls it back into its TV.
+                           The discs come in their cases: front cover, back cover (the wiki's words and how to
+                           survive), spine, the disc and its label. Right-click the one in your hand (or Inspect,
+                           R, on the floor) to look at it close: turn it, zoom, open the case, flip it. One may be
+                           dirty (the player will not read it: wipe it) or scratched (the tape skips and what comes
+                           out is angrier). The player: its tray, its display (NO DISC, READ, PLAY 00:07, PAUSE,
+                           DISC ERR, EJECT), its Pause (F) while the tape plays
             Pedestal       a pedestal by the far wall and the TV on the floor: pick it up, put it there, plug it
                            in, turn its antenna. The pedestal may give way: the TV falls, cracks, and keeps going
             Teller         the Teller's screen
@@ -76,6 +82,8 @@
                 Rounds = 0,             -- rebounds, faces or colours (0 = the type's own)
                 PedestalFall = 0.5,     -- the chance the pedestal gives way
                 Kick = true,            -- S-90 kicks you out of the game (false: it kills you)
+                DiscWear = true,        -- a disc may be dirty (wipe it) or scratched (it skips); false: always clean;
+                                        -- or "dirty", "scratched", "clean" for every disc
                 Laugh = "",             -- a sound id for Trollface-90's laugh (A-90's sound, faster, without one)
                 G90 = "",               -- "Paper" or "Computer" (empty: either)
                 Hammer = true,          -- a hammer on the floor to break the TV (Ceiling)
@@ -114,6 +122,7 @@ local CONFIG = {
 	Rounds = 0,
 	PedestalFall = 0.5,
 	Kick = true,
+	DiscWear = true,
 	Laugh = "",
 	G90 = "",
 	Hammer = true,
@@ -154,7 +163,7 @@ local function rgb(r, g, b) return Color3.fromRGB(r, g, b) end
 local YELLOW = rgb(255, 230, 0)
 local TYPES = {
 	["B-90"] = { color = rgb(60, 120, 255), deep = rgb(10, 40, 210), pale = rgb(150, 190, 255), trigger = "look", setups = { "Ceiling" }, phase = "chase", crucify = true,
-		discs = { { title = "B-90 (Look)", disc = "Look" }, { title = "B-90 (Don't Look)", disc = "DontLook" } },
+		discs = { { title = "B-90 (Look)", disc = "Look", art = "B90Look" }, { title = "B-90 (Don't Look)", disc = "DontLook", art = "B90DontLook" } },
 		hints = { "You died to B-90.", "Noise walks your steps, almost as fast as you.", "Break its TV, or hold up a crucifix when it catches you." } },
 	["C-90"] = { color = rgb(255, 140, 30), face = A90.face, faceColor = rgb(255, 150, 40), trigger = "away",
 		setups = { "Table", "Cart", "Ceiling" }, phase = "chase", contrary = true,
@@ -216,6 +225,9 @@ if not typeName then
 end
 local V = TYPES[typeName]
 V.name = typeName
+-- The art of its disc (its covers, its label)
+V.art = ({ ["B-90"] = "B90Look", ["C-90"] = "C90", ["Ransom//90"] = "Ransom90", ["A-90"] = "A90", ["X-90"] = "X90", ["G-90"] = "G90",
+	["Pix-90"] = "Pix90", ["Trollface-90"] = "Troll90", ["XTrollface-90"] = "XTroll90", ["S-90"] = "S90", ["XS-90"] = "XS90", ["X-60"] = "X60" })[typeName]
 
 -- The tape: 179 frames at 15 per second, 12 to a sheet (3 x 4 of 320 x 240)
 local TAPE = { frames = 179, fps = 15, sheets = 15, columns = 3, rows = 4, width = 320, height = 240 }
@@ -282,7 +294,7 @@ local function asset(name)
 	return if ok and type(id) == "string" then id else nil
 end
 
-local files = { sheets = {}, gray = {}, faces = {} }
+local files = { sheets = {}, gray = {}, faces = {}, discs = {} }
 local kit = nil -- the Noise (B-90) kit: its TV, Noise, B-90, the hammer, the crucifix's circle
 local world = nil -- the props kit: the Stairwell's TV cart and its disc player, the Archives' tables, monitors, the Teller
 local filesReady = false
@@ -313,6 +325,13 @@ task.spawn(function() -- all of it now, so nothing waits later
 	for _, face in ipairs(wanted) do
 		if type(face) == "string" and not face:find("^rbxasset") then files.faces[face] = asset(face) end
 	end
+	-- Its disc: covers, spine, label; the dirt and the scratches a disc may have
+	for _, d in ipairs(V.discs or { { art = V.art } }) do
+		for _, part in ipairs({ "_Front.jpg", "_Back.jpg", "_Spine.jpg", "_Label.png" }) do
+			files.discs[d.art .. part:match("^(.-)%.")] = asset("Disc_" .. d.art .. part)
+		end
+	end
+	files.discs.Dirt, files.discs.Scratch = asset("Disc_Dirt.png"), asset("Disc_Scratch.png")
 	filesReady = true
 end)
 
@@ -576,6 +595,7 @@ end
 local current = nil -- the Noise of now
 local pausedUntil = 0 -- the remote's pause: everything of it stands still until then
 local function frozen() return os.clock() < pausedUntil end
+local tapeStartedAt = 0 -- when the tape began (the disc player's clock)
 local climbBack -- below, with its ways: back into its TV
 local screensOff -- below, with the tape: the screens go dark
 
@@ -858,6 +878,7 @@ local picture, video, hum = nil, nil, nil
 local screens = {} -- every screen that plays the tape: { part, gui, picture, face, tint }; the first is the TV's
 local owned = {} -- what this event put on the world's own pieces: gone at the end
 local emergeLook = nil -- the way out of a TV that lies on its back
+local powerLed = nil -- the TV's little light: red in standby, green on
 
 -- The face of a part that looks most along `dir`
 local function faceToward(part, dir)
@@ -908,6 +929,28 @@ local function sheetFrame(label, frame)
 	label.ImageRectOffset = Vector2.new((inSheet % TAPE.columns) * TAPE.width, (inSheet // TAPE.columns) * TAPE.height)
 end
 
+-- An old tube switching on (a line opening into the picture) or off (the picture squashed into a line, the line into a dot)
+local function crt(record, on)
+	local flash = make("Frame", { Name = "Crt", BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0, ZIndex = 9,
+		AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(1, 0.01) }, record.gui)
+	task.spawn(function()
+		local t0 = os.clock()
+		while alive and os.clock() - t0 < 0.4 do
+			local u = (os.clock() - t0) / 0.4
+			if on then
+				flash.Size, flash.BackgroundTransparency = UDim2.fromScale(1, 0.01 + 0.99 * u), u
+			else
+				flash.Size = if u < 0.5 then UDim2.fromScale(1 - 1.96 * u, 0.012) else UDim2.fromScale(0.02 * (2 - 2 * u), 0.02 * (2 - 2 * u))
+			end
+			RunService.Heartbeat:Wait()
+		end
+		flash:Destroy()
+	end)
+end
+local function setLed(on)
+	if powerLed then powerLed.Color = if on then Color3.fromRGB(60, 255, 90) else Color3.fromRGB(255, 40, 30) end
+end
+
 -- Bigger or smaller than the kit's (B-90's stays as it is)
 local function scaleTV(model)
 	local k = if CONFIG.TVScale > 0 then CONFIG.TVScale elseif V.name == "B-90" then 1 else 0.8 + math.random() * 0.55
@@ -926,6 +969,10 @@ local function dressScreen()
 	end
 	local record = addScreen(screen, gui)
 	record.own, picture = true, record.picture
+	-- its power light, under the screen, on the right
+	powerLed = make("Part", { Name = "PowerLed", Shape = Enum.PartType.Ball, Size = Vector3.new(0.09, 0.09, 0.09), Material = Enum.Material.Neon,
+		Color = Color3.fromRGB(60, 255, 90), Anchored = true, CanCollide = false, CanQuery = false, CanTouch = false, CastShadow = false,
+		CFrame = screen.CFrame * CFrame.new(screen.Size.X / 2 - 0.12, -screen.Size.Y / 2 - 0.13, -screen.Size.Z / 2 - 0.03) }, tv)
 	for _, light in ipairs(screen:GetDescendants()) do
 		if light:IsA("Light") then light.Color, light.Brightness = PALE, 0.4 end
 	end
@@ -1514,47 +1561,258 @@ function SETUPS.Teller()
 	return setup
 end
 
----- The Stairwell's TV cart and its disc player: the discs lie in the room, one goes in ----
+---- The Stairwell's TV cart and its disc player ----
+--[[ The discs lie in the room, each in its case: the front cover, the back (the wiki's words, how to survive), the spine,
+     the disc with its label. Take one; right-click it (or Inspect) to look at it close: turn it, open the case, flip it.
+     A disc may be dirty (the player will not read it: wipe it) or scratched (the tape skips, and what comes out is angrier).
+     The player: its tray slides out for the disc and back in, its display says what it is doing, Pause holds the tape,
+     and once it is out, Eject pulls it back into its TV ]]
 
-disc = { carried = nil, inserted = nil, entries = {}, insert = nil }
+-- What the back of each disc says (the wikis'), for the inspection
+local DISC_TEXT = {
+	B90Look = { "Noise, with B-90 in it. Stare at the tape and it crawls out of the TV and walks your steps, almost as fast as you.",
+		"Break its TV. Hold up a crucifix when it catches you." },
+	B90DontLook = { "Noise, with B-90 in it. The tape plays by itself. Look at it for a moment and it comes out.", "Look away until the tape is over." },
+	C90 = { "Its tape plays only while you look away from it. Out of the TV, it walks only while you stand still.", "Keep moving. Watch the tape." },
+	Ransom90 = { "IF YOU DO NOT PAY THIS RANSOM BEFORE THE TIMER ENDS, YOUR ITEMS WILL BE UNRECOVERABLE. It sleeps in its TV: every drawer you open wakes it up.",
+		"Leave the drawers alone. Run when it climbs out." },
+	A90 = { "Looks like a green yellowish colored face with eyes with no pupils. Rebounds 10 times and checks lockers. It is very fast checking lockers and also very fast when it rebounds. Speed: far beyond godspeed.",
+		"Freeze when its face is on your screen. Stay out of the lockers." },
+	X90 = { "X-90 is the variant of A-90. A cyan face with eyes with no pupils. Rebounds 40 times and checks lockers and tables. Speed: 50 times faster than A-90.",
+		"Freeze. Do not hide anywhere." },
+	G90 = { "Two dark blue eyes with a smile. It appears out of a paper, checking rotting tables; or out of a computer, checking rotting tables, then it fakes despawning for 5 seconds and checks rusty lockers.",
+		"It is never gone when it seems gone." },
+	Pix90 = { "The wiki only has its pictures: a smile, an open mouth, a wide one. Every time you move while it watches, the mouth opens wider.",
+		"Freeze when its face pops up." },
+	Troll90 = { "Shows up on your screen and attacks shortly after if you do not stop moving. Stop, and it turns red, then white, and disappears. Damage: 90. You do not heal any more.",
+		"Stop moving when it is on your screen." },
+	XTroll90 = { "A rare X variant of Trollface-90: bloodshot eyes, glitched, inverted. It damages you if you do NOT move, appears way faster, and a giggling noise gives it away. Damage: 90-100.",
+		"Keep moving when it is on your screen." },
+	S90 = { "collect my colours. Its TV glows a colour: choose that colour. It splits into three clones that circle around you; one is its colour. Damage: Kick.",
+		"Learn the colors of the rainbow." },
+	XS90 = { "ME WANT COLOURZ!!!! Like S-90 but inverted: he looks angry, with red pupils and red blood leaking out of his eyes. Damage: Kick.",
+		"Sprint towards the closest hiding spot when it spawns." },
+	X60 = { "The Orbiting Monstrosities. Six faces, mainly yellow with hints of black; two constantly orbit another in the middle. Loud static, quiet screams. It gets faster, then stops for 9 seconds in your room, slowly descending.",
+		"Hide in any hiding spot." },
+}
+local SoundService = game:GetService("SoundService")
+local CONDITION = { clean = "Clean", dirty = "Dirty: the player will not read it. Wipe it.", scratched = "Scratched: it will skip. What comes out will be angrier." }
+
+disc = { carried = nil, inserted = nil, entries = {}, insert = nil, scratched = false }
 
 local function takeDisc(entry)
-	if disc.inserted or disc.carried == entry then return end
+	if disc.inserted or disc.busy or disc.carried == entry then return end
 	local old = disc.carried
 	if old then -- the other one goes back where it was
 		old.model:PivotTo(old.spot)
-		old.prompt.Enabled = true
+		old.take.Enabled, old.look.Enabled = true, true
 	end
 	disc.carried = entry
-	entry.prompt.Enabled = false
-	oneShot(SOUNDS.click, entry.model.PrimaryPart)
+	entry.take.Enabled, entry.look.Enabled = false, false
+	oneShot(SOUNDS.click, entry.parts.tray)
 	if disc.insert then disc.insert.Enabled = true end
 end
 
--- A disc in its sleeve: the type's face and name on it, the disc showing at one side
+-- The case open (1) or shut (0): the lid and the cover in it swing up on the spine
+local function setLid(model, rest, u)
+	local tray, lid, cover = model:FindFirstChild("Tray"), model:FindFirstChild("Lid"), model:FindFirstChild("Cover")
+	if not (tray and lid and cover) then return end
+	local hinge = tray.CFrame * CFrame.new(-0.65, 0.075, 0) * CFrame.Angles(0, 0, u * math.rad(115)) * CFrame.new(0.65, -0.075, 0)
+	lid.CFrame, cover.CFrame = hinge * rest.lid, hinge * rest.cover
+end
+
+-- A disc in its case, lying flat, the cover up: tray (the back cover under it), spine, the disc on its rosette, the clear
+-- lid with the front cover in it. Its art from the kit's folder; dirty or scratched, it shows
 local function makeDisc(entry)
 	local m = make("Model", { Name = "Noise90Disc" }, nil)
-	local case = make("Part", { Name = "Case", Size = Vector3.new(1.3, 0.12, 1.15), Color = rgb(24, 24, 30), Material = Enum.Material.SmoothPlastic,
-		Anchored = true, CanCollide = false, CanTouch = false }, m)
-	make("Part", { Name = "Disc", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.03, 1, 1), Color = rgb(205, 210, 220),
-		Material = Enum.Material.Foil, Reflectance = 0.25, Anchored = true, CanCollide = false, CanQuery = false, CanTouch = false,
-		CFrame = CFrame.new(0.42, 0, 0) * CFrame.Angles(0, 0, math.pi / 2) }, m)
-	make("PointLight", { Color = BLUE, Brightness = 0.6, Range = 5 }, case)
-	local gui = make("SurfaceGui", { Face = Enum.NormalId.Top, CanvasSize = Vector2.new(260, 230), LightInfluence = 0.3 }, case)
-	make("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = rgb(16, 16, 22), BorderSizePixel = 0 }, gui)
-	local face = image(V.face)
-	if face then
-		make("ImageLabel", { Size = UDim2.fromScale(0.6, 0.6), Position = UDim2.fromScale(0.2, 0.05), BackgroundTransparency = 1, Image = face,
-			ImageColor3 = V.faceColor or Color3.new(1, 1, 1) }, gui)
+	local function piece(name, size, cf, props)
+		local p = make("Part", { Name = name, Size = size, CFrame = cf, Anchored = true, CanCollide = false, CanTouch = false, CastShadow = false,
+			Color = rgb(18, 18, 22), Material = Enum.Material.SmoothPlastic }, m)
+		for k, v in pairs(props or {}) do p[k] = v end
+		return p
 	end
-	make("TextLabel", { Size = UDim2.fromScale(0.96, 0.26), Position = UDim2.fromScale(0.02, 0.7), BackgroundTransparency = 1, Text = entry.title,
-		TextScaled = true, Font = Enum.Font.Arcade, TextColor3 = BLUE }, gui)
-	m.PrimaryPart = case
+	local function decal(part, face, file, z)
+		return make("Decal", { Name = "Art", Face = face, Texture = files.discs[file] or "", ZIndex = z or 1 }, part)
+	end
+	local art = entry.art
+	local tray = piece("Tray", Vector3.new(1.3, 0.05, 1.15), CFrame.new(0, 0.025, 0))
+	decal(tray, Enum.NormalId.Bottom, art .. "_Back")
+	decal(piece("Spine", Vector3.new(0.05, 0.12, 1.15), CFrame.new(-0.675, 0.06, 0)), Enum.NormalId.Left, art .. "_Spine")
+	piece("Rosette", Vector3.new(0.02, 0.32, 0.32), CFrame.new(0, 0.055, 0) * CFrame.Angles(0, 0, math.pi / 2),
+		{ Shape = Enum.PartType.Cylinder, Color = rgb(60, 60, 66) })
+	local cd = piece("Disc", Vector3.new(0.012, 1.02, 1.02), CFrame.new(0, 0.062, 0) * CFrame.Angles(0, 0, math.pi / 2),
+		{ Shape = Enum.PartType.Cylinder, Color = rgb(205, 210, 220), Material = Enum.Material.Foil, Reflectance = 0.2 })
+	decal(cd, Enum.NormalId.Right, art .. "_Label", 1)
+	if entry.condition ~= "clean" then
+		decal(cd, Enum.NormalId.Right, if entry.condition == "dirty" then "Dirt" else "Scratch", 2).Name = "Wear"
+	end
+	piece("Lid", Vector3.new(1.3, 0.02, 1.15), CFrame.new(0, 0.11, 0), { Material = Enum.Material.Glass, Color = rgb(225, 230, 240), Transparency = 0.6 })
+	decal(piece("Cover", Vector3.new(1.24, 0.008, 1.1), CFrame.new(0, 0.096, 0)), Enum.NormalId.Top, art .. "_Front")
+	make("PointLight", { Name = "Glint", Color = BLUE, Brightness = 0.5, Range = 4 }, tray)
+	m.PrimaryPart = tray
 	entry.model = m
-	entry.prompt = newPrompt(case, "Take", entry.title, 0.2, 8)
-	on(entry.prompt.Triggered, function() takeDisc(entry) end)
+	entry.parts = { tray = tray, disc = cd }
+	entry.rest = { lid = tray.CFrame:ToObjectSpace(m.Lid.CFrame), cover = tray.CFrame:ToObjectSpace(m.Cover.CFrame), disc = tray.CFrame:ToObjectSpace(cd.CFrame) }
+	entry.take = newPrompt(tray, "Take", entry.title, 0.2, 8)
+	entry.look = newPrompt(tray, "Inspect", entry.title, 0, 8)
+	entry.look.KeyboardKeyCode, entry.look.GamepadKeyCode, entry.look.UIOffset = Enum.KeyCode.R, Enum.KeyCode.ButtonY, Vector2.new(0, 70)
+	on(entry.take.Triggered, function() takeDisc(entry) end)
 	return m
 end
+
+---- A disc close up: turn it (drag), zoom (wheel), open the case, flip it, wipe it ----
+
+local UserInputService = game:GetService("UserInputService")
+local inspect = { entry = nil, yaw = 0.4, pitch = 0.5, dist = 2.4, lid = 0, lidGoal = 0, wiping = false, dragging = false }
+local inspectGui = make("ScreenGui", { Name = "Noise90Inspect", IgnoreGuiInset = true, DisplayOrder = 100003, ResetOnSpawn = false, Enabled = false }, hud)
+make("Frame", { Name = "Backdrop", Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 0.3, BorderSizePixel = 0 }, inspectGui)
+local viewport = make("ViewportFrame", { Name = "View", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.36, 0.5),
+	Size = UDim2.fromScale(0.56, 0.86), BackgroundTransparency = 1, Ambient = Color3.fromRGB(170, 170, 180),
+	LightColor = Color3.new(1, 1, 1), LightDirection = Vector3.new(-0.4, -1, -0.6) }, inspectGui)
+local viewCam = make("Camera", { Name = "Camera", FieldOfView = 38 }, viewport)
+viewport.CurrentCamera = viewCam
+local panel = make("Frame", { Name = "Panel", Position = UDim2.fromScale(0.66, 0.1), Size = UDim2.fromScale(0.31, 0.8),
+	BackgroundColor3 = Color3.fromRGB(14, 14, 18), BackgroundTransparency = 0.1, BorderSizePixel = 0 }, inspectGui)
+make("UICorner", { CornerRadius = UDim.new(0, 10) }, panel)
+make("UIPadding", { PaddingTop = UDim.new(0, 14), PaddingLeft = UDim.new(0, 14), PaddingRight = UDim.new(0, 14) }, panel)
+local function line(name, y, h, size, font, color)
+	return make("TextLabel", { Name = name, Position = UDim2.fromScale(0, y), Size = UDim2.fromScale(1, h), BackgroundTransparency = 1,
+		TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, Font = font,
+		TextSize = size, TextColor3 = color or Color3.fromRGB(225, 225, 225), Text = "" }, panel)
+end
+local pTitle = line("Title", 0, 0.08, 30, Enum.Font.GothamBlack, BLUE)
+local pState = line("Condition", 0.09, 0.1, 15, Enum.Font.GothamBold)
+local pAbout = line("About", 0.2, 0.42, 16, Enum.Font.Gotham)
+local pSurvive = line("Survive", 0.63, 0.12, 16, Enum.Font.GothamBold, BLUE)
+local pHint = line("Hint", 0.93, 0.07, 13, Enum.Font.Gotham, Color3.fromRGB(150, 150, 155))
+pHint.Text = "Drag: turn it. Wheel: closer. Right-click: put it away."
+local function button(name, text, x)
+	local b = make("TextButton", { Name = name, Text = text, Position = UDim2.fromScale(x, 0.79), Size = UDim2.fromScale(0.3, 0.07),
+		BackgroundColor3 = Color3.fromRGB(40, 40, 48), TextColor3 = Color3.new(1, 1, 1), Font = Enum.Font.GothamBold, TextScaled = true,
+		BorderSizePixel = 0, AutoButtonColor = true, Modal = true }, panel)
+	make("UICorner", { CornerRadius = UDim.new(0, 6) }, b)
+	return b
+end
+local bOpen, bFlip, bWipe = button("OpenCase", "Open", 0), button("Flip", "Flip", 0.34), button("Wipe", "Wipe", 0.68)
+local bDone = button("Done", "Done", 0.34)
+bDone.Position = UDim2.fromScale(0.34, 0.87)
+local wipeBar = make("Frame", { Name = "WipeBar", Position = UDim2.fromScale(0.68, 0.865), Size = UDim2.fromScale(0, 0.012),
+	BackgroundColor3 = BLUE, BorderSizePixel = 0 }, panel)
+-- On your screen while you hold a disc: inspect it (for touch screens; right-click on a computer)
+local handGui = make("ScreenGui", { Name = "Noise90Hand", ResetOnSpawn = false, Enabled = false }, hud)
+local bInspect = make("TextButton", { Name = "Inspect", Text = "Inspect disc", AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -20, 1, -140),
+	Size = UDim2.fromOffset(150, 40), BackgroundColor3 = Color3.fromRGB(20, 20, 26), BackgroundTransparency = 0.2, TextColor3 = Color3.new(1, 1, 1),
+	Font = Enum.Font.GothamBold, TextSize = 16, BorderSizePixel = 0 }, handGui)
+make("UICorner", { CornerRadius = UDim.new(0, 8) }, bInspect)
+
+local function refreshPanel()
+	local entry = inspect.entry
+	if not entry then return end
+	local text = DISC_TEXT[entry.art] or { "", "" }
+	pTitle.Text, pAbout.Text, pSurvive.Text = entry.title, text[1], "HOW TO SURVIVE: " .. text[2]
+	pState.Text = "Condition: " .. CONDITION[entry.condition]
+	pState.TextColor3 = if entry.condition == "clean" then Color3.fromRGB(120, 255, 150) elseif entry.condition == "dirty" then Color3.fromRGB(255, 200, 80)
+		else Color3.fromRGB(255, 90, 90)
+	bWipe.Visible = entry.condition == "dirty"
+	wipeBar.Visible = entry.condition == "dirty"
+	bOpen.Text = if inspect.lidGoal > 0.5 then "Close" else "Open"
+end
+
+local function closeInspect()
+	if not inspect.entry then return end
+	if inspect.view then inspect.view:Destroy() end
+	inspect.entry, inspect.view, inspect.wiping, inspect.dragging = nil, nil, false, false
+	inspectGui.Enabled = false
+	if mainGame and inspect.freed ~= nil then mainGame.freemouse = inspect.freed end
+end
+local function openInspect(entry)
+	if inspect.entry then closeInspect() end
+	local view = entry.model:Clone()
+	for _, d in ipairs(view:GetDescendants()) do
+		if d:IsA("ProximityPrompt") or d:IsA("Light") then d:Destroy() end
+	end
+	local cd = view:FindFirstChild("Disc")
+	if cd and disc.inserted == entry then
+		cd:Destroy() -- the disc is in the player: the case is empty
+	elseif cd then
+		cd.Transparency = 0
+		for _, d in ipairs(cd:GetChildren()) do
+			if d:IsA("Decal") and d.Name == "Art" then d.Transparency = 0 end
+		end
+	end
+	view.Parent = viewport
+	inspect.entry, inspect.view = entry, view
+	inspect.yaw, inspect.pitch, inspect.dist, inspect.lid, inspect.lidGoal = 0.4, 0.5, 2.4, 0, 0
+	inspect.freed = mainGame and mainGame.freemouse
+	if mainGame then mainGame.freemouse = true end
+	pTitle.TextColor3, pSurvive.TextColor3, wipeBar.BackgroundColor3 = BLUE, BLUE, BLUE
+	refreshPanel()
+	inspectGui.Enabled = true
+	oneShot(SOUNDS.click, SoundService, { Volume = CONFIG.Volume * 0.5, PlaybackSpeed = 1.3 })
+end
+-- The dirt comes off: on the disc in your hand and on the one you are looking at
+local function wiped(entry)
+	entry.condition = "clean"
+	for _, model in ipairs({ entry.model, inspect.view }) do
+		local wear = model and model:FindFirstChild("Disc") and model.Disc:FindFirstChild("Wear")
+		if wear then wear:Destroy() end
+	end
+	oneShot(SOUNDS.click, SoundService, { Volume = CONFIG.Volume * 0.6, PlaybackSpeed = 0.8 })
+	refreshPanel()
+end
+
+on(bOpen.MouseButton1Click, function()
+	inspect.lidGoal = if inspect.lidGoal > 0.5 then 0 else 1
+	refreshPanel()
+end)
+on(bFlip.MouseButton1Click, function() inspect.flip = (inspect.flip or 0) + math.pi end)
+on(bDone.MouseButton1Click, closeInspect)
+on(bWipe.MouseButton1Down, function() inspect.wiping = true end)
+on(bWipe.MouseButton1Up, function() inspect.wiping = false end)
+on(bInspect.MouseButton1Click, function() if disc.carried then openInspect(disc.carried) end end)
+on(UserInputService.InputBegan, function(input)
+	local kind = input.UserInputType
+	if kind == Enum.UserInputType.MouseButton2 then
+		if inspect.entry then closeInspect() elseif disc.carried then openInspect(disc.carried) end
+	elseif inspect.entry and (input.KeyCode == Enum.KeyCode.Escape or input.KeyCode == Enum.KeyCode.Backspace) then
+		closeInspect()
+	elseif inspect.entry and (kind == Enum.UserInputType.MouseButton1 or kind == Enum.UserInputType.Touch) then
+		local p, at, size = input.Position, viewport.AbsolutePosition, viewport.AbsoluteSize
+		if p and at and size and p.X >= at.X and p.X <= at.X + size.X and p.Y >= at.Y and p.Y <= at.Y + size.Y then inspect.dragging = true end
+	end
+end)
+on(UserInputService.InputEnded, function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		inspect.dragging, inspect.wiping = false, false
+	end
+end)
+on(UserInputService.InputChanged, function(input)
+	if not inspect.entry then return end
+	local kind = input.UserInputType
+	if (kind == Enum.UserInputType.MouseMovement or kind == Enum.UserInputType.Touch) and inspect.dragging and input.Delta then
+		inspect.yaw += input.Delta.X * 0.012
+		inspect.pitch = math.clamp(inspect.pitch + input.Delta.Y * 0.012, -1.5, 1.5)
+	elseif kind == Enum.UserInputType.MouseWheel and input.Position then
+		inspect.dist = math.clamp(inspect.dist - input.Position.Z * 0.25, 1.2, 4)
+	end
+end)
+on(RunService.RenderStepped, function(dt)
+	handGui.Enabled = disc.carried ~= nil and not inspect.entry
+	local entry, view = inspect.entry, inspect.view
+	if not (entry and view and view.Parent) then return end
+	inspect.lid += (inspect.lidGoal - inspect.lid) * math.min(dt * 8, 1)
+	inspect.turn = (inspect.turn or 0) + ((inspect.flip or 0) - (inspect.turn or 0)) * math.min(dt * 6, 1)
+	view:PivotTo(CFrame.Angles(0, inspect.yaw, 0) * CFrame.Angles(inspect.pitch * 0.4 + inspect.turn, 0, 0))
+	setLid(view, entry.rest, inspect.lid)
+	viewCam.CFrame = CFrame.lookAt(Vector3.new(0, inspect.dist * 0.82, inspect.dist * 0.58), Vector3.new(0, 0.05, 0))
+	if inspect.wiping and entry.condition == "dirty" then -- round and round with a sleeve
+		entry.wipe = (entry.wipe or 0) + dt / 2
+		local wear = view:FindFirstChild("Disc") and view.Disc:FindFirstChild("Wear")
+		if wear then wear.Transparency = entry.wipe end
+		wipeBar.Size = UDim2.fromScale(0.3 * math.min(entry.wipe, 1), 0.012)
+		if entry.wipe >= 1 then wiped(entry) end
+	end
+end)
 
 function SETUPS.Cart()
 	local source = prop("TV_Stand")
@@ -1574,11 +1832,73 @@ function SETUPS.Cart()
 
 	local player = cart.PlayerMain.PlayerMain
 	local drive, light = player:FindFirstChild("Drive"), player:FindFirstChild("Light")
-	disc.insert = newPrompt(player, "Put the disc in", "Media", 0.3, 8)
+	local function front() return flat(outwardOf(screen)) or flat(player.CFrame.LookVector) or Vector3.new(0, 0, -1) end
+	-- Its display: what it is doing
+	local display = make("SurfaceGui", { Name = "Noise90Display", Face = faceToward(player, front()), CanvasSize = Vector2.new(440, 132),
+		LightInfluence = 0, Brightness = 2 }, player)
+	local readout = make("TextLabel", { Name = "Readout", AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.fromScale(0.95, 0.5),
+		Size = UDim2.fromScale(0.42, 0.42), BackgroundColor3 = Color3.fromRGB(5, 12, 8), BorderSizePixel = 0, Font = Enum.Font.Code,
+		TextScaled = true, TextColor3 = Color3.fromRGB(90, 255, 150), Text = "NO DISC" }, display)
+	local message, messageUntil = nil, 0
+	local function say(text, seconds) message, messageUntil = text, os.clock() + (seconds or 1.5) end
+	on(RunService.Heartbeat, function()
+		local text
+		if os.clock() < messageUntil then
+			text = message
+		elseif not disc.inserted then
+			text = if math.floor(os.clock() * 2) % 2 == 0 then "NO DISC" else ""
+		elseif disc.ejected then
+			text = "EJECT"
+		elseif state == "tape" then
+			local t = math.max(os.clock() - tapeStartedAt, 0)
+			text = if frozen() then "PAUSE" elseif disc.scratched and math.random() < 0.06 then "SKIP" else ("PLAY %02d:%02d"):format(t // 60, t % 60)
+		elseif state == "waiting" then
+			text = "READ"
+		elseif state == "chase" or state == "phase" or state == "emerging" then
+			text = if math.random() < 0.1 then "ERR" else "PLAY --:--"
+		else
+			text = "STOP"
+		end
+		readout.Text = text
+	end)
+	-- Its tray: out of the drive, towards you, and back in
+	local tray = make("Part", { Name = "Tray", Size = Vector3.new(1.05, 0.05, 1.05), Color = rgb(22, 22, 26), Material = Enum.Material.SmoothPlastic,
+		Anchored = true, CanCollide = false, CanQuery = false, CanTouch = false }, cart)
+	local function trayAt(u)
+		local inside = (drive or player).Position
+		local at = inside + front() * (u * 1.05)
+		tray.CFrame = CFrame.lookAt(at, at + front())
+	end
+	trayAt(0)
+	local function slide(from, to, carry)
+		oneShot(SOUNDS.whir, player, { Volume = CONFIG.Volume * 0.5, PlaybackSpeed = 2 })
+		local t0 = os.clock()
+		while alive do
+			local u = math.min((os.clock() - t0) / 0.35, 1)
+			trayAt(from + (to - from) * (u * u * (3 - 2 * u)))
+			if carry then carry.CFrame = tray.CFrame * CFrame.new(0, 0.04, 0) * CFrame.Angles(0, 0, math.pi / 2) end
+			if u >= 1 then break end
+			RunService.Heartbeat:Wait()
+		end
+	end
+	local function hideDisc(part, hidden)
+		part.Transparency = if hidden then 1 else 0
+		for _, d in ipairs(part:GetChildren()) do
+			if d:IsA("Decal") then d.Transparency = if hidden then 1 else 0 end
+		end
+	end
+
+	disc.insert = newPrompt(player, "Put the disc in", "Player", 0.3, 8)
 	disc.insert.Enabled = false
-	for _, d in ipairs(V.discs or { { title = V.name } }) do
-		local entry = { title = d.title, disc = d.disc }
+	disc.pause = newPrompt(player, "Pause", "Player", 0, 8)
+	disc.pause.KeyboardKeyCode, disc.pause.UIOffset, disc.pause.Enabled = Enum.KeyCode.F, Vector2.new(0, 70), false
+	local discs = V.discs or { { title = V.name, art = V.art } }
+	for _, d in ipairs(discs) do
+		local roll, wear = math.random(), tostring(CONFIG.DiscWear):lower()
+		local entry = { title = d.title, disc = d.disc, art = d.art or V.art,
+			condition = if CONDITION[wear] then wear elseif not CONFIG.DiscWear or roll < 0.5 then "clean" elseif roll < 0.8 then "dirty" else "scratched" }
 		makeDisc(entry)
+		on(entry.look.Triggered, function() openInspect(entry) end)
 		table.insert(disc.entries, entry)
 	end
 	-- In your hand while you carry it
@@ -1586,72 +1906,122 @@ function SETUPS.Cart()
 		local entry = disc.carried
 		local character = LocalPlayer.Character
 		local hand = character and (character:FindFirstChild("RightHand") or character:FindFirstChild("Right Arm"))
-		if entry and hand then
+		if entry and hand and not disc.busy then
 			entry.model:PivotTo(hand.CFrame * CFrame.new(0, -hand.Size.Y / 2 - 0.15, -0.3) * CFrame.Angles(0, 0, math.pi / 2))
 		end
 	end)
-	-- Eject, once it is out: the disc jumps out, the tape stops, and it is pulled back into its TV
+	-- Pause, while the tape plays: it holds for 2.5 s (then the player needs 10 s)
+	local pauseReady = 0
+	on(RunService.Heartbeat, function()
+		disc.pause.Enabled = disc.inserted ~= nil and not disc.ejected and state == "tape" and os.clock() >= pauseReady
+	end)
+	on(disc.pause.Triggered, function()
+		if state ~= "tape" or os.clock() < pauseReady then return end
+		pauseReady = os.clock() + 10
+		pausedUntil = math.max(pausedUntil, os.clock() + 2.5)
+		oneShot(SOUNDS.click, player)
+	end)
+	-- Eject, once it is out: the tray comes out, the disc jumps out, the tape stops, and it is pulled back into its TV
 	local function eject()
 		local noise = current
 		if disc.ejected or not (noise and not noise.gone and (state == "chase" or state == "phase")) then return end
 		disc.ejected, disc.insert.Enabled = true, false
 		state = "done"
-		local out = make("Part", { Name = "Disc", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.03, 1, 1), Color = rgb(205, 210, 220),
-			Material = Enum.Material.Foil, Reflectance = 0.25, CanQuery = false, CanTouch = false,
-			CFrame = (drive or player).CFrame * CFrame.Angles(0, 0, math.pi / 2) }, folder)
-		out.AssemblyLinearVelocity = (flat(outwardOf(screen)) or Vector3.new(0, 0, 1)) * 9 + Vector3.new(0, 7, 0)
-		oneShot(SOUNDS.click, player)
-		oneShot(SOUNDS.whir, player, { Volume = CONFIG.Volume * 0.6, PlaybackSpeed = 1.6 })
-		if light then light.Material, light.Color = Enum.Material.SmoothPlastic, Color3.new(0.15, 0.15, 0.15) end
 		screensOff()
 		task.spawn(climbBack, noise)
+		local entry = disc.inserted
+		local part = entry.parts.disc
+		oneShot(SOUNDS.click, player)
+		if light then light.Material, light.Color = Enum.Material.SmoothPlastic, Color3.new(0.15, 0.15, 0.15) end
+		task.spawn(function()
+			hideDisc(part, false)
+			slide(0, 1, part)
+			part.Parent = folder
+			part.Anchored, part.CanCollide = false, true
+			part.AssemblyLinearVelocity = front() * 9 + Vector3.new(0, 7, 0)
+			part.AssemblyAngularVelocity = Vector3.new(rnd(6), rnd(6), rnd(6))
+			task.wait(0.5)
+			slide(1, 0)
+		end)
 	end
 	on(RunService.Heartbeat, function()
-		if disc.inserted and not disc.ejected then
+		if disc.inserted and not disc.ejected and not disc.busy then
 			local noise = current
 			disc.insert.Enabled = noise ~= nil and not noise.gone and (state == "chase" or state == "phase")
 		end
 	end)
-	-- Into the drive: the sleeve flat, sliding in; the player's light comes on
+	-- In: the tray comes out, the case goes down on the player and opens, the disc onto the tray, the tray in. The player
+	-- reads it: a dirty one comes back out (wipe it); a good one plays
 	on(disc.insert.Triggered, function()
 		if disc.inserted then
 			eject()
 			return
 		end
 		local entry = disc.carried
-		if not entry then return end
-		disc.inserted, disc.carried = entry, nil
-		disc.insert.Enabled = false
-		for _, other in ipairs(disc.entries) do other.prompt.Enabled = false end
-		if entry.disc then CONFIG.Disc = entry.disc end
-		local from = entry.model:GetPivot()
-		local slot = CFrame.new((drive or player).Position) * player.CFrame.Rotation
+		if not entry or disc.busy then return end
+		disc.busy, disc.insert.Enabled = true, false
+		closeInspect()
 		task.spawn(function()
+			say("OPEN", 1)
+			slide(0, 1)
+			local top = player.Position + Vector3.new(0, player.Size.Y / 2, 0) - front() * 0.2
+			entry.model:PivotTo(CFrame.new(top + Vector3.new(0, 0.01, 0)) * CFrame.Angles(0, math.atan2(-front().X, -front().Z) + math.pi / 2, 0))
 			local t0 = os.clock()
-			while alive and os.clock() - t0 < 0.6 do
-				local u = (os.clock() - t0) / 0.6
-				entry.model:PivotTo(from:Lerp(slot, u * u * (3 - 2 * u)))
+			while alive and os.clock() - t0 < 0.3 do
+				setLid(entry.model, entry.rest, (os.clock() - t0) / 0.3)
 				RunService.Heartbeat:Wait()
 			end
-			entry.model:Destroy()
+			setLid(entry.model, entry.rest, 1)
+			local part = entry.parts.disc
+			local from = part.CFrame
+			local goal = tray.CFrame * CFrame.new(0, 0.04, 0) * CFrame.Angles(0, 0, math.pi / 2)
+			t0 = os.clock()
+			while alive and os.clock() - t0 < 0.4 do
+				local u = (os.clock() - t0) / 0.4
+				part.CFrame = from:Lerp(goal, u) + Vector3.new(0, math.sin(u * math.pi) * 0.5, 0)
+				RunService.Heartbeat:Wait()
+			end
+			slide(1, 0, part)
+			hideDisc(part, true)
+			say("READ", 1.3)
+			oneShot(SOUNDS.whir, player, { Volume = CONFIG.Volume * 0.4, PlaybackSpeed = 0.7 })
+			task.wait(1.3)
+			if entry.condition == "dirty" then -- it cannot read it: back out, back in its case, back in your hand
+				say("DISC ERR", 2.5)
+				oneShot(SOUNDS.crack, player, { Volume = CONFIG.Volume * 0.3, PlaybackSpeed = 2 })
+				hideDisc(part, false)
+				slide(0, 1, part)
+				part.CFrame = entry.model.Tray.CFrame * entry.rest.disc
+				setLid(entry.model, entry.rest, 0)
+				task.wait(0.2)
+				slide(1, 0)
+				disc.carried, disc.busy, disc.insert.Enabled = entry, false, true
+				return
+			end
+			disc.inserted, disc.carried = entry, nil
+			for _, other in ipairs(disc.entries) do other.take.Enabled, other.look.Enabled = false, false end
+			entry.look.Enabled = true -- the empty case on the player: you can still read it
+			if entry.disc then CONFIG.Disc = entry.disc end
+			disc.scratched = entry.condition == "scratched"
 			oneShot(SOUNDS.click, player)
-			oneShot(SOUNDS.whir, player, { Volume = CONFIG.Volume * 0.6 })
 			if light then light.Material, light.Color = Enum.Material.Neon, BLUE end
 			disc.insert.ActionText, disc.insert.HoldDuration, disc.insert.Enabled = "Eject", 2.5, false
+			disc.busy = false
 		end)
 	end)
 
 	local setup = { name = "Cart", trigger = "disc", power = addPower() }
 	function setup.place()
-		if disc.carried or disc.inserted or setup.power.on then return true end -- it stays once you have touched it
+		if disc.carried or disc.inserted or disc.busy or setup.power.on then return true end -- it stays once you have touched it
 		local at, inward = wallSpot(2.8)
 		if not at then return false end
 		standAt(cart, flat(outwardOf(screen)), at, inward)
 		cart.Parent = folder
+		trayAt(0)
 		setup.power.place(inward)
 		local spots = floorSpots(#disc.entries, { at })
 		for i, entry in ipairs(disc.entries) do
-			entry.spot = CFrame.new(spots[i] + Vector3.new(0, 0.07, 0)) * CFrame.Angles(0, math.random() * math.pi * 2, 0)
+			entry.spot = CFrame.new(spots[i] + Vector3.new(0, 0.01, 0)) * CFrame.Angles(0, math.random() * math.pi * 2, 0)
 			entry.model:PivotTo(entry.spot)
 			entry.model.Parent = folder
 		end
@@ -2013,6 +2383,8 @@ local function playTape(trigger)
 		end
 	end
 	local clock, screamed, faced, watched, angry, paused = 0, false, false, 0, false, false
+	local skipAt, stutterUntil = os.clock() + 1.5, 0 -- a scratched disc skips
+	tapeStartedAt = os.clock()
 	while alive and state == "tape" and clock < length do
 		local dt = RunService.RenderStepped:Wait()
 		local seeing = (trigger == "away" or trigger == "dontlook") and lookingAtAny()
@@ -2022,7 +2394,15 @@ local function playTape(trigger)
 			if audio then if paused then audio:Pause() else audio:Resume() end end
 			if playingVideo then pcall(function() if paused then video:Pause() else video:Play() end end) end
 		end
-		if not paused then clock += dt end
+		if disc and disc.scratched and not paused and os.clock() >= skipAt then -- it skips: a jump, a stutter
+			skipAt = os.clock() + 1.2 + math.random() * 1.4
+			clock = math.clamp(clock + (if math.random() < 0.5 then -1 else 1) * (0.3 + math.random() * 0.7), 0, length - 0.1)
+			if audio then audio.TimePosition = clock * speed end
+			if playingVideo then pcall(function() video.TimePosition = clock end) end
+			stutterUntil = os.clock() + 0.25
+			oneShot(SOUNDS.glitch, screen, { Volume = CONFIG.Volume * 0.4, PlaybackSpeed = 1.6 })
+		end
+		if not paused and os.clock() >= stutterUntil then clock += dt end
 		if trigger == "dontlook" and seeing then
 			watched += dt
 			if watched > 1.2 then -- you looked
@@ -2074,7 +2454,9 @@ end
 
 -- The screens go dark: the tape is over and nothing came out
 function screensOff()
+	setLed(false)
 	for _, record in ipairs(screens) do
+		crt(record, false)
 		record.picture.Image = ""
 		record.picture.BackgroundColor3 = Color3.new(0, 0, 0)
 		record.face.Visible = false
@@ -2328,7 +2710,7 @@ local function chase(noise)
 	state = "chase"
 	local crumbs, cursor = { root.Position }, 1
 	local started, startRoom = os.clock(), latestRoom()
-	local rushing, lastScream, shimmerAt, still = false, -math.huge, 0, false
+	local rushing, lastScream, shimmerAt, still = disc ~= nil and disc.scratched, -math.huge, 0, false -- a scratched disc: it comes out rushing
 	local pixelWait, nextFace = 0, os.clock() + 6 -- Pix-90: its picture changes 6 times a second; its face, now and then
 	setLevel(noise, false)
 	noise.rig:play(noise.anims.Walk, 1)
@@ -4072,7 +4454,7 @@ function PHASES.rebound(noise)
 			streak.Enabled = false
 		end
 		if not alright then break end
-		gap = math.max(gap * 0.85, 0.8) -- sooner and sooner
+		gap = math.max(gap * (if disc and disc.scratched then 0.7 else 0.85), 0.8) -- sooner and sooner (a scratched disc: much sooner)
 	end
 	faceOnScreens(false)
 	roomLights(true)
@@ -4634,8 +5016,12 @@ local function run()
 		if on == wasOn then return end
 		wasOn = on
 		for _, record in ipairs(screens) do
-			if record.own then record.gui.Enabled = on end
+			if record.own then
+				record.gui.Enabled = on
+				if on and wasOn ~= nil then crt(record, true) end -- it switches on
+			end
 		end
+		setLed(on)
 		for _, label in ipairs(setup.antenna and setup.antenna.labels or {}) do label.Visible = on and not setup.antenna.tuned end
 		if hum then if on then hum:Play() else hum:Stop() end end
 	end
