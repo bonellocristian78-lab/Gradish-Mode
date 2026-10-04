@@ -238,7 +238,7 @@ end
 ---- ITS ICON: its own (DOORS' / the tablet's). In a Light's colour or yours: its own picture, its screen recoloured, the
 ---- Light's glow and sparkles around it (made once, kept in the executor's folder) ----
 
-local ICON_BASES = { Tablet = "assets/scanner/Tablet.icon" } -- its own picture, ready to be recoloured (the Nokia's: not yet)
+local ICON_BASES = { Nokia = "assets/scanner/Nokia.icon", Tablet = "assets/scanner/Tablet.icon" } -- its own picture, ready to be recoloured
 local ICON = {}
 do
 	local function clamp01(x) return if x < 0 then 0 elseif x > 1 then 1 else x end
@@ -294,10 +294,10 @@ do
 
 	local SCREEN_S = 0.63 -- how green its screen is in its own picture (its saturation)
 	--[[ ICON.paint(base, color, light): a PNG of its own picture (base: a .icon file, see assets/scanner/) with its
-	     screen, and the green it casts on its body, in `color`; with `light`, the Light's glow and sparkles in it.
-	     Colours as { r, g, b }, 0 to 1 ]]
+	     screen, and the green it casts on its body, in `color` (what the file says takes it); with `light`, the Light's
+	     glow and sparkles in it. Colours as { r, g, b }, 0 to 1 ]]
 	function ICON.paint(base, color, light)
-		assert(base:sub(1, 8) == "SCNICON1", "not an icon")
+		assert(base:sub(1, 8) == "SCNICON2", "not an icon")
 		local w, h = base:byte(9) * 256 + base:byte(10), base:byte(11) * 256 + base:byte(12)
 		local th, ts, tv = toHSV(color[1], color[2], color[3])
 		local rows, at = table.create(h), 13
@@ -305,13 +305,14 @@ do
 			local row = table.create(w + 1)
 			row[1] = "\0"
 			for x = 1, w do
-				local r, g, b, a, glow, spark, core = string.byte(base, at, at + 6)
-				at += 7
+				local r, g, b, a, glow, spark, core, paint = string.byte(base, at, at + 7)
+				at += 8
 				r, g, b, a = r / 255, g / 255, b / 255, a / 255
-				local hue, s, v = toHSV(r, g, b)
-				if a > 0 and s > 0.04 and hue > 0.17 and hue < 0.55 then -- green: its screen (saturated) and its light on the body
-					local m = clamp01((s - 0.25) / 0.2)
-					r, g, b = fromHSV(th, math.min(s * ts / SCREEN_S, 1), v * (1 - m + m * tv))
+				if paint > 0 then -- its screen (saturated), and its light on the body: to the new colour
+					local _, s, v = toHSV(r, g, b)
+					local m, k = clamp01((s - 0.25) / 0.2), paint / 255
+					local nr, ng, nb = fromHSV(th, math.min(s * ts / SCREEN_S, 1), v * (1 - m + m * tv))
+					r, g, b = r + (nr - r) * k, g + (ng - g) * k, b + (nb - b) * k
 				end
 				if light then
 					local ga = glow / 255 * 0.55 -- under it, its glow
@@ -345,7 +346,7 @@ local function useIcon(d)
 	local base = ICON_BASES[KIND]
 	if not (base and (LIGHT or CUSTOM)) then return end
 	local c = CONFIG.Screen
-	local path = ("ObjectScanner/Icons/%s_%s_%02x%02x%02x_1.png"):format(KIND, LIGHT or "Normal", math.floor(c.R * 255 + 0.5), math.floor(c.G * 255 + 0.5), math.floor(c.B * 255 + 0.5))
+	local path = ("ObjectScanner/Icons/%s_%s_%02x%02x%02x_2.png"):format(KIND, LIGHT or "Normal", math.floor(c.R * 255 + 0.5), math.floor(c.G * 255 + 0.5), math.floor(c.B * 255 + 0.5))
 	pcall(function()
 		if not isfolder("ObjectScanner") then makefolder("ObjectScanner") end
 		if not isfolder("ObjectScanner/Icons") then makefolder("ObjectScanner/Icons") end
@@ -353,7 +354,7 @@ local function useIcon(d)
 			local data = nil
 			for _, branch in ipairs(BRANCHES) do
 				local ok, body = pcall(function() return game:HttpGet(REPO .. branch .. "/" .. base) end)
-				if ok and type(body) == "string" and body:sub(1, 8) == "SCNICON1" then
+				if ok and type(body) == "string" and body:sub(1, 8) == "SCNICON2" then
 					data = body
 					break
 				end

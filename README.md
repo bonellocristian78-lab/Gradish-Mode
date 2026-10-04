@@ -531,11 +531,15 @@ yellow). `Color` is its screen's colour, by name: `"Red"`, `"Orange"`, `"Yellow"
 screen is drawn (30, as DOORS').
 
 Its icon is its own. In a Light, or with a `Color` of yours, it is the same icon with
-its screen (and the light it casts on its body) in that colour, and for a Light its
-glow and sparkles around it: the script makes it once from `assets/scanner/Tablet.icon`
-(the tablet's own icon, without its background: `assets/scanner/Tablet.png`) and keeps
-it in the executor's folder (`ObjectScanner/Icons/`). The Nokia keeps DOORS' icon in
-every colour until its own is in `assets/scanner/` too.
+its screen in that colour (the tablet: and the light its screen casts on its body; the
+Nokia's red and green buttons stay as they are), and for a Light its glow and sparkles
+around it. The script makes it once from `assets/scanner/Nokia.icon` or `Tablet.icon`
+(their own icons without their background: `Nokia.png`, `Tablet.png`) and keeps it in
+the executor's folder (`ObjectScanner/Icons/`).
+
+A `.icon` file is `SCNICON2`, the width and the height (2 bytes each, big-endian), then
+8 bytes a pixel, row by row: R, G, B, A, the Light's glow, its sparkles, their white
+middles, and how much of the new colour the pixel takes.
 
 In your hand (held on a Motor6D as DOORS holds its scanner):
 
