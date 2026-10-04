@@ -30,7 +30,7 @@ mod rather than playing it.
 | Noise 90: every "-90" (and A-404) as a Noise (`_G.Type = "A-90"`, ...), all in one | `.../Noise90` |
 | Noise 90, all of them: a new one every 10 s (the others stay), out at once, every disc in the Journal | `.../Noise90All` |
 | DOORS' walk, run, crouch and jump in any game | `.../DoorsAnimations` |
-| Scanners: DOORS' radar, a tablet, a computer, a phone, a GameBoy (`_G.Scanner = { Type = "Phone" }`) | `.../ObjectScanner` |
+| Scanners: DOORS' radar (Nokia) or the NVCS tablet (`_G.Scanner = { Type = "Tablet" }`) | `.../ObjectScanner` |
 | Universal Custom Assets: animator with Studio controls (Ctrl + U I O) | `.../UniversalAssets` |
 | The same, obfuscated | `.../UniversalAssets.obf` |
 
@@ -511,47 +511,39 @@ Until it is on `main`, the script takes them from the branch it is made on.
 ## Scanners (Object Scanner)
 
 ```lua
-_G.Scanner = { Type = "Phone", Variant = "Guiding" } -- optional: the Nokia, Normal, by default
+_G.Scanner = { Type = "Tablet", Variant = "Guiding" } -- optional: the Nokia, Normal, by default
 loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/ObjectScanner"))()
 ```
 
-One script, one scanner in your inventory: the kind you pick.
+One script, one scanner in your inventory: DOORS' two, the one you pick, each with
+its own model and its own icon.
 
 | `Type` | What it is | Only it has |
 |---|---|---|
-| `"Nokia"` (default) | DOORS' own scanner from the Mines: its model (`ObjectScanner.rbxm`), sounds and animations | **SNAKE** |
-| `"Tablet"` | the NVCS tablet of the tablet's own script (model `rbxassetid://12594482248`; one made here if it cannot be loaded) | **X-RAY**: the room seen through its screen, stars on what opens the way |
-| `"Computer"` | a small laptop, made here: DOORS' open and close animations open and close its lid | **TERMINAL**: room, door, what is around, what is coming, typed |
-| `"Phone"` | a phone, made here | **COLOR** (left/right click: its colour, from 12) and **LIGHT** (a flashlight) |
-| `"GameBoy"` | a handheld, made here | **MAP**: the room and the next one from above, turning as you turn |
+| `"Nokia"` (default) | DOORS' own scanner from the Mines: its model (`ObjectScanner.rbxm`), icon, sounds and animations | **SNAKE** (left / right click turn it) |
+| `"Tablet"` | the NVCS tablet: the model of the tablet's own script (`rbxassetid://12594482248`), its icon, sounds and animations | **X-RAY**: the room seen through its screen, stars on what opens the way |
 
 `Variant`: `"Normal"`, `"Guiding"` (Guiding Light: blue, its glow and sparkles) or
-`"Curious"` (Curious Light: yellow). `Color` is its screen's colour (by default the
-kind's own, or the Light's), `BodyColor` its body's (Computer, Phone, GameBoy), `FPS`
-how many times a second its screen is drawn (30, as DOORS').
+`"Curious"` (Curious Light: yellow). `Color` is its screen's colour (by default its
+own, or the Light's), `FPS` how many times a second its screen is drawn (30, as DOORS').
 
-Its picture in the inventory is drawn by the script, in its colours: the colour of its
-screen and of its body (the Phone's picture changes with its colour). Each picture is
-made once and kept in the executor's folder (`ObjectScanner/Icons/`).
-
-In your hand (held on a Motor6D as DOORS holds its scanner, with DOORS' animations):
+In your hand (held on a Motor6D as DOORS holds its scanner):
 
 | Key | What it does |
 |---|---|
-| Left click | on / off (in SNAKE, COLOR, LIGHT: their action) |
-| Right click | inspect it: DOORS' own, turned round, brought to your face, tapped (in SNAKE and COLOR: their action) |
+| Left click | on / off (in SNAKE: turn left) |
+| Right click | inspect it: DOORS' own, turned round, brought to your face, tapped (in SNAKE: turn right) |
 | F | the next function |
 | L | a trick: tossed like a pancake, spun, shaken, smacked, juggled, nearly dropped (and once in a while it really falls) |
 | X | drop it in front of you; **E** picks it up |
 
-Its functions, on every kind: **SCANNER** (DOORS' own: a pulse every 2.5 s, a star on
-what is worth finding 60 studs around), **ENTITIES** (what is coming, on a radar; it
-beeps faster as it comes, and a "!" blinks on every other function), **EXIT** (an
-arrow to the next door, its number, if it is locked), **HIDING** (where to hide, on a
-radar), **TRAPS** (the Dupe's fake door, Snares, Giggles, Gloombat eggs; in a room
-with the Dupe, the real door's number). Its battery never runs out; after a respawn
-you have it again (the one on the floor too). Running it again replaces the one you
-have.
+Its functions, on both: **SCANNER** (DOORS' own: a pulse every 2.5 s, a star on what is
+worth finding 60 studs around), **ENTITIES** (what is coming, on a radar; it beeps
+faster as it comes, and a "!" blinks on every other function), **EXIT** (an arrow to the
+next door, its number, if it is locked), **HIDING** (where to hide, on a radar), **TRAPS**
+(the Dupe's fake door, Snares, Giggles, Gloombat eggs; in a room with the Dupe, the real
+door's number). Its battery never runs out; after a respawn you have it again (the one
+on the floor too). Running it again replaces the one you have.
 
 ## DOORS animations in any game
 
@@ -801,7 +793,7 @@ Over 400 simulated seeds: no spacing violations, about 12 encounters per run.
 | `Noise` / `Noise90` | Noise (B-90); every "-90" as a Noise, `_G.Type` |
 | `Noise90All` | every Noise 90, a new one every 10 s (fills the Noise Journal) |
 | `Errorbush` / `Errorbush.rbxm` | 3rr0rbu2h, the broken Ambush; its model |
-| `ObjectScanner` / `ObjectScanner.rbxm` | The scanners (five kinds, their Lights, their pictures); DOORS' scanner's model, out of a saved place |
+| `ObjectScanner` / `ObjectScanner.rbxm` | The scanners (Nokia and Tablet, their Lights); DOORS' scanner's model, out of a saved place |
 | `assets/errorbush/` | 3rr0rbu2h's two faces |
 | `assets/noise/` | Noise's kit, tape and sheets; Noise 90's props kit, grey sheets and faces |
 | `UniversalAssets` / `.obf` | the animator for DOORS' things and custom assets, readable and obfuscated |

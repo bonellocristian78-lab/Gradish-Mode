@@ -3,31 +3,27 @@
 
         S C A N N E R S        (ObjectScanner)
 
-        DOORS' scanner and four more, the one you pick, in your inventory and
-        working. Five kinds:
+        DOORS' two scanners, the one you pick, in your inventory and working:
 
-            Nokia     DOORS' own scanner (the Mines'), its model and animations
-            Tablet    the NVCS tablet: it sees the room through its screen
-            Computer  a small laptop that opens and closes, with a terminal
-            Phone     a phone: radar, a flashlight, and its colour, yours to pick
-            GameBoy   a handheld with the map of the room, seen from above
+            Nokia     DOORS' own scanner (the Mines'): its model, its icon, its
+                      animations
+            Tablet    the NVCS tablet (the model of the tablet's own script):
+                      it sees the room through its screen
 
         Each in three versions: Normal, Guiding Light (blue) and Curious Light
-        (yellow), with their glow. Its inventory picture is drawn in its own
-        colours: the colour of its screen and of its body, always.
+        (yellow), with their glow. Their icon is their own.
 
-            _G.Scanner = { Type = "Phone", Variant = "Guiding" }   -- optional
+            _G.Scanner = { Type = "Tablet", Variant = "Guiding" }   -- optional
             loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/ObjectScanner"))()
 
-        Type       "Nokia" (the default), "Tablet", "Computer", "Phone", "GameBoy"
+        Type       "Nokia" (the default), "Tablet"
         Variant    "Normal" (the default), "Guiding", "Curious"
-        Color      its screen (Color3): by default the kind's own, or the Light's
-        BodyColor  its body (Color3), for the Computer, the Phone and the GameBoy
+        Color      its screen (Color3): by default its own, or the Light's
         FPS        how many times a second its screen is drawn (30, as DOORS')
 
         In your hand:
-            Left click   turn it on / off      (in an app: its action)
-            Right click  inspect it            (in an app: its other action)
+            Left click   turn it on / off      (in SNAKE: turn left)
+            Right click  inspect it            (in SNAKE: turn right)
             F            the next function
             L            a trick: it flies, it spins, it falls...
             X            drop it (E to pick it up)
@@ -35,10 +31,9 @@
         Its functions (F): SCANNER (DOORS' own: what is worth finding),
         ENTITIES (what is coming, and from where), EXIT (an arrow to the next
         door), HIDING (where to hide), TRAPS (fake doors, snares, Giggles); and
-        each kind its own: Nokia SNAKE, Tablet X-RAY, Computer TERMINAL, Phone
-        COLOR and LIGHT, GameBoy MAP.
+        its own: the Nokia SNAKE, the Tablet X-RAY.
 
-        Run it again to change kind: the old one goes away. Its battery never
+        Run it again to change it: the old one goes away. Its battery never
         runs out.
 
 ================================================================================
@@ -54,27 +49,18 @@ local LocalPlayer = Players.LocalPlayer
 
 local function rgb(r, g, b) return Color3.fromRGB(r, g, b) end
 
--- The kinds: their screen's colour, their body's, the pitch of their sounds, and what only they can do
+-- The kinds: their screen's colour, and what only they can do
 local KINDS = {
-	Nokia = { title = "Scanner", screen = rgb(124, 165, 116), pitch = 1, own = { "SNAKE" } },
-	Tablet = { title = "Tablet", screen = rgb(124, 200, 110), body = rgb(50, 52, 60), pitch = 0.9, own = { "XRAY" } },
-	Computer = { title = "Computer", screen = rgb(51, 255, 102), body = rgb(70, 72, 80), pitch = 0.85, own = { "TERMINAL" } },
-	Phone = { title = "Phone", screen = rgb(150, 215, 255), body = rgb(230, 50, 64), pitch = 1.15, own = { "COLOR", "LIGHT" } },
-	GameBoy = { title = "Game Boy", screen = rgb(155, 188, 15), body = rgb(199, 199, 189), pitch = 1.3, own = { "MAP" } },
+	Nokia = { title = "Scanner", screen = rgb(124, 165, 116), own = { "SNAKE" } },
+	Tablet = { title = "Tablet", screen = rgb(124, 200, 110), own = { "XRAY" } },
 }
 local KIND_NAMES = { nokia = "Nokia", radar = "Nokia", scanner = "Nokia", objectscanner = "Nokia", tablet = "Tablet", nvcs = "Tablet",
-	nvcs3000 = "Tablet", computer = "Computer", laptop = "Computer", pc = "Computer", phone = "Phone", telefono = "Phone",
-	smartphone = "Phone", gameboy = "GameBoy", gb = "GameBoy" }
+	nvcs3000 = "Tablet" }
 local LIGHTS = {
 	Guiding = { title = "Guiding Light", color = rgb(95, 180, 255) },
 	Curious = { title = "Curious Light", color = rgb(255, 205, 70) },
 }
 local LIGHT_NAMES = { guiding = "Guiding", guidinglight = "Guiding", curious = "Curious", curiouslight = "Curious" }
--- The colours of the Phone (its COLOR app)
-local PALETTE = { { "RED", rgb(230, 50, 64) }, { "ORANGE", rgb(255, 140, 40) }, { "YELLOW", rgb(250, 210, 60) }, { "LIME", rgb(130, 220, 80) },
-	{ "GREEN", rgb(40, 170, 90) }, { "CYAN", rgb(40, 200, 220) }, { "BLUE", rgb(50, 110, 240) }, { "PURPLE", rgb(150, 80, 230) },
-	{ "PINK", rgb(255, 110, 190) }, { "WHITE", rgb(235, 235, 240) }, { "BLACK", rgb(35, 35, 40) }, { "GOLD", rgb(212, 175, 55) } }
-
 local function simple(s) return if type(s) == "string" then (s:lower():gsub("[^%w]", "")) else "" end
 local given = _G.Scanner
 _G.Scanner = nil
@@ -85,7 +71,6 @@ local LIGHT = LIGHT_NAMES[simple(given.Variant)] -- nil: Normal
 local CONFIG = {
 	FPS = math.clamp(tonumber(given.FPS) or 30, 1, 240),
 	Screen = if typeof(given.Color) == "Color3" then given.Color elseif LIGHT then LIGHTS[LIGHT].color else KINDS[KIND].screen,
-	Body = if typeof(given.BodyColor) == "Color3" then given.BodyColor else KINDS[KIND].body,
 }
 local TITLE = KINDS[KIND].title .. (if LIGHT then " (" .. LIGHTS[LIGHT].title .. ")" else "")
 local FNS = { "ITEMS", "ENTITIES", "EXIT", "HIDING", "TRAPS" } -- its functions, in order (F): these, then its own
@@ -124,110 +109,21 @@ if not template then
 end
 local SCREEN_UI = template.Handle.Top.Screen.ScreenUI
 
--- The NVCS tablet (the model of the tablet's own script); without it, a tablet made here
+-- The NVCS tablet: the model of the tablet's own script
 local tabletModel = nil
 if KIND == "Tablet" then
 	local ok, model = pcall(function() return game:GetObjects("rbxassetid://12594482248")[1] end)
 	if ok and typeof(model) == "Instance" and model:IsA("Tool") and model:FindFirstChild("Handle") and model.Handle:FindFirstChild("Screen") then
 		tabletModel = model
+	else
+		warn("[Scanner] the tablet's model could not be loaded")
+		return
 	end
 end
 
----- ITS MODEL: DOORS' own (Nokia), the tablet's, or made here of parts; held as DOORS holds its scanner ----
+---- ITS MODEL: DOORS' own (Nokia) or the tablet's; held as DOORS holds its scanner ----
 
-local GRIP = CFrame.new(-1.2, -0.15, 0.3, -1, 0, 0, 0, 1, 0, 0, 0, -1) -- where DOORS' hand holds its scanner (its ToolGripAttach)
 local FRONT = Enum.NormalId.Front
-local ACROSS = CFrame.Angles(0, math.pi / 2, 0) -- a cylinder standing out of the front
-local function dark(c, k) return Color3.new(math.min(c.R * k, 1), math.min(c.G * k, 1), math.min(c.B * k, 1)) end
-local function piece(parent, name, size, cf, color, material, shape)
-	local p = Instance.new("Part")
-	p.Name = name
-	if shape then p.Shape = shape end
-	p.Size = size
-	p.CFrame = cf
-	p.Color = color
-	p.Material = material or Enum.Material.SmoothPlastic
-	p.TopSurface, p.BottomSurface = Enum.SurfaceType.Smooth, Enum.SurfaceType.Smooth
-	p.Anchored, p.CanCollide, p.CanQuery, p.CanTouch, p.Massless = false, false, false, false, true
-	p.Parent = parent
-	return p
-end
-
---[[ The kinds made here: in the space of DOORS' scanner's handle (its screen looks out of the front, -Z), where DOORS'
-     animations hold it. Each gives its screen; what takes its body's colour (paint: { part, how dark }); a lid (on a
-     Top_Joint, as DOORS' scanner's: its open and close animations fold it); a light (led); a flashlight (torch) ]]
-local BUILD = {}
-function BUILD.Phone(root, body)
-	local d = { paint = {} }
-	local function painted(p, k) table.insert(d.paint, { p, k }) return p end
-	local c = CFrame.new(0, 0.4, 0)
-	painted(piece(root, "Body", Vector3.new(0.62, 1.24, 0.09), c, body), 1)
-	piece(root, "Glass", Vector3.new(0.58, 1.2, 0.012), c * CFrame.new(0, 0, -0.045), rgb(14, 14, 17), Enum.Material.Glass)
-	d.screen = piece(root, "Screen", Vector3.new(0.52, 1.02, 0.01), c * CFrame.new(0, -0.01, -0.052), rgb(0, 0, 0))
-	piece(root, "Notch", Vector3.new(0.14, 0.035, 0.01), c * CFrame.new(0, 0.555, -0.053), rgb(5, 5, 6))
-	local bump = painted(piece(root, "CameraBump", Vector3.new(0.2, 0.22, 0.03), c * CFrame.new(0.14, 0.43, 0.058), dark(body, 0.7)), 0.7)
-	piece(root, "Lens", Vector3.new(0.02, 0.08, 0.08), c * CFrame.new(0.14, 0.47, 0.075) * ACROSS, rgb(10, 10, 12), Enum.Material.Glass, Enum.PartType.Cylinder)
-	painted(piece(root, "Button", Vector3.new(0.02, 0.16, 0.04), c * CFrame.new(0.32, 0.25, 0), dark(body, 0.8)), 0.8)
-	painted(piece(root, "Button", Vector3.new(0.02, 0.1, 0.04), c * CFrame.new(-0.32, 0.3, 0), dark(body, 0.8)), 0.8)
-	local torch = Instance.new("SpotLight") -- its flashlight, out of its back
-	torch.Name = "Flashlight"
-	torch.Face = Enum.NormalId.Back
-	torch.Angle, torch.Range, torch.Brightness, torch.Shadows, torch.Enabled = 75, 45, 3, true, false
-	torch.Color = rgb(255, 250, 235)
-	torch.Parent = bump
-	d.torch = torch
-	return d
-end
-function BUILD.Computer(root, body)
-	local d = { paint = {} }
-	local function painted(p, k) table.insert(d.paint, { p, k }) return p end
-	painted(piece(root, "Body", Vector3.new(1, 0.68, 0.06), CFrame.new(0, 0.05, 0), body), 1) -- its keyboard half
-	piece(root, "Keys", Vector3.new(0.86, 0.36, 0.012), CFrame.new(0, 0.12, -0.035), rgb(28, 28, 32))
-	for row = 0, 2 do piece(root, "KeyRow", Vector3.new(0.8, 0.07, 0.006), CFrame.new(0, 0.23 - row * 0.11, -0.043), rgb(72, 74, 82)) end
-	painted(piece(root, "Pad", Vector3.new(0.3, 0.16, 0.008), CFrame.new(0, -0.17, -0.033), dark(body, 0.8)), 0.8)
-	d.led = piece(root, "Led", Vector3.new(0.04, 0.03, 0.01), CFrame.new(0.42, -0.24, -0.033), rgb(60, 255, 90), Enum.Material.Neon)
-	local at = CFrame.new(0, 0.73, 0) -- its lid, on its hinge
-	local lid = painted(piece(root, "Top", Vector3.new(1, 0.68, 0.05), at, body), 1)
-	piece(lid, "Bezel", Vector3.new(0.96, 0.64, 0.012), at * CFrame.new(0, 0, -0.03), rgb(14, 14, 17), Enum.Material.Glass)
-	d.screen = piece(lid, "Screen", Vector3.new(0.86, 0.54, 0.01), at * CFrame.new(0, 0.01, -0.037), rgb(0, 0, 0))
-	local hinge = Instance.new("Motor6D")
-	hinge.Name = "Top_Joint"
-	hinge.Part0, hinge.Part1 = root, lid
-	hinge.C0, hinge.C1 = CFrame.new(0, 0.39, 0), CFrame.new(0, -0.34, 0)
-	hinge.Parent = lid
-	d.lid = lid
-	return d
-end
-function BUILD.GameBoy(root, body)
-	local d = { paint = {} }
-	local function painted(p, k) table.insert(d.paint, { p, k }) return p end
-	local c = CFrame.new(0, 0.35, 0)
-	painted(piece(root, "Body", Vector3.new(0.72, 1.18, 0.2), c, body), 1)
-	piece(root, "Frame", Vector3.new(0.6, 0.46, 0.012), c * CFrame.new(0, 0.25, -0.104), rgb(78, 80, 96))
-	d.screen = piece(root, "Screen", Vector3.new(0.42, 0.36, 0.01), c * CFrame.new(0, 0.26, -0.11), rgb(0, 0, 0))
-	d.led = piece(root, "Led", Vector3.new(0.03, 0.03, 0.01), c * CFrame.new(-0.255, 0.3, -0.111), rgb(255, 40, 40), Enum.Material.Neon)
-	piece(root, "Cross", Vector3.new(0.2, 0.065, 0.04), c * CFrame.new(-0.17, -0.17, -0.11), rgb(30, 30, 35))
-	piece(root, "Cross", Vector3.new(0.065, 0.2, 0.04), c * CFrame.new(-0.17, -0.17, -0.11), rgb(30, 30, 35))
-	piece(root, "ButtonB", Vector3.new(0.04, 0.11, 0.11), c * CFrame.new(0.1, -0.21, -0.11) * ACROSS, rgb(150, 30, 90), nil, Enum.PartType.Cylinder)
-	piece(root, "ButtonA", Vector3.new(0.04, 0.11, 0.11), c * CFrame.new(0.24, -0.15, -0.11) * ACROSS, rgb(150, 30, 90), nil, Enum.PartType.Cylinder)
-	for _, x in ipairs({ -0.06, 0.06 }) do
-		painted(piece(root, "Select", Vector3.new(0.09, 0.025, 0.02), c * CFrame.new(x, -0.36, -0.104) * CFrame.Angles(0, 0, math.rad(25)), dark(body, 0.6)), 0.6)
-	end
-	for k = 0, 3 do
-		painted(piece(root, "Grille", Vector3.new(0.015, 0.14, 0.012), c * CFrame.new(0.17 + k * 0.045, -0.44, -0.102) * CFrame.Angles(0, 0, math.rad(-30)), dark(body, 0.6)), 0.6)
-	end
-	piece(root, "Cartridge", Vector3.new(0.5, 0.12, 0.1), c * CFrame.new(0, 0.6, 0.06), rgb(60, 60, 66))
-	return d
-end
-function BUILD.Tablet(root, body) -- (when the NVCS could not be loaded)
-	local d = { paint = {} }
-	local c = CFrame.new(0, 0.45, 0)
-	table.insert(d.paint, { piece(root, "Body", Vector3.new(1.3, 0.9, 0.06), c, body), 1 })
-	piece(root, "Glass", Vector3.new(1.24, 0.84, 0.012), c * CFrame.new(0, 0, -0.03), rgb(14, 14, 17), Enum.Material.Glass)
-	d.screen = piece(root, "Screen", Vector3.new(1.08, 0.78, 0.01), c * CFrame.new(-0.04, 0, -0.037), rgb(0, 0, 0))
-	piece(root, "Home", Vector3.new(0.012, 0.06, 0.06), c * CFrame.new(0.58, 0, -0.037) * ACROSS, rgb(60, 60, 66), nil, Enum.PartType.Cylinder)
-	return d
-end
 
 -- Every part of it (not what it keeps in its folders)
 local function partsOf(tool)
@@ -256,54 +152,21 @@ local function centreOf(tool, handle)
 	return Vector3.new((lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2, (lo[3] + hi[3]) / 2)
 end
 
--- The colour of its body, for its picture: what takes its colour, or its biggest part (if not a texture)
-local function bodyColor(d)
-	if #d.paint > 0 then return d.paint[1][1].Color end
-	local best, most = nil, 0
-	for _, p in ipairs(partsOf(d.tool)) do
-		local volume = p.Size.X * p.Size.Y * p.Size.Z
-		if p.Transparency < 1 and p ~= d.screen and volume > most then best, most = p, volume end
-	end
-	if best and not (best:IsA("MeshPart") and best.TextureID ~= "") then return best.Color end
-	return KINDS[KIND].body or rgb(78, 80, 78)
-end
-
--- A new scanner of the kind chosen: { tool, handle, screen, face, paint, torch, native, grip, centre, assets, body }
+-- A new scanner of the kind chosen: { tool, handle, screen, face, native, grip, centre, assets }
 local function make()
-	local d = { paint = {} }
+	local d = {}
 	local tool
 	if KIND == "Nokia" then
 		tool = template:Clone()
 		tool.Name = "ObjectScanner"
 		d.handle, d.screen, d.face = tool.Handle, tool.Handle.Top.Screen, FRONT
 		tool.Handle.Top.Screen.ScreenUI.Enabled = false
-	elseif KIND == "Tablet" and tabletModel then
+	else
 		tool = tabletModel:Clone()
 		tool.Name = TITLE
 		d.handle, d.screen, d.native = tool.Handle, tool.Handle.Screen, true -- its own animations (fire, equip, idle) and sounds (Use, Idle, Disable)
 		local own = tool:FindFirstChild("Storage") and tool.Storage:FindFirstChild("ScreenUI")
 		d.face = if own and own:IsA("SurfaceGui") then own.Face else FRONT
-	else
-		tool = Instance.new("Tool")
-		tool.Name = TITLE
-		local root = piece(tool, "Handle", Vector3.new(0.3, 0.3, 0.3), CFrame.new(), rgb(0, 0, 0))
-		root.Transparency = 1
-		local built = BUILD[KIND](root, CONFIG.Body or KINDS[KIND].body)
-		for _, p in ipairs(root:GetDescendants()) do -- all of it on its handle (the lid's pieces on the lid)
-			if p:IsA("BasePart") and p ~= built.lid then
-				local base = if built.lid and p:IsDescendantOf(built.lid) then built.lid else root
-				local w = Instance.new("Weld")
-				w.Part0, w.Part1 = base, p
-				w.C0 = base.CFrame:ToObjectSpace(p.CFrame)
-				w.Parent = p
-			end
-		end
-		local grip = Instance.new("Attachment")
-		grip.Name = "ToolGripAttach"
-		grip.CFrame = GRIP
-		grip.Parent = root
-		for _, name in ipairs({ "BootSystem", "SystemIdle", "CloseSystem" }) do template.Handle[name]:Clone().Parent = root end
-		d.handle, d.screen, d.face, d.paint, d.torch, d.led = root, built.screen, FRONT, built.paint, built.torch, built.led
 	end
 	-- What every kind needs of DOORS' scanner: its sounds, its star and pings, its animations, its Inspect
 	for _, name in ipairs({ "NextMode", "ScannedIdle" }) do
@@ -317,10 +180,7 @@ local function make()
 		inspect.Parent = tool
 	end
 	for _, s in ipairs(tool:GetDescendants()) do
-		if s:IsA("Sound") then
-			s.Playing = false
-			if KIND ~= "Nokia" and not d.native then s.PlaybackSpeed = KINDS[KIND].pitch end
-		end
+		if s:IsA("Sound") then s.Playing = false end
 	end
 	tool:SetAttribute("ScannerMode", "")
 	tool:SetAttribute("Durability", tool:GetAttribute("DurabilityMax") or 300) -- full, and it stays so
@@ -339,7 +199,6 @@ local function make()
 	d.grip = if grip then grip.CFrame else tool.Grip
 	d.centre = centreOf(tool, d.handle)
 	d.assets = tool.ScannerAssets
-	d.body = bodyColor(d)
 	if LIGHT then -- the Light's glow on it, and its sparkles
 		local color = LIGHTS[LIGHT].color
 		local glow = Instance.new("PointLight")
@@ -362,289 +221,25 @@ local function make()
 		sparkles.Speed = NumberRange.new(0.2, 0.6)
 		sparkles.SpreadAngle = Vector2.new(180, 180)
 		sparkles.Parent = at
-		if d.led then d.led.Color = color end
 	end
 	return d
 end
 
----- ICONS: every scanner's inventory picture, drawn here in its own colours (a PNG, made in Lua) ----
-local ICON = {}
-do
-	local N = 128 -- pixels a side
-	local function clamp01(x) return if x < 0 then 0 elseif x > 1 then 1 else x end
-
-	-- Shapes, by their signed distance (pixels: < 0 inside)
-	local function box(cx, cy, hw, hh, r)
-		return { bb = { cx - hw, cy - hh, cx + hw, cy + hh }, d = function(x, y)
-			local qx, qy = math.abs(x - cx) - (hw - r), math.abs(y - cy) - (hh - r)
-			local ox, oy = math.max(qx, 0), math.max(qy, 0)
-			return math.sqrt(ox * ox + oy * oy) + math.min(math.max(qx, qy), 0) - r
-		end }
-	end
-	local function circle(cx, cy, r)
-		return { bb = { cx - r, cy - r, cx + r, cy + r }, d = function(x, y)
-			return math.sqrt((x - cx) ^ 2 + (y - cy) ^ 2) - r
-		end }
-	end
-	local function ring(cx, cy, r, w)
-		return { bb = { cx - r - w, cy - r - w, cx + r + w, cy + r + w }, d = function(x, y)
-			return math.abs(math.sqrt((x - cx) ^ 2 + (y - cy) ^ 2) - r) - w
-		end }
-	end
-	local function seg(ax, ay, bx, by, r)
-		return { bb = { math.min(ax, bx) - r, math.min(ay, by) - r, math.max(ax, bx) + r, math.max(ay, by) + r }, d = function(x, y)
-			local pax, pay, bax, bay = x - ax, y - ay, bx - ax, by - ay
-			local h = clamp01((pax * bax + pay * bay) / (bax * bax + bay * bay))
-			local dx, dy = pax - bax * h, pay - bay * h
-			return math.sqrt(dx * dx + dy * dy) - r
-		end }
-	end
-	local function star(cx, cy, R, w) -- a sparkle: two thin diamonds, crossed
-		local k = 1 / math.sqrt(R * R + w * w)
-		return { bb = { cx - R, cy - R, cx + R, cy + R }, d = function(x, y)
-			local ax, ay = math.abs(x - cx), math.abs(y - cy)
-			return math.min((ax * w + ay * R - R * w) * k, (ax * R + ay * w - R * w) * k)
-		end }
-	end
-	local function frame(cx, cy, hw, hh, w) -- a box's outline only
-		local inner = box(cx, cy, hw, hh, 0)
-		return { bb = { cx - hw - w, cy - hh - w, cx + hw + w, cy + hh + w }, d = function(x, y) return math.abs(inner.d(x, y)) - w end }
-	end
-
-	local INK = { 0.09, 0.08, 0.1 }
-	local function mul(c, k) return { math.min(c[1] * k, 1), math.min(c[2] * k, 1), math.min(c[3] * k, 1) } end
-	local function mix(a, b, t) return { a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t, a[3] + (b[3] - a[3]) * t } end
-
-	-- Paints a shape on the canvas: o.outline (dark border, pixels), o.grad (lighter at its top), o.glow (soft, pixels), o.alpha
-	local function paint(cv, shape, color, o)
-		o = o or {}
-		local alpha, ow, glow, grad = o.alpha or 1, o.outline or 0, o.glow, o.grad or 0
-		local pad = math.max(ow, glow or 0) + 2
-		local cs, sn = math.cos(cv.rot), math.sin(cv.rot)
-		local b = shape.bb
-		local X0, Y0, X1, Y1 = math.huge, math.huge, -math.huge, -math.huge
-		for _, corner in ipairs({ { b[1] - pad, b[2] - pad }, { b[3] + pad, b[2] - pad }, { b[1] - pad, b[4] + pad }, { b[3] + pad, b[4] + pad } }) do
-			local lx, ly = corner[1] - 64, corner[2] - 64
-			local px, py = cs * lx - sn * ly + 64, sn * lx + cs * ly + 64
-			X0, Y0, X1, Y1 = math.min(X0, px), math.min(Y0, py), math.max(X1, px), math.max(Y1, py)
-		end
-		local R, G, B, A = cv.r, cv.g, cv.b, cv.a
-		local top, height = b[2], math.max(b[4] - b[2], 1)
-		local function blend(i, c, a)
-			if a <= 0 then return end
-			local under = A[i] * (1 - a)
-			local out = a + under
-			R[i] = (c[1] * a + R[i] * under) / out
-			G[i] = (c[2] * a + G[i] * under) / out
-			B[i] = (c[3] * a + B[i] * under) / out
-			A[i] = out
-		end
-		for py = math.max(math.floor(Y0), 0), math.min(math.ceil(Y1), N - 1) do
-			for px = math.max(math.floor(X0), 0), math.min(math.ceil(X1), N - 1) do
-				local sx, sy = px + 0.5 - 64, py + 0.5 - 64
-				local lx, ly = cs * sx + sn * sy + 64, -sn * sx + cs * sy + 64
-				local d = shape.d(lx, ly)
-				local i = py * N + px + 1
-				if glow then
-					blend(i, color, (if d <= 0 then 1 else (1 - clamp01(d / glow)) ^ 2) * alpha)
-				else
-					if ow > 0 then blend(i, INK, clamp01(0.5 - (d - ow)) * alpha) end
-					local cover = clamp01(0.5 - d) * alpha
-					if cover > 0 then
-						blend(i, if grad ~= 0 then mul(color, 1 + grad * (0.5 - (ly - top) / height)) else color, cover)
-					end
-				end
-			end
-		end
-	end
-
-	-- What each scanner's screen shows, in its colour (s: the screen colour; bg: the screen, dark)
-	local function sparkle(cv, x, y, R, c)
-		paint(cv, star(x, y, R, R * 0.28), c, { glow = R * 0.6, alpha = 0.55 })
-		paint(cv, star(x, y, R, R * 0.28), c)
-		paint(cv, star(x, y, R * 0.55, R * 0.16), { 1, 1, 1 })
-	end
-	local function screen(cv, cx, cy, hw, hh, s)
-		paint(cv, box(cx, cy, hw + 3, hh + 3, 3), { 0.07, 0.07, 0.08 }, { outline = 2 })
-		paint(cv, box(cx, cy, hw, hh, 2), mul(s, 0.16))
-		paint(cv, box(cx, cy, hw, hh, 2), s, { glow = 5, alpha = 0.22 })
-		paint(cv, frame(cx, cy, hw - 2, hh - 2, 0.6), s, { alpha = 0.7 })
-	end
-
-	local DRAW = {}
-	local TILT = { Nokia = -10, Tablet = -8, Computer = -6, Phone = 12, GameBoy = -12 } -- degrees
-	function DRAW.Nokia(cv, s, body)
-		paint(cv, seg(42, 26, 37, 6, 3.2), mul(body, 0.8), { outline = 2.5 }) -- the antenna
-		paint(cv, circle(37, 6, 4.5), mul(body, 0.9), { outline = 2.5 })
-		paint(cv, box(64, 92, 31, 26, 7), body, { outline = 3, grad = 0.35 }) -- the body
-		paint(cv, box(64, 44, 31, 27, 7), mul(body, 1.08), { outline = 3, grad = 0.35 }) -- the lid
-		paint(cv, box(64, 70, 22, 3.5, 1.5), mul(body, 0.55), { outline = 2 }) -- its hinge
-		screen(cv, 64, 44, 21, 17, s)
-		paint(cv, ring(62, 47, 10, 1.2), s, { alpha = 0.8 })
-		paint(cv, ring(62, 47, 4, 1), s, { alpha = 0.6 })
-		paint(cv, star(70, 40, 6, 2), mix(s, { 1, 1, 1 }, 0.35))
-		paint(cv, box(52, 88, 7, 3.5, 1.5), { 0.62, 0.36, 0.36 }, { outline = 2 }) -- its buttons, red and green as DOORS'
-		paint(cv, box(76, 88, 7, 3.5, 1.5), { 0.38, 0.6, 0.38 }, { outline = 2 })
-		for k = 0, 2 do paint(cv, seg(52, 100 + k * 5, 76, 100 + k * 5, 1.1), mul(body, 0.45)) end -- its speaker
-	end
-	function DRAW.Tablet(cv, s, body)
-		paint(cv, box(64, 64, 52, 37, 8), body, { outline = 3, grad = 0.3 })
-		screen(cv, 60, 64, 41, 28, s)
-		paint(cv, seg(26, 86, 46, 62, 0.8), s, { alpha = 0.5 }) -- a room, seen through it
-		paint(cv, seg(94, 86, 74, 62, 0.8), s, { alpha = 0.5 })
-		paint(cv, seg(26, 42, 46, 56, 0.8), s, { alpha = 0.5 })
-		paint(cv, seg(94, 42, 74, 56, 0.8), s, { alpha = 0.5 })
-		paint(cv, frame(60, 61, 14, 6, 0.8), s, { alpha = 0.5 })
-		paint(cv, frame(60, 64, 5, 7, 0.9), s, { alpha = 0.85 }) -- its door
-		paint(cv, star(78, 70, 8, 2.5), mix(s, { 1, 1, 1 }, 0.35))
-		paint(cv, circle(110, 64, 3.5), mul(body, 1.7), { outline = 1.5 }) -- its button
-	end
-	function DRAW.Computer(cv, s, body)
-		paint(cv, box(64, 94, 52, 9, 4), mul(body, 1.25), { outline = 3, grad = 0.4 }) -- the keyboard half
-		for k = 0, 4 do paint(cv, seg(24 + k * 16, 92, 34 + k * 16, 92, 1.4), mul(body, 0.6)) end
-		paint(cv, seg(42, 98, 86, 98, 1.4), mul(body, 0.6))
-		paint(cv, box(64, 50, 46, 34, 5), body, { outline = 3, grad = 0.3 }) -- the lid
-		screen(cv, 64, 50, 39, 27, s)
-		paint(cv, seg(32, 33, 60, 33, 1.6), s) -- its terminal
-		paint(cv, seg(32, 41, 84, 41, 1.6), s, { alpha = 0.8 })
-		paint(cv, seg(32, 49, 72, 49, 1.6), s, { alpha = 0.8 })
-		paint(cv, seg(32, 57, 50, 57, 1.6), s, { alpha = 0.8 })
-		paint(cv, box(36, 66, 3.5, 4, 0.5), mix(s, { 1, 1, 1 }, 0.3))
-		paint(cv, star(88, 64, 6, 2), mix(s, { 1, 1, 1 }, 0.35))
-	end
-	function DRAW.Phone(cv, s, body)
-		paint(cv, box(92, 44, 2.5, 8, 1.2), mul(body, 0.7), { outline = 1.5 }) -- its side buttons
-		paint(cv, box(64, 64, 28, 50, 10), body, { outline = 3, grad = 0.35 })
-		screen(cv, 64, 64, 20, 39, s)
-		paint(cv, seg(58, 26, 70, 26, 2.2), { 0.05, 0.05, 0.06 }) -- the notch
-		paint(cv, ring(64, 68, 13, 1.2), s, { alpha = 0.8 })
-		paint(cv, ring(64, 68, 6, 1), s, { alpha = 0.6 })
-		paint(cv, seg(64, 68, 74, 59, 1), s, { alpha = 0.7 })
-		paint(cv, star(73, 60, 6, 2), mix(s, { 1, 1, 1 }, 0.35))
-		paint(cv, seg(48, 96, 80, 96, 1.4), s, { alpha = 0.5 })
-	end
-	function DRAW.GameBoy(cv, s, body)
-		paint(cv, box(64, 64, 38, 54, 7), body, { outline = 3, grad = 0.3 })
-		paint(cv, box(64, 40, 30, 24, 4), { 0.3, 0.3, 0.35 }, { outline = 2 }) -- the screen's frame
-		screen(cv, 64, 40, 21, 16, s)
-		paint(cv, frame(58, 40, 10, 7, 0.9), s, { alpha = 0.7 }) -- a map
-		paint(cv, seg(48, 47, 48, 52, 0.9), s, { alpha = 0.7 })
-		paint(cv, frame(76, 36, 5, 5, 0.9), s, { alpha = 0.7 })
-		paint(cv, circle(58, 42, 2.4), mix(s, { 1, 1, 1 }, 0.4))
-		paint(cv, star(77, 46, 4, 1.4), mix(s, { 1, 1, 1 }, 0.35))
-		paint(cv, box(46, 82, 10, 3.5, 1), { 0.15, 0.15, 0.17 }, { outline = 1.5 }) -- its cross
-		paint(cv, box(46, 82, 3.5, 10, 1), { 0.15, 0.15, 0.17 }, { outline = 1.5 })
-		paint(cv, box(46, 82, 9, 2.5, 0.5), { 0.15, 0.15, 0.17 })
-		paint(cv, circle(78, 86, 5.5), { 0.6, 0.12, 0.35 }, { outline = 1.8, grad = 0.4 }) -- B and A
-		paint(cv, circle(90, 78, 5.5), { 0.6, 0.12, 0.35 }, { outline = 1.8, grad = 0.4 })
-		paint(cv, seg(56, 101, 61, 99, 1.8), mul(body, 0.55)) -- select, start
-		paint(cv, seg(67, 99, 72, 97, 1.8), mul(body, 0.55))
-	end
-
-	-- Its silhouette, for the Light's glow behind it
-	local HALO = {
-		Nokia = function() return box(64, 66, 34, 54, 10) end,
-		Tablet = function() return box(64, 64, 52, 37, 9) end,
-		Computer = function() return box(64, 66, 54, 46, 8) end,
-		Phone = function() return box(64, 64, 30, 52, 12) end,
-		GameBoy = function() return box(64, 64, 40, 56, 9) end,
-	}
-
-	local function crcTable()
-		local t = {}
-		for n = 0, 255 do
-			local c = n
-			for _ = 1, 8 do c = if bit32.band(c, 1) == 1 then bit32.bxor(0xEDB88320, bit32.rshift(c, 1)) else bit32.rshift(c, 1) end
-			t[n] = c
-		end
-		return t
-	end
-	local CRC = crcTable()
-	local function crc32(s)
-		local c = 0xFFFFFFFF
-		for i = 1, #s do c = bit32.bxor(CRC[bit32.band(bit32.bxor(c, string.byte(s, i)), 0xFF)], bit32.rshift(c, 8)) end
-		return bit32.bxor(c, 0xFFFFFFFF)
-	end
-	local function u32(n) return string.char(bit32.band(bit32.rshift(n, 24), 255), bit32.band(bit32.rshift(n, 16), 255), bit32.band(bit32.rshift(n, 8), 255), bit32.band(n, 255)) end
-	local function chunk(kind, data) return u32(#data) .. kind .. data .. u32(crc32(kind .. data)) end
-
-	-- The canvas as a PNG: 8-bit RGBA, stored (not packed) inside zlib
-	local function encode(cv)
-		local rows = table.create(N)
-		for y = 0, N - 1 do
-			local row = table.create(N + 1)
-			row[1] = "\0"
-			for x = 0, N - 1 do
-				local i = y * N + x + 1
-				row[x + 2] = string.char(math.floor(cv.r[i] * 255 + 0.5), math.floor(cv.g[i] * 255 + 0.5), math.floor(cv.b[i] * 255 + 0.5), math.floor(cv.a[i] * 255 + 0.5))
-			end
-			rows[y + 1] = table.concat(row)
-		end
-		local raw = table.concat(rows)
-		local a, b = 1, 0
-		for i = 1, #raw do
-			a = (a + string.byte(raw, i)) % 65521
-			b = (b + a) % 65521
-		end
-		local parts, at = { "\120\1" }, 1
-		while at <= #raw do
-			local piece = raw:sub(at, at + 65534)
-			at += #piece
-			local last = if at > #raw then 1 else 0
-			table.insert(parts, string.char(last, #piece % 256, math.floor(#piece / 256), 255 - #piece % 256, 255 - math.floor(#piece / 256)) .. piece)
-		end
-		table.insert(parts, u32(b * 65536 + a))
-		return "\137PNG\r\n\26\n" .. chunk("IHDR", u32(N) .. u32(N) .. "\8\6\0\0\0") .. chunk("IDAT", table.concat(parts)) .. chunk("IEND", "")
-	end
-
-	--[[ ICON.png(kind, screen, body, light): the PNG of a scanner of that kind, its screen in `screen`, its body in `body`
-	     (colours as {r, g, b}, 0 to 1); `light` (a colour, or nil): a Light's glow around it and its sparkles ]]
-	function ICON.png(kind, screenColor, body, light)
-		local cv = { r = table.create(N * N, 0), g = table.create(N * N, 0), b = table.create(N * N, 0), a = table.create(N * N, 0), rot = math.rad(TILT[kind]) }
-		if light then paint(cv, HALO[kind](), light, { glow = 14, alpha = 0.55 }) end
-		DRAW[kind](cv, screenColor, body)
-		if light then
-			cv.rot = 0
-			sparkle(cv, 18, 22, 11, light)
-			sparkle(cv, 110, 30, 7, light)
-			sparkle(cv, 106, 108, 9, light)
-		end
-		return encode(cv)
-	end
-end
----- END ICONS ----
-
--- Its picture in your inventory, in its colours: drawn once for each set of colours, kept in the executor's folder
-local function hexOf(c) return string.format("%02x%02x%02x", math.floor(c.R * 255 + 0.5), math.floor(c.G * 255 + 0.5), math.floor(c.B * 255 + 0.5)) end
-local function refreshIcon(d)
-	local path = ("ObjectScanner/Icons/%s_%s_%s_%s.png"):format(KIND, LIGHT or "Normal", hexOf(CONFIG.Screen), hexOf(d.body))
-	local ok, id = pcall(function()
-		if not isfolder("ObjectScanner") then makefolder("ObjectScanner") end
-		if not isfolder("ObjectScanner/Icons") then makefolder("ObjectScanner/Icons") end
-		if not isfile(path) then
-			local function three(c) return { c.R, c.G, c.B } end
-			writefile(path, ICON.png(KIND, three(CONFIG.Screen), three(d.body), if LIGHT then three(LIGHTS[LIGHT].color) else nil))
-		end
-		return getcustomasset(path)
-	end)
-	if ok and type(id) == "string" then d.tool.TextureId = id end
-end
-
----- ITS SCREEN: DOORS' scanner's (its picture, its frame, its battery, its static) on every kind, in its colour ----
+---- ITS SCREEN: DOORS' scanner's (its picture, its frame, its battery, its static) on both, in its colour ----
 
 local S = {
 	d = nil, -- the scanner: what make() gave
 	on = false, fn = 1, booting = false, token = 0, -- its screen: on or off, its function (FNS), booting
 	equipped = false, held = {}, tracks = {}, busy = false, motion = nil, lastTrick = nil, lastLook = nil, -- in your hand
 	flash = 0, bootFrom = -10, bootedAt = -10, -- its static
-	threats = {}, alert = nil, nextThreat = 0, nextBeep = 0, log = {}, -- what it knows of what is coming
-	torch = false, snakeBest = 0, dropped = nil,
+	threats = {}, alert = nil, nextThreat = 0, nextBeep = 0, -- what it knows of what is coming
+	snakeBest = 0, dropped = nil,
 }
 local ui = {} -- its screen's pieces, while it is in your hand
 local MODE = { Label = "SCANNER", BootImage = "rbxassetid://100718803042146", PulseInterval = 2.5, PulseRange = 60, RevealTime = 2,
 	Tags = { "SalvageDrop", "RBS" } }
 local STATIC = { "rbxassetid://8681113666", "rbxassetid://8681113503" }
-local CANVAS = 195 -- pixels across its screen: DOORS' scanner's (0.65 studs, 300 a stud), on every kind
+local CANVAS = 195 -- pixels across its screen: DOORS' scanner's (0.65 studs, 300 a stud), on both
 
 local function hsv(color, k)
 	local h, s, v = color:ToHSV()
@@ -978,10 +573,6 @@ local function scanThreats(now)
 	end)
 	return out
 end
-local function logLine(text) -- what happened (the Computer's terminal shows it, typed)
-	table.insert(S.log, { text = text, at = os.clock() })
-	if #S.log > 3 then table.remove(S.log, 1) end
-end
 
 -- A copy of a room's parts (the ones `accept` wants) in a viewport; the ones that move, listed to follow
 local KEEP = { Decal = true, Texture = true, SurfaceAppearance = true, SpecialMesh = true }
@@ -1010,9 +601,6 @@ end
 
 local play -- (in your hand, below): plays one of its animations
 local FN = {}
-local function updateTorch() -- the Phone's flashlight: on while it is on, in your hand, and you turned it on
-	if S.d and S.d.torch then S.d.torch.Enabled = S.torch and S.on and S.equipped end
-end
 local function ease(u) return u * u * (3 - 2 * u) end
 
 -- SCANNER: DOORS' own. Every 2.5 s a pulse 60 studs around you; what is worth finding shows as a star where it is
@@ -1380,170 +968,6 @@ do
 	function FN.XRAY.leave() x.token += 1 end
 end
 
--- TERMINAL (the Computer's): the room, the door, what is around, what is coming; and what happened, typed
-FN.TERMINAL = { label = "TERMINAL", clean = true }
-do
-	local t = {}
-	function FN.TERMINAL.enter(c)
-		t.box = W.text(c, { Size = UDim2.fromScale(1, 1), TextScaled = false, TextSize = 10, Font = Enum.Font.Code, TextXAlignment = Enum.TextXAlignment.Left,
-			TextYAlignment = Enum.TextYAlignment.Top, TextWrapped = true })
-		t.status, t.next = {}, 0
-	end
-	function FN.TERMINAL.step(_, now)
-		if now >= t.next then
-			t.next = now + 1
-			local room, where = roomAt(0), "ROOM ???"
-			if room then
-				local _, number, lock = exitOf(room)
-				where = ("ROOM %03d > %03d%s"):format(tonumber(room.Name) or 0, number, if lock then " LOCKED" else "")
-			end
-			local first = S.threats[1]
-			t.status = { "C:\\DOORS> scan", where,
-				("ITEMS %d HIDE %d TRAPS %d"):format(#gather(index.worth, 80), #gather(index.hide, 80), #gather(index.trap, 80)),
-				"ENTITY: " .. (if first then first.what .. " " .. metres(first.dist) else "NONE"), "" }
-		end
-		local lines = table.clone(t.status)
-		for _, entry in ipairs(S.log) do table.insert(lines, "> " .. entry.text:sub(1, math.floor((now - entry.at) * 40))) end
-		lines[#lines] = lines[#lines] .. (if math.floor(now * 2) % 2 == 0 then "_" else "")
-		t.box.Text = table.concat(lines, "\n")
-	end
-end
-
--- COLOR (the Phone's): its colour, yours to pick: left click the one before, right click the next
-FN.COLOR = { label = "COLOR", clean = true }
-do
-	local k = {}
-	local function name() return if S.paintIndex then PALETTE[S.paintIndex][1] else "CUSTOM" end
-	local function step(by)
-		S.paintIndex = ((S.paintIndex or 1) - 1 + by) % #PALETTE + 1
-		local color = PALETTE[S.paintIndex][2]
-		for _, entry in ipairs(S.d.paint) do entry[1].Color = dark(color, entry[2]) end
-		S.d.body = color
-		S.d.tool:SetAttribute("BodyColor", color)
-		refreshIcon(S.d) -- its picture in your inventory, in its new colour
-		local s = sound("NextMode")
-		if s then oneShot(s, 1 + by * 0.12) end
-		if k.swatch then
-			k.swatch.BackgroundColor3 = color
-			k.name.Text = name()
-			k.swatch.Size = UDim2.fromScale(0.62, 0.62)
-			TweenService:Create(k.swatch, TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Size = UDim2.fromScale(0.5, 0.5) }):Play()
-		end
-		return true
-	end
-	function FN.COLOR.enter(c)
-		k.swatch = W.round(W.square(W.new("Frame", c, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.4), Size = UDim2.fromScale(0.5, 0.5),
-			BackgroundColor3 = S.d.body, BackgroundTransparency = 0 })))
-		W.new("UIStroke", k.swatch, { Color = CONFIG.Screen, Thickness = 2 })
-		W.text(c, { Position = UDim2.fromScale(0, 0.28), Size = UDim2.fromScale(0.2, 0.24), Text = "<" })
-		W.text(c, { Position = UDim2.fromScale(0.8, 0.28), Size = UDim2.fromScale(0.2, 0.24), Text = ">" })
-		k.name = W.text(c, { Position = UDim2.fromScale(0, 0.74), Size = UDim2.fromScale(1, 0.14), Text = name() })
-		W.text(c, { Position = UDim2.fromScale(0, 0.89), Size = UDim2.fromScale(1, 0.11), Text = "< LEFT CLICK   RIGHT CLICK >", TextTransparency = 0.35 })
-	end
-	function FN.COLOR.leave() k.swatch = nil end
-	function FN.COLOR.left() return step(-1) end
-	function FN.COLOR.right() return step(1) end
-end
-
--- LIGHT (the Phone's): its flashlight. Click: on, off. It stays on (on every function) until you turn it off
-FN.LIGHT = { label = "LIGHT", clean = true }
-do
-	local l = {}
-	local function show()
-		if not l.bulb then return end
-		l.bulb.BackgroundTransparency = if S.torch then 0 else 0.85
-		l.state.Text = if S.torch then "FLASHLIGHT ON" else "FLASHLIGHT OFF"
-	end
-	function FN.LIGHT.enter(c)
-		l.bulb = W.round(W.square(W.new("Frame", c, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.4), Size = UDim2.fromScale(0.5, 0.5),
-			BackgroundColor3 = CONFIG.Screen })))
-		W.new("UIStroke", l.bulb, { Color = CONFIG.Screen, Thickness = 2 })
-		l.state = W.text(c, { Position = UDim2.fromScale(0, 0.74), Size = UDim2.fromScale(1, 0.14) })
-		W.text(c, { Position = UDim2.fromScale(0, 0.89), Size = UDim2.fromScale(1, 0.11), Text = "CLICK: ON / OFF", TextTransparency = 0.35 })
-		show()
-	end
-	function FN.LIGHT.leave() l.bulb = nil end
-	function FN.LIGHT.left()
-		S.torch = not S.torch
-		updateTorch()
-		local s = sound("NextMode")
-		if s then oneShot(s, if S.torch then 1.25 else 0.8) end
-		show()
-		return true
-	end
-end
-
--- MAP (the GameBoy's): the room you are in and the next, from above, turning as you turn; bright: what is worth finding, the door
-FN.MAP = { label = "MAP", clean = true }
-do
-	local m = { token = 0 }
-	local function above(d, floor) -- a ceiling, a lamp: flat, over your head (DOORS tags its ceilings)
-		if CollectionService:HasTag(d, "PartCeiling") then return true end
-		local cf, s = d.CFrame, d.Size
-		local tall = math.abs(cf.RightVector.Y) * s.X + math.abs(cf.UpVector.Y) * s.Y + math.abs(cf.LookVector.Y) * s.Z
-		return tall < 3 and cf.Position.Y > floor + 4
-	end
-	local function mark(at, size, shape)
-		local p = Instance.new("Part")
-		p.Shape = shape
-		p.Size = size
-		p.Material = Enum.Material.Neon
-		p.Color = Color3.new(1, 1, 1)
-		p.Anchored = true
-		p.CFrame = CFrame.new(at)
-		p.Parent = m.world
-		table.insert(m.marks, p)
-	end
-	local function build(room)
-		m.token += 1
-		local token = m.token
-		m.room, m.moving, m.marks = room, {}, {}
-		m.world:ClearAllChildren()
-		local root = myRoot()
-		if not (room and root) then return end
-		local floor = root.Position.Y - 3
-		local list = { room, roomAt(1) }
-		local holder = Instance.new("Model")
-		holder.Parent = m.world
-		task.spawn(function()
-			for _, r in ipairs(list) do
-				copyRoom(r, holder, function(d) return d.Size.Magnitude > 1.5 and not above(d, floor) end, m.moving, function() return m.token == token end)
-			end
-		end)
-		for i in pairs(index.worth) do
-			for _, r in ipairs(list) do
-				if i:IsDescendantOf(r) then mark(whereIs(i) + Vector3.new(0, 6, 0), Vector3.new(2.5, 2.5, 2.5), Enum.PartType.Ball) end
-			end
-		end
-		local door = exitOf(room)
-		if door then mark(door.Position + Vector3.new(0, 8, 0), Vector3.new(5, 1, 5), Enum.PartType.Block) end
-	end
-	function FN.MAP.enter(c)
-		m.token += 1
-		m.cam = W.new("Camera", c, { FieldOfView = 30 })
-		m.world = W.new("ViewportFrame", c, { Size = UDim2.fromScale(1, 1), CurrentCamera = m.cam, Ambient = Color3.new(1, 1, 1), LightColor = Color3.new(1, 1, 1),
-			LightDirection = Vector3.new(0, -1, 0), ImageColor3 = CONFIG.Screen })
-		W.arrow(c, UDim2.fromScale(0.5, 0.5), UDim2.fromScale(0.14, 0.14)) -- you
-		m.room, m.marks, m.moving, m.nextFollow = false, {}, {}, 0
-	end
-	function FN.MAP.step(_, now)
-		local room = roomAt(0)
-		if room ~= m.room then build(room) end
-		local root = myRoot()
-		if root then
-			m.cam.CFrame = CFrame.lookAt(root.Position + Vector3.new(0, 100, 0), root.Position, flat(workspace.CurrentCamera.CFrame.LookVector))
-		end
-		for i, p in ipairs(m.marks) do p.Transparency = if math.floor(now * 3 + i * 0.5) % 2 == 0 then 0 else 0.6 end
-		if now >= m.nextFollow then
-			m.nextFollow = now + 0.5
-			for _, pair in ipairs(m.moving) do
-				if pair[1].Parent then pair[2].CFrame = pair[1].CFrame end
-			end
-		end
-	end
-	function FN.MAP.leave() m.token += 1 end
-end
-
 ---- Its screen on and off, its functions in turn ----
 
 local function current() return FN[FNS[S.fn]] end
@@ -1572,7 +996,6 @@ local function startScreen(fromOff)
 	S.flash = 1
 	if fromOff then S.bootFrom = os.clock() end
 	ui.image.ImageTransparency = 0.6
-	updateTorch()
 	task.delay(if fromOff then 0.9 else 0.35, function()
 		if S.token ~= token or not S.on or not ui.gui then return end
 		S.booting = false
@@ -1585,7 +1008,6 @@ local function closeScreen(animate)
 	if S.on and not S.booting and ui.gui then leaveFn() end
 	S.token += 1
 	S.on, S.booting, S.alert = false, false, nil
-	updateTorch()
 	if not ui.gui then return end
 	ui.alert.Visible = false
 	ui.frame.Visible, ui.off.Visible = false, true
@@ -1632,13 +1054,13 @@ local function step(dt)
 	if not S.on then return end
 	if now >= S.nextThreat then
 		S.nextThreat = now + 0.25
-		local before = {}
-		for _, t in ipairs(S.threats) do before[t.inst] = true end
 		S.threats = scanThreats(now)
 		S.alert = nil
 		for _, t in ipairs(S.threats) do
-			if t.moving and not S.alert then S.alert = t end
-			if not before[t.inst] then logLine("!! " .. t.what .. " " .. metres(t.dist)) end
+			if t.moving then
+				S.alert = t
+				break
+			end
 		end
 	end
 	if S.alert and now >= S.nextBeep then -- it warns you, faster as it comes
@@ -1650,12 +1072,6 @@ local function step(dt)
 	local f = current()
 	if f.step then f.step(dt, now) end
 end
-pcall(function()
-	on(LocalPlayer:GetAttributeChangedSignal("CurrentRoom"), function()
-		logLine(("ROOM %03d"):format(tonumber(LocalPlayer:GetAttribute("CurrentRoom")) or 0))
-	end)
-end)
-
 ---- IN YOUR HAND: held as DOORS holds it, its animations, its tricks (L), inspecting it (right click), dropping it (X) ----
 
 local NATIVE_ANIMS = { open = "fire", close = "fire", idle_open = "idle" } -- the tablet's own: fire, equip, idle
@@ -1841,7 +1257,6 @@ local function unequipped()
 	end
 	if ui.gui then ui.gui:Destroy() end
 	ui = {}
-	updateTorch()
 end
 
 -- Left click: on, off (or the app's own)
@@ -1860,7 +1275,6 @@ local function activated()
 			if s then s:Play() end
 		end
 		startScreen(true)
-		logLine("BOOT " .. KINDS[KIND].title:upper())
 	else
 		S.d.tool:SetAttribute("ScannerMode", "")
 		play("close")
@@ -1962,16 +1376,10 @@ function give()
 	S.on, S.motion, S.held, S.tracks = false, nil, {}, {}
 	local d = make()
 	S.d = d
-	S.paintIndex = nil
-	for i, entry in ipairs(PALETTE) do
-		local c = entry[2]
-		if math.abs(c.R - d.body.R) + math.abs(c.G - d.body.G) + math.abs(c.B - d.body.B) < 0.02 then S.paintIndex = i end
-	end
 	on(d.tool.Equipped, equipped)
 	on(d.tool.Unequipped, unequipped)
 	on(d.tool.Activated, activated)
 	on(d.tool.Inspect.Event, inspected)
-	refreshIcon(d)
 	d.tool.Parent = LocalPlayer:WaitForChild("Backpack")
 end
 
