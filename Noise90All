@@ -14,12 +14,27 @@
         never come (Kick = true to be kicked all the same).
 ]]
 
-local URL = "https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/Noise90"
+-- Where Noise90 is: on main; until it is there, on the branch it is made on
+local SOURCES = {
+	"https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/Noise90",
+	"https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/claude/sei-qui-con-noi-ye4k62/Noise90",
+}
 local TYPES = { "B-90", "C-90", "Ransom//90", "A-90", "X-90", "G-90", "Pix-90", "Trollface-90", "XTrollface-90", "S-90", "XS-90", "X-60", "A-404" }
 local Players = game:GetService("Players")
 
 local settings = if type(_G.Noise90) == "table" then _G.Noise90 else {}
-local source = game:HttpGet(URL)
+local source = nil
+for _, url in ipairs(SOURCES) do
+	local ok, body = pcall(function() return game:HttpGet(url) end)
+	if ok and loadstring(body) then -- a script, not "404: Not Found"
+		source = body
+		break
+	end
+end
+if not source then
+	warn("[Noise90All] Noise90 could not be downloaded")
+	return
+end
 
 local function living()
 	local character = Players.LocalPlayer.Character
