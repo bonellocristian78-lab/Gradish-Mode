@@ -1136,7 +1136,7 @@ local function placeHammer()
 end
 
 ---====== WHERE ITS TV IS: the setups ======---
-local newPrompt, SETUPS, disc, g90Mode, joinWorldScreens, chooseSetup, placeRemote -- what the rest needs of the setups
+local newPrompt, SETUPS, disc, g90Mode, joinWorldScreens, chooseSetup, placeRemote, closeInspect -- what the rest needs of the setups
 do
 
 local function customPrompt(p)
@@ -1693,6 +1693,7 @@ end
 local UserInputService = game:GetService("UserInputService")
 local inspect = { entry = nil, yaw = 0.4, pitch = 0.5, dist = 2.4, lid = 0, lidGoal = 0, wiping = false, dragging = false }
 local inspectGui = make("ScreenGui", { Name = "Noise90Inspect", IgnoreGuiInset = true, DisplayOrder = 100003, ResetOnSpawn = false, Enabled = false }, hud)
+table.insert(owned, inspectGui)
 make("Frame", { Name = "Backdrop", Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 0.3, BorderSizePixel = 0 }, inspectGui)
 local viewport = make("ViewportFrame", { Name = "View", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.36, 0.5),
 	Size = UDim2.fromScale(0.56, 0.86), BackgroundTransparency = 1, Ambient = Color3.fromRGB(170, 170, 180),
@@ -1722,7 +1723,7 @@ local pHint = line("Hint", 0.93, 0.07, 15, UI.writing)
 pHint.TextTransparency = 0.35
 pHint.Text = "Drag: turn it. Wheel: closer. Right-click: put it away."
 local function button(name, text, x)
-	return UI.button({ Name = name, Text = text, Position = UDim2.fromScale(x, 0.79), Size = UDim2.fromScale(0.3, 0.07), Modal = true }, panel)
+	return UI.button({ Name = name, Text = text, Position = UDim2.fromScale(x, 0.79), Size = UDim2.fromScale(0.3, 0.07) }, panel)
 end
 local bOpen, bFlip, bWipe = button("OpenCase", "Open", 0), button("Flip", "Flip", 0.34), button("Wipe", "Wipe", 0.68)
 local bDone = button("Done", "Done", 0.34)
@@ -1731,6 +1732,7 @@ local wipeBar = make("Frame", { Name = "WipeBar", Position = UDim2.fromScale(0.6
 	BackgroundColor3 = UI.ink, BorderSizePixel = 0 }, panel)
 -- On your screen while you hold a disc: inspect it (for touch screens; right-click on a computer)
 local handGui = make("ScreenGui", { Name = "Noise90Hand", ResetOnSpawn = false, Enabled = false }, hud)
+table.insert(owned, handGui)
 local bInspect = UI.button({ Name = "Inspect", Text = "Inspect disc", AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -20, 1, -140),
 	Size = UDim2.fromOffset(170, 46) }, handGui)
 
@@ -1746,11 +1748,12 @@ local function refreshPanel()
 	bOpen.Text = if inspect.lidGoal > 0.5 then "Close" else "Open"
 end
 
-local function closeInspect()
+function closeInspect()
 	if not inspect.entry then return end
 	if inspect.view then inspect.view:Destroy() end
 	inspect.entry, inspect.view, inspect.wiping, inspect.dragging = nil, nil, false, false
 	inspectGui.Enabled = false
+	bDone.Modal = false
 	if mainGame and inspect.freed ~= nil then mainGame.freemouse = inspect.freed end
 end
 local function openInspect(entry)
@@ -1773,6 +1776,7 @@ local function openInspect(entry)
 	inspect.yaw, inspect.pitch, inspect.dist, inspect.lid, inspect.lidGoal = 0.4, 0.5, 2.4, 0, 0
 	inspect.freed = mainGame and mainGame.freemouse
 	if mainGame then mainGame.freemouse = true end
+	bDone.Modal = true -- the mouse free to click (only while it is open: Roblox frees it even for a disabled ScreenGui)
 	refreshPanel()
 	inspectGui.Enabled = true
 	oneShot(SOUNDS.click, SoundService, { Volume = CONFIG.Volume * 0.5, PlaybackSpeed = 1.3 })
@@ -4846,6 +4850,9 @@ local function askColor(count, seconds)
 	end
 	if mainGame then mainGame.freemouse = freed end
 	colorGui.Enabled = false
+	for _, button in ipairs(row:GetChildren()) do
+		if button:IsA("GuiButton") then button.Modal = false end -- or the mouse stays free: Roblox ignores the disabled ScreenGui
+	end
 	return chosen
 end
 local FOOL = "LEARN THE COLORS OF THE RAINBOW. FOOL."
@@ -5143,6 +5150,7 @@ local cleanup = function()
 	pcall(function() RunService:UnbindFromRenderStep("NoiseCutscene") end)
 	for _, c in ipairs(connections) do c:Disconnect() end
 	if restoreCutscene then pcall(restoreCutscene) end
+	if closeInspect then pcall(closeInspect) end -- DOORS' mouse given back
 	for _, i in ipairs({ folder, overlay, tint, blur, faceGui, pixelGui }) do i:Destroy() end
 	for _, i in ipairs(owned) do pcall(function() i:Destroy() end) end
 	if colorGui then colorGui:Destroy() end

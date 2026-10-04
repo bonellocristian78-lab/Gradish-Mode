@@ -409,7 +409,9 @@ when you inspect it, is a page of DOORS' Journal (handwriting in brown ink, its
 border and smudge). The player's display and Ransom's note keep their own screen
 fonts. The cart is a copy of DOORS' own, and DOORS' prompt gate kept switching its
 prompts back on (they flickered and could not be held): the copy now loses the
-tags that bring it there (`CartProp`, `GatedPrompt`, `ItemHolder`).
+tags that bring it there (`CartProp`, `GatedPrompt`, `ItemHolder`). Its buttons free
+the mouse (`Modal`) only while their screen is open: Roblox frees it even for a
+disabled ScreenGui, and in DOORS the camera stopped turning as soon as the script ran.
 
 `Auto` takes the type's own setups at random, `Screens` in the Archives; with
 any setup, the room's own screens play the tape too. The TV is a little bigger
