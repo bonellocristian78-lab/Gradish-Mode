@@ -18,9 +18,11 @@
             _G.Scanner = { Type = "Tablet", Variant = "Guiding" }   -- optional
             loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/ObjectScanner"))()
 
-        Type       "Nokia" (the default), "Tablet"
+        Type       "Scanner" (the Nokia: the default), "Tablet"
         Variant    "Normal" (the default), "Guiding", "Curious"
-        Color      its screen (Color3): by default its own, or the Light's
+        Color      its screen: "Red", "Orange", "Yellow", "Lime", "Green", "Cyan",
+                   "Blue", "Purple", "Pink", "White" (or any Color3); by default
+                   its own, or the Light's
         FPS        how many times a second its screen is drawn (30, as DOORS')
 
         In your hand:
@@ -63,6 +65,10 @@ local LIGHTS = {
 	Curious = { title = "Curious Light", color = rgb(255, 205, 70) },
 }
 local LIGHT_NAMES = { guiding = "Guiding", guidinglight = "Guiding", curious = "Curious", curiouslight = "Curious" }
+-- Its screen's colours, by name
+local COLORS = { red = rgb(255, 45, 45), orange = rgb(255, 140, 40), yellow = rgb(250, 210, 60), lime = rgb(130, 220, 80),
+	green = rgb(124, 200, 110), cyan = rgb(40, 200, 220), blue = rgb(50, 110, 240), purple = rgb(150, 80, 230), pink = rgb(255, 110, 190),
+	white = rgb(235, 235, 240) }
 local function simple(s) return if type(s) == "string" then (s:lower():gsub("[^%w]", "")) else "" end
 local given = _G.Scanner
 _G.Scanner = nil
@@ -70,9 +76,11 @@ given = if type(given) == "table" then given else {}
 local KIND = KIND_NAMES[simple(given.Type)] or "Nokia"
 if given.Type ~= nil and not KIND_NAMES[simple(given.Type)] then warn("[Scanner] there is no Type " .. tostring(given.Type) .. ": the Nokia") end
 local LIGHT = LIGHT_NAMES[simple(given.Variant)] -- nil: Normal
+local CUSTOM = if typeof(given.Color) == "Color3" then given.Color else COLORS[simple(given.Color)] -- a colour of yours
+if given.Color ~= nil and not CUSTOM then warn("[Scanner] there is no Color " .. tostring(given.Color) .. ": its own") end
 local CONFIG = {
 	FPS = math.clamp(tonumber(given.FPS) or 30, 1, 240),
-	Screen = if typeof(given.Color) == "Color3" then given.Color elseif LIGHT then LIGHTS[LIGHT].color else KINDS[KIND].screen,
+	Screen = CUSTOM or (if LIGHT then LIGHTS[LIGHT].color else KINDS[KIND].screen),
 }
 local TITLE = KINDS[KIND].title .. (if LIGHT then " (" .. LIGHTS[LIGHT].title .. ")" else "")
 local FNS = { "ITEMS", "ENTITIES", "EXIT", "HIDING", "TRAPS" } -- its functions, in order (F): these, then its own
@@ -333,7 +341,6 @@ end
 ---- END ICON ----
 
 -- Its icon in your inventory: its own; in a Light or in a colour of yours, its own recoloured (once, then kept)
-local CUSTOM = typeof(given.Color) == "Color3"
 local function useIcon(d)
 	local base = ICON_BASES[KIND]
 	if not (base and (LIGHT or CUSTOM)) then return end

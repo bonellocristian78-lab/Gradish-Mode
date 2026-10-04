@@ -511,7 +511,7 @@ Until it is on `main`, the script takes them from the branch it is made on.
 ## Scanners (Object Scanner)
 
 ```lua
-_G.Scanner = { Type = "Tablet", Variant = "Guiding" } -- optional: the Nokia, Normal, by default
+_G.Scanner = { Type = "Tablet", Variant = "Guiding", Color = "Lime" } -- all optional
 loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/ObjectScanner"))()
 ```
 
@@ -523,9 +523,12 @@ its own model and its own icon.
 | `"Nokia"` (default) | DOORS' own scanner from the Mines: its model (`ObjectScanner.rbxm`), icon, sounds and animations | **SNAKE** (left / right click turn it) |
 | `"Tablet"` | the NVCS tablet: the model of the tablet's own script (`rbxassetid://12594482248`), its icon, sounds and animations | **X-RAY**: the room seen through its screen, stars on what opens the way |
 
-`Variant`: `"Normal"`, `"Guiding"` (Guiding Light: blue, its glow and sparkles) or
-`"Curious"` (Curious Light: yellow). `Color` is its screen's colour (by default its
-own, or the Light's), `FPS` how many times a second its screen is drawn (30, as DOORS').
+`Type`: `"Scanner"` (the Nokia, the default) or `"Tablet"`. `Variant`: `"Normal"`,
+`"Guiding"` (Guiding Light: blue, its glow and sparkles) or `"Curious"` (Curious Light:
+yellow). `Color` is its screen's colour, by name: `"Red"`, `"Orange"`, `"Yellow"`,
+`"Lime"`, `"Green"`, `"Cyan"`, `"Blue"`, `"Purple"`, `"Pink"`, `"White"` (or any
+`Color3`); by default its own, or the Light's. `FPS` is how many times a second its
+screen is drawn (30, as DOORS').
 
 Its icon is its own. In a Light, or with a `Color` of yours, it is the same icon with
 its screen (and the light it casts on its body) in that colour, and for a Light its
