@@ -527,6 +527,13 @@ its own model and its own icon.
 `"Curious"` (Curious Light: yellow). `Color` is its screen's colour (by default its
 own, or the Light's), `FPS` how many times a second its screen is drawn (30, as DOORS').
 
+Its icon is its own. In a Light, or with a `Color` of yours, it is the same icon with
+its screen (and the light it casts on its body) in that colour, and for a Light its
+glow and sparkles around it: the script makes it once from `assets/scanner/Tablet.icon`
+(the tablet's own icon, without its background: `assets/scanner/Tablet.png`) and keeps
+it in the executor's folder (`ObjectScanner/Icons/`). The Nokia keeps DOORS' icon in
+every colour until its own is in `assets/scanner/` too.
+
 In your hand (held on a Motor6D as DOORS holds its scanner):
 
 | Key | What it does |
@@ -796,6 +803,7 @@ Over 400 simulated seeds: no spacing violations, about 12 encounters per run.
 | `ObjectScanner` / `ObjectScanner.rbxm` | The scanners (Nokia and Tablet, their Lights); DOORS' scanner's model, out of a saved place |
 | `assets/errorbush/` | 3rr0rbu2h's two faces |
 | `assets/noise/` | Noise's kit, tape and sheets; Noise 90's props kit, grey sheets and faces |
+| `assets/scanner/` | The scanners' own icons without their background (`.png`) and ready to be recoloured by the script (`.icon`) |
 | `UniversalAssets` / `.obf` | the animator for DOORS' things and custom assets, readable and obfuscated |
 | `GradishCheck` | the config report |
 | `ImagesA/` | one file per entity saying where its picture comes from |
