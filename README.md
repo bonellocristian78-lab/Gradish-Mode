@@ -664,12 +664,8 @@ other one is converted when the model is inserted: its KeyframeSequence is
 downloaded and played by the script, joint by joint. A KeyframeSequence inside
 the model works the same way. Nothing is uploaded anywhere; only you see it.
 
-`UniversalAssets.obf` is the same script obfuscated with
-[Prometheus](https://github.com/prometheus-lua/Prometheus) (Luau): the Medium
-preset's steps — strings encrypted, names mangled, constants and numbers hidden,
-anti-tamper — without its VM step (Vmify). Vmify miscompiled this script at random
-(about one build in five crashed or misbehaved) and made it about 3.5 times slower.
-Regenerate it after every change to `UniversalAssets`, and run the tests on it.
+`UniversalAssets.obf` stays for the links that use it: it is the same obfuscated
+script as `UniversalAssets` (see [Obfuscation](#obfuscation)).
 
 ## DOORS optimizer
 
@@ -777,6 +773,26 @@ Over 400 simulated seeds: no spacing violations, about 12 encounters per run.
 
 ---
 
+## Obfuscation
+
+The scripts people load are obfuscated with [Prometheus](https://github.com/wcrddn/Prometheus)
+(Luau), with `tools/prometheus.config.lua`: the Medium preset's steps — strings
+encrypted, names mangled, constants and numbers hidden, anti-tamper — without its VM
+step (Vmify), which miscompiled our scripts at random (about one build in five) and
+made them about 3.5 times slower. Their names, and so every loadstring, do not change.
+
+The readable scripts are on the branch
+[`sorgenti`](https://github.com/bonellocristian78-lab/Gradish-Mode/tree/sorgenti): change
+them there, then bring the file over and obfuscate it, and run its tests on the result:
+
+```sh
+git checkout sorgenti -- Noise90
+tools/obfuscate.sh /path/to/Prometheus Noise90
+```
+
+Prometheus needs one fix first (`git apply tools/prometheus-ifexpression.patch` in its
+folder): without it, it cannot write Luau's `if ... then ... else` expressions.
+
 ## Requirements
 
 - **The repo must stay public.** `game:HttpGet` cannot authenticate, so a private
@@ -810,6 +826,7 @@ Over 400 simulated seeds: no spacing violations, about 12 encounters per run.
 | `ObjectScanner` / `ObjectScanner.rbxm` | The scanners (Nokia and Tablet, their Lights); DOORS' scanner's model, out of a saved place |
 | `assets/errorbush/` | 3rr0rbu2h's two faces |
 | `assets/noise/` | Noise's kit, tape and sheets; Noise 90's props kit, grey sheets and faces |
+| `tools/` | Prometheus' settings for the obfuscation, the script that runs it, its fix for Luau |
 | `assets/scanner/` | The scanners' own icons without their background (`.png`) and ready to be recoloured by the script (`.icon`) |
 | `UniversalAssets` / `.obf` | the animator for DOORS' things and custom assets, readable and obfuscated |
 | `GradishCheck` | the config report |

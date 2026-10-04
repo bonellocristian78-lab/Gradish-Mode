@@ -1,0 +1,27 @@
+diff --git a/src/prometheus/unparser.lua b/src/prometheus/unparser.lua
+index 0aacd51..eb50190 100644
+--- a/src/prometheus/unparser.lua
++++ b/src/prometheus/unparser.lua
+@@ -685,17 +685,17 @@ function Unparser:unparseExpression(expression, tabbing)
+ 		k = AstKind.IfElseExpression
+ 		if(expression.kind == k) then
+ 			push("if ");
+-			push(self:unparseExpression(expression.condition));
++			push(self:unparseExpression(expression.condition, tabbing));
+ 			push(" then ");
+-			push(self:unparseExpression(expression.true_value));
++			push(self:unparseExpression(expression.true_value, tabbing));
+ 			for _, elseifexp in pairs(expression.elseifs) do
+ 				push(" elseif ");
+-				push(self:unparseExpression(elseifexp.condition));
++				push(self:unparseExpression(elseifexp.condition, tabbing));
+ 				push(" then ");
+-				push(self:unparseExpression(elseifexp.value));
++				push(self:unparseExpression(elseifexp.value, tabbing));
+ 			end
+ 			push(" else ");
+-			push(self:unparseExpression(expression.false_value));
++			push(self:unparseExpression(expression.false_value, tabbing));
+ 			return joinParts(parts);
+ 		end
+ 	end

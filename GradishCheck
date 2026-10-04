@@ -218,17 +218,19 @@ head("ENTITY SCRIPTS")
 local profiles = {}
 
 do
+	--[[ The scripts are obfuscated, so their text cannot be read: each one's Name, DeathType and DeathLight are
+	     written here (as their profiles have them, on the branch with the readable scripts) ]]
 	local scripts = {
-		{ file = "RetterV2",           model = "retterbetter.rbxm" },
-		{ file = "RoseHellRemake",     model = "roseHell.rbxm" },
-		{ file = "Yeller",             model = "Yeller.rbxm" },
-		{ file = "Rebounddd",          model = "ReboundGradishVer.rbxm" },
-		{ file = "Corrode",            model = "corrodeV3butmadebyMyFriend.rbxm" },
-		{ file = "Rude",               model = "Rude.rbxm" },
-		{ file = "Silence",            model = "Silence.rbxm" },
-		{ file = "SpeedsterPurpleist", model = "SpeedsterPurpleist.rbxm" },
-		{ file = "BlueHell",           model = "BlueHell.rbxm" },
-		{ file = "MischievousLight",   model = "MischievousLight.rbxm" },
+		{ file = "RetterV2",           model = "retterbetter.rbxm",               name = "Retter",              deathType = "Blue",        deathLight = "Mischievous" },
+		{ file = "RoseHellRemake",     model = "roseHell.rbxm",                   name = "Rose Hell",           deathType = "Blue",        deathLight = "Rose" },
+		{ file = "Yeller",             model = "Yeller.rbxm",                     name = "Yeller",              deathType = "Glitch",      deathLight = "None" },
+		{ file = "Rebounddd",          model = "ReboundGradishVer.rbxm",          name = "Rebound",             deathType = "Glitch",      deathLight = "None" },
+		{ file = "Corrode",            model = "corrodeV3butmadebyMyFriend.rbxm", name = "Corrode",             deathType = "Glitch",      deathLight = "Corroded" },
+		{ file = "Rude",               model = "Rude.rbxm",                       name = "Rude",                deathType = "Glitch",      deathLight = "None" },
+		{ file = "Silence",            model = "Silence.rbxm",                    name = "Silence",             deathType = "Glitch",      deathLight = "Silence" },
+		{ file = "SpeedsterPurpleist", model = "SpeedsterPurpleist.rbxm",         name = "Speedster Purpleist", deathType = "Rush",        deathLight = "Violet" },
+		{ file = "BlueHell",           model = "BlueHell.rbxm",                   name = "Blue Hell",           deathType = "Blue",        deathLight = "BlueHell" },
+		{ file = "MischievousLight",   model = "MischievousLight.rbxm",           name = "Mischievous Light",   deathType = "Mischievous", deathLight = "Mischievous" },
 	}
 
 	for _, entry in ipairs(scripts) do
@@ -237,11 +239,7 @@ do
 		if not ok then
 			bad("%s does not load (%s)", entry.file, tostring(body))
 		else
-			-- The first Name = "..." in the file is the profile's, because the
-			-- profile is the first table in every one of these scripts.
-			local name = body:match('Name%s*=%s*"([^"]+)"')
-			local deathType = body:match('DeathType%s*=%s*"([^"]+)"')
-			local deathLight = body:match('DeathLight%s*=%s*"([^"]+)"')
+			local name, deathType, deathLight = entry.name, entry.deathType, entry.deathLight
 
 			local modelOk, modelSize = reachable(BASE .. entry.model)
 
