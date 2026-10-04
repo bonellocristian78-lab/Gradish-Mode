@@ -30,6 +30,7 @@ mod rather than playing it.
 | Noise 90: every "-90" (and A-404) as a Noise (`_G.Type = "A-90"`, ...), all in one | `.../Noise90` |
 | Noise 90, all of them: a new one every 10 s (the others stay), out at once, every disc in the Journal | `.../Noise90All` |
 | DOORS' walk, run, crouch and jump in any game | `.../DoorsAnimations` |
+| DOORS' Object Scanner (the Mines' radar) in your inventory, working | `.../ObjectScanner` |
 | Universal Custom Assets: animator with Studio controls (Ctrl + U I O) | `.../UniversalAssets` |
 | The same, obfuscated | `.../UniversalAssets.obf` |
 
@@ -507,6 +508,30 @@ Its model is `Errorbush.rbxm`; its two faces are `assets/errorbush/Errorbush_Emb
 and `Errorbush_Azure.png`, downloaded once into the executor's folder (`Errorbush/`).
 Until it is on `main`, the script takes them from the branch it is made on.
 
+## Object Scanner
+
+```lua
+_G.Scanner = { Color = Color3.fromRGB(124, 165, 116), FPS = 30 } -- optional: these are its own
+loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/ObjectScanner"))()
+```
+
+DOORS' own scanner from the Mines, in your inventory and working. It is the game's
+model (`ObjectScanner.rbxm`, taken out of a saved place with its meshes, screen,
+sounds and animations), held in your hand on a Motor6D the way DOORS holds it.
+Its animations (equip, idle, open, close, pulse, inspect) are DOORS' own, so they
+play in DOORS.
+
+Click to open it: it boots, and every 2.5 s it sends a pulse 60 studs around you;
+what it finds shows on its screen as a star where it is, one ping each. It finds
+what DOORS' own finds (the Mines' salvage) and, on every floor, what is worth
+finding: keys, levers, books, breakers, fuses, gold and DOORS' items in the
+drawers. Click again to close it; inspect it as any DOORS item. Its battery never
+runs out, and after a respawn you get it back.
+
+`Color` is its screen's colour (the picture, the frame, the battery, the pulse and
+the stars; DOORS' green by default). `FPS` is how many times a second its screen
+is drawn (30, as DOORS'). Running it again replaces the one you have.
+
 ## DOORS animations in any game
 
 ```lua
@@ -755,6 +780,7 @@ Over 400 simulated seeds: no spacing violations, about 12 encounters per run.
 | `Noise` / `Noise90` | Noise (B-90); every "-90" as a Noise, `_G.Type` |
 | `Noise90All` | every Noise 90, a new one every 10 s (fills the Noise Journal) |
 | `Errorbush` / `Errorbush.rbxm` | 3rr0rbu2h, the broken Ambush; its model |
+| `ObjectScanner` / `ObjectScanner.rbxm` | DOORS' Object Scanner in your inventory; its model, out of a saved place |
 | `assets/errorbush/` | 3rr0rbu2h's two faces |
 | `assets/noise/` | Noise's kit, tape and sheets; Noise 90's props kit, grey sheets and faces |
 | `UniversalAssets` / `.obf` | the animator for DOORS' things and custom assets, readable and obfuscated |

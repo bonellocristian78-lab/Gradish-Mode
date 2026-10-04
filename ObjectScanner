@@ -1,0 +1,505 @@
+--[[
+================================================================================
+
+        O B J E C T   S C A N N E R
+
+        DOORS' scanner (the Mines'), in your inventory and working. Click to
+        open it: it boots, and every 2.5 seconds it sends a pulse 60 studs
+        around you; what it finds shows on its screen as a star where it is,
+        one ping each. It finds what DOORS' own finds (the Mines' salvage)
+        and, on every floor, what is worth finding: keys, levers, books,
+        breakers, fuses, gold and the items in the drawers. Click again to
+        close it. Inspect it as any DOORS item. Its battery never runs out.
+
+            _G.Scanner = { Color = Color3.fromRGB(124, 165, 116), FPS = 30 }   -- optional (these are its own)
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/ObjectScanner"))()
+
+        Color  its screen: the picture, its frame, the battery, the pulse and
+               the stars (DOORS' green by default)
+        FPS    how many times a second its screen is drawn (30, as DOORS')
+
+        The model is DOORS' own (ObjectScanner.rbxm, out of a saved place):
+        its meshes, its screen, its sounds and its animations, which play
+        because this runs in DOORS. What its server did (opening, closing,
+        holding it in your hand, playing its animations) is done here.
+
+================================================================================
+]]
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local CollectionService = game:GetService("CollectionService")
+local LocalPlayer = Players.LocalPlayer
+
+local CONFIG = { Color = Color3.fromRGB(124, 165, 116), FPS = 30 }
+local given = _G.Scanner
+_G.Scanner = nil
+if type(given) == "table" then
+	if typeof(given.Color) == "Color3" then CONFIG.Color = given.Color end
+	if tonumber(given.FPS) then CONFIG.FPS = math.clamp(tonumber(given.FPS), 1, 240) end
+end
+
+-- DOORS' own scanner (its "Base" mode)
+local MODE = { Label = "SCANNER", BootImage = "rbxassetid://100718803042146", PulseInterval = 2.5, PulseRange = 60, RevealTime = 2,
+	Tags = { "SalvageDrop", "RBS" } }
+local STATIC = { "rbxassetid://8681113666", "rbxassetid://8681113503" }
+-- What is worth finding on every floor: what opens the way, gold, and DOORS' items (by their own names)
+local WORTH = {}
+for _, name in ipairs({ "KeyObtain", "ElectricalKeyObtain", "LeverForGate", "LiveHintBook", "LiveBreakerPolePickup", "FuseObtain", "GoldPile",
+	"KeyElectrical", "KeyRetro", "KeyBackdoor", "KeyIron", "GeneratorFuse", "Lighter", "Flashlight", "Lockpick", "Vitamins", "Bandage",
+	"BandagePack", "Battery", "BatteryPack", "Crucifix", "SkeletonKey", "Candle", "Shears", "Smoothie", "Glowsticks", "StarVial", "StarBottle",
+	"StarJug", "AlarmClock", "Straplight", "Bulklight", "Shakelight", "Lantern", "Multitool", "Compass", "AloeVera", "Bread", "Cheese",
+	"Donut", "GweenSoda", "Pizza", "CoinRoll", "TipJar", "LaserPointer", "HolyGrenade", "Bomb", "Knockbomb", "Nanner", "RiftCandle",
+	"RiftSmoothie", "RiftJar", "PocketMirror", "BoxingGloves", "KnockbackStick" }) do
+	WORTH[name] = true
+end
+
+-- One scanner at a time: running it again takes the old one away
+if getgenv and type(getgenv().__ObjectScannerStop) == "function" then pcall(getgenv().__ObjectScannerStop) end
+local connections, alive = {}, true
+local function on(signal, fn)
+	local c = signal:Connect(fn)
+	table.insert(connections, c)
+	return c
+end
+
+-- The model: from the repo (main; until it is there, the branch it is made on)
+local REPO = "https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/"
+local BRANCHES = { "main", "claude/sei-qui-con-noi-ye4k62" }
+local function loadModel()
+	for _, branch in ipairs(BRANCHES) do
+		local ok, body = pcall(function() return game:HttpGet(REPO .. branch .. "/ObjectScanner.rbxm") end)
+		if ok and type(body) == "string" and body:sub(1, 8) == "<roblox!" then
+			local loaded, model = pcall(function()
+				if not isfolder("ObjectScanner") then makefolder("ObjectScanner") end
+				writefile("ObjectScanner/ObjectScanner.rbxm", body)
+				return game:GetObjects(getcustomasset("ObjectScanner/ObjectScanner.rbxm"))[1]
+			end)
+			if loaded and model then return model end
+		end
+	end
+	return nil
+end
+local template = loadModel()
+if not template then
+	warn("[ObjectScanner] its model could not be loaded")
+	return
+end
+
+---- Its screen: DOORS' own code (the scanner's client module), drawn CONFIG.FPS times a second in CONFIG.Color ----
+
+local tool, handle, screenUI, assets = nil, nil, nil, nil
+local ui = {} -- the screen's pieces, while it is in your hand
+local ghosts = {} -- what it found: [instance] = { part, born, order, found, seed }
+local mode = "" -- "" closed, "Base" open
+local flash, lastPulse, nextPulse, booting, bootedAt, bootFrom = 0, -10, 0, false, -10, -10
+local starSize = nil
+
+local function hsv(color, k)
+	local h, s, v = color:ToHSV()
+	return Color3.fromHSV(h, s, v * k)
+end
+local function oneShot(sound, speed)
+	local s = sound:Clone()
+	s.PlaybackSpeed = speed or 1
+	s.Parent = assets
+	s:Play()
+	s.Ended:Once(function() s:Destroy() end)
+end
+local function boxOf(i)
+	if i:IsA("Model") then return i:GetBoundingBox() end
+	return i.CFrame, i.Size
+end
+
+local function bindUI()
+	local gui = screenUI:Clone()
+	gui.Name = "ScannerScreen"
+	gui.Adornee = handle.Top.Screen
+	gui.Enabled = true
+	gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+	ui.gui = gui
+	ui.frame = gui.Frame
+	ui.image = ui.frame.ImageLabel
+	ui.inner = ui.frame.InnerFrame
+	ui.mode = ui.inner.ModeName
+	ui.battery = ui.inner.Battery
+	ui.off = gui.OffScreen
+	ui.offFrame = ui.off.OffFrame
+	ui.static1, ui.static2, ui.offStatic = gui.Static1, gui.Static2, ui.off.OffStatic
+	screenUI.Enabled = false
+end
+local function ensureViewport()
+	if ui.viewport then return end
+	local v = Instance.new("ViewportFrame")
+	v.Name = "Scan"
+	v.Size = UDim2.fromScale(1, 1)
+	v.BackgroundTransparency = 1
+	v.Ambient, v.LightColor = Color3.new(1, 1, 1), Color3.new(1, 1, 1)
+	v.ZIndex = ui.image.ZIndex + 1
+	local cam = Instance.new("Camera")
+	cam.Parent = v
+	v.CurrentCamera = cam
+	v.Parent = ui.inner
+	local ring = Instance.new("Part") -- the pulse, spreading on the floor
+	ring.Shape = Enum.PartType.Cylinder
+	ring.Material = Enum.Material.Neon
+	ring.Anchored, ring.CanCollide, ring.Transparency = true, false, 1
+	ring.Parent = v
+	ui.viewport, ui.cam, ui.ring = v, cam, ring
+end
+local function clearGhosts()
+	for _, g in pairs(ghosts) do g.part:Destroy() end
+	ghosts = {}
+end
+local function ghostAlpha(g, alpha)
+	g.part.Transparency = alpha
+	for _, d in ipairs(g.part:GetDescendants()) do
+		if d:IsA("Decal") or d:IsA("Texture") then d.Transparency = alpha end
+	end
+end
+local function newGhost(target)
+	local part = assets.Star:Clone()
+	part.Anchored, part.CanCollide, part.CanQuery = true, false, false
+	part.Color = CONFIG.Color
+	part.Parent = ui.viewport
+	local g = { born = math.huge, order = 1, found = true, part = part, seed = math.random() * 50 }
+	ghostAlpha(g, 1)
+	ghosts[target] = g
+	return g
+end
+
+local function applyColor(c)
+	ui.frame.BackgroundColor3 = hsv(c, 0.08)
+	ui.inner.BackgroundColor3 = hsv(c, 0.14)
+	ui.gui.Vignette.ImageColor3 = hsv(c, 0.25)
+	ui.off.Vignette.ImageColor3 = hsv(c, 0.15)
+	ui.inner.UIStroke.Color = c
+	ui.image.ImageColor3 = c
+	ui.mode.TextColor3 = c
+	local stroke = ui.mode:FindFirstChildWhichIsA("UIStroke")
+	if stroke then stroke.Color = hsv(c, 0.3) end
+	ui.static1.ImageColor3 = c
+	if ui.viewport then ui.viewport.ImageColor3 = c end
+	ui.battery.UIStroke.Color = c
+	for _, bar in ipairs(ui.battery:GetChildren()) do
+		if bar:IsA("GuiObject") then
+			bar.BackgroundColor3 = c
+			local s = bar:FindFirstChildWhichIsA("UIStroke")
+			if s then s.Color = c end
+		end
+	end
+	if ui.ring then ui.ring.Color = c end
+	for _, g in pairs(ghosts) do g.part.Color = c end
+	ui.off.BackgroundColor3 = hsv(c, 0.05)
+	ui.offFrame.BackgroundColor3 = hsv(c, 0.35)
+	ui.offStatic.ImageColor3 = c
+end
+-- Its battery: full, always
+local function refreshBattery()
+	for _, bar in ipairs(ui.battery:GetChildren()) do
+		if bar:IsA("GuiObject") then bar.Visible = true end
+	end
+end
+
+-- Everything worth finding in the rooms, kept up to date as they come and go (so a pulse never searches them all)
+local worth = {}
+local function consider(d)
+	if WORTH[d.Name] and (d:IsA("Model") or d:IsA("BasePart")) then worth[d] = true end
+end
+local rooms = workspace:FindFirstChild("CurrentRooms")
+if rooms then
+	for _, d in ipairs(rooms:GetDescendants()) do consider(d) end
+	on(rooms.DescendantAdded, consider)
+end
+
+local tracks = {}
+local function play(name, fade)
+	local t = tracks[name]
+	if t then t:Play(fade or 0.05, 1, 1) end
+end
+
+local function pulse()
+	local character = LocalPlayer.Character
+	local root = character and character.PrimaryPart
+	if not root then return end
+	play("pulse")
+	oneShot(assets.Ping, 1)
+	flash, lastPulse = 1, os.clock()
+	local found = {}
+	local function take(i)
+		if not i:IsDescendantOf(workspace) or (character and i:IsDescendantOf(character)) then return end
+		local cf = boxOf(i)
+		local dist = (cf.Position - root.Position).Magnitude
+		if dist <= MODE.PulseRange then table.insert(found, { inst = i, dist = dist }) end
+	end
+	local seen = {}
+	for _, tag in ipairs(MODE.Tags) do
+		for _, i in ipairs(CollectionService:GetTagged(tag)) do
+			seen[i] = true
+			take(i)
+		end
+	end
+	for i in pairs(worth) do
+		if not (rooms and i:IsDescendantOf(rooms)) then -- taken (by you or anyone), or its room gone
+			worth[i] = nil
+		elseif not seen[i] then
+			local up, inside = i.Parent, false -- the item itself, not a piece of it with the same name
+			while up and up ~= workspace do
+				if worth[up] then inside = true break end
+				up = up.Parent
+			end
+			if not inside then take(i) end
+		end
+	end
+	table.sort(found, function(a, b) return a.dist < b.dist end)
+	for order, f in ipairs(found) do
+		local g = ghosts[f.inst] or newGhost(f.inst)
+		g.born = os.clock() + f.dist / MODE.PulseRange * 0.6
+		g.order, g.found = order, false
+	end
+end
+
+local function animateStatic()
+	local k = math.clamp((os.clock() - bootFrom) / 1.5, 0, 1)
+	for label, alpha in pairs({ [ui.static1] = k * 0.85, [ui.static2] = 0.975, [ui.offStatic] = 0.6 }) do
+		label.Position = UDim2.new(0.5, math.random(-28, 28) * 6, 0.5, math.random(-18, 18) * 6)
+		label.Image = STATIC[math.random(1, 2)]
+		label.ImageTransparency = math.clamp(alpha - flash * 0.55, 0, 1)
+	end
+end
+
+local function step(dt)
+	local now = os.clock()
+	flash = math.max(flash - dt * 2.5, 0)
+	animateStatic()
+	if not ui.viewport or booting or mode == "" then return end
+	local camera = workspace.CurrentCamera
+	local grow = 1 - (1 - math.clamp((now - bootedAt) / 0.8, 0, 1)) ^ 3
+	ui.cam.CFrame = camera.CFrame
+	ui.cam.FieldOfView = 1 + (camera.FieldOfView - 1) * grow
+	local character = LocalPlayer.Character
+	local root = character and character.PrimaryPart
+	if nextPulse <= now then
+		nextPulse = now + MODE.PulseInterval
+		pulse()
+	end
+	local u = (now - lastPulse) / 0.8
+	if root and u < 1 then
+		local size = MODE.PulseRange * 2 * u
+		ui.ring.Size = Vector3.new(0.15, size, size)
+		ui.ring.CFrame = CFrame.new(root.Position - Vector3.new(0, 2.8, 0)) * CFrame.Angles(0, 0, math.pi / 2)
+		ui.ring.Transparency = 0.4 + 0.6 * u
+	else
+		ui.ring.Transparency = 1
+	end
+	local showing = false
+	for target, g in pairs(ghosts) do
+		if target.Parent then
+			local cf, size = boxOf(target)
+			local at = cf.Position - Vector3.new(0, size.Y * 0.5, 0)
+			local far = (at - ui.cam.CFrame.Position).Magnitude
+			g.part.CFrame = ui.cam.CFrame.Rotation + at
+			g.part.Size = starSize * (1 + far / MODE.PulseRange * 0.6)
+			local age = now - g.born
+			if age >= 0 and not g.found then
+				g.found = true
+				oneShot(assets.Found, 1 + (g.order - 1) * 0.08)
+			end
+			local alpha = (if age < 0 then 0 elseif age < 0.15 then age / 0.15 else math.clamp(1 - (age - 0.15) / MODE.RevealTime, 0, 1))
+				* (1 + math.noise(now * 12, g.seed) * 0.35)
+			ghostAlpha(g, 1 - math.clamp(alpha, 0, 1) * 0.7)
+			if alpha > 0.05 then showing = true end
+			if age > MODE.RevealTime + 1 then
+				g.part:Destroy()
+				ghosts[target] = nil
+			end
+		else
+			g.part:Destroy()
+			ghosts[target] = nil
+		end
+	end
+	local scanned = handle:FindFirstChild("ScannedIdle")
+	if scanned then
+		if showing and not scanned.IsPlaying then scanned:Play() elseif not showing and scanned.IsPlaying then scanned:Stop() end
+	end
+end
+
+-- Open: it boots (its picture, then its scan); closed: the screen folds to a line and goes out
+local function enterMode(fromOff)
+	clearGhosts()
+	mode = "Base"
+	ensureViewport()
+	applyColor(CONFIG.Color)
+	ui.image.Image = MODE.BootImage
+	ui.mode.Text = MODE.Label
+	ui.frame.Visible, ui.off.Visible = true, false
+	flash = 1
+	if fromOff then bootFrom = os.clock() end
+	booting = true
+	ui.image.ImageTransparency = 0.6
+	ui.viewport.Visible = false
+	task.delay(if fromOff then 0.9 else 0.35, function()
+		if mode ~= "Base" or not ui.viewport then return end
+		booting = false
+		ui.image.ImageTransparency = 0.85
+		ui.viewport.Visible = true
+		bootedAt = if fromOff then os.clock() else -10
+		nextPulse = os.clock() + 0.3
+	end)
+end
+local function closeMode()
+	local wasOpen = mode ~= ""
+	clearGhosts()
+	mode = ""
+	if not ui.gui then return end
+	ui.frame.Visible, ui.off.Visible = false, true
+	local scanned = handle:FindFirstChild("ScannedIdle")
+	if scanned then scanned:Stop() end
+	if not wasOpen then
+		ui.offFrame.Size = UDim2.fromScale(0, 0.1)
+		return
+	end
+	ui.offFrame.Size = UDim2.fromScale(1, 1)
+	TweenService:Create(ui.offFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Size = UDim2.fromScale(1, 0.1) }):Play()
+	task.delay(0.31, function()
+		if mode == "" and ui.offFrame then
+			TweenService:Create(ui.offFrame, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.In), { Size = UDim2.fromScale(0, 0.1) }):Play()
+		end
+	end)
+end
+
+---- In your hand: held as DOORS holds it, its animations, open and close, inspect ----
+
+local held = {} -- what holding it set up
+local busy = false
+
+local function equipped()
+	local character = tool.Parent
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	local hand = character and (character:FindFirstChild("RightHand") or character:FindFirstChild("Right Arm"))
+	if not (humanoid and hand) then return end
+	-- On a Motor6D in your hand, as DOORS does (its animations move it in your hand): DOORS' own C0 and C1
+	local grip = hand:FindFirstChild("RightGripAttachment")
+	local joint = Instance.new("Motor6D")
+	joint.Name = "Handle"
+	joint.Part0, joint.Part1 = hand, handle
+	joint.C0 = CFrame.new(grip and grip.Position or Vector3.new(-0.04432, -0.05005, -0.04755)) * CFrame.new(0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -1, 0)
+	joint.C1 = CFrame.new(-1.2, -0.15, 0.3, -1, 0, 0, 0, 1, 0, 0, 0, -1)
+	joint.Parent = hand
+	held.joint = joint
+	local animator = humanoid:FindFirstChildOfClass("Animator") or humanoid
+	for _, anim in ipairs(tool.Animations:GetChildren()) do
+		if anim:IsA("Animation") then tracks[anim.Name] = animator:LoadAnimation(anim) end
+	end
+	play("equip")
+	play(if mode == "" then "idle" else "idle_open", 0.2)
+	bindUI()
+	refreshBattery()
+	if mode ~= "" then
+		enterMode(true)
+		handle.SystemIdle:Play()
+	else
+		closeMode()
+	end
+	local acc = 0
+	held.step = RunService.RenderStepped:Connect(function(dt) -- CONFIG.FPS times a second, steadily (what is left over carries on)
+		acc += dt
+		local period = 1 / CONFIG.FPS
+		if acc + 1e-4 < period then return end
+		local passed = acc
+		acc = math.clamp(acc - period, 0, period)
+		step(passed)
+	end)
+end
+
+local function unequipped()
+	if held.step then held.step:Disconnect() end
+	if held.joint then held.joint:Destroy() end
+	held = {}
+	for _, t in pairs(tracks) do t:Stop(0.1) end
+	tracks = {}
+	clearGhosts()
+	for _, name in ipairs({ "SystemIdle", "ScannedIdle" }) do
+		local s = handle:FindFirstChild(name)
+		if s then s:Stop() end
+	end
+	if ui.gui then ui.gui:Destroy() end
+	ui = {}
+	if screenUI then screenUI.Enabled = true end
+end
+
+-- Click: open it, or close it
+local function activated()
+	if busy or not ui.gui then return end
+	busy = true
+	if mode == "" then
+		tool:SetAttribute("ScannerMode", "Base")
+		play("open")
+		if tracks.idle then tracks.idle:Stop(0.3) end
+		play("idle_open", 0.3)
+		handle.BootSystem:Play()
+		handle.SystemIdle:Play()
+		enterMode(true)
+	else
+		tool:SetAttribute("ScannerMode", "")
+		play("close")
+		if tracks.idle_open then tracks.idle_open:Stop(0.3) end
+		play("idle", 0.3)
+		handle.SystemIdle:Stop()
+		handle.CloseSystem:Play()
+		closeMode()
+	end
+	task.delay(0.6, function() busy = false end)
+end
+
+-- A new scanner, in your inventory
+local function give()
+	tool = template:Clone()
+	tool:SetAttribute("ScannerMode", "")
+	tool:SetAttribute("Durability", tool:GetAttribute("DurabilityMax") or 300) -- full, and it stays so
+	tool:SetAttribute("_OriginalOwner", nil)
+	tool:SetAttribute("_ServerAnimated", true) -- its animations are played here, not by DOORS' inventory
+	tool:SetAttribute("GradishScanner", true)
+	tool.RequiresHandle = false -- no Roblox grip: it is held on its own Motor6D, as in DOORS
+	pcall(function() tool:AddTag("Tool") end)
+	for _, d in ipairs(tool:GetDescendants()) do
+		if d:IsA("Sound") then d.Playing = false end
+	end
+	handle = tool.Handle
+	screenUI = handle.Top.Screen.ScreenUI
+	assets = tool.ScannerAssets
+	starSize = assets.Star.Size
+	mode = ""
+	on(tool.Equipped, equipped)
+	on(tool.Unequipped, unequipped)
+	on(tool.Activated, activated)
+	on(tool.Inspect.Event, function() play(if mode == "" then "inspect" else "inspect_open") end)
+	tool.Parent = LocalPlayer:WaitForChild("Backpack")
+end
+
+local function hasOne()
+	for _, holder in ipairs({ LocalPlayer:FindFirstChildOfClass("Backpack"), LocalPlayer.Character }) do
+		for _, item in ipairs(holder and holder:GetChildren() or {}) do
+			if item:GetAttribute("GradishScanner") then return true end
+		end
+	end
+	return false
+end
+give()
+on(LocalPlayer.CharacterAdded, function() -- after a respawn, a new one
+	task.delay(1, function()
+		if alive and not hasOne() then give() end
+	end)
+end)
+
+if getgenv then
+	getgenv().__ObjectScannerStop = function()
+		alive = false
+		for _, c in ipairs(connections) do c:Disconnect() end
+		if tool then
+			if tool.Parent and tool.Parent:IsA("Model") then unequipped() end
+			tool:Destroy()
+		end
+	end
+end
