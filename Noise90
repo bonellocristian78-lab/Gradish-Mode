@@ -12,6 +12,9 @@
             _G.RandomPos = true  -- the TV anywhere in the room, on a battery (optional)
             loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/Noise90"))()
 
+        Run it again and the one before stays: they go on together (getgenv().__Noise90.stop() ends them all). The kits
+        and the files are read once; the next ones take them as they are, so a new one does not stop the game.
+
         THE TYPES (faces, colours and ways from the wikis: Interminable Rooms fanmade, Interminable Rooms, INTERMINABLE FEVER)
             B-90           Noise with B-90 in it. Stare at the TV and it comes out and walks your steps; it can be
                            crucified (B-90 is torn out of it) and the TV can be broken with the hammer. Its disc comes
@@ -46,6 +49,9 @@
                            angered (red): its head and its face come apart on your screen and it kicks you
                            (ERROR CODE 404), hiding or not
         Every one is in its own colours, body and all (no more of the kit's blue but on B-90).
+        Every one can be crucified: a crucifix in your inventory, and in your hand when it is about to get you (it catches
+        you, its face on your screen, S-90's wrong colour, A-404's kick) it is chained, rewound and goes down into its
+        circle, in its colour, instead. Only from B-90's Noise is B-90 torn out, into a second circle.
 
         THE SETUPS (Auto: the type's own, at random, "Cart" being any of the four carts; in the Archives every screen there is)
             Ceiling        above the door, hanging from the ceiling on its arm (the hammer works here)
@@ -106,7 +112,7 @@
                 Laugh = "",             -- a sound id for Trollface-90's laugh (A-90's sound, faster, without one)
                 G90 = "",               -- "Paper" or "Computer" (empty: either)
                 Hammer = true,          -- a hammer on the floor to break the TV (Ceiling)
-                CrucifixGive = true,    -- B-90: a crucifix in your inventory (also _G.CrucifixGive = true / false)
+                CrucifixGive = true,    -- a crucifix in your inventory (also _G.CrucifixGive = true / false)
                 Volume = 1,
                 Folder = "Noise",       -- where the kits, the tape and the faces are kept
                 AssetsUrl = "...",      -- where they are downloaded from
@@ -188,7 +194,7 @@ local function rgb(r, g, b) return Color3.fromRGB(r, g, b) end
      in the Cart, always). setups: where its TV may be (Auto picks one). phase: what it does once out ]]
 local YELLOW = rgb(255, 230, 0)
 local TYPES = {
-	["B-90"] = { color = rgb(60, 120, 255), deep = rgb(10, 40, 210), pale = rgb(150, 190, 255), trigger = "look", setups = { "Ceiling" }, phase = "chase", crucify = true,
+	["B-90"] = { color = rgb(60, 120, 255), deep = rgb(10, 40, 210), pale = rgb(150, 190, 255), trigger = "look", setups = { "Ceiling" }, phase = "chase",
 		discs = { { title = "B-90 (Look)", disc = "Look", art = "B90Look" }, { title = "B-90 (Don't Look)", disc = "DontLook", art = "B90DontLook" } },
 		hints = { "You died to B-90.", "Noise walks your steps, almost as fast as you.", "Break its TV, or hold up a crucifix when it catches you." } },
 	["C-90"] = { color = rgb(255, 140, 30), face = A90.face, faceColor = rgb(255, 150, 40), trigger = "away",
@@ -281,8 +287,16 @@ local TweenService = game:GetService("TweenService")
 local LocalPlayer = Players.LocalPlayer
 local hud = if gethui then gethui() else LocalPlayer:WaitForChild("PlayerGui")
 
-if getgenv and type(getgenv().__NoiseCleanup) == "function" then
-	pcall(getgenv().__NoiseCleanup)
+-- Every run stays (they go on together; getgenv().__Noise90.stop() ends them all). What one run has loaded (its kits, its
+-- files) the next ones take as it is: a new one does not stop the game to read and build them again
+local SESSION = { runs = {}, assets = {}, kits = {} }
+if getgenv then
+	SESSION = getgenv().__Noise90 or SESSION
+	getgenv().__Noise90 = SESSION
+end
+function SESSION.stop()
+	for _, stop in ipairs(SESSION.runs) do pcall(stop) end
+	table.clear(SESSION.runs)
 end
 
 local connections, alive = {}, true
@@ -345,6 +359,7 @@ end
 -- A content ID for one of the files, or nil (no executor support, no internet)
 local function asset(name)
 	local path = CONFIG.Folder .. "/" .. name
+	if SESSION.assets[path] then return SESSION.assets[path] end
 	pcall(function()
 		if not isfolder(CONFIG.Folder) then makefolder(CONFIG.Folder) end
 		if isfile(path) and valid(name, readfile(path)) then return end
@@ -352,18 +367,24 @@ local function asset(name)
 		if valid(name, data) then writefile(path, data) end -- an error page is never kept
 	end)
 	local ok, id = pcall(function() return isfile(path) and getcustomasset(path) end)
-	return if ok and type(id) == "string" then id else nil
+	if not (ok and type(id) == "string") then return nil end
+	SESSION.assets[path] = id
+	return id
 end
 
 local files = { sheets = {}, gray = {}, faces = {}, discs = {} }
 local kit = nil -- the Noise (B-90) kit: its TV, Noise, B-90, the hammer, the crucifix's circle
 local world = nil -- the props kit: the Stairwell's TV cart and its disc player, the Archives' tables, monitors, the Teller
 local filesReady = false
-local function loadKit(name)
+local function loadKit(name) -- (never changed: what is used of it is a copy)
+	local key = CONFIG.Folder .. "/" .. name
+	if SESSION.kits[key] then return SESSION.kits[key] end
 	local id = asset(name)
 	if not id then return nil end
 	local ok, objects = pcall(function() return game:GetObjects(id) end)
-	return if ok and type(objects) == "table" then objects[1] else nil
+	if not (ok and type(objects) == "table" and objects[1]) then return nil end
+	SESSION.kits[key] = objects[1]
+	return objects[1]
 end
 -- A face: an id as it is, a file of the kit's folder as its content ID
 local function image(face)
@@ -659,6 +680,7 @@ end
 ---====== NOISE ======---
 
 local current = nil -- the Noise of now
+local crucified -- below: a crucifix in your hand takes the hit instead (any of them)
 local pausedUntil = 0 -- the disc player's Pause: everything of it stands still until then
 local function frozen() return os.clock() < pausedUntil end
 local tapeStartedAt = 0 -- when the tape began (the disc player's clock)
@@ -811,7 +833,7 @@ end
 -- Its own way out: it freezes, its tape goes bad (torn poses, jumps, ghosts, missing pieces), and it shuts off like an old TV:
 -- the picture squashes into a line, the line into a dot, the dot goes out
 local function fizzle(noise)
-	if noise.gone then return end
+	if noise.gone or noise.crucified then return end
 	noise.gone = true
 	noise.rig.anim = nil -- frozen where it is
 	for _, name in ipairs({ "Idle", "EnragedIdle", "FastForward", "Footstep", "EnragedFootstep", "Pause" }) do
@@ -1761,17 +1783,21 @@ disc = { carried = nil, inserted = nil, entries = {}, insert = nil, scratched = 
 
 local JOURNAL_FILE = CONFIG.Folder .. "/Journal.txt"
 journal = { found = {}, runs = 0 } -- found[art] = { times, first (os.time) }
-pcall(function()
-	if not (isfile and isfile(JOURNAL_FILE)) then return end
-	for line in readfile(JOURNAL_FILE):gmatch("[^\n]+") do
-		local art, times, first = line:match("^(%w+) (%d+) (%d+)$")
-		if art then
-			journal.found[art] = { times = tonumber(times), first = tonumber(first) }
-		elseif line:match("^runs %d+$") then
-			journal.runs = tonumber(line:match("%d+"))
+-- As the file has it now (the other runs going on write in it too)
+function journal.load()
+	pcall(function()
+		if not (isfile and isfile(JOURNAL_FILE)) then return end
+		for line in readfile(JOURNAL_FILE):gmatch("[^\n]+") do
+			local art, times, first = line:match("^(%w+) (%d+) (%d+)$")
+			if art then
+				journal.found[art] = { times = tonumber(times), first = tonumber(first) }
+			elseif line:match("^runs %d+$") then
+				journal.runs = tonumber(line:match("%d+"))
+			end
 		end
-	end
-end)
+	end)
+end
+journal.load()
 function journal.save()
 	local lines = { "runs " .. journal.runs }
 	for art, f in pairs(journal.found) do table.insert(lines, ("%s %d %d"):format(art, f.times, f.first)) end
@@ -1781,6 +1807,7 @@ function journal.save()
 	end)
 end
 function journal.note(entry)
+	journal.load()
 	local f = journal.found[entry.art] or { times = 0, first = os.time() }
 	f.times += 1
 	journal.found[entry.art] = f
@@ -2147,6 +2174,7 @@ function J.open()
 		J.shut()
 		return
 	end
+	journal.load()
 	journal.refresh()
 	J.gui.Enabled, J.close.Modal = true, true -- the mouse free to click (only while it is open)
 	J.freed = mainGame and mainGame.freemouse
@@ -2157,9 +2185,13 @@ on(J.close.MouseButton1Click, J.shut)
 on(UserInputService.InputBegan, function(input)
 	if J.gui.Enabled and (input.KeyCode == Enum.KeyCode.Escape or input.KeyCode == Enum.KeyCode.Backspace) then J.shut() end
 end)
--- The journal itself: an item with its icon, in your inventory every run (and again after you respawn)
+-- The journal itself: an item with its icon, in your inventory every run (and again after you respawn); one only, with
+-- other runs going on
 function J.give()
 	if not alive or (journal.tool and journal.tool.Parent) then return end
+	for _, holder in ipairs({ backpack(), LocalPlayer.Character }) do
+		if holder and holder:FindFirstChild("Noise Journal") then return end
+	end
 	local tool = make("Tool", { Name = "Noise Journal", ToolTip = "Your Noise tapes", CanBeDropped = false, RequiresHandle = false,
 		TextureId = files.journal or "" }, nil)
 	on(tool.Activated, J.open)
@@ -3174,6 +3206,7 @@ end
 function hurt(amount)
 	local _, humanoid = body()
 	if not humanoid then return true end
+	if crucified() then return false end -- you hold a crucifix: it is crucified instead
 	blueFlash(0.7)
 	shake(6)
 	if humanoid.Health - amount <= 0 then
@@ -3321,7 +3354,9 @@ function faceCheck(opts)
 	faceImage.ImageColor3 = Color3.new(1, 0, 0)
 	task.wait(1 / 30)
 	local result = "pass"
-	if broke and alive then
+	if broke and alive and crucified() then -- you hold a crucifix: no angry face, it is crucified
+		result = "spared"
+	elseif broke and alive then
 		-- Caught: its angry face, close
 		oneShot(A90.hit, SoundService, { Volume = CONFIG.Volume * 0.6 })
 		faceImage.ImageColor3 = Color3.new(1, 1, 1)
@@ -3490,12 +3525,7 @@ local function chase(noise)
 		end
 
 		if (here - noise.position).Magnitude < CONFIG.KillDistance then
-			local cross = V.crucify and heldCrucifix() -- only B-90 can be crucified
-			if cross then -- it caught you, but you hold a crucifix
-				state = "crucified"
-				task.spawn(crucify, noise, cross)
-				break
-			end
+			if crucified(noise) then break end -- it caught you, but you hold a crucifix
 			-- Caught: it turns to you, the jumpscare, and you are gone
 			state = "done"
 			noise.rig:play(noise.anims.Jumpscare, 2)
@@ -3635,6 +3665,7 @@ local function newFilm(character, root)
 	camera.CameraType = Enum.CameraType.Scriptable
 
 	local bars = make("ScreenGui", { Name = "NoiseCutscene", IgnoreGuiInset = true, DisplayOrder = 99998, ResetOnSpawn = false }, hud)
+	table.insert(owned, bars)
 	local top = make("Frame", { Size = UDim2.fromScale(1, 0), BackgroundColor3 = Color3.new(0, 0, 0), BorderSizePixel = 0 }, bars)
 	local bottom = make("Frame", { AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1), Size = UDim2.fromScale(1, 0),
 		BackgroundColor3 = Color3.new(0, 0, 0), BorderSizePixel = 0 }, bars)
@@ -3678,7 +3709,8 @@ local function newFilm(character, root)
 		root.CFrame = CFrame.lookAt(at, at + face)
 	end)
 	-- The picture
-	RunService:BindToRenderStep("NoiseCutscene", Enum.RenderPriority.Last.Value + 2, function(dt)
+	local step = "NoiseCutscene" .. math.random(1, 2 ^ 30) -- its own render step, with other runs going on
+	RunService:BindToRenderStep(step, Enum.RenderPriority.Last.Value + 2, function(dt)
 		local now = os.clock()
 		for _, d in ipairs(character:GetDescendants()) do -- seen from outside, even in first person
 			if d:IsA("BasePart") or d:IsA("Decal") then d.LocalTransparencyModifier = 0 end
@@ -3696,7 +3728,7 @@ local function newFilm(character, root)
 		if film.done then return end
 		film.done = true
 		restoreCutscene = nil
-		RunService:UnbindFromRenderStep("NoiseCutscene")
+		RunService:UnbindFromRenderStep(step)
 		writer:Disconnect()
 		for _, j in pairs(joints) do j.motor.Transform = CFrame.new() end
 		camera.CameraType = film.saved.type
@@ -4207,7 +4239,7 @@ end
 do
 	local CHAIN = "rbxassetid://11517174215" -- the chain of DOORS' crucifix
 	local CRUCIFIX, SLAM, RUMBLE, GLITCH = "rbxassetid://6555668806", "rbxassetid://74149238738530", "rbxassetid://9114219876", "rbxassetid://10237953274"
-	local LIGHT = Color3.fromRGB(137, 208, 255) -- the circle's blue
+	local LIGHT = if V.name == "B-90" then Color3.fromRGB(137, 208, 255) else PALE -- the circle's blue; the others', in their colour
 	local up = Vector3.new(0, 1, 0)
 	local function clamp01(x) return math.clamp(x, 0, 1) end
 	local function span(t, from, to) return clamp01((t - from) / (to - from)) end
@@ -4376,6 +4408,9 @@ do
 		end
 		for _, d in ipairs(model:GetDescendants()) do
 			if d:IsA("Constraint") then d:Destroy() end -- its rings turn by script, not by physics
+			if V.name ~= "B-90" then -- (the kit's is B-90's blue)
+				if d:IsA("Beam") or d:IsA("ParticleEmitter") then d.Color = ColorSequence.new(LIGHT) elseif d:IsA("Light") then d.Color = LIGHT end
+			end
 		end
 		local pentagram = model:FindFirstChild("Pentagram") or model
 		local mark = pentagram:FindFirstChild("Mark") or pentagram:FindFirstChild("Base") or pentagram:FindFirstChildWhichIsA("BasePart")
@@ -4504,6 +4539,7 @@ do
 	-- B-90 is pulled out of its head along one smooth curve while the circle divides in two, the body it wore turning white;
 	-- three pulls, both at once, and both go down into their circles
 	function crucify(noise, tool)
+		local split = V.name == "B-90" -- B-90 is torn out of it, into a second circle; the others go down whole into theirs
 		local character, _, root = body()
 		if not character or noise.gone then
 			state = "done"
@@ -4543,7 +4579,7 @@ do
 		if room(splitDir) < 4.5 then splitDir = away end -- no room beside it: behind it
 		local C2 = C1 + splitDir * math.clamp(room(splitDir) - 1.5, 4, 7)
 		C2 = Vector3.new(C2.X, (floorUnder(C2 + up * 3) or C2).Y, C2.Z)
-		local mid = (C1 + C2) * 0.5
+		local mid = if split then (C1 + C2) * 0.5 else C1
 		local ceiling = cast(mid + up * 2, up * 16)
 		local high = if ceiling then math.min(8, ceiling.Position.Y - mid.Y - 1.2) else 8
 		local lift = 1.5
@@ -4568,15 +4604,15 @@ do
 		-- What it turns into when B-90 leaves: the kit's Noise without B-90, white, part by part (one body, no second one over it)
 		local whiteSource = piece("NoiseModel(WithoutB-90)")
 		local paints = {}
-		for _, p in ipairs(noise.model:GetDescendants()) do
+		for _, p in ipairs(if split then noise.model:GetDescendants() else {}) do
 			if p:IsA("BasePart") and p ~= noise.root then
 				local twin = whiteSource and whiteSource:FindFirstChild(p.Name, true)
 				table.insert(paints, { part = p, from = p.Color, to = if twin and twin:IsA("BasePart") then twin.Color else Color3.fromRGB(205, 205, 205) })
 			end
 		end
 		local glowFill, glowOutline = noise.glow.FillTransparency, noise.glow.OutlineColor
-		local b90 = newB90()
-		b90.grow(0.08)
+		local b90 = if split then newB90() else nil
+		if b90 then b90.grow(0.08) end
 		local circles = { newCircle(), nil }
 		circles[1].place(C1, 0, 0, nil)
 		local chest = holder("NoiseChest", start + up)
@@ -4649,44 +4685,46 @@ do
 			circles[1].speed = spin
 			circles[1].place(C1, open, dt, chestAt)
 
-			-- The split
-			local u = smoother(span(t, 3.0, 6.0))
-			local headAt = at + up * 2.4
-			local b90At
-			if t < 3.0 then
-				b90At = headAt
-			elseif t < 6.0 then
-				b90At = bezier(headAt, headAt + up * 1.2 + splitDir, B90top + up * 0.6, B90top, u)
-			else
-				-- B-90 on its chains: it thrashes, lunges at you and is yanked back
-				local wake = smoother(span(t, 6.0, 6.8))
-				local thrash = Vector3.new(math.noise(t * 2.2, 1, 0), math.noise(t * 2.2, 2, 0) * 0.6, math.noise(t * 2.2, 3, 0)) * 0.8 * wake
-				local lunge = 0
-				for _, lungeAt in ipairs(LUNGES) do
-					lunge = math.max(lunge, smoother(span(t, lungeAt, lungeAt + 0.18)) * (1 - smoother(span(t, lungeAt + 0.18, lungeAt + 0.65))))
+			-- The split (B-90)
+			if split then
+				local u = smoother(span(t, 3.0, 6.0))
+				local headAt = at + up * 2.4
+				local b90At
+				if t < 3.0 then
+					b90At = headAt
+				elseif t < 6.0 then
+					b90At = bezier(headAt, headAt + up * 1.2 + splitDir, B90top + up * 0.6, B90top, u)
+				else
+					-- B-90 on its chains: it thrashes, lunges at you and is yanked back
+					local wake = smoother(span(t, 6.0, 6.8))
+					local thrash = Vector3.new(math.noise(t * 2.2, 1, 0), math.noise(t * 2.2, 2, 0) * 0.6, math.noise(t * 2.2, 3, 0)) * 0.8 * wake
+					local lunge = 0
+					for _, lungeAt in ipairs(LUNGES) do
+						lunge = math.max(lunge, smoother(span(t, lungeAt, lungeAt + 0.18)) * (1 - smoother(span(t, lungeAt + 0.18, lungeAt + 0.65))))
+					end
+					b90At = B90top + thrash + flatDir(B90top, root.Position) * 2.4 * lunge - up * (pull + sink)
+					if t < SLAM_AT then b90.grow(1 + 0.12 * math.sin((t - 6) * 6) * wake + 0.35 * lunge) end -- it breathes, and swells as it lunges
 				end
-				b90At = B90top + thrash + flatDir(B90top, root.Position) * 2.4 * lunge - up * (pull + sink)
-				if t < SLAM_AT then b90.grow(1 + 0.12 * math.sin((t - 6) * 6) * wake + 0.35 * lunge) end -- it breathes, and swells as it lunges
-			end
-			if t >= 3.0 then
-				if once("split") then
-					b90.model.Parent = folder
-					circles[2] = newCircle()
-					toB90.Enabled = true
-					oneShot(GLITCH, b90.core, { Volume = CONFIG.Volume })
-					oneShot(files.scream, b90.core, { Volume = CONFIG.Volume * 1.3, RollOffMinDistance = 60 })
-					for _, name in ipairs({ "Rays_Thin", "Rays_Thick", "Core", "Wave", "HijackFace", "HijackFaceGlitch" }) do noise:emitter(name, false) end
+				if t >= 3.0 then
+					if once("split") then
+						b90.model.Parent = folder
+						circles[2] = newCircle()
+						toB90.Enabled = true
+						oneShot(GLITCH, b90.core, { Volume = CONFIG.Volume })
+						oneShot(files.scream, b90.core, { Volume = CONFIG.Volume * 1.3, RollOffMinDistance = 60 })
+						for _, name in ipairs({ "Rays_Thin", "Rays_Thick", "Core", "Wave", "HijackFace", "HijackFaceGlitch" }) do noise:emitter(name, false) end
+					end
+					if t < 6.0 then b90.grow(lerpNum(0.08, 1, smoother(span(t, 3.0, 5.0)))) end
+					local change = smoother(span(t, 3.2, 5.2))
+					for _, item in ipairs(paints) do item.part.Color = item.from:Lerp(item.to, change) end
+					noise.glow.FillTransparency = lerpNum(glowFill, 1, change) -- a white body with the kit's black outline
+					noise.glow.OutlineColor = glowOutline:Lerp(Color3.new(0, 0, 0), change)
+					circles[2].speed = spin
+					circles[2].place(C1:Lerp(C2, u), open, dt, b90At)
 				end
-				if t < 6.0 then b90.grow(lerpNum(0.08, 1, smoother(span(t, 3.0, 5.0)))) end
-				local change = smoother(span(t, 3.2, 5.2))
-				for _, item in ipairs(paints) do item.part.Color = item.from:Lerp(item.to, change) end
-				noise.glow.FillTransparency = lerpNum(glowFill, 1, change) -- a white body with the kit's black outline
-				noise.glow.OutlineColor = glowOutline:Lerp(Color3.new(0, 0, 0), change)
-				circles[2].speed = spin
-				circles[2].place(C1:Lerp(C2, u), open, dt, b90At)
+				b90.place(b90At)
+				b90Point.CFrame = CFrame.new(b90At)
 			end
-			b90.place(b90At)
-			b90Point.CFrame = CFrame.new(b90At)
 
 			-- Three pulls, both at once; at each one B-90 shows its STOP
 			for i, pullAt in ipairs(PULLS) do
@@ -4697,14 +4735,14 @@ do
 					stopUntil = t + 0.35
 				end
 			end
-			for i, lungeAt in ipairs(LUNGES) do
+			for i, lungeAt in ipairs(if split then LUNGES else {}) do
 				if t >= lungeAt and once("lunge" .. i) then
 					b90.emitter("FaceAngry", nil, 10)
 					oneShot(GLITCH, b90.core, { Volume = CONFIG.Volume * 0.6, PlaybackSpeed = 1.3 })
 					shake(2)
 				end
 			end
-			if t >= 3.0 then
+			if split and t >= 3.0 then
 				local stopping = t < stopUntil
 				if stopping ~= showingStop then
 					showingStop = stopping
@@ -4731,14 +4769,14 @@ do
 					if hum then hum:Stop() end
 				end
 				fade(noise.model, noise.root, span(t, SLAM_AT, SLAM_AT + 0.5))
-				b90.grow(math.max(0.01, 1 - span(t, SLAM_AT, SLAM_AT + 0.5)))
+				if b90 then b90.grow(math.max(0.01, 1 - span(t, SLAM_AT, SLAM_AT + 0.5))) end
 			end
 			RunService.Heartbeat:Wait()
 		end
 
-		-- Gone, both
+		-- Gone (both)
 		noise.gone = true
-		for _, thing in ipairs({ noise.model, b90.model, cross, chest, b90Point, tip }) do thing:Destroy() end
+		for _, thing in ipairs({ noise.model, cross, chest, b90Point, tip, b90 and b90.model }) do thing:Destroy() end
 		for _, circle in ipairs(circles) do circle.model:Destroy() end
 		if current == noise then current = nil end
 		state = "done"
@@ -4873,6 +4911,7 @@ end)
 
 -- Its feet on the floor under `p` (a point as high as your root), looking along `look`
 local function setAt(noise, p, look)
+	if noise.crucified then return end -- the crucifix has it now
 	local floor = floorUnder(p)
 	local floorY = if floor then floor.Y else p.Y - 3
 	noise.position = Vector3.new(p.X, floorY + 3, p.Z)
@@ -4885,7 +4924,7 @@ end
 local function walkTo(noise, target, speed, maxTime, backwards)
 	local t0 = os.clock()
 	noise.rig:play(noise.anims.Walk, if backwards then -speed / 10 else speed / 10)
-	while alive and not noise.gone and os.clock() - t0 < (maxTime or 10) do
+	while alive and not noise.gone and not noise.crucified and os.clock() - t0 < (maxTime or 10) do
 		local dt = RunService.Heartbeat:Wait()
 		if frozen() then
 			t0 += dt
@@ -4901,6 +4940,7 @@ end
 
 -- Hidden for a while (it pretends it is gone), or back
 local function vanish(noise, hidden)
+	if hidden and noise.crucified then return end
 	for _, d in ipairs(noise.model:GetDescendants()) do
 		if d:IsA("BasePart") then
 			d.LocalTransparencyModifier = if hidden then 1 else 0
@@ -4920,10 +4960,24 @@ local function vanish(noise, hidden)
 	end
 end
 
+-- It is about to get you, and you hold a crucifix: it is crucified instead (any of them, wherever it is: out of its TV, out
+-- of hiding). True when it is, or already was
+function crucified(noise)
+	noise = noise or current
+	if state == "crucified" then return true end
+	local cross = heldCrucifix()
+	if not (cross and noise and not noise.gone and noise.model.Parent) then return false end
+	vanish(noise, false)
+	noise.crucified = true -- what it was doing leaves it alone now
+	state = "crucified"
+	task.spawn(crucify, noise, cross)
+	return true
+end
+
 -- Back into its TV: it walks backwards to where it came out, and climbs in the way it came out (its Emerge, backwards)
 function climbBack(noise)
 	local home = noise.home
-	if noise.gone or not noise.model.Parent then return end
+	if noise.gone or noise.crucified or not noise.model.Parent then return end
 	if not home or not home.torso or not noise.anims.Emerge then
 		fizzle(noise)
 		return
@@ -5119,7 +5173,7 @@ function PHASES.rebound(noise)
 		faceOnScreens(true)
 		if not hold(gap) then break end
 		oneShot(A90.spawn, screen, { Volume = CONFIG.Volume, PlaybackSpeed = if volley > 1 then 1.6 else 1.2, RollOffMaxDistance = 200 })
-		if faceCheck({ rule = "still" }) == "dead" then break end
+		if faceCheck({ rule = "still" }) == "dead" or state ~= "phase" then break end
 		faceOnScreens(false)
 		local alright = true
 		for _ = 1, volley do
@@ -5319,7 +5373,7 @@ function PHASES.screen(noise)
 		end
 		local result = faceCheck({ rule = V.rule, frenzy = true, flash = if x then yellow else Color3.new(1, 0, 0),
 			laugh = if CONFIG.Laugh ~= "" then CONFIG.Laugh else A90.spawn, laughSpeed = if CONFIG.Laugh ~= "" then 1 else 1.6 })
-		if result == "dead" then return end
+		if result == "dead" or state ~= "phase" then return end
 		if result == "hit" and V.noRegen and not noise.noHealing then -- the wiki: once it has hit you, you do not heal any more
 			local _, humanoid = body()
 			if humanoid then
@@ -5433,7 +5487,7 @@ end
 
 function PHASES.g90(noise)
 	state = "phase"
-	if faceCheck({ rule = "still" }) == "dead" then return end
+	if faceCheck({ rule = "still" }) == "dead" or state ~= "phase" then return end
 	if checkPlaces(noise, "table") then return end
 	if g90Mode == "Computer" then
 		-- Gone... for five seconds
@@ -5585,7 +5639,7 @@ function PHASES.colors(noise)
 		fizzle(noise)
 		screensOff()
 		state = "done"
-	else
+	elseif not crucified(noise) then -- (a crucifix in your hand: crucified instead)
 		fool()
 	end
 end
@@ -5786,6 +5840,7 @@ function PHASES.glitch(noise)
 		local facing = flat(r.CFrame.LookVector) or along
 		setAt(noise, r.Position + facing * 3, -facing)
 	end
+	if crucified(noise) then return end -- a crucifix in your hand: no kick, it is crucified
 	kicked404()
 	state = "done"
 end
@@ -5796,7 +5851,7 @@ local function run()
 	if CONFIG.Time > 0 then task.wait(CONFIG.Time) end
 	local t0 = os.clock()
 	while not filesReady and os.clock() - t0 < 20 do task.wait(0.1) end
-	if V.crucify then giveCrucifix() end
+	giveCrucifix()
 	local setup = (SETUPS[chooseSetup()] or SETUPS.Ceiling)()
 	if setup.hammer and CONFIG.Hammer then
 		hammer = makeHammer()
@@ -5918,20 +5973,14 @@ local function run()
 	if noise and alive and state == "emerging" then (PHASES[V.phase] or PHASES.chase)(noise) end
 end
 
-local cleanup = function()
+table.insert(SESSION.runs, function() -- (its stop)
 	alive = false
-	pcall(function() RunService:UnbindFromRenderStep("NoiseCutscene") end)
 	for _, c in ipairs(connections) do c:Disconnect() end
 	if restoreCutscene then pcall(restoreCutscene) end
 	if closeInspect then pcall(closeInspect) end -- DOORS' mouse given back
 	for _, i in ipairs({ folder, overlay, tint, blur, faceGui, pixelGui }) do i:Destroy() end
 	for _, i in ipairs(owned) do pcall(function() i:Destroy() end) end
 	if colorGui then colorGui:Destroy() end
-	local bars = hud:FindFirstChild("NoiseCutscene")
-	if bars then bars:Destroy() end
-end
-if getgenv then getgenv().__NoiseCleanup = cleanup end
+end)
 
 task.spawn(run)
--- Whether it is over: gone, broken, crucified, or run again (Noise90All waits on it)
-return function() return not alive or state == "done" or state == "broken" or state == "crucified" end

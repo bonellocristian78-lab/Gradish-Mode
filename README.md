@@ -28,7 +28,7 @@ mod rather than playing it.
 | Hellish Time Ever (K = an entity, spam it) | `.../HellishTimeEver` |
 | Noise: a TV above the door, a blue tape, a hammer, a crucifix | `.../Noise` |
 | Noise 90: every "-90" (and A-404) as a Noise (`_G.Type = "A-90"`, ...), all in one | `.../Noise90` |
-| Noise 90, all of them one after another: out at once, every disc in the Journal | `.../Noise90All` |
+| Noise 90, all of them: a new one every 10 s (the others stay), out at once, every disc in the Journal | `.../Noise90All` |
 | DOORS' walk, run, crouch and jump in any game | `.../DoorsAnimations` |
 | Universal Custom Assets: animator with Studio controls (Ctrl + U I O) | `.../UniversalAssets` |
 | The same, obfuscated | `.../UniversalAssets.obf` |
@@ -356,8 +356,19 @@ loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab
 One script, every "-90" (the entities you must stand still for) as a version of
 Noise. Each starts from a TV; its tape is tinted in its colour, with its face in
 the middle of the picture (where the light is while it loads, and big at the end);
-Noise comes out in its colours, with its face on its head. Only B-90 can be
-crucified. `B-90` here is exactly the `Noise` script (hammer and crucifix included).
+Noise comes out in its colours, with its face on its head. `B-90` here is
+exactly the `Noise` script (hammer and crucifix included).
+
+**Every one can be crucified**: you get a crucifix with every type. Hold it when
+it is about to get you (it catches you, its face is on your screen, S-90's wrong
+colour, A-404's kick) and instead it is chained, rewound and pulled down into
+its circle, in its own colour. Only B-90 also has B-90 torn out of it, into a
+second circle.
+
+**More than one at once**: run it again and the one before stays; they go on
+together. To end them all: `getgenv().__Noise90.stop()`. The kits and the files
+are read and built once, by the first one; the next ones reuse them, so a new
+one no longer freezes the game when it appears.
 
 Faces, colours and ways come from the wikis (Interminable Rooms fanmade, Interminable
 Rooms, INTERMINABLE FEVER); G-90 has no picture there, so its face is drawn from its
@@ -461,10 +472,10 @@ loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab
 
 Each one's TV stands anywhere in the room (`RandomPos`, no battery, no antenna,
 never the pedestal) and it comes out at once, no tape (`Now = true`); its discs
-are written in the Noise Journal as it comes. Once it is over (gone, or you got
-through it) the next one comes, in the Journal's order. Your `_G.Noise90` settings
+are written in the Noise Journal as it comes. Every 10 seconds the next one comes,
+in the Journal's order, and the ones before it stay. Your `_G.Noise90` settings
 carry over; S-90, XS-90 and A-404 kill you instead of kicking you out (`Kick = true`
-to be kicked), or the rest would never come. The TV is a little bigger
+to be kicked), or a kick would end them all. The TV is a little bigger
 or smaller each time (`TVScale`). Every setting is at the top of the script
 (`_G.Noise90 = { ... }`). The props come from `assets/noise/NoiseWorld.rbxm`,
 the faces from `assets/noise/Wiki_*.png` (the wikis'; G-90's `Face_G90.png`), the discs' art from
@@ -720,7 +731,7 @@ Over 400 simulated seeds: no spacing violations, about 12 encounters per run.
 | `HTE/` | the models Hellish Time Ever summons |
 | `DoorsAnimations` | DOORS' character animations, recorded in DOORS and played anywhere |
 | `Noise` / `Noise90` | Noise (B-90); every "-90" as a Noise, `_G.Type` |
-| `Noise90All` | every Noise 90 one after another (fills the Noise Journal) |
+| `Noise90All` | every Noise 90, a new one every 10 s (fills the Noise Journal) |
 | `assets/noise/` | Noise's kit, tape and sheets; Noise 90's props kit, grey sheets and faces |
 | `UniversalAssets` / `.obf` | the animator for DOORS' things and custom assets, readable and obfuscated |
 | `GradishCheck` | the config report |

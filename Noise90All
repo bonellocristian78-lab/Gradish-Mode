@@ -1,17 +1,18 @@
 --[[
-        NOISE 90 ALL -- every "-90" of Noise90, one after another: the quick way to have them all
+        NOISE 90 ALL -- every "-90" of Noise90, a new one every 10 seconds: the quick way to have them all
 
         Each one: its TV anywhere in the room (no battery, nothing to turn), and out it comes at
-        once, no tape. Its discs are written in the Noise Journal as it comes. Once it is over
-        (gone, or you got through it), the next one, in the Journal's order:
+        once, no tape. Its discs are written in the Noise Journal as it comes. Every 10 seconds the
+        next one, in the Journal's order; the ones before it stay and go on:
             B-90, C-90, Ransom//90, A-90, X-90, G-90, Pix-90, Trollface-90, XTrollface-90,
             S-90, XS-90, X-60, A-404
 
             loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/Noise90All"))()
 
         Noise90's settings work here too, before the loadstring (_G.Noise90 = { Volume = 0.5 }).
-        One change: S-90, XS-90 and A-404 kill you instead of kicking you out, or the rest would
-        never come (Kick = true to be kicked all the same).
+        One change: S-90, XS-90 and A-404 kill you instead of kicking you out, or a kick would end
+        them all (Kick = true to be kicked all the same). Every one can be crucified: hold the
+        crucifix when it is about to get you. To end them all: getgenv().__Noise90.stop()
 ]]
 
 -- Where Noise90 is: on main; until it is there, on the branch it is made on
@@ -49,8 +50,7 @@ task.spawn(function()
 		for k, v in pairs(settings) do options[k] = v end
 		options.Type, options.RandomPos, options.Now = name, true, true
 		_G.Noise90 = options -- Noise90 reads it (and clears it)
-		local over = loadstring(source)()
-		repeat task.wait(1) until over()
-		task.wait(2)
+		loadstring(source)()
+		task.wait(10)
 	end
 end)
