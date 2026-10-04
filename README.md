@@ -403,6 +403,14 @@ down on it and opens, the disc goes in; its display says `NO DISC`, `READ`,
 into its TV. The TV has a power light (red in standby, green on) and switches on
 and off like an old tube.
 
+**Its screens look like DOORS'**: Oswald and cream text, dark brown buttons with a
+cream edge, DOORS' title font for NO SIGNAL, MOVE, X-60 and FOOL; the back of a disc,
+when you inspect it, is a page of DOORS' Journal (handwriting in brown ink, its
+border and smudge). The player's display and Ransom's note keep their own screen
+fonts. The cart is a copy of DOORS' own, and DOORS' prompt gate kept switching its
+prompts back on (they flickered and could not be held): the copy now loses the
+tags that bring it there (`CartProp`, `GatedPrompt`, `ItemHolder`).
+
 `Auto` takes the type's own setups at random, `Screens` in the Archives; with
 any setup, the room's own screens play the tape too. The TV is a little bigger
 or smaller each time (`TVScale`). Every setting is at the top of the script

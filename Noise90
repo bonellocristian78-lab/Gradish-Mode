@@ -264,6 +264,31 @@ local function make(class, props, parent)
 end
 local function rnd(a) return (math.random() * 2 - 1) * a end -- between -a and a
 
+-- DOORS' look, from its MainUI and its Journal: Oswald and cream text; dark brown buttons with a cream edge; the titles of its
+-- prompts in its own font; the Journal's handwriting in brown ink
+local UI = { cream = rgb(255, 222, 189), edge = rgb(91, 67, 63), dark = rgb(38, 25, 25), ink = rgb(57, 43, 38), red = rgb(212, 71, 71),
+	paper = rgb(226, 206, 172), title = Font.new("rbxassetid://11702779517", Enum.FontWeight.Heavy),
+	hand = Font.new("rbxassetid://12187373881"), writing = Font.new("rbxassetid://12187369802"), smudge = "rbxassetid://136719252500283" }
+function UI.font(weight) return Font.new("rbxasset://fonts/families/Oswald.json", weight or Enum.FontWeight.Medium) end
+-- A text in cream Oswald (outline: the brown edge of its titles)
+function UI.label(props, parent, outline)
+	local base = { BackgroundTransparency = 1, FontFace = UI.font(), TextColor3 = UI.cream, TextScaled = true }
+	for k, v in pairs(props) do base[k] = v end
+	local label = make("TextLabel", base, parent)
+	if outline then make("UIStroke", { Color = UI.edge, Thickness = 2 }, label) end
+	return label
+end
+function UI.button(props, parent)
+	local base = { BackgroundColor3 = UI.dark, BackgroundTransparency = 0.3, BorderSizePixel = 0, FontFace = UI.font(Enum.FontWeight.SemiBold),
+		TextColor3 = UI.cream, TextScaled = true, AutoButtonColor = true }
+	for k, v in pairs(props) do base[k] = v end
+	local button = make("TextButton", base, parent)
+	make("UICorner", { CornerRadius = UDim.new(0, 8) }, button)
+	make("UIStroke", { Color = UI.cream, Thickness = 3, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, button)
+	make("UIPadding", { PaddingTop = UDim.new(0.12, 0), PaddingBottom = UDim.new(0.12, 0) }, button)
+	return button
+end
+
 local folder = make("Folder", { Name = "NoiseEvent" }, workspace)
 local mainGame = nil -- DOORS' Main_Game: its camera, its shake
 pcall(function() mainGame = require(LocalPlayer.PlayerGui.MainUI.Initiator.Main_Game) end)
@@ -427,11 +452,15 @@ end
 
 ---====== THE KIT'S PIECES (or plain ones when it does not load) ======---
 
+-- DOORS' PromptGate turns on, every 0.05 s, each prompt in a model with one of these tags: ours too, against us
+local GATE_TAGS = { "CartProp", "ItemHolder", "GatedPrompt" }
+
 -- Scripts, the game's remotes and props' leftovers out; everything still and see-through to clicks
 local function clean(model, keepPhysics)
 	local all = model:GetDescendants()
 	table.insert(all, model)
 	for _, d in ipairs(all) do
+		for _, tag in ipairs(GATE_TAGS) do d:RemoveTag(tag) end
 		if d:IsA("LuaSourceContainer") or d:IsA("RemoteEvent") or d:IsA("BindableEvent") or d:IsA("PathfindingModifier")
 			or d:IsA("ProximityPrompt") then
 			d:Destroy()
@@ -1398,9 +1427,8 @@ local function addAntenna()
 	antenna.labels = {}
 	for _, record in ipairs(screens) do
 		if record.own then
-			table.insert(antenna.labels, make("TextLabel", { Name = "NoSignal", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 0.25),
-				Position = UDim2.fromScale(0, 0.375), ZIndex = 6, Font = Enum.Font.Arcade, TextScaled = true, TextColor3 = Color3.new(1, 1, 1),
-				Text = "NO SIGNAL", Visible = false }, record.gui))
+			table.insert(antenna.labels, UI.label({ Name = "NoSignal", Size = UDim2.fromScale(1, 0.25), Position = UDim2.fromScale(0, 0.375), ZIndex = 6,
+				FontFace = UI.title, Text = "NO SIGNAL", Visible = false }, record.gui, true))
 		end
 	end
 	on(antenna.prompt.Triggered, function()
@@ -1671,48 +1699,48 @@ local viewport = make("ViewportFrame", { Name = "View", AnchorPoint = Vector2.ne
 	LightColor = Color3.new(1, 1, 1), LightDirection = Vector3.new(-0.4, -1, -0.6) }, inspectGui)
 local viewCam = make("Camera", { Name = "Camera", FieldOfView = 38 }, viewport)
 viewport.CurrentCamera = viewCam
+-- The back of the case as a page of DOORS' Journal: its border, a smudge, the handwriting in brown ink
 local panel = make("Frame", { Name = "Panel", Position = UDim2.fromScale(0.66, 0.1), Size = UDim2.fromScale(0.31, 0.8),
-	BackgroundColor3 = Color3.fromRGB(14, 14, 18), BackgroundTransparency = 0.1, BorderSizePixel = 0 }, inspectGui)
-make("UICorner", { CornerRadius = UDim.new(0, 10) }, panel)
-make("UIPadding", { PaddingTop = UDim.new(0, 14), PaddingLeft = UDim.new(0, 14), PaddingRight = UDim.new(0, 14) }, panel)
+	BackgroundColor3 = UI.paper, BorderSizePixel = 0 }, inspectGui)
+make("UICorner", { CornerRadius = UDim.new(0, 4) }, panel)
+make("ImageLabel", { Name = "BorderImage", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Image = "rbxassetid://125810982882185",
+	ImageTransparency = 0.1 }, panel)
+make("ImageLabel", { Name = "Smudge", Position = UDim2.fromScale(0.25, 0.14), Size = UDim2.fromScale(0.7, 0.4), BackgroundTransparency = 1,
+	Image = UI.smudge, ImageTransparency = 0.8 }, panel)
+make("UIPadding", { PaddingTop = UDim.new(0, 18), PaddingLeft = UDim.new(0, 18), PaddingRight = UDim.new(0, 18) }, panel)
 local function line(name, y, h, size, font, color)
-	return make("TextLabel", { Name = name, Position = UDim2.fromScale(0, y), Size = UDim2.fromScale(1, h), BackgroundTransparency = 1,
-		TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, Font = font,
-		TextSize = size, TextColor3 = color or Color3.fromRGB(225, 225, 225), Text = "" }, panel)
+	return UI.label({ Name = name, Position = UDim2.fromScale(0, y), Size = UDim2.fromScale(1, h), TextScaled = false, TextWrapped = true,
+		TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, FontFace = font, TextSize = size,
+		TextColor3 = color or UI.ink, RichText = true, Text = "" }, panel)
 end
-local pTitle = line("Title", 0, 0.08, 30, Enum.Font.GothamBlack, BLUE)
-local pState = line("Condition", 0.09, 0.1, 15, Enum.Font.GothamBold)
-local pAbout = line("About", 0.2, 0.42, 16, Enum.Font.Gotham)
-local pSurvive = line("Survive", 0.63, 0.12, 16, Enum.Font.GothamBold, BLUE)
-local pHint = line("Hint", 0.93, 0.07, 13, Enum.Font.Gotham, Color3.fromRGB(150, 150, 155))
+local pTitle = line("Title", 0, 0.09, 36, UI.hand)
+pTitle.Rotation = -3
+local pState = line("Condition", 0.1, 0.1, 19, UI.writing)
+local pAbout = line("About", 0.2, 0.42, 19, UI.writing)
+local pSurvive = line("Survive", 0.63, 0.13, 19, UI.writing)
+local pHint = line("Hint", 0.93, 0.07, 15, UI.writing)
+pHint.TextTransparency = 0.35
 pHint.Text = "Drag: turn it. Wheel: closer. Right-click: put it away."
 local function button(name, text, x)
-	local b = make("TextButton", { Name = name, Text = text, Position = UDim2.fromScale(x, 0.79), Size = UDim2.fromScale(0.3, 0.07),
-		BackgroundColor3 = Color3.fromRGB(40, 40, 48), TextColor3 = Color3.new(1, 1, 1), Font = Enum.Font.GothamBold, TextScaled = true,
-		BorderSizePixel = 0, AutoButtonColor = true, Modal = true }, panel)
-	make("UICorner", { CornerRadius = UDim.new(0, 6) }, b)
-	return b
+	return UI.button({ Name = name, Text = text, Position = UDim2.fromScale(x, 0.79), Size = UDim2.fromScale(0.3, 0.07), Modal = true }, panel)
 end
 local bOpen, bFlip, bWipe = button("OpenCase", "Open", 0), button("Flip", "Flip", 0.34), button("Wipe", "Wipe", 0.68)
 local bDone = button("Done", "Done", 0.34)
 bDone.Position = UDim2.fromScale(0.34, 0.87)
 local wipeBar = make("Frame", { Name = "WipeBar", Position = UDim2.fromScale(0.68, 0.865), Size = UDim2.fromScale(0, 0.012),
-	BackgroundColor3 = BLUE, BorderSizePixel = 0 }, panel)
+	BackgroundColor3 = UI.ink, BorderSizePixel = 0 }, panel)
 -- On your screen while you hold a disc: inspect it (for touch screens; right-click on a computer)
 local handGui = make("ScreenGui", { Name = "Noise90Hand", ResetOnSpawn = false, Enabled = false }, hud)
-local bInspect = make("TextButton", { Name = "Inspect", Text = "Inspect disc", AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -20, 1, -140),
-	Size = UDim2.fromOffset(150, 40), BackgroundColor3 = Color3.fromRGB(20, 20, 26), BackgroundTransparency = 0.2, TextColor3 = Color3.new(1, 1, 1),
-	Font = Enum.Font.GothamBold, TextSize = 16, BorderSizePixel = 0 }, handGui)
-make("UICorner", { CornerRadius = UDim.new(0, 8) }, bInspect)
+local bInspect = UI.button({ Name = "Inspect", Text = "Inspect disc", AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -20, 1, -140),
+	Size = UDim2.fromOffset(170, 46) }, handGui)
 
 local function refreshPanel()
 	local entry = inspect.entry
 	if not entry then return end
 	local text = DISC_TEXT[entry.art] or { "", "" }
-	pTitle.Text, pAbout.Text, pSurvive.Text = entry.title, text[1], "HOW TO SURVIVE: " .. text[2]
+	pTitle.Text, pAbout.Text, pSurvive.Text = entry.title, text[1], "How to survive: <b>" .. text[2] .. "</b>" -- as the Journal says it
 	pState.Text = "Condition: " .. CONDITION[entry.condition]
-	pState.TextColor3 = if entry.condition == "clean" then Color3.fromRGB(120, 255, 150) elseif entry.condition == "dirty" then Color3.fromRGB(255, 200, 80)
-		else Color3.fromRGB(255, 90, 90)
+	pState.TextColor3 = if entry.condition == "clean" then rgb(46, 120, 52) elseif entry.condition == "dirty" then rgb(170, 110, 20) else UI.red
 	bWipe.Visible = entry.condition == "dirty"
 	wipeBar.Visible = entry.condition == "dirty"
 	bOpen.Text = if inspect.lidGoal > 0.5 then "Close" else "Open"
@@ -1745,7 +1773,6 @@ local function openInspect(entry)
 	inspect.yaw, inspect.pitch, inspect.dist, inspect.lid, inspect.lidGoal = 0.4, 0.5, 2.4, 0, 0
 	inspect.freed = mainGame and mainGame.freemouse
 	if mainGame then mainGame.freemouse = true end
-	pTitle.TextColor3, pSurvive.TextColor3, wipeBar.BackgroundColor3 = BLUE, BLUE, BLUE
 	refreshPanel()
 	inspectGui.Enabled = true
 	oneShot(SOUNDS.click, SoundService, { Volume = CONFIG.Volume * 0.5, PlaybackSpeed = 1.3 })
@@ -2310,8 +2337,8 @@ local function x60Frame(record, t)
 	local frame = if t < 1.6 then 2 + math.floor(t * 15) % 22 elseif t < 3.2 then 28 + math.floor(t * 15) % 5
 		elseif t < 6 then 143 + math.floor(t * 15) % 10 else 2 + math.floor(t * 30) % 22
 	sheetFrame(picture, frame)
-	record.title = record.title or make("TextLabel", { Name = "Title", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 0.24),
-		Font = Enum.Font.Arcade, TextScaled = true, TextColor3 = BLUE, Text = "X-60", ZIndex = 4, Visible = false }, record.gui)
+	record.title = record.title or UI.label({ Name = "Title", Size = UDim2.fromScale(1, 0.24), FontFace = UI.title, TextColor3 = BLUE, Text = "X-60",
+		ZIndex = 4, Visible = false }, record.gui, true)
 	record.title.Visible = t > 1.4 and t < 3.4 and math.random() < 0.8
 	record.title.Position = UDim2.fromScale(rnd(0.02), 0.06 + rnd(0.02))
 	if not record.orbit then
@@ -2576,8 +2603,8 @@ local function faceLabel(id)
 	return label
 end
 local faceImage, faceAngry, faceStop = faceLabel(), faceLabel(), faceLabel(A90.stop)
-local faceWord = make("TextLabel", { Text = "MOVE", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.78), Size = UDim2.fromScale(0.6, 0.14),
-	BackgroundTransparency = 1, Font = Enum.Font.Arcade, TextScaled = true, TextColor3 = BLUE, Visible = false }, faceGui)
+local faceWord = UI.label({ Text = "MOVE", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.78), Size = UDim2.fromScale(0.6, 0.14),
+	FontFace = UI.title, TextColor3 = BLUE, Visible = false }, faceGui, true)
 local checking = false
 
 --[[ opts: rule ("still": stop moving and do not turn; "move": keep moving), face, angry, color, window (seconds it watches),
@@ -4804,12 +4831,11 @@ local function askColor(count, seconds)
 		order[i], order[j] = order[j], order[i]
 	end
 	for _, c in ipairs(order) do
-		local button = make("TextButton", { Name = c.name, Text = c.name, Size = UDim2.fromScale(1 / count - 0.02, 1), BackgroundColor3 = Color3.new(1, 1, 1),
-			TextColor3 = c.color, Font = Enum.Font.Arcade, TextScaled = true, BorderSizePixel = 0, Modal = true, AutoButtonColor = true }, row)
+		local button = UI.button({ Name = c.name, Text = c.name, Size = UDim2.fromScale(1 / count - 0.02, 1), TextColor3 = c.color, Modal = true }, row)
 		button.MouseButton1Click:Connect(function() chosen = chosen or c end)
 	end
 	local bar = make("Frame", { Name = "Bar", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0.51), Size = UDim2.fromScale(0.4, 0.012),
-		BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0 }, colorGui)
+		BackgroundColor3 = UI.cream, BorderSizePixel = 0 }, colorGui)
 	TweenService:Create(bar, TweenInfo.new(seconds, Enum.EasingStyle.Linear), { Size = UDim2.fromScale(0, 0.012) }):Play()
 	local freed = mainGame and mainGame.freemouse
 	if mainGame then mainGame.freemouse = true end -- DOORS: the mouse free to click
@@ -4829,8 +4855,8 @@ local function fool()
 	local faceL = make("ImageLabel", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.4), Size = UDim2.fromScale(0.4, 0.4),
 		BackgroundTransparency = 1, Image = image(V.face) or "" }, gui)
 	make("UIAspectRatioConstraint", {}, faceL)
-	local text = make("TextLabel", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0.72), Size = UDim2.fromScale(0.9, 0.12),
-		BackgroundTransparency = 1, Font = Enum.Font.Arcade, TextScaled = true, TextColor3 = Color3.new(1, 1, 1), Text = FOOL }, gui)
+	local text = UI.label({ AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0.72), Size = UDim2.fromScale(0.9, 0.12),
+		FontFace = UI.title, TextColor3 = Color3.new(1, 1, 1), Text = FOOL }, gui)
 	local points = {}
 	for i = 0, 6 do table.insert(points, ColorSequenceKeypoint.new(i / 6, Color3.fromHSV(i / 6 * 0.83, 0.85, 1))) end
 	make("UIGradient", { Color = ColorSequence.new(points) }, text)
