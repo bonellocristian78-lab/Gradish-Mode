@@ -9,6 +9,7 @@
             _G.Type = "B-90"     -- which one (the list below)
             _G.Setup = "Auto"    -- where its TV is (the list below)
             _G.Disc = "Look"     -- B-90 only: "Look" or "DontLook" (with the disc player, the disc you put in decides)
+            _G.RandomPos = true  -- the TV anywhere in the room, on a battery (optional)
             loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/Noise90"))()
 
         THE TYPES (faces, colours and ways from the wikis: Interminable Rooms fanmade, Interminable Rooms, INTERMINABLE FEVER)
@@ -40,7 +41,7 @@
                            you came and rushes back, faster and faster, loud static, quiet screams; it stays 9
                            seconds in your room, slowly going down. Hide
 
-        THE SETUPS (Auto: the type's own, at random; in the Archives every screen there is)
+        THE SETUPS (Auto: the type's own, at random, "Cart" being any of the four carts; in the Archives every screen there is)
             Ceiling        above the door, hanging from the ceiling on its arm (the hammer works here)
             Table          on a table against the far wall: plug it in, turn its antenna
             Cart           the Stairwell's TV cart with its disc player: plug it in, find the disc, put it in;
@@ -51,6 +52,10 @@
                            dirty (the player will not read it: wipe it) or scratched (the tape skips and what comes
                            out is angrier). The player: its tray, its display (NO DISC, READ, PLAY 00:07, PAUSE,
                            DISC ERR, EJECT), its Pause (F) while the tape plays
+            AVCart         the disc player on a school AV cart: grey steel, three shelves, the TV strapped on top
+            Console        the disc player in a 70s walnut TV console: open its doors first
+            Luggage        the disc player on the hotel's brass luggage cart: the TV on a suitcase, the player on a
+                           vanity case
             Pedestal       a pedestal by the far wall and the TV on the floor: pick it up, put it there, plug it
                            in, turn its antenna. The pedestal may give way: the TV falls, cracks, and keeps going
             Teller         the Teller's screen
@@ -58,6 +63,9 @@
             Screens        every screen in the room plays the tape, and Noise comes out of them in pieces
                            (a leg from one, an arm from another) that come together
         And a remote lies in every room: take it, and it pauses the tape or it for 3 seconds, 4 times.
+        RandomPos: the TV (its table, its cart, its pedestal) anywhere in the room instead of by the far wall,
+        and no wall socket near it: a 6 V battery lies in the room; take it and put it in the box on the TV's side.
+        With RandomPos, Auto never takes the ceiling or the room's own screens (B-90: one of the carts).
 
         Every setting, with its default. All optional, before the loadstring:
 
@@ -81,6 +89,7 @@
                 ChaseTime = 90,         -- it ends after this many seconds anyway
                 Rounds = 0,             -- rebounds, faces or colours (0 = the type's own)
                 PedestalFall = 0.5,     -- the chance the pedestal gives way
+                RandomPos = false,      -- the TV anywhere in the room, on a battery (also _G.RandomPos = true)
                 Kick = true,            -- S-90 kicks you out of the game (false: it kills you)
                 DiscWear = true,        -- a disc may be dirty (wipe it) or scratched (it skips); false: always clean;
                                         -- or "dirty", "scratched", "clean" for every disc
@@ -121,6 +130,7 @@ local CONFIG = {
 	ChaseTime = 90,
 	Rounds = 0,
 	PedestalFall = 0.5,
+	RandomPos = false,
 	Kick = true,
 	DiscWear = true,
 	Laugh = "",
@@ -146,6 +156,11 @@ end
 if _G.CrucifixGive ~= nil then
 	CONFIG.CrucifixGive = _G.CrucifixGive == true
 	_G.CrucifixGive = nil
+end
+for key, value in pairs(_G) do -- _G.RandomPos = true (any capitals)
+	if type(key) == "string" and key:lower() == "randompos" then
+		CONFIG.RandomPos, _G[key] = value == true, nil
+	end
 end
 
 ---====== THE TYPES ======---
@@ -352,7 +367,7 @@ task.spawn(function() -- all of it now, so nothing waits later
 	end
 	-- Its disc: covers, spine, label; the dirt and the scratches a disc may have
 	for _, d in ipairs(V.discs or { { art = V.art } }) do
-		for _, part in ipairs({ "_Front.jpg", "_Back.jpg", "_Spine.jpg", "_Label.png" }) do
+		for _, part in ipairs({ "_Front.jpg", "_Back.jpg", "_Spine.jpg", "_Label.png", "_Photo.png" }) do
 			files.discs[d.art .. part:match("^(.-)%.")] = asset("Disc_" .. d.art .. part)
 		end
 	end
@@ -884,6 +899,14 @@ on(RunService.PreSimulation or RunService.Stepped, function(a, b)
 		if pixelClock < 1 / 6 then return end
 		dt, pixelClock = pixelClock, 0
 	end
+	-- Its walk goes only as far as it goes: standing still, it holds its step instead of walking on the spot
+	local anim, at = noise.rig.anim, noise.root.Position
+	if anim and (anim == noise.anims.Walk or anim == noise.anims.HijackWalk) then
+		local pace = if noise.lastAt then ((at - noise.lastAt) * Vector3.new(1, 0, 1)).Magnitude / math.max(dt, 1e-3) else 0
+		noise.pace = (noise.pace or pace) + (pace - (noise.pace or pace)) * math.min(dt * 12, 1)
+		if noise.pace < 1 then dt = 0 end
+	end
+	noise.lastAt = at
 	noise.rig:step(dt)
 	if now >= staticAt then
 		staticAt = now + 0.05
@@ -1227,6 +1250,40 @@ local function wallSpot(r, avoid)
 	p += right * aside
 	return floorUnder(p) or (p - Vector3.new(0, 3, 0)), inward
 end
+-- RandomPos: anywhere in the room, `r` studs clear around it, out of the way of its doors; looking into the room
+local function randomSpot(r)
+	local room = roomModel()
+	local entrance, exit = room and room:FindFirstChild("RoomEntrance"), room and room:FindFirstChild("RoomExit")
+	if not (entrance and exit) then return wallSpot(r) end
+	local a, b = entrance.Position, exit.Position
+	local side = (flat(b - a) or Vector3.new(0, 0, 1)):Cross(Vector3.new(0, 1, 0))
+	for _ = 1, 40 do
+		local mid = a:Lerp(b, 0.15 + math.random() * 0.7) + Vector3.new(0, 1, 0)
+		local reach = rnd(16)
+		local wall = cast(mid, side * reach) -- not through a wall: as far as the room goes
+		if wall then reach = math.sign(reach) * math.max((wall.Position - mid).Magnitude - r - 0.5, 0) end
+		local floor = cast(mid + side * reach, Vector3.new(0, -12, 0))
+		if floor and floor.Normal.Y > 0.8 and clearAround(floor.Position, r)
+			and (floor.Position - a).Magnitude > r + 5 and (floor.Position - b).Magnitude > r + 5 then
+			-- to the side: looking at the way through; on it: looking at the way in
+			return floor.Position, if math.abs(reach) > 1.5 then flat(mid - floor.Position) else flat(a - b)
+		end
+	end
+	for _ = 1, 20 do -- a narrow room: halfway between its walls, anywhere along it, looking at the way in
+		local mid = a:Lerp(b, 0.2 + math.random() * 0.6) + Vector3.new(0, 1, 0)
+		local one, other = cast(mid, side * 20), cast(mid, -side * 20)
+		local floor = cast(if one and other then (one.Position + other.Position) / 2 else mid, Vector3.new(0, -12, 0))
+		if floor and floor.Normal.Y > 0.8 and (floor.Position - a).Magnitude > r + 5 and (floor.Position - b).Magnitude > r + 5 then
+			return floor.Position, flat(a - b)
+		end
+	end
+	return wallSpot(r)
+end
+-- Where it stands: by the far wall, or (RandomPos) anywhere in the room
+local function spotFor(r)
+	if CONFIG.RandomPos then return randomSpot(r) end
+	return wallSpot(r)
+end
 -- Spots on the floor of the room along the way through it, clear of walls and furniture, apart from each other and from `avoid`
 local function floorSpots(count, avoid)
 	local room = roomModel()
@@ -1356,7 +1413,7 @@ local function reach(size, dir)
 end
 
 -- Its cable, from its back to a plug on the floor under a socket on the nearest wall. Until it is in, the TV is off
-local function addPower()
+local function addPlug()
 	local power = { on = false }
 	local cord = make("Model", { Name = "Noise90Power" }, nil)
 	local socket = make("Part", { Name = "Socket", Size = Vector3.new(0.7, 0.9, 0.1), Color = rgb(226, 222, 208), Material = Enum.Material.SmoothPlastic,
@@ -1408,6 +1465,110 @@ local function addPower()
 		end)
 	end)
 	return power
+end
+
+-- RandomPos: no wall socket near it. A 6 V lantern battery lies somewhere in the room: take it, put it in the box on the TV's
+-- side; its lid shuts and the TV comes on
+local function addBattery()
+	local power = { on = false, carried = false }
+	local cell = make("Model", { Name = "Noise90Battery" }, nil)
+	local function block(parent, name, size, cf, color, material, extra)
+		local p = make("Part", { Name = name, Size = size, CFrame = cf, Color = color, Material = material or Enum.Material.SmoothPlastic,
+			Anchored = true, CanCollide = false, CanQuery = false, CanTouch = false, CastShadow = false }, parent)
+		for k, v in pairs(extra or {}) do p[k] = v end
+		return p
+	end
+	local round = { Shape = Enum.PartType.Cylinder }
+	local upright = CFrame.Angles(0, 0, math.pi / 2) -- a cylinder standing up
+	local body = block(cell, "Body", Vector3.new(0.62, 0.78, 0.62), CFrame.new(0, 0.39, 0), rgb(24, 24, 28))
+	local band = block(cell, "Band", Vector3.new(0.635, 0.4, 0.635), CFrame.new(0, 0.42, 0), rgb(245, 190, 30))
+	block(cell, "Top", Vector3.new(0.6, 0.04, 0.6), CFrame.new(0, 0.8, 0), rgb(70, 70, 76), Enum.Material.Metal)
+	for i, x in ipairs({ -0.15, 0.15 }) do -- its two spring terminals, + in red
+		block(cell, "Spring", Vector3.new(0.14, 0.1, 0.1), CFrame.new(x, 0.89, 0) * upright, rgb(200, 200, 205), Enum.Material.Metal, round)
+		block(cell, "Terminal", Vector3.new(0.03, 0.14, 0.14), CFrame.new(x, 0.975, 0) * upright, if i == 2 then rgb(200, 40, 40) else rgb(30, 30, 30),
+			Enum.Material.SmoothPlastic, round)
+	end
+	local tag = make("SurfaceGui", { Name = "Tag", Face = Enum.NormalId.Front, CanvasSize = Vector2.new(200, 130) }, band)
+	UI.label({ Name = "Volts", Text = "6V", Size = UDim2.fromScale(1, 0.62), FontFace = UI.title, TextColor3 = rgb(20, 20, 20) }, tag)
+	UI.label({ Name = "Brand", Text = "NOISE CELL", Position = UDim2.fromScale(0, 0.62), Size = UDim2.fromScale(1, 0.3), TextColor3 = rgb(20, 20, 20) }, tag)
+	cell.PrimaryPart = body
+	power.prompt = newPrompt(body, "Take", "Battery", 0.2, 8)
+
+	-- Its box on the TV's side (along the TV: x its front, y its top, z away from it), the lid standing open
+	local f, u = tvAxes.f, tvAxes.u
+	local side = f:Cross(u)
+	local inTV = CFrame.fromMatrix(side * (reach(tvMain.Size, side) + 0.4) + u * (0.7 - reach(tvMain.Size, u)), f, u, side)
+	local function boxCF() return tvMain.CFrame * inTV end
+	local box = make("Model", { Name = "Noise90BatteryBox" }, tv)
+	local dark = rgb(34, 34, 38)
+	for _, w in ipairs({ { "Bottom", Vector3.new(0.8, 0.06, 0.8), CFrame.new(0, -0.47, 0) }, { "Front", Vector3.new(0.06, 1, 0.8), CFrame.new(0.37, 0, 0) },
+		{ "Back", Vector3.new(0.06, 1, 0.8), CFrame.new(-0.37, 0, 0) }, { "Outside", Vector3.new(0.8, 1, 0.06), CFrame.new(0, 0, 0.37) },
+		{ "Inside", Vector3.new(0.8, 1, 0.06), CFrame.new(0, 0, -0.37) } }) do
+		block(box, w[1], w[2], boxCF() * w[3], dark)
+	end
+	for _, x in ipairs({ -0.15, 0.15 }) do block(box, "Contact", Vector3.new(0.16, 0.02, 0.16), boxCF() * CFrame.new(x, -0.43, 0), rgb(196, 120, 60), Enum.Material.Metal) end
+	local sticker = make("SurfaceGui", { Name = "Sticker", Face = Enum.NormalId.Back, CanvasSize = Vector2.new(160, 200) }, box.Outside)
+	UI.label({ Name = "Volts", Text = "6V +", Size = UDim2.fromScale(1, 0.4), Position = UDim2.fromScale(0, 0.3), FontFace = UI.title, TextColor3 = UI.cream }, sticker)
+	local function lidAt(angle) return boxCF() * CFrame.new(0, 0.5, 0.4) * CFrame.Angles(angle, 0, 0) * CFrame.new(0, 0.025, -0.4) end
+	local lid = block(box, "Lid", Vector3.new(0.8, 0.05, 0.8), lidAt(math.rad(110)), dark)
+	power.slot = newPrompt(box.Outside, "Put the battery in", "TV", 0.3, 9)
+	power.slot.Enabled = false
+
+	function power.place()
+		if power.on or power.carried then return end
+		local spot = floorSpots(1, { tvMain.Position })[1]
+		if not spot then return end
+		cell:PivotTo(CFrame.new(spot) * CFrame.Angles(0, math.random() * math.pi * 2, 0) * CFrame.new(0, 0.39, 0))
+		cell.Parent = folder
+	end
+	on(power.prompt.Triggered, function()
+		if power.on or power.carried then return end
+		power.carried, power.prompt.Enabled, power.slot.Enabled = true, false, true
+		oneShot(SOUNDS.click, body)
+	end)
+	on(RunService.Heartbeat, function() -- in your hand
+		if not power.carried then return end
+		local character = LocalPlayer.Character
+		local hand = character and (character:FindFirstChild("RightHand") or character:FindFirstChild("Right Arm"))
+		if hand then cell:PivotTo(hand.CFrame * CFrame.new(0, -hand.Size.Y / 2 - 0.42, -0.15)) end
+	end)
+	on(power.slot.Triggered, function()
+		if power.on or not power.carried then return end
+		power.carried, power.slot.Enabled = false, false
+		task.spawn(function()
+			local function move(goal, seconds)
+				local t0, start = os.clock(), body.CFrame
+				while alive and os.clock() - t0 < seconds do
+					local k = (os.clock() - t0) / seconds
+					cell:PivotTo(start:Lerp(goal(), k * k * (3 - 2 * k)))
+					RunService.Heartbeat:Wait()
+				end
+				cell:PivotTo(goal())
+			end
+			move(function() return boxCF() * CFrame.new(0, 1.2, 0) end, 0.3)
+			move(function() return boxCF() * CFrame.new(0, -0.11, 0) end, 0.25) -- its springs just under the lid
+			cell.Parent = tv -- it goes where the TV goes now
+			local t0 = os.clock()
+			while alive and os.clock() - t0 < 0.2 do -- the lid shuts
+				lid.CFrame = lidAt(math.rad(110) * (1 - (os.clock() - t0) / 0.2))
+				RunService.Heartbeat:Wait()
+			end
+			lid.CFrame = lidAt(0)
+			oneShot(SOUNDS.click, lid)
+			oneShot(SOUNDS.bulb, lid, { Volume = CONFIG.Volume * 0.4, PlaybackSpeed = 1.5 })
+			local zap = make("ParticleEmitter", { Rate = 0, Lifetime = NumberRange.new(0.15, 0.35), Speed = NumberRange.new(4, 9), SpreadAngle = Vector2.new(60, 60),
+				Size = NumberSequence.new(0.08, 0), Color = ColorSequence.new(PALE), LightEmission = 1 }, lid)
+			zap:Emit(14)
+			power.on = true
+		end)
+	end)
+	return power
+end
+
+-- Plugged into the wall; with RandomPos (nowhere near a socket), a battery
+local function addPower()
+	if CONFIG.RandomPos then return addBattery() end
+	return addPlug()
 end
 
 -- Rabbit ears on top of it: turn them (hold) or there is no picture to see, only NO SIGNAL
@@ -1517,7 +1678,7 @@ function SETUPS.Table()
 	local setup = { name = "Table", power = addPower(), antenna = addAntenna() }
 	function setup.place()
 		if setup.power.on then return true end -- it stays once you have plugged it in
-		local at, inward = wallSpot(3.8)
+		local at, inward = spotFor(3.8)
 		if not at then return false end
 		standAt(desk, shortSide(desk), at, inward)
 		desk.Parent = folder
@@ -1554,7 +1715,7 @@ function SETUPS.Computer()
 	local setup = { name = "Computer", power = addPower() }
 	function setup.place()
 		if setup.power.on then return true end
-		local at, inward = wallSpot(3.8)
+		local at, inward = spotFor(3.8)
 		if not at then return false end
 		standAt(desk, shortSide(desk), at, inward)
 		desk.Parent = folder
@@ -1580,7 +1741,7 @@ function SETUPS.Teller()
 	measureTV()
 	local setup = { name = "Teller" }
 	function setup.place()
-		local at, inward = wallSpot(2.4)
+		local at, inward = spotFor(2.4)
 		if not at then return false end
 		standAt(teller, flat(outwardOf(screen)), at, inward)
 		teller.Parent = folder
@@ -1638,7 +1799,7 @@ local function takeDisc(entry)
 	disc.carried = entry
 	entry.take.Enabled, entry.look.Enabled = false, false
 	oneShot(SOUNDS.click, entry.parts.tray)
-	if disc.insert then disc.insert.Enabled = true end
+	if disc.insert then disc.insert.Enabled = not disc.locked end
 end
 
 -- The case open (1) or shut (0): the lid and the cover in it swing up on the spine
@@ -1649,6 +1810,8 @@ local function setLid(model, rest, u)
 	lid.CFrame, cover.CFrame = hinge * rest.lid, hinge * rest.cover
 end
 
+-- A disc lying flat, its label the right way up (a cylinder's round face is its +X; its picture's top, its +Y)
+local DISC_FLAT = CFrame.fromMatrix(Vector3.new(), Vector3.new(0, 1, 0), Vector3.new(0, 0, -1), Vector3.new(-1, 0, 0))
 -- A disc in its case, lying flat, the cover up: tray (the back cover under it), spine, the disc on its rosette, the clear
 -- lid with the front cover in it. Its art from the kit's folder; dirty or scratched, it shows
 local function makeDisc(entry)
@@ -1663,19 +1826,21 @@ local function makeDisc(entry)
 		return make("Decal", { Name = "Art", Face = face, Texture = files.discs[file] or "", ZIndex = z or 1 }, part)
 	end
 	local art = entry.art
+	-- A Top decal's picture has its top towards the part's back (+Z) and its right towards -X (as seen in DOORS); a Right
+	-- decal's, up (+Y) and -Z. Each picture is turned so that, the spine on the left, it reads the right way up
 	local tray = piece("Tray", Vector3.new(1.3, 0.05, 1.15), CFrame.new(0, 0.025, 0))
-	decal(tray, Enum.NormalId.Bottom, art .. "_Back")
+	decal(piece("Back", Vector3.new(1.3, 0.004, 1.15), CFrame.new(0, -0.002, 0) * CFrame.Angles(0, 0, math.pi)), Enum.NormalId.Top, art .. "_Back")
 	decal(piece("Spine", Vector3.new(0.05, 0.12, 1.15), CFrame.new(-0.675, 0.06, 0)), Enum.NormalId.Left, art .. "_Spine")
 	piece("Rosette", Vector3.new(0.02, 0.32, 0.32), CFrame.new(0, 0.055, 0) * CFrame.Angles(0, 0, math.pi / 2),
 		{ Shape = Enum.PartType.Cylinder, Color = rgb(60, 60, 66) })
-	local cd = piece("Disc", Vector3.new(0.012, 1.02, 1.02), CFrame.new(0, 0.062, 0) * CFrame.Angles(0, 0, math.pi / 2),
+	local cd = piece("Disc", Vector3.new(0.012, 1.02, 1.02), CFrame.new(0, 0.062, 0) * DISC_FLAT,
 		{ Shape = Enum.PartType.Cylinder, Color = rgb(205, 210, 220), Material = Enum.Material.Foil, Reflectance = 0.2 })
 	decal(cd, Enum.NormalId.Right, art .. "_Label", 1)
 	if entry.condition ~= "clean" then
 		decal(cd, Enum.NormalId.Right, if entry.condition == "dirty" then "Dirt" else "Scratch", 2).Name = "Wear"
 	end
 	piece("Lid", Vector3.new(1.3, 0.02, 1.15), CFrame.new(0, 0.11, 0), { Material = Enum.Material.Glass, Color = rgb(225, 230, 240), Transparency = 0.6 })
-	decal(piece("Cover", Vector3.new(1.24, 0.008, 1.1), CFrame.new(0, 0.096, 0)), Enum.NormalId.Top, art .. "_Front")
+	decal(piece("Cover", Vector3.new(1.24, 0.008, 1.1), CFrame.new(0, 0.096, 0) * CFrame.Angles(0, math.pi, 0)), Enum.NormalId.Top, art .. "_Front")
 	make("PointLight", { Name = "Glint", Color = BLUE, Brightness = 0.5, Range = 4 }, tray)
 	m.PrimaryPart = tray
 	entry.model = m
@@ -1708,27 +1873,64 @@ make("ImageLabel", { Name = "BorderImage", Size = UDim2.fromScale(1, 1), Backgro
 	ImageTransparency = 0.1 }, panel)
 make("ImageLabel", { Name = "Smudge", Position = UDim2.fromScale(0.25, 0.14), Size = UDim2.fromScale(0.7, 0.4), BackgroundTransparency = 1,
 	Image = UI.smudge, ImageTransparency = 0.8 }, panel)
-make("UIPadding", { PaddingTop = UDim.new(0, 18), PaddingLeft = UDim.new(0, 18), PaddingRight = UDim.new(0, 18) }, panel)
-local function line(name, y, h, size, font, color)
-	return UI.label({ Name = name, Position = UDim2.fromScale(0, y), Size = UDim2.fromScale(1, h), TextScaled = false, TextWrapped = true,
-		TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, FontFace = font, TextSize = size,
-		TextColor3 = color or UI.ink, RichText = true, Text = "" }, panel)
+-- Inside the border: as big as the page lets the writing be (not bigger than `most`)
+local function line(name, x, y, w, h, font, most)
+	local label = UI.label({ Name = name, Position = UDim2.fromScale(x, y), Size = UDim2.fromScale(w, h), TextWrapped = true,
+		TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, FontFace = font, TextColor3 = UI.ink,
+		RichText = true, Text = "" }, panel)
+	make("UITextSizeConstraint", { MaxTextSize = most, MinTextSize = 10 }, label)
+	return label
 end
-local pTitle = line("Title", 0, 0.09, 36, UI.hand)
+local pTitle = line("Title", 0.09, 0.07, 0.5, 0.1, UI.hand, 64)
 pTitle.Rotation = -3
-local pState = line("Condition", 0.1, 0.1, 19, UI.writing)
-local pAbout = line("About", 0.2, 0.42, 19, UI.writing)
-local pSurvive = line("Survive", 0.63, 0.13, 19, UI.writing)
-local pHint = line("Hint", 0.93, 0.07, 15, UI.writing)
+local pState = line("Condition", 0.09, 0.18, 0.5, 0.08, UI.writing, 30)
+local pAbout = line("About", 0.09, 0.33, 0.82, 0.29, UI.writing, 30)
+local pSurvive = line("Survive", 0.09, 0.63, 0.82, 0.12, UI.writing, 30)
+local pHint = line("Hint", 0.09, 0.915, 0.82, 0.035, UI.writing, 18)
 pHint.TextTransparency = 0.35
 pHint.Text = "Drag: turn it. Wheel: closer. Right-click: put it away."
-local function button(name, text, x)
-	return UI.button({ Name = name, Text = text, Position = UDim2.fromScale(x, 0.79), Size = UDim2.fromScale(0.3, 0.07) }, panel)
+-- Its picture taped on the page: the print (with its face, when there is a file of it), and over it what the game has of
+-- it: the kit's Noise for B-90, the game's face for C-90 and Ransom
+local photo = make("Frame", { Name = "Photo", Position = UDim2.fromScale(0.6, 0.06), Size = UDim2.fromScale(0.31, 0.31), Rotation = 4,
+	BackgroundTransparency = 1 }, panel)
+make("UIAspectRatioConstraint", { AspectRatio = 1 }, photo)
+local photoPrint = make("ImageLabel", { Name = "Print", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1 }, photo)
+local subject = nil
+local function dressPhoto(entry)
+	photoPrint.Image = files.discs[entry.art .. "_Photo"] or ""
+	if subject or not (V.face == nil or V.face:find("^rbxasset")) then return end
+	local inside = { Name = "Subject", Position = UDim2.fromScale(0.07, 0.07), Size = UDim2.fromScale(0.86, 0.86), BackgroundTransparency = 1, ZIndex = 2 }
+	if V.face then
+		subject = make("ImageLabel", inside, photo)
+		subject.Image, subject.ImageColor3, subject.ScaleType = V.face, V.faceColor or Color3.new(1, 1, 1), Enum.ScaleType.Fit
+		return
+	end
+	subject = make("ViewportFrame", inside, photo)
+	subject.Ambient, subject.LightColor, subject.LightDirection = PALE, Color3.new(1, 1, 1), Vector3.new(-0.3, -0.6, -1)
+	local source = piece("NoiseModel")
+	if not source then return end
+	local model = clean(source:Clone(), true)
+	for _, d in ipairs(model:GetDescendants()) do -- a picture: nothing that moves, sounds or shines
+		if d:IsA("Sound") or d:IsA("ParticleEmitter") or d:IsA("Light") or d:IsA("Highlight") or d:IsA("BillboardGui") or d.Name == "AnimSaves" then
+			d:Destroy()
+		end
+	end
+	paint(model, 0)
+	model.Parent = subject
+	local cam = make("Camera", { Name = "Camera", FieldOfView = 30 }, subject)
+	subject.CurrentCamera = cam
+	local cf, size = model:GetBoundingBox()
+	local root = model.PrimaryPart or model:FindFirstChild("HumanoidRootPart")
+	local front = flat(if root then root.CFrame.LookVector else cf.LookVector) or Vector3.new(0, 0, -1)
+	local away = size.Y / 2 / math.tan(math.rad(15)) * 1.15
+	cam.CFrame = CFrame.lookAt(cf.Position + front * away + Vector3.new(0, size.Y * 0.08, 0), cf.Position)
 end
-local bOpen, bFlip, bWipe = button("OpenCase", "Open", 0), button("Flip", "Flip", 0.34), button("Wipe", "Wipe", 0.68)
-local bDone = button("Done", "Done", 0.34)
-bDone.Position = UDim2.fromScale(0.34, 0.87)
-local wipeBar = make("Frame", { Name = "WipeBar", Position = UDim2.fromScale(0.68, 0.865), Size = UDim2.fromScale(0, 0.012),
+local function button(name, text, x, y)
+	return UI.button({ Name = name, Text = text, Position = UDim2.fromScale(x, y), Size = UDim2.fromScale(0.26, 0.065) }, panel)
+end
+local bOpen, bFlip, bWipe = button("OpenCase", "Open", 0.09, 0.77), button("Flip", "Flip", 0.37, 0.77), button("Wipe", "Wipe", 0.65, 0.77)
+local bDone = button("Done", "Done", 0.37, 0.85)
+local wipeBar = make("Frame", { Name = "WipeBar", Position = UDim2.fromScale(0.65, 0.85), Size = UDim2.fromScale(0, 0.012),
 	BackgroundColor3 = UI.ink, BorderSizePixel = 0 }, panel)
 -- On your screen while you hold a disc: inspect it (for touch screens; right-click on a computer)
 local handGui = make("ScreenGui", { Name = "Noise90Hand", ResetOnSpawn = false, Enabled = false }, hud)
@@ -1742,6 +1944,7 @@ local function refreshPanel()
 	local text = DISC_TEXT[entry.art] or { "", "" }
 	pTitle.Text, pAbout.Text, pSurvive.Text = entry.title, text[1], "How to survive: <b>" .. text[2] .. "</b>" -- as the Journal says it
 	pState.Text = "Condition: " .. CONDITION[entry.condition]
+	dressPhoto(entry)
 	pState.TextColor3 = if entry.condition == "clean" then rgb(46, 120, 52) elseif entry.condition == "dirty" then rgb(170, 110, 20) else UI.red
 	bWipe.Visible = entry.condition == "dirty"
 	wipeBar.Visible = entry.condition == "dirty"
@@ -1840,29 +2043,14 @@ on(RunService.RenderStepped, function(dt)
 		entry.wipe = (entry.wipe or 0) + dt / 2
 		local wear = view:FindFirstChild("Disc") and view.Disc:FindFirstChild("Wear")
 		if wear then wear.Transparency = entry.wipe end
-		wipeBar.Size = UDim2.fromScale(0.3 * math.min(entry.wipe, 1), 0.012)
+		wipeBar.Size = UDim2.fromScale(0.26 * math.min(entry.wipe, 1), 0.012)
 		if entry.wipe >= 1 then wiped(entry) end
 	end
 end)
 
-function SETUPS.Cart()
-	local source = prop("TV_Stand")
-	local deck = source and source:FindFirstChild("PlayerMain")
-	if not (deck and deck:FindFirstChild("PlayerMain")) then return SETUPS.Table() end
-	local cart = clean(source:Clone())
-	cart.Name = "NoiseTV"
-	for _, d in ipairs(cart:GetDescendants()) do -- for the game's physics only
-		if d:IsA("BasePart") and d.Name == "DebrisCollider" then d:Destroy() end
-	end
-	local collider = cart:FindFirstChild("Collider")
-	if collider then collider.CanCollide = true end -- you bump into it
-	tv, tvMain = cart, cart:FindFirstChild("TVMain")
-	screen = tvMain:FindFirstChild("TVScreen")
-	dressScreen()
-	measureTV()
-
-	local player = cart.PlayerMain.PlayerMain
-	local drive, light = player:FindFirstChild("Drive"), player:FindFirstChild("Light")
+-- The disc player's cart, whatever it is built of: `cart` (its TV in it, tv/tvMain/screen set), the player's body, the drive
+-- its tray comes out of, its light. Until `disc.locked` is let go (the Console's doors), no disc goes in
+local function discCart(name, cart, player, drive, light)
 	local function front() return flat(outwardOf(screen)) or flat(player.CFrame.LookVector) or Vector3.new(0, 0, -1) end
 	-- Its display: what it is doing
 	local display = make("SurfaceGui", { Name = "Noise90Display", Face = faceToward(player, front()), CanvasSize = Vector2.new(440, 132),
@@ -1907,7 +2095,7 @@ function SETUPS.Cart()
 		while alive do
 			local u = math.min((os.clock() - t0) / 0.35, 1)
 			trayAt(from + (to - from) * (u * u * (3 - 2 * u)))
-			if carry then carry.CFrame = tray.CFrame * CFrame.new(0, 0.04, 0) * CFrame.Angles(0, 0, math.pi / 2) end
+			if carry then carry.CFrame = tray.CFrame * CFrame.new(0, 0.04, 0) * DISC_FLAT end
 			if u >= 1 then break end
 			RunService.Heartbeat:Wait()
 		end
@@ -1989,7 +2177,7 @@ function SETUPS.Cart()
 			return
 		end
 		local entry = disc.carried
-		if not entry or disc.busy then return end
+		if not entry or disc.busy or disc.locked then return end
 		disc.busy, disc.insert.Enabled = true, false
 		closeInspect()
 		task.spawn(function()
@@ -2005,7 +2193,7 @@ function SETUPS.Cart()
 			setLid(entry.model, entry.rest, 1)
 			local part = entry.parts.disc
 			local from = part.CFrame
-			local goal = tray.CFrame * CFrame.new(0, 0.04, 0) * CFrame.Angles(0, 0, math.pi / 2)
+			local goal = tray.CFrame * CFrame.new(0, 0.04, 0) * DISC_FLAT
 			t0 = os.clock()
 			while alive and os.clock() - t0 < 0.4 do
 				local u = (os.clock() - t0) / 0.4
@@ -2041,10 +2229,10 @@ function SETUPS.Cart()
 		end)
 	end)
 
-	local setup = { name = "Cart", trigger = "disc", power = addPower() }
+	local setup = { name = name, trigger = "disc", power = addPower() }
 	function setup.place()
 		if disc.carried or disc.inserted or disc.busy or setup.power.on then return true end -- it stays once you have touched it
-		local at, inward = wallSpot(2.8)
+		local at, inward = spotFor(2.8)
 		if not at then return false end
 		standAt(cart, flat(outwardOf(screen)), at, inward)
 		cart.Parent = folder
@@ -2059,6 +2247,332 @@ function SETUPS.Cart()
 		return true
 	end
 	return setup
+end
+
+-- The Stairwell's TV cart, from the kit
+function SETUPS.Cart()
+	local source = prop("TV_Stand")
+	local deck = source and source:FindFirstChild("PlayerMain")
+	if not (deck and deck:FindFirstChild("PlayerMain")) then return SETUPS.Table() end
+	local cart = clean(source:Clone())
+	cart.Name = "NoiseTV"
+	for _, d in ipairs(cart:GetDescendants()) do -- for the game's physics only
+		if d:IsA("BasePart") and d.Name == "DebrisCollider" then d:Destroy() end
+	end
+	local collider = cart:FindFirstChild("Collider")
+	if collider then collider.CanCollide = true end -- you bump into it
+	tv, tvMain = cart, cart:FindFirstChild("TVMain")
+	screen = tvMain:FindFirstChild("TVScreen")
+	dressScreen()
+	measureTV()
+	local player = cart.PlayerMain.PlayerMain
+	return discCart("Cart", cart, player, player:FindFirstChild("Drive"), player:FindFirstChild("Light"))
+end
+
+---- Three more carts for the disc player, built here: a school AV cart, a 70s TV console, the hotel's luggage cart ----
+
+local build = {}
+-- A part of a built cart (clean() anchors it and keeps it out of the way of clicks)
+function build.part(parent, name, size, cf, color, material, extra)
+	local p = make("Part", { Name = name, Size = size, CFrame = cf, Color = color, Material = material or Enum.Material.SmoothPlastic,
+		Anchored = true, CanCollide = false, CanQuery = false, CanTouch = false, TopSurface = Enum.SurfaceType.Smooth,
+		BottomSurface = Enum.SurfaceType.Smooth }, parent)
+	for k, v in pairs(extra or {}) do p[k] = v end
+	return p
+end
+-- A turn whose X looks along `dir` (a cylinder lies along its X)
+function build.along(at, dir)
+	local x = dir.Unit
+	local z = x:Cross(if math.abs(x.Y) < 0.9 then Vector3.new(0, 1, 0) else Vector3.new(0, 0, 1)).Unit
+	return CFrame.fromMatrix(at, x, z:Cross(x), z)
+end
+-- A rod from `a` to `b`
+function build.rod(parent, name, a, b, thick, color, material)
+	return build.part(parent, name, Vector3.new((b - a).Magnitude, thick, thick), build.along((a + b) / 2, b - a), color, material,
+		{ Shape = Enum.PartType.Cylinder })
+end
+function build.ball(parent, name, d, at, color, material)
+	return build.part(parent, name, Vector3.new(d, d, d), CFrame.new(at), color, material, { Shape = Enum.PartType.Ball })
+end
+-- A wheel at `at` turning about `axle`: its tyre, its hub
+function build.wheel(parent, at, d, width, axle, hub)
+	local cf = build.along(at, axle)
+	build.part(parent, "Wheel", Vector3.new(width, d, d), cf, rgb(22, 22, 24), Enum.Material.Rubber, { Shape = Enum.PartType.Cylinder })
+	build.part(parent, "Hub", Vector3.new(width + 0.04, d * 0.45, d * 0.45), cf, hub or rgb(170, 172, 178), Enum.Material.Metal, { Shape = Enum.PartType.Cylinder })
+end
+-- Words on a face of a part
+function build.words(part, face, text, props)
+	local gui = make("SurfaceGui", { Name = "Words", Face = face, CanvasSize = Vector2.new(400, 100) }, part)
+	local base = { Name = "Text", Text = text, Size = UDim2.fromScale(1, 1), TextColor3 = rgb(20, 20, 20) }
+	for k, v in pairs(props or {}) do base[k] = v end
+	return UI.label(base, gui)
+end
+-- The kit's TV (the Stairwell's, on its little feet) into `cart`, its feet at `at`, its screen towards -Z: tv, tvMain, screen.
+-- False without the kit
+function build.tv(cart, at)
+	local source = prop("TV_Stand")
+	local main = source and source:FindFirstChild("TVMain")
+	if not (main and main:FindFirstChild("TVScreen")) then return false end
+	local set = make("Model", { Name = "TV" }, cart)
+	main:Clone().Parent = set
+	set.PrimaryPart = set:FindFirstChild("TVMain")
+	tv, tvMain = set, set.PrimaryPart
+	screen = tvMain:FindFirstChild("TVScreen")
+	measureTV()
+	poseTV(at + Vector3.new(0, 3, 0), Vector3.new(0, 0, -1), Vector3.new(0, 1, 0))
+	local box = set:GetBoundingBox()
+	set:PivotTo(set:GetPivot() + Vector3.new(at.X - box.X, at.Y - spanY(set), at.Z - box.Z))
+	tv = cart
+	return true
+end
+-- A disc player of our own at `cf`, its front towards -Z: the left of its front has the slot of its tray, its light and its
+-- buttons, the right its display. look: size, body, trim. -> its body, its drive, its light
+function build.deck(cart, cf, look)
+	local w, h, d = look.size.X, look.size.Y, look.size.Z
+	local trim = look.trim or rgb(150, 150, 156)
+	local body = build.part(cart, "PlayerMain", look.size, cf, look.body, look.material)
+	local front = -d / 2 - 0.012
+	local drive = build.part(body, "Drive", Vector3.new(w * 0.4, 0.05, d * 0.85), cf * CFrame.new(-w * 0.22, h * 0.2, 0), rgb(10, 10, 12))
+	build.part(body, "Slot", Vector3.new(w * 0.42, math.min(0.07, h * 0.2), 0.02), cf * CFrame.new(-w * 0.22, h * 0.2, front), rgb(8, 8, 10))
+	local light = build.part(body, "Light", Vector3.new(w * 0.3, math.min(0.035, h * 0.12), 0.02), cf * CFrame.new(-w * 0.22, -h * 0.04, front), rgb(38, 38, 38))
+	for i = 1, 4 do
+		build.part(body, "Button", Vector3.new(w * 0.06, h * 0.14, 0.03), cf * CFrame.new(-w * 0.42 + i * w * 0.08, -h * 0.3, front), trim, Enum.Material.Metal)
+	end
+	build.part(body, "Knob", Vector3.new(0.05, h * 0.36, h * 0.36), cf * CFrame.new(-w * 0.02, -h * 0.18, front - 0.02) * CFrame.Angles(0, math.pi / 2, 0),
+		trim, Enum.Material.Metal, { Shape = Enum.PartType.Cylinder })
+	for _, x in ipairs({ -1, 1 }) do
+		for _, z in ipairs({ -1, 1 }) do
+			build.part(body, "Foot", Vector3.new(0.04, 0.12, 0.12), cf * CFrame.new(x * (w / 2 - 0.15), -h / 2 - 0.02, z * (d / 2 - 0.15)) * CFrame.Angles(0, 0, math.pi / 2),
+				rgb(20, 20, 20), Enum.Material.Rubber, { Shape = Enum.PartType.Cylinder })
+		end
+	end
+	return body, drive, light
+end
+-- An invisible box you bump into; clean() it, then dress its TV
+function build.finish(cart, size, cf)
+	local collider = build.part(cart, "Collider", size, cf, Color3.new(), nil, { Transparency = 1 })
+	clean(cart)
+	collider.CanCollide = true
+	dressScreen()
+	measureTV()
+end
+
+-- A school AV cart: grey steel, three shelves with a lip, four casters, a push handle at the back. The TV strapped on top,
+-- the player on the middle shelf, a stack of tapes underneath, a power strip on a leg, PROPERTY OF THE HOTEL
+function SETUPS.AVCart()
+	local cart = make("Model", { Name = "NoiseTV" }, nil)
+	local steel, dark, W, D = rgb(150, 154, 162), rgb(60, 62, 68), 3.6, 2.4
+	local shelves = { 0.95, 2.35, 3.75 }
+	for _, y in ipairs(shelves) do
+		build.part(cart, "Shelf", Vector3.new(W, 0.08, D), CFrame.new(0, y, 0), steel, Enum.Material.Metal)
+		for _, lip in ipairs({ { Vector3.new(W, 0.2, 0.05), Vector3.new(0, 0.1, -D / 2) }, { Vector3.new(W, 0.2, 0.05), Vector3.new(0, 0.1, D / 2) },
+			{ Vector3.new(0.05, 0.2, D), Vector3.new(-W / 2, 0.1, 0) }, { Vector3.new(0.05, 0.2, D), Vector3.new(W / 2, 0.1, 0) } }) do
+			build.part(cart, "Lip", lip[1], CFrame.new(lip[2] + Vector3.new(0, y, 0)), steel, Enum.Material.Metal)
+		end
+	end
+	for _, x in ipairs({ -W / 2 + 0.1, W / 2 - 0.1 }) do
+		for _, z in ipairs({ -D / 2 + 0.1, D / 2 - 0.1 }) do
+			build.part(cart, "Leg", Vector3.new(0.16, 3.3, 0.16), CFrame.new(x, 2.2, z), steel, Enum.Material.Metal)
+			build.part(cart, "Fork", Vector3.new(0.24, 0.3, 0.3), CFrame.new(x, 0.47, z), dark, Enum.Material.Metal)
+			build.wheel(cart, Vector3.new(x, 0.22, z + 0.06), 0.44, 0.16, Vector3.new(1, 0, 0))
+		end
+	end
+	for _, x in ipairs({ -1.2, 1.2 }) do
+		build.rod(cart, "Bracket", Vector3.new(x, 3.25, D / 2), Vector3.new(x, 3.25, D / 2 + 0.38), 0.1, steel, Enum.Material.Metal)
+	end
+	build.rod(cart, "Handle", Vector3.new(-1.4, 3.25, D / 2 + 0.38), Vector3.new(1.4, 3.25, D / 2 + 0.38), 0.14, rgb(25, 25, 28), Enum.Material.Rubber)
+	for i = 1, 3 do -- the tapes underneath, the discs' brand on their spines
+		local box = build.part(cart, "Tapes", Vector3.new(1.3, 0.22, 0.75), CFrame.new(-0.75, shelves[1] + 0.04 + 0.11 + (i - 1) * 0.23, -0.2)
+			* CFrame.Angles(0, rnd(0.12), 0), rgb(18, 18, 22))
+		build.words(box, Enum.NormalId.Front, "NOISE TAPES", { FontFace = UI.font(Enum.FontWeight.Bold), TextColor3 = rgb(225, 225, 225) })
+	end
+	local strip = build.part(cart, "PowerStrip", Vector3.new(0.2, 1, 0.12), CFrame.new(W / 2 - 0.1, 1.65, -D / 2 - 0.06), rgb(226, 222, 208))
+	for i = 1, 3 do build.part(strip, "Socket", Vector3.new(0.12, 0.14, 0.02), CFrame.new(W / 2 - 0.1, 1.95 - i * 0.22, -D / 2 - 0.13), rgb(30, 30, 30)) end
+	build.part(strip, "Switch", Vector3.new(0.1, 0.08, 0.03), CFrame.new(W / 2 - 0.1, 2.05, -D / 2 - 0.13), rgb(220, 40, 30), Enum.Material.Neon)
+	local sticker = build.part(cart, "Sticker", Vector3.new(1.5, 0.15, 0.01), CFrame.new(0.95, shelves[1] + 0.1, -D / 2 - 0.035), rgb(236, 230, 214))
+	build.words(sticker, Enum.NormalId.Front, "PROPERTY OF THE HOTEL", { FontFace = UI.font(Enum.FontWeight.Bold) })
+	if not build.tv(cart, Vector3.new(0, shelves[3] + 0.04, 0)) then return SETUPS.Table() end
+	-- the strap holding the TV down: over its top, down its front and its back, a buckle
+	local box, size = cart.TV:GetBoundingBox() -- turned as the kit's TV is: how far it reaches up and along Z
+	local top, black = box.Y + extentY(box, size), rgb(24, 24, 26)
+	local depth = math.abs(box.RightVector.Z) * size.X + math.abs(box.UpVector.Z) * size.Y + math.abs(box.LookVector.Z) * size.Z
+	build.part(cart, "Strap", Vector3.new(0.16, 0.04, depth + 0.1), CFrame.new(box.X + 0.7, top + 0.02, box.Z), black, Enum.Material.Fabric)
+	for _, z in ipairs({ -1, 1 }) do
+		local h = top - shelves[3]
+		build.part(cart, "Strap", Vector3.new(0.16, h, 0.04), CFrame.new(box.X + 0.7, shelves[3] + h / 2, box.Z + z * (depth / 2 + 0.05)), black, Enum.Material.Fabric)
+	end
+	build.part(cart, "Buckle", Vector3.new(0.22, 0.16, 0.05), CFrame.new(box.X + 0.7, shelves[3] + 0.45, box.Z - depth / 2 - 0.09), rgb(170, 172, 178), Enum.Material.Metal)
+	local body, drive, light = build.deck(cart, CFrame.new(0, shelves[2] + 0.04 + 0.26, -0.2),
+		{ size = Vector3.new(2.3, 0.52, 1.6), body = rgb(28, 28, 32), trim = rgb(160, 160, 168) })
+	cart.PrimaryPart = cart:FindFirstChild("Shelf")
+	build.finish(cart, Vector3.new(W, 4.1, D), CFrame.new(0, 2.05, 0))
+	return discCart("AVCart", cart, body, drive, light)
+end
+
+-- A 70s TV console: a walnut cabinet on four legs, the speaker's cloth behind slats on the left, two doors on the right with
+-- the player behind them (open them before a disc goes in), a lace doily under the TV, brass knobs
+function SETUPS.Console()
+	local cart = make("Model", { Name = "NoiseTV" }, nil)
+	local walnut, dark, brass, wood = rgb(92, 58, 34), rgb(52, 32, 20), rgb(196, 158, 76), Enum.Material.Wood
+	local W, D, H, lift = 4.6, 2.1, 2.2, 0.45
+	local y0, y1 = lift, lift + H
+	local bottom = build.part(cart, "Bottom", Vector3.new(W, 0.12, D), CFrame.new(0, y0 + 0.06, 0), walnut, wood)
+	for _, x in ipairs({ -W / 2 + 0.06, W / 2 - 0.06 }) do build.part(cart, "Side", Vector3.new(0.12, H, D), CFrame.new(x, y0 + H / 2, 0), walnut, wood) end
+	build.part(cart, "Back", Vector3.new(W, H, 0.08), CFrame.new(0, y0 + H / 2, D / 2 - 0.04), dark, wood)
+	build.part(cart, "Top", Vector3.new(W + 0.2, 0.14, D + 0.16), CFrame.new(0, y1 + 0.07, 0), walnut, wood)
+	build.part(cart, "Plinth", Vector3.new(W - 0.1, 0.16, 0.06), CFrame.new(0, y0 + 0.08, -D / 2 - 0.02), dark, wood)
+	for _, x in ipairs({ -W / 2 + 0.3, W / 2 - 0.3 }) do -- splayed legs, brass feet
+		for _, z in ipairs({ -D / 2 + 0.3, D / 2 - 0.3 }) do
+			local foot = Vector3.new(x + math.sign(x) * 0.08, 0.04, z + math.sign(z) * 0.06)
+			build.rod(cart, "Leg", foot, Vector3.new(x, y0, z), 0.16, walnut, wood)
+			build.part(cart, "Ferrule", Vector3.new(0.1, 0.17, 0.17), CFrame.new(foot + Vector3.new(0, 0.05, 0)) * CFrame.Angles(0, 0, math.pi / 2),
+				brass, Enum.Material.Metal, { Shape = Enum.PartType.Cylinder })
+		end
+	end
+	local xd = -0.35 -- the divider: the speaker on its left, the doors on its right
+	build.part(cart, "Divider", Vector3.new(0.1, H - 0.12, D - 0.1), CFrame.new(xd, y0 + H / 2 + 0.06, -0.02), walnut, wood)
+	local left, right = -W / 2 + 0.12, W / 2 - 0.12
+	local sx, sw = (left + xd) / 2, xd - left
+	local face = -D / 2
+	build.part(cart, "Speaker", Vector3.new(sw, H - 0.3, 0.05), CFrame.new(sx, y0 + H / 2 + 0.06, face + 0.06), rgb(78, 58, 44), Enum.Material.Fabric)
+	for i = 1, 9 do -- the slats over its cloth
+		build.part(cart, "Slat", Vector3.new(0.06, H - 0.3, 0.05), CFrame.new(left + i * sw / 10, y0 + H / 2 + 0.06, face + 0.01), dark, wood)
+	end
+	for _, y in ipairs({ y0 + 0.17, y1 - 0.05 }) do build.part(cart, "Rail", Vector3.new(W - 0.24, 0.1, 0.08), CFrame.new(0, y, face + 0.01), walnut, wood) end
+	local badge = build.part(cart, "Badge", Vector3.new(0.7, 0.16, 0.02), CFrame.new(sx, y0 + 0.42, face - 0.03), brass, Enum.Material.Metal)
+	build.words(badge, Enum.NormalId.Front, "NOISE", { FontFace = UI.title, TextColor3 = dark })
+	-- behind the doors: a shelf with discs standing on it, the player under it
+	local cx, cw = (xd + right) / 2, right - xd
+	build.part(cart, "Shelf", Vector3.new(cw - 0.05, 0.08, D - 0.2), CFrame.new(cx, y0 + 1.3, 0.04), walnut, wood)
+	for i = 1, 5 do
+		build.part(cart, "Records", Vector3.new(0.09, 0.82, 0.95), CFrame.new(cx - 0.9 + i * 0.13, y0 + 1.75, 0.15) * CFrame.Angles(0, 0, rnd(0.06)),
+			if i % 2 == 0 then rgb(30, 30, 36) else rgb(150, 30, 30))
+	end
+	local body, drive, light = build.deck(cart, CFrame.new(cx, y0 + 0.12 + 0.26, -0.15),
+		{ size = Vector3.new(cw - 0.55, 0.5, 1.45), body = rgb(196, 196, 202), trim = rgb(50, 50, 55), material = Enum.Material.Metal })
+	-- the doors, shut: each hinged on its outer edge, its knob by the middle
+	local doors = {}
+	for _, side in ipairs({ -1, 1 }) do -- -1: hinged on the divider; 1: on the side
+		local hingeX = if side < 0 then xd + 0.04 else right
+		local toward = -side -- where its free edge is
+		local hinge = CFrame.new(hingeX, y0 + H / 2 + 0.06, face - 0.03)
+		local parts = {}
+		local function door(name, size, at, color, material, extra)
+			local p = build.part(cart, name, size, hinge * CFrame.new(at), color, material, extra)
+			table.insert(parts, p)
+			return p
+		end
+		local half = cw / 2 - 0.02
+		door("Door", Vector3.new(half, H - 0.3, 0.06), Vector3.new(toward * half / 2, 0, 0), walnut, wood)
+		for _, t in ipairs({ { Vector3.new(half - 0.2, 0.05, 0.03), Vector3.new(0, H / 2 - 0.28, -0.04) }, { Vector3.new(half - 0.2, 0.05, 0.03), Vector3.new(0, -H / 2 + 0.28, -0.04) },
+			{ Vector3.new(0.05, H - 0.6, 0.03), Vector3.new(-(half / 2 - 0.12), 0, -0.04) }, { Vector3.new(0.05, H - 0.6, 0.03), Vector3.new(half / 2 - 0.12, 0, -0.04) } }) do
+			door("Trim", t[1], Vector3.new(toward * half / 2, 0, 0) + t[2], dark, wood)
+		end
+		door("DoorKnob", Vector3.new(0.13, 0.13, 0.13), Vector3.new(toward * (half - 0.12), 0, -0.08), brass, Enum.Material.Metal, { Shape = Enum.PartType.Ball })
+		table.insert(doors, { parts = parts, hinge = hinge, toward = toward })
+	end
+	-- the doily, the TV on it
+	build.part(cart, "Doily", Vector3.new(0.02, 2.2, 2.2), CFrame.new(0, y1 + 0.15, 0) * CFrame.Angles(0, 0, math.pi / 2), rgb(240, 236, 224),
+		Enum.Material.Fabric, { Shape = Enum.PartType.Cylinder })
+	if not build.tv(cart, Vector3.new(0, y1 + 0.16, 0)) then return SETUPS.Table() end
+	cart.PrimaryPart = bottom
+	for _, d in ipairs(doors) do -- the doors move with the cabinet: their hinges, in its space
+		d.hinge = bottom.CFrame:ToObjectSpace(d.hinge)
+		for i, p in ipairs(d.parts) do d.parts[i] = { part = p, rel = (bottom.CFrame * d.hinge):ToObjectSpace(p.CFrame) } end
+	end
+	build.finish(cart, Vector3.new(W, y1, D), CFrame.new(0, y1 / 2, 0))
+	disc.locked = true
+	local open = newPrompt(doors[2].parts[1].part, "Open", "Cabinet", 0.3, 8)
+	on(open.Triggered, function()
+		if not disc.locked then return end
+		disc.locked, open.Enabled = false, false
+		oneShot(SOUNDS.crack, bottom, { Volume = CONFIG.Volume * 0.3, PlaybackSpeed = 1.6 })
+		task.spawn(function()
+			local t0 = os.clock()
+			while alive do
+				local u = math.min((os.clock() - t0) / 0.6, 1)
+				local angle = math.rad(105) * (1 - (1 - u) ^ 3)
+				for _, d in ipairs(doors) do
+					local hinge = bottom.CFrame * d.hinge * CFrame.Angles(0, d.toward * angle, 0) -- the free edge comes out towards you
+					for _, p in ipairs(d.parts) do p.part.CFrame = hinge * p.rel end
+				end
+				if u >= 1 then break end
+				RunService.Heartbeat:Wait()
+			end
+		end)
+		if disc.carried and disc.insert then disc.insert.Enabled = true end
+	end)
+	return discCart("Console", cart, body, drive, light)
+end
+
+-- The hotel's brass luggage cart: a red carpeted deck on a brass rim, two big wheels and two casters, two brass posts and the
+-- bar between them with its hooks; a suitcase with the TV on it, a vanity case with the player on it, a luggage tag
+function SETUPS.Luggage()
+	local cart = make("Model", { Name = "NoiseTV" }, nil)
+	local brass, leather, metal = rgb(201, 162, 78), rgb(104, 62, 36), Enum.Material.Metal
+	local W, D, deckY = 5.4, 2.6, 0.62
+	local deck = build.part(cart, "Deck", Vector3.new(W, 0.16, D), CFrame.new(0, deckY, 0), rgb(60, 40, 30), Enum.Material.Wood)
+	build.part(cart, "Carpet", Vector3.new(W - 0.1, 0.04, D - 0.1), CFrame.new(0, deckY + 0.1, 0), rgb(132, 18, 30), Enum.Material.Carpet)
+	local corners = { Vector3.new(-W / 2, deckY + 0.06, -D / 2), Vector3.new(W / 2, deckY + 0.06, -D / 2), Vector3.new(W / 2, deckY + 0.06, D / 2), Vector3.new(-W / 2, deckY + 0.06, D / 2) }
+	for i, a in ipairs(corners) do
+		build.rod(cart, "Rim", a, corners[i % 4 + 1], 0.12, brass, metal)
+		build.ball(cart, "Corner", 0.18, a, brass, metal)
+	end
+	for _, x in ipairs({ -W / 2 + 0.5, W / 2 - 0.5 }) do -- big wheels at the back, casters at the front
+		build.part(cart, "Bracket", Vector3.new(0.3, 0.3, 0.1), CFrame.new(x, deckY - 0.2, D / 2 - 0.3), brass, metal)
+		build.wheel(cart, Vector3.new(x, 0.42, D / 2 - 0.3), 0.84, 0.18, Vector3.new(1, 0, 0), brass)
+		build.part(cart, "Fork", Vector3.new(0.22, 0.3, 0.26), CFrame.new(x, deckY - 0.22, -D / 2 + 0.35), brass, metal)
+		build.wheel(cart, Vector3.new(x, 0.22, -D / 2 + 0.38), 0.44, 0.15, Vector3.new(1, 0, 0), brass)
+	end
+	local postX, barY = W / 2 - 0.12, 5.05
+	for _, x in ipairs({ -postX, postX }) do
+		build.part(cart, "Flange", Vector3.new(0.06, 0.42, 0.42), CFrame.new(x, deckY + 0.11, 0) * CFrame.Angles(0, 0, math.pi / 2), brass, metal,
+			{ Shape = Enum.PartType.Cylinder })
+		build.rod(cart, "Post", Vector3.new(x, deckY + 0.1, 0), Vector3.new(x, barY + 0.3, 0), 0.16, brass, metal)
+		build.ball(cart, "Finial", 0.3, Vector3.new(x, barY + 0.42, 0), brass, metal)
+		build.part(cart, "Collar", Vector3.new(0.12, 0.22, 0.22), CFrame.new(x, barY, 0) * CFrame.Angles(0, 0, math.pi / 2), brass, metal, { Shape = Enum.PartType.Cylinder })
+	end
+	build.rod(cart, "Bar", Vector3.new(-postX, barY, 0), Vector3.new(postX, barY, 0), 0.13, brass, metal)
+	for i = 1, 4 do -- hooks for coats
+		local x = -postX + i * (2 * postX) / 5
+		build.rod(cart, "Hook", Vector3.new(x, barY, 0), Vector3.new(x, barY - 0.28, 0), 0.04, brass, metal)
+		build.ball(cart, "HookEnd", 0.08, Vector3.new(x, barY - 0.3, -0.04), brass, metal)
+	end
+	-- the suitcase, lying flat: seam, straps and buckles, brass corners, its handle in front, a luggage tag on it
+	local sx, sw, sd, sh = -0.75, 3.1, 1.9, 0.85
+	local sy = deckY + 0.12 + sh / 2
+	build.part(cart, "Suitcase", Vector3.new(sw, sh, sd), CFrame.new(sx, sy, 0.05), leather, Enum.Material.Leather)
+	build.part(cart, "Seam", Vector3.new(sw + 0.02, 0.05, sd + 0.02), CFrame.new(sx, sy, 0.05), rgb(60, 36, 22), Enum.Material.Leather)
+	for _, x in ipairs({ sx - 0.9, sx + 0.9 }) do
+		build.part(cart, "Strap", Vector3.new(0.2, sh + 0.03, sd + 0.03), CFrame.new(x, sy, 0.05), rgb(70, 40, 24), Enum.Material.Leather)
+		build.part(cart, "Buckle", Vector3.new(0.24, 0.18, 0.04), CFrame.new(x, sy + 0.1, 0.05 - sd / 2 - 0.03), brass, metal)
+	end
+	for _, x in ipairs({ -1, 1 }) do
+		for _, y in ipairs({ -1, 1 }) do
+			for _, z in ipairs({ -1, 1 }) do
+				build.part(cart, "Corner", Vector3.new(0.16, 0.16, 0.16), CFrame.new(sx + x * (sw / 2 - 0.06), sy + y * (sh / 2 - 0.06), 0.05 + z * (sd / 2 - 0.06)), brass, metal)
+			end
+		end
+	end
+	local handleZ = 0.05 - sd / 2 - 0.12
+	for _, x in ipairs({ sx - 0.3, sx + 0.3 }) do build.part(cart, "HandleMount", Vector3.new(0.08, 0.08, 0.16), CFrame.new(x, sy + 0.05, handleZ + 0.05), brass, metal) end
+	build.rod(cart, "Handle", Vector3.new(sx - 0.3, sy + 0.05, handleZ - 0.02), Vector3.new(sx + 0.3, sy + 0.05, handleZ - 0.02), 0.09, rgb(60, 36, 22), Enum.Material.Leather)
+	build.rod(cart, "String", Vector3.new(sx + 0.2, sy + 0.05, handleZ - 0.02), Vector3.new(sx + 0.32, sy - 0.18, handleZ - 0.05), 0.015, rgb(230, 225, 210), Enum.Material.Fabric)
+	local tag = build.part(cart, "LuggageTag", Vector3.new(0.5, 0.3, 0.02), CFrame.new(sx + 0.36, sy - 0.33, handleZ - 0.06) * CFrame.Angles(0, 0, math.rad(-8)),
+		rgb(238, 230, 212))
+	build.words(tag, Enum.NormalId.Front, V.name, { FontFace = UI.hand, TextColor3 = UI.ink })
+	if not build.tv(cart, Vector3.new(sx, sy + sh / 2, 0.05)) then return SETUPS.Table() end
+	-- the vanity case, the player on it
+	local vx, vw, vd, vh = 1.65, 1.5, 1.5, 0.7
+	local vy = deckY + 0.12 + vh / 2
+	build.part(cart, "VanityCase", Vector3.new(vw, vh, vd), CFrame.new(vx, vy, -0.2), rgb(222, 206, 176), Enum.Material.Leather)
+	build.part(cart, "Trim", Vector3.new(vw + 0.02, 0.05, vd + 0.02), CFrame.new(vx, vy + vh / 2 - 0.08, -0.2), brass, metal)
+	build.part(cart, "Latch", Vector3.new(0.18, 0.14, 0.04), CFrame.new(vx, vy + vh / 2 - 0.12, -0.2 - vd / 2 - 0.02), brass, metal)
+	local body, drive, light = build.deck(cart, CFrame.new(vx, vy + vh / 2 + 0.15, -0.25),
+		{ size = Vector3.new(1.4, 0.3, 1.25), body = rgb(20, 20, 22), trim = brass })
+	cart.PrimaryPart = deck
+	build.finish(cart, Vector3.new(W, 3, D), CFrame.new(0, 1.5, 0))
+	return discCart("Luggage", cart, body, drive, light)
 end
 
 ---- A pedestal by the far wall and the TV on the floor: you put it there. The pedestal may give way ----
@@ -2179,7 +2693,7 @@ function SETUPS.Pedestal()
 	end)
 	function setup.place()
 		if setup.onIt or setup.carrying or setup.power.on then return true end -- it stays once you have touched it
-		local at, inward = wallSpot(2.2)
+		local at, inward = spotFor(2.2)
 		if not at then return false end
 		setup.at, setup.inward = at, inward
 		standAt(ped, flat(ped.PrimaryPart.CFrame.LookVector), at, inward)
@@ -2258,7 +2772,8 @@ function SETUPS.Screens()
 	return setup
 end
 
-local SETUP_NAMES = { "Ceiling", "Table", "Cart", "Pedestal", "Teller", "Computer", "Screens" }
+local SETUP_NAMES = { "Ceiling", "Table", "Cart", "AVCart", "Console", "Luggage", "Pedestal", "Teller", "Computer", "Screens" }
+local CARTS = { "Cart", "AVCart", "Console", "Luggage" } -- the disc player's
 g90Mode = nil -- "Paper" or "Computer"
 function chooseSetup()
 	local want = nil
@@ -2272,8 +2787,19 @@ function chooseSetup()
 		if not want and g90Mode == "Computer" then return "Computer" end
 	end
 	if want then return want end
-	if #findScreens() >= 2 then return "Screens" end -- the Archives: every screen there is
-	return V.setups[math.random(#V.setups)]
+	local list = V.setups
+	if CONFIG.RandomPos then -- anywhere in the room: not above the door, not the room's own screens (a cart, if nothing else)
+		list = {}
+		for _, name in ipairs(V.setups) do
+			if name ~= "Ceiling" and name ~= "Screens" then table.insert(list, name) end
+		end
+		if #list == 0 then list = CARTS end
+	elseif #findScreens() >= 2 then
+		return "Screens" -- the Archives: every screen there is
+	end
+	local pick = list[math.random(#list)]
+	if pick == "Cart" then pick = CARTS[math.random(#CARTS)] end -- the Stairwell's, or one of the other three
+	return pick
 end
 end
 

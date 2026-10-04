@@ -348,6 +348,7 @@ animations (`assets/noise/NoiseKitV2.rbxm`).
 _G.Type = "A-90"     -- which one (below); B-90 if left out
 _G.Setup = "Auto"    -- where its TV is (below)
 _G.Disc = "Look"     -- B-90 only: "Look" or "DontLook"
+_G.RandomPos = true  -- optional: the TV anywhere in the room, on a battery
 loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/Noise90"))()
 ```
 
@@ -381,6 +382,9 @@ description.
 | `Ceiling` | above the door on its ceiling arm (the hammer only here) |
 | `Table` | on the Archives' wooden table by the far wall: plug it in (the socket is on the nearest wall), turn its antenna (until then: NO SIGNAL) |
 | `Cart` | the Stairwell's TV cart with its disc player: plug it in; the discs (one per type, two for B-90) lie in the room; take one, put it in. Once it is out, hold **Eject**: the disc jumps out and it is pulled back into its TV |
+| `AVCart` | the disc player on a school AV cart: grey steel, three shelves with a lip, casters, a push handle, the TV strapped on top, tapes underneath, a power strip, PROPERTY OF THE HOTEL |
+| `Console` | the disc player in a 70s walnut TV console: speaker cloth behind slats, brass knobs, a doily under the TV. **Open** its doors before a disc goes in |
+| `Luggage` | the disc player on the hotel's brass luggage cart: red carpet, brass posts and bar with hooks, the TV on a strapped suitcase (its luggage tag says which one it is), the player on a vanity case |
 | `Pedestal` | a pedestal by the far wall, the TV on the floor: pick it up, put it on, plug it in, tune it. The pedestal may give way (`PedestalFall`): the TV falls, cracks, and keeps playing |
 | `Teller` | the Teller's screen (it says NOW SERVING until the tape covers it) |
 | `Computer` | a computer on a table (G-90's): plug it in |
@@ -403,6 +407,12 @@ down on it and opens, the disc goes in; its display says `NO DISC`, `READ`,
 into its TV. The TV has a power light (red in standby, green on) and switches on
 and off like an old tube.
 
+Inspecting a disc: its covers and its label read the right way up; the back is a
+page of DOORS' Journal with the entity's picture taped on it (the wiki's face; for
+B-90 the kit's Noise itself, for C-90 and Ransom the game's own faces), and the
+writing is as big as the page lets it be. Noise only walks while it goes somewhere:
+standing still, it holds its step (no more walking on the spot).
+
 **Its screens look like DOORS'**: Oswald and cream text, dark brown buttons with a
 cream edge, DOORS' title font for NO SIGNAL, MOVE, X-60 and FOOL; the back of a disc,
 when you inspect it, is a page of DOORS' Journal (handwriting in brown ink, its
@@ -413,8 +423,17 @@ tags that bring it there (`CartProp`, `GatedPrompt`, `ItemHolder`). Its buttons 
 the mouse (`Modal`) only while their screen is open: Roblox frees it even for a
 disabled ScreenGui, and in DOORS the camera stopped turning as soon as the script ran.
 
-`Auto` takes the type's own setups at random, `Screens` in the Archives; with
-any setup, the room's own screens play the tape too. The TV is a little bigger
+`Auto` takes the type's own setups at random (`Cart` being any of the four
+carts), `Screens` in the Archives; with any setup, the room's own screens play the
+tape too.
+
+**`_G.RandomPos = true`** (any capitals, or `RandomPos = true` in `_G.Noise90`):
+the TV (its table, its cart, its pedestal, its computer) stands anywhere in the
+room instead of by the far wall, out of the way of the doors, looking into the
+room. There is no socket near it: a 6 V lantern battery lies somewhere in the
+room; take it and put it in the box on the TV's side (its lid shuts, the TV comes
+on). With it, `Auto` never takes the ceiling or the room's own screens (B-90, whose
+only setup is the ceiling, gets one of the carts). The TV is a little bigger
 or smaller each time (`TVScale`). Every setting is at the top of the script
 (`_G.Noise90 = { ... }`). The props come from `assets/noise/NoiseWorld.rbxm`,
 the faces from `assets/noise/Wiki_*.png` (the wikis'; G-90's `Face_G90.png`), the tinted tape from
