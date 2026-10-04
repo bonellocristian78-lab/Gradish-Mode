@@ -655,10 +655,10 @@ local picture, video, hum = nil, nil, nil
 local function sheetFrame(label, frame)
 	local index = math.clamp(frame, 0, TAPE.frames - 1)
 	local perSheet = TAPE.columns * TAPE.rows
-	local sheet = files.sheets[index // perSheet + 1]
+	local sheet = files.sheets[math.floor(index / perSheet) + 1]
 	local inSheet = index % perSheet
 	if sheet then label.Image = sheet end
-	label.ImageRectOffset = Vector2.new((inSheet % TAPE.columns) * TAPE.width, (inSheet // TAPE.columns) * TAPE.height)
+	label.ImageRectOffset = Vector2.new((inSheet % TAPE.columns) * TAPE.width, (math.floor(inSheet / TAPE.columns)) * TAPE.height)
 end
 
 local function buildTV()

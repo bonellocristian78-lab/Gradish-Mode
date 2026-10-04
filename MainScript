@@ -1,4 +1,4 @@
-local function getGitSoundId(GithubSoundPath: string, AssetName: string): Sound
+local function getGitSoundId(GithubSoundPath, AssetName)
 	local Url = GithubSoundPath
 
 	if not isfile(AssetName..".mp3") then 

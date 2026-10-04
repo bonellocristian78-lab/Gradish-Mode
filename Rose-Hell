@@ -108,7 +108,7 @@ entity:SetCallback("OnStartMoving", function()
     print("Entity has started moving")
 end)
 
-entity:SetCallback("OnEnterRoom", function(room: Model, firstTime: boolean)
+entity:SetCallback("OnEnterRoom", function(room, firstTime)
     if firstTime == true then
         print("Entity has entered room: ".. room.Name.. " for the first time")
     else
@@ -116,7 +116,7 @@ entity:SetCallback("OnEnterRoom", function(room: Model, firstTime: boolean)
     end
 end)
 
-entity:SetCallback("OnLookAt", function(lineOfSight: boolean)
+entity:SetCallback("OnLookAt", function(lineOfSight)
 	if lineOfSight == true then
 		print("Player is looking at entity")
 	else
@@ -124,7 +124,7 @@ entity:SetCallback("OnLookAt", function(lineOfSight: boolean)
 	end
 end)
 
-entity:SetCallback("OnRebounding", function(startOfRebound: boolean)
+entity:SetCallback("OnRebounding", function(startOfRebound)
     if startOfRebound == true then
         print("Entity has started rebounding")
 	else
@@ -156,7 +156,7 @@ CustomAchievements:Grant({
 })
 end)
 
-entity:SetCallback("OnDamagePlayer", function(newHealth: number)
+entity:SetCallback("OnDamagePlayer", function(newHealth)
 	if newHealth <= 0 then
 		print("Entity has killed the player")
 	else

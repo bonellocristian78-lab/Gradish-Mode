@@ -791,7 +791,12 @@ tools/obfuscate.sh /path/to/Prometheus Noise90
 ```
 
 Prometheus needs one fix first (`git apply tools/prometheus-ifexpression.patch` in its
-folder): without it, it cannot write Luau's `if ... then ... else` expressions.
+folder): without it, it cannot write Luau's `if ... then ... else` expressions. It does
+not read Luau's types (`x: number`, `:: number`) or `//`, so the scripts do without them.
+
+That includes the files made to be copied or filled in (`AchievementConfig`,
+`AchievementTemplate`, `BadgeTemplate`, `ImagesA/...`): their readable versions are on
+`sorgenti` too.
 
 ## Requirements
 

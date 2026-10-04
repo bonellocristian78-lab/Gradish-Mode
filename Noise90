@@ -1027,10 +1027,10 @@ end
 local function sheetFrame(label, frame)
 	local index = math.clamp(frame, 0, TAPE.frames - 1)
 	local perSheet = TAPE.columns * TAPE.rows
-	local sheet = files.sheets[index // perSheet + 1]
+	local sheet = files.sheets[math.floor(index / perSheet) + 1]
 	local inSheet = index % perSheet
 	if sheet then label.Image = sheet end
-	label.ImageRectOffset = Vector2.new((inSheet % TAPE.columns) * TAPE.width, (inSheet // TAPE.columns) * TAPE.height)
+	label.ImageRectOffset = Vector2.new((inSheet % TAPE.columns) * TAPE.width, (math.floor(inSheet / TAPE.columns)) * TAPE.height)
 end
 
 -- An old tube switching on (a line opening into the picture) or off (the picture squashed into a line, the line into a dot)
@@ -2231,7 +2231,7 @@ local function discCart(name, cart, player, drive, light)
 			text = "EJECT"
 		elseif state == "tape" then
 			local t = math.max(os.clock() - tapeStartedAt, 0)
-			text = if frozen() then "PAUSE" elseif disc.scratched and math.random() < 0.06 then "SKIP" else ("PLAY %02d:%02d"):format(t // 60, t % 60)
+			text = if frozen() then "PAUSE" elseif disc.scratched and math.random() < 0.06 then "SKIP" else ("PLAY %02d:%02d"):format(math.floor(t / 60), t % 60)
 		elseif state == "waiting" then
 			text = "READ"
 		elseif state == "chase" or state == "phase" or state == "emerging" then
@@ -4236,7 +4236,7 @@ local function giveCrucifix()
 	end)
 end
 
-do
+;(function() -- (a function, not a do-block: its locals get registers of their own, obfuscated too)
 	local CHAIN = "rbxassetid://11517174215" -- the chain of DOORS' crucifix
 	local CRUCIFIX, SLAM, RUMBLE, GLITCH = "rbxassetid://6555668806", "rbxassetid://74149238738530", "rbxassetid://9114219876", "rbxassetid://10237953274"
 	local LIGHT = if V.name == "B-90" then Color3.fromRGB(137, 208, 255) else PALE -- the circle's blue; the others', in their colour
@@ -4781,8 +4781,9 @@ do
 		if current == noise then current = nil end
 		state = "done"
 	end
-end
+end)()
 
+;(function() -- (the rest in a function of its own: its locals get registers of their own, obfuscated too)
 ---====== OUT OF MANY SCREENS: a leg from one, an arm from another, and it comes together ======---
 
 -- Which piece of it a part is: head, body, left arm, right arm, left leg, right leg
@@ -5984,3 +5985,4 @@ table.insert(SESSION.runs, function() -- (its stop)
 end)
 
 task.spawn(run)
+end)()

@@ -229,7 +229,7 @@ local state = {
 	glitched    = false,           -- il crocifisso Glitch l'ha trasformato
 	jitter      = nil,             -- da glitchato: uno scatto di qualche centesimo
 }
-local body: { [string]: any } = {}
+local body = {}
 local connections = {}
 local cleanupTasks = {}
 
@@ -682,7 +682,7 @@ local function sortedNodePositions(folder)
 		end
 	end
 	table.sort(nodes, function(a, b)
-		return (tonumber(a.Name) :: number) < (tonumber(b.Name) :: number)
+		return tonumber(a.Name) < tonumber(b.Name)
 	end)
 
 	local positions = {}
@@ -714,7 +714,7 @@ local function buildPath()
 		end
 	end
 	table.sort(rooms, function(a, b)
-		return (tonumber(a.Name) :: number) < (tonumber(b.Name) :: number)
+		return tonumber(a.Name) < tonumber(b.Name)
 	end)
 
 	local path = {}
@@ -3376,7 +3376,7 @@ end
 -- Rompe le luci delle stanze dove passa, tranne l'ultima, come lo spawner di Vynixu
 local function onEnterRoom(room)
 	log("entra nella stanza %s", room.Name)
-	if (tonumber(room.Name) :: number) < latestRoomNumber() then
+	if tonumber(room.Name) < latestRoomNumber() then
 		shatterRoom(room)
 	end
 end
