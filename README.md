@@ -357,41 +357,47 @@ the middle of the picture (where the light is while it loads, and big at the end
 Noise comes out in its colours, with its face on its head. Only B-90 can be
 crucified. `B-90` here is exactly the `Noise` script (hammer and crucifix included).
 
+Faces, colours and ways come from the wikis (Interminable Rooms fanmade, Interminable
+Rooms, INTERMINABLE FEVER); G-90 has no picture there, so its face is drawn from its
+description.
+
 | Type | What sets the tape off | What it does |
 |---|---|---|
 | `B-90` | you stare at it (disc "Don't Look": it plays by itself, do not look) | walks your steps; hammer, crucifix |
 | `C-90` | it plays only while you look **away** | walks only while you stand still, stops when you move |
 | `Ransom//90` | you open a drawer | red, Ransom in its tape. Every drawer: it climbs out, comes for you, hits 90, walks backwards into its TV |
-| `A-90` | you come close | green-yellow face, no pupils. 10 rebounds: its face on your screen (freeze, or 90), then it runs the room and back and checks the lockers |
-| `X-90` | you come close | cyan face: 40 rebounds, faster, checks lockers **and** tables |
-| `G-90` | you stare at it | two dark blue eyes and a smile. Out of a paper (checks the tables) or out of a computer (checks the tables, fakes it is gone for 5 s, comes back behind you and checks the lockers) |
-| `Pix-90` | you stare at it | pixels: a choppy tape, a choppy walk on a grid; its pixel face pops up as it walks: freeze |
-| `Trollface-90` | you stare at it | its face on your screen: stop moving, or the Rage Guy face jumps all over it, red and white, 90. Pass: red, white, gone, with A-90's sound |
+| `A-90` | you come close | 10 rebounds in the dark: its face on your screen (freeze, or 90), then out of the TV across the room and back in a streak, throwing every locker about; in one, it has you |
+| `X-90` | you come close | 40 rebounds, four at a time, 50x faster; lockers **and** tables |
+| `G-90` | you stare at it | out of a paper (checks the tables) or out of a computer (checks the tables, fakes it is gone for 5 s, comes back behind you and checks the lockers) |
+| `Pix-90` | you stare at it | creeps in pixel jumps; its pixel face pops up: move while it is there and its mouth opens wider (the wiki's three frames); the third time it jumps at you, 90 |
+| `Trollface-90` | you stare at it | its face on your screen: stop moving, or the Rage Guy jumps all over it, 90, and no more healing. Pass: red, white, gone, with A-90's sound |
 | `XTrollface-90` | you come close | inverted, bloodshot, a giggle first, flashes yellow: if you do **not** move, 90 to 100 |
-| `S-90` | you stare at it | three TVs (blue, red, green). A colour is named, written in another colour: choose its TV in time. Wrong: "LEARN THE COLORS OF THE RAINBOW. FOOL." and you are kicked (`Kick = false`: you die) |
-| `XS-90` | you come close | S-90 inverted and angry, red pupils: much less time, but hiding also saves you |
-| `X-60` | you stare at it | its own tape (7.4 s, its name, its face coming closer); then it rushes the room twice: hide |
+| `S-90` | you stare at it | dark room, its TV glows one colour; its buttons (redn, geen, bule) while three of it circle you: click its colour. Wrong: "LEARN THE COLORS OF THE RAINBOW. FOOL." and a kick (`Kick = false`: you die) |
+| `XS-90` | you come close | inverted, red pupils: six colours, much less time, or hide |
+| `X-60` | you stare at it | its own tape (its six yellow faces, two orbiting the middle one); then it rushes back the way you came, faster and faster, loud static, and stays 9 s in your room slowly going down: hide |
 
 | Setup | Where the TV is |
 |---|---|
 | `Ceiling` | above the door on its ceiling arm (the hammer only here) |
-| `Table` | on the Archives' wooden table by the far wall |
-| `Cart` | the Stairwell's TV cart with its disc player: the discs (one per type, two for B-90) lie in the room; take one, put it in |
-| `Pedestal` | a pedestal by the far wall, the TV on the floor: pick it up, put it on. The pedestal may give way (`PedestalFall`): the TV falls, cracks, and keeps playing |
+| `Table` | on the Archives' wooden table by the far wall: plug it in (the socket is on the nearest wall), turn its antenna (until then: NO SIGNAL) |
+| `Cart` | the Stairwell's TV cart with its disc player: plug it in; the discs (one per type, two for B-90) lie in the room; take one, put it in. Once it is out, hold **Eject**: the disc jumps out and it is pulled back into its TV |
+| `Pedestal` | a pedestal by the far wall, the TV on the floor: pick it up, put it on, plug it in, tune it. The pedestal may give way (`PedestalFall`): the TV falls, cracks, and keeps playing |
 | `Teller` | the Teller's screen (it says NOW SERVING until the tape covers it) |
-| `Computer` | a computer on a table (G-90's) |
+| `Computer` | a computer on a table (G-90's): plug it in |
 | `Screens` | the room's own screens (the Archives' monitors, the Teller's, the terminals): every one plays the tape, and Noise comes out of them in pieces — a leg from one, an arm from another — that fly together |
+
+A remote lies in every room: take it, and it pauses the tape or the entity for
+3 seconds, 4 times.
 
 `Auto` takes the type's own setups at random, `Screens` in the Archives; with
 any setup, the room's own screens play the tape too. The TV is a little bigger
 or smaller each time (`TVScale`). Every setting is at the top of the script
 (`_G.Noise90 = { ... }`). The props come from `assets/noise/NoiseWorld.rbxm`,
-the faces from `assets/noise/Face_*.png` (drawn for it), the tinted tape from
+the faces from `assets/noise/Wiki_*.png` (the wikis'; G-90's `Face_G90.png`), the tinted tape from
 `assets/noise/NoiseFramesGray_*.jpg`.
 
-Still to come: X-60's model in its tape (a drawn face stands in), C-90's own
-details (it is the "contrary" one for now), the troll laugh (any sound id in
-`Laugh`; A-90's sound sped up without one).
+Still to come: the troll laugh (any sound id in `Laugh`; A-90's sound sped up
+without one). C-90 is on no wiki: it is the "contrary" one for now.
 
 ## DOORS animations in any game
 

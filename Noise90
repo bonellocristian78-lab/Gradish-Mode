@@ -11,7 +11,7 @@
             _G.Disc = "Look"     -- B-90 only: "Look" or "DontLook" (with the disc player, the disc you put in decides)
             loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/Noise90"))()
 
-        THE TYPES
+        THE TYPES (faces, colours and ways from the wikis: Interminable Rooms fanmade, Interminable Rooms, INTERMINABLE FEVER)
             B-90           Noise with B-90 in it. Stare at the TV and it comes out and walks your steps; it can be
                            crucified (B-90 is torn out of it) and the TV can be broken with the hammer. Its disc comes
                            in two: "Look" (stare at the tape) and "Don't Look" (the tape plays: do not look at it)
@@ -19,31 +19,39 @@
                            while you stand still, and stops as soon as you move
             Ransom//90     Red, Ransom in the middle of its tape. It sleeps in the TV: every drawer you open, it
                            climbs out and comes for you; it hits you for 90 and walks backwards into its TV
-            A-90           A green-yellow face with no pupils. It rebounds 10 times: its face on your screen
-                           (freeze, or 90 damage), then it runs the room and back, checking the lockers
-            X-90           A cyan face with no pupils: 40 rebounds, much faster, it checks lockers and tables
+            A-90           The wiki's green-yellow face. 10 rebounds: the room goes dark; each time its face on your
+                           screen (freeze, or 90), then out of the TV across the room and back faster than you can
+                           follow, every locker it passes thrown about: if you are in one, it has you
+            X-90           The wiki's cyan face: 40 rebounds, four at a time, 50 times faster; lockers and tables
             G-90           Two dark blue eyes and a smile. Out of a paper (it checks the tables), or out of a
                            computer (it checks the tables, fakes it is gone for 5 seconds, then checks the lockers)
-            Pix-90         Made of pixels: a choppy tape, a choppy walk; its face pops up as it walks: freeze
-            Trollface-90   Its face pops up on your screen: stop moving, or the Rage Guy hits you for 90.
-                           Pass and it turns red, then white, and goes with A-90's sound
+            Pix-90         The wiki's three pixel frames. It creeps closer in pixel jumps; its face pops up: move
+                           while it is there and its mouth opens wider; the third time it jumps at you (90)
+            Trollface-90   Its face on your screen: stop moving, or the Rage Guy jumps all over it, 90, and you do
+                           not heal any more. Pass and it turns red, then white, and goes with A-90's sound
             XTrollface-90  The opposite: inverted, bloodshot, a giggle first, it flashes yellow: if you do NOT move,
                            it hits you for 90 to 100
-            S-90           Three TVs: blue, red, green. A colour is named: choose its TV in time.
-                           Wrong, and "LEARN THE COLORS OF THE RAINBOW. FOOL." and you are out of the game
-            XS-90          S-90 inverted and angry, red pupils: much less time; hiding also saves you
-            X-60           Its own tape (shorter); then it rushes the room: hide
+            S-90           INTERMINABLE FEVER's: the room goes dark, its TV glows one colour; its face comes up with
+                           its buttons (redn, geen, bule) while three of it circle you: click its colour in time.
+                           Wrong: "LEARN THE COLORS OF THE RAINBOW. FOOL." and you are kicked
+            XS-90          Inverted and angry, red pupils: six colours (yell, magnet, cyn too), much less time;
+                           or run to the nearest hiding place
+            X-60           Its own tape: its six yellow faces, two orbiting the middle one. Then it goes off the way
+                           you came and rushes back, faster and faster, loud static, quiet screams; it stays 9
+                           seconds in your room, slowly going down. Hide
 
         THE SETUPS (Auto: the type's own, at random; in the Archives every screen there is)
             Ceiling        above the door, hanging from the ceiling on its arm (the hammer works here)
-            Table          on a table against the far wall
-            Cart           the Stairwell's TV cart with its disc player: find the disc, put it in
-            Pedestal       a pedestal by the far wall and the TV on the floor: pick it up and put it there.
-                           The pedestal may give way: the TV falls, cracks, and keeps going
+            Table          on a table against the far wall: plug it in, turn its antenna
+            Cart           the Stairwell's TV cart with its disc player: plug it in, find the disc, put it in;
+                           once it is out, hold "Eject" and the disc pulls it back into its TV
+            Pedestal       a pedestal by the far wall and the TV on the floor: pick it up, put it there, plug it
+                           in, turn its antenna. The pedestal may give way: the TV falls, cracks, and keeps going
             Teller         the Teller's screen
-            Computer       a computer on a table (G-90's)
+            Computer       a computer on a table (G-90's): plug it in
             Screens        every screen in the room plays the tape, and Noise comes out of them in pieces
                            (a leg from one, an arm from another) that come together
+        And a remote lies in every room: take it, and it pauses the tape or it for 3 seconds, 4 times.
 
         Every setting, with its default. All optional, before the loadstring:
 
@@ -143,6 +151,7 @@ local function rgb(r, g, b) return Color3.fromRGB(r, g, b) end
 --[[ color: Noise's, its glow and its tape's. face: the middle of its tape and its head (a file of the kit or an id),
      faceColor tints it. trigger: what sets the tape off -- look, dontlook, away, near, drawer (the disc player's disc,
      in the Cart, always). setups: where its TV may be (Auto picks one). phase: what it does once out ]]
+local YELLOW = rgb(255, 230, 0)
 local TYPES = {
 	["B-90"] = { color = rgb(60, 120, 255), deep = rgb(10, 40, 210), pale = rgb(150, 190, 255), trigger = "look", setups = { "Ceiling" }, phase = "chase", crucify = true,
 		discs = { { title = "B-90 (Look)", disc = "Look" }, { title = "B-90 (Don't Look)", disc = "DontLook" } },
@@ -152,35 +161,43 @@ local TYPES = {
 		hints = { "You died to C-90.", "It does everything the other way round.", "Its tape plays while you look away. Out, it walks while you stand still." } },
 	["Ransom//90"] = { color = rgb(230, 30, 45), face = RANSOM, trigger = "drawer", setups = { "Cart", "Teller", "Ceiling" }, phase = "drawers",
 		hints = { "You died to Ransom//90.", "It sleeps in its TV.", "Every drawer you open wakes it up. Get away from it." } },
-	["A-90"] = { color = rgb(190, 230, 40), face = A90.face, faceColor = rgb(205, 240, 60), trigger = "near",
-		setups = { "Ceiling", "Table", "Pedestal" }, phase = "rebound", rounds = 10, dash = 140, gap = { 2.5, 4.5 }, window = 0.9,
-		checks = { locker = true },
+	-- The wiki: a green-yellow face with no pupils; rebounds 10 times and checks lockers; very fast
+	["A-90"] = { color = rgb(190, 255, 0), face = "Wiki_A90.png", trigger = "near", setups = { "Ceiling", "Table", "Pedestal" }, phase = "rebound",
+		rounds = 10, volley = 1, dash = 200, gap = { 2.5, 4.5 }, trail = 0.35, window = 0.9, checks = { locker = true },
 		hints = { "You died to A-90.", "It rebounds ten times.", "When its face is on your screen, freeze.", "It checks the lockers: stay out of them." } },
-	["X-90"] = { color = rgb(40, 230, 255), face = A90.face, faceColor = rgb(60, 235, 255), trigger = "near",
-		setups = { "Ceiling", "Pedestal", "Table" }, phase = "rebound", rounds = 40, dash = 320, gap = { 0.7, 1.5 }, window = 0.65,
-		checks = { locker = true, table = true },
+	-- The wiki: a cyan face with no pupils; rebounds 40 times, checks lockers and tables; 50 times faster than A-90
+	["X-90"] = { color = rgb(0, 152, 152), face = "Wiki_X90.png", trigger = "near", setups = { "Ceiling", "Pedestal", "Table" }, phase = "rebound",
+		rounds = 40, volley = 4, dash = 600, gap = { 1.6, 2.6 }, trail = 0.7, window = 0.65, checks = { locker = true, table = true },
 		hints = { "You died to X-90.", "Forty rebounds, and fast.", "Freeze when you see it. It checks lockers and tables." } },
+	-- The wiki: two dark blue eyes and a smile; out of a paper (rotting tables), or out of a computer (fakes it is gone, then rusty lockers)
 	["G-90"] = { color = rgb(30, 55, 200), face = "Face_G90.png", trigger = "look", setups = { "Table", "Ceiling" }, phase = "g90",
 		hints = { "You died to G-90.", "It comes out of a paper, or out of a computer.", "It checks the tables, then the lockers. It is never gone when it seems gone." } },
-	["Pix-90"] = { color = rgb(230, 60, 220), face = "Face_Pix90.png", trigger = "look", setups = { "Table", "Pedestal", "Ceiling" },
-		phase = "chase", pixel = true, window = 0.8,
-		hints = { "You died to Pix-90.", "A few pixels, and one rule.", "When its face pops up, freeze." } },
-	["Trollface-90"] = { color = rgb(235, 235, 235), face = "Face_Troll.png", angry = "Face_Rage.png", trigger = "look",
-		setups = { "Pedestal", "Table", "Ceiling" }, phase = "screen", rounds = 4, rule = "still", gap = { 4, 9 }, window = 0.9,
+	-- The wiki: three pixel frames, its mouth wider and wider
+	["Pix-90"] = { color = rgb(25, 25, 25), face = "Wiki_Pix90_1.png", faces = { "Wiki_Pix90_1.png", "Wiki_Pix90_2.png", "Wiki_Pix90_3.png" },
+		trigger = "look", setups = { "Table", "Pedestal", "Ceiling" }, phase = "pixel", pixel = true, rounds = 6, window = 1.3,
+		hints = { "You died to Pix-90.", "Its mouth opens wider every time you move.", "When its face is on your screen, freeze." } },
+	-- Interminable Rooms' wiki: on your screen; stop moving, or the Rage Guy, 90, and no more healing
+	["Trollface-90"] = { color = rgb(240, 240, 240), face = "Wiki_Troll.png", angry = "Wiki_Rage.png", trigger = "look",
+		setups = { "Pedestal", "Table", "Ceiling" }, phase = "screen", rounds = 4, rule = "still", gap = { 4, 9 }, window = 0.9, noRegen = true,
 		hints = { "You died to Trollface-90.", "Problem?", "When it is on your screen, stop moving." } },
-	["XTrollface-90"] = { color = rgb(255, 225, 40), face = "Face_XTroll.png", angry = "Face_XTroll.png", trigger = "near",
-		setups = { "Pedestal", "Table" }, phase = "screen", rounds = 5, rule = "move", gap = { 2.5, 5 }, window = 0.75, giggle = true,
-		damage = { 90, 100 },
+	-- The wiki: inverted, bloodshot, a giggle first, faster, flashes yellow; it hurts if you do NOT move, 90 to 100
+	["XTrollface-90"] = { color = rgb(20, 20, 20), face = "Wiki_XTroll.png", angry = "Wiki_XTroll.png", flash = YELLOW, trigger = "near",
+		setups = { "Pedestal", "Table" }, phase = "screen", rounds = 5, rule = "move", gap = { 2, 4 }, window = 0.75, giggle = true, damage = { 90, 100 },
 		hints = { "You died to XTrollface-90.", "It giggles first.", "When it is on your screen, KEEP moving." } },
-	["S-90"] = { color = rgb(245, 240, 255), face = "Face_S90.png", trigger = "look", setups = { "Rainbow" }, phase = "colors", rounds = 3,
-		time = { 7, 5.5, 4 }, rainbow = true,
+	-- INTERMINABLE FEVER: its TV glows a colour; choose it (redn, geen, bule) or "LEARN THE COLORS OF THE RAINBOW. FOOL." and a kick.
+	-- Interminable Rooms: it splits into three that circle you
+	["S-90"] = { color = rgb(245, 245, 245), face = "Wiki_S90.png", trigger = "look", setups = { "Table", "Pedestal", "Ceiling" }, phase = "colors",
+		colors = 3, time = 7,
 		hints = { "You died to S-90.", "LEARN THE COLORS OF THE RAINBOW. FOOL." } },
-	["XS-90"] = { color = rgb(255, 40, 40), face = "Face_XS90.png", trigger = "near", setups = { "Rainbow" }, phase = "colors", rounds = 3,
-		time = { 3, 2.5, 2 }, hard = true,
-		hints = { "You died to XS-90.", "No time to think.", "Choose the right TV at once, or hide." } },
-	["X-60"] = { color = rgb(255, 30, 30), face = "Face_X60.png", trigger = "look", setups = { "Ceiling", "Cart" }, phase = "rush",
-		tape = "X-60",
-		hints = { "You died to X-60.", "Its tape is its warning.", "When the screen shakes, hide." } },
+	-- INTERMINABLE FEVER: S-90 inverted and angry, red pupils, bleeding eyes; six colours; run to the closest hiding spot
+	["XS-90"] = { color = rgb(255, 0, 0), face = "Wiki_XS90.png", trigger = "near", setups = { "Pedestal", "Table", "Ceiling" }, phase = "colors",
+		colors = 6, time = 3.5, hard = true,
+		hints = { "You died to XS-90.", "LEARN THE COLORS OF THE RAINBOW. FOOL.", "No time to think: hide." } },
+	-- The wiki (X-60, Recreation): yellow, six faces, two orbit the one in the middle; loud static, quiet screams; it rushes,
+	-- faster and faster, stops 9 seconds in your room going slowly down, and goes. Hide
+	["X-60"] = { color = YELLOW, face = "Wiki_X60_1.png", orbit = { "Wiki_X60_2.png", "Wiki_X60_3.png", "Wiki_X60_4.png", "Wiki_X60_5.png", "Wiki_X60_6.png" },
+		trigger = "look", setups = { "Ceiling", "Cart" }, phase = "rush", tape = "X-60",
+		hints = { "You died to X-60.", "The Orbiting Monstrosities.", "When you hear the static, hide. It stays for a while." } },
 }
 local ORDER = { "B-90", "C-90", "Ransom//90", "A-90", "X-90", "G-90", "Pix-90", "Trollface-90", "XTrollface-90", "S-90", "XS-90", "X-60" }
 
@@ -206,7 +223,8 @@ local TAPE = { frames = 179, fps = 15, sheets = 15, columns = 3, rows = 4, width
 local BLUE = V.color
 local DEEP, PALE = V.deep or BLUE:Lerp(Color3.new(0, 0, 0), 0.5), V.pale or BLUE:Lerp(Color3.new(1, 1, 1), 0.45)
 local SOUNDS = { glass = "rbxassetid://6737581315", crack = "rbxassetid://9120805129", bulb = "rbxassetid://8828938165", -- DOORS' own
-	click = "rbxassetid://89680378880359", whir = "rbxassetid://128246563755914" } -- the kit's pause and fast-forward
+	click = "rbxassetid://89680378880359", whir = "rbxassetid://128246563755914", -- the kit's pause and fast-forward
+	glitch = "rbxassetid://10237953274" }
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -288,7 +306,11 @@ task.spawn(function() -- all of it now, so nothing waits later
 	else -- the same tape in grey: any colour tints it
 		for i = 1, TAPE.sheets do files.sheets[i] = asset(("NoiseFramesGray_%02d.jpg"):format(i)) end
 	end
-	for _, face in ipairs({ V.face, V.angry }) do
+	local wanted = { V.face, V.angry }
+	for _, list in ipairs({ V.faces or {}, V.orbit or {} }) do
+		for _, face in ipairs(list) do table.insert(wanted, face) end
+	end
+	for _, face in ipairs(wanted) do
 		if type(face) == "string" and not face:find("^rbxasset") then files.faces[face] = asset(face) end
 	end
 	filesReady = true
@@ -552,6 +574,10 @@ end
 ---====== NOISE ======---
 
 local current = nil -- the Noise of now
+local pausedUntil = 0 -- the remote's pause: everything of it stands still until then
+local function frozen() return os.clock() < pausedUntil end
+local climbBack -- below, with its ways: back into its TV
+local screensOff -- below, with the tape: the screens go dark
 
 -- Noise as it chases you ("NoiseModel", B-90 in it), or another of the kit's bodies ("NoiseModel(WithoutB-90)")
 local function makeNoise(name)
@@ -587,14 +613,25 @@ local function makeNoise(name)
 		if p:IsA("BasePart") then p.Anchored, p.CanCollide, p.CanTouch, p.CanQuery, p.Massless = p == root, false, false, false, true end
 	end
 	paint(model, 0)
+	-- Its face (the wiki's) instead of its head; X-60's other faces orbit it
 	local face = image(V.face)
-	if face and V.name ~= "B-90" then -- its face where B-90's flickers
+	local faceLabel, orbiters = nil, {}
+	if face and V.name ~= "B-90" then
+		local head = model:FindFirstChild("Head") or root
 		for _, d in ipairs(model:GetDescendants()) do
-			if d:IsA("ParticleEmitter") and d.Name == "HijackFace" then
-				d.Texture, d.Color = face, ColorSequence.new(V.faceColor or Color3.new(1, 1, 1))
-				d.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.4), NumberSequenceKeypoint.new(0.05, 1.15), NumberSequenceKeypoint.new(1, 1.05) })
+			if d:IsA("ParticleEmitter") and d.Name:find("^HijackFace") then
+				d.Enabled = false
 				d:SetAttribute("KeepColor", true)
 			end
+		end
+		local function board(name, size, id)
+			local gui = make("BillboardGui", { Name = name, Size = UDim2.new(size, 0, size, 0), LightInfluence = 0, MaxDistance = 300 }, head)
+			return make("ImageLabel", { Name = "Image", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Image = id,
+				ImageColor3 = V.faceColor or Color3.new(1, 1, 1), ResampleMode = if V.pixel then Enum.ResamplerMode.Pixelated else Enum.ResamplerMode.Default }, gui)
+		end
+		faceLabel = board("Noise90Face", 4.2, face)
+		for i = 1, (if V.orbit then 2 else 0) do
+			orbiters[i] = board("Noise90Orbit", 3, image(V.orbit[i]) or face)
 		end
 	end
 	local box, size = model:GetBoundingBox()
@@ -603,6 +640,7 @@ local function makeNoise(name)
 		glow = model:FindFirstChildOfClass("Highlight") or make("Highlight", {}, model),
 		light = root:FindFirstChildWhichIsA("PointLight") or make("PointLight", { Range = 16 }, root) }
 	noise.glow.DepthMode = Enum.HighlightDepthMode.Occluded
+	noise.face, noise.orbiters, noise.stage = faceLabel, orbiters, 1
 	noise.textures = {}
 	for _, d in ipairs(model:GetDescendants()) do
 		if d:IsA("Texture") then table.insert(noise.textures, d) end
@@ -785,21 +823,28 @@ local staticAt, pixelClock = 0, 0
 on(RunService.PreSimulation or RunService.Stepped, function(a, b)
 	local dt = if type(b) == "number" then b else a
 	local noise = current
-	if not (noise and noise.model.Parent) then return end
+	if not (noise and noise.model.Parent) or frozen() then return end
+	local now = os.clock()
+	for i, label in ipairs(noise.orbiters) do -- X-60: two faces orbit the one in the middle, changing face as they go
+		local a = now * 2.4 + i * math.pi
+		label.Parent.StudsOffset = Vector3.new(math.cos(a) * 3.2, 0.6 + math.sin(a * 2) * 0.4, math.sin(a) * 3.2)
+		label.Image = image(V.orbit[(math.floor(now * 2.5) + i * 2) % #V.orbit + 1]) or label.Image
+	end
 	if V.pixel then -- Pix-90 moves 6 times a second
 		pixelClock += dt
 		if pixelClock < 1 / 6 then return end
 		dt, pixelClock = pixelClock, 0
 	end
 	noise.rig:step(dt)
-	if V.rainbow and not noise.gone then -- S-90: every colour of the rainbow
-		local c = Color3.fromHSV(os.clock() * 0.25 % 1, 0.75, 1)
-		noise.glow.FillColor, noise.glow.OutlineColor, noise.light.Color = c, c, c
-	end
-	if os.clock() >= staticAt then
-		staticAt = os.clock() + 0.05
+	if now >= staticAt then
+		staticAt = now + 0.05
 		for _, t in ipairs(noise.textures) do
 			t.OffsetStudsU, t.OffsetStudsV = math.random() * 2, math.random() * 2
+		end
+		if noise.face then -- its face jitters like a bad tape (Pix-90: the frame its mouth is at)
+			noise.face.Position = UDim2.fromScale(rnd(0.03), rnd(0.03))
+			noise.face.ImageTransparency = if math.random() < 0.08 then 0.7 else 0
+			if V.faces then noise.face.Image = image(V.faces[math.clamp(noise.stage, 1, #V.faces)]) or noise.face.Image end
 		end
 	end
 end)
@@ -879,7 +924,8 @@ local function dressScreen()
 		video.Visible = false
 		if files.webm then pcall(function() video.Video = files.webm end) end -- it loads while you wait
 	end
-	picture = addScreen(screen, gui).picture
+	local record = addScreen(screen, gui)
+	record.own, picture = true, record.picture
 	for _, light in ipairs(screen:GetDescendants()) do
 		if light:IsA("Light") then light.Color, light.Brightness = PALE, 0.4 end
 	end
@@ -1014,7 +1060,7 @@ local function placeHammer()
 end
 
 ---====== WHERE ITS TV IS: the setups ======---
-local newPrompt, SETUPS, disc, rainbow, g90Mode, joinWorldScreens, chooseSetup -- what the rest needs of the setups
+local newPrompt, SETUPS, disc, g90Mode, joinWorldScreens, chooseSetup, placeRemote -- what the rest needs of the setups
 do
 
 local function customPrompt(p)
@@ -1226,6 +1272,160 @@ local function makeTable()
 	return desk
 end
 
+---- More to do with a TV: its plug, its antenna; and a remote in the room ----
+
+-- How far a box reaches along a direction of its own space
+local function reach(size, dir)
+	return 0.5 * (math.abs(dir.X) * size.X + math.abs(dir.Y) * size.Y + math.abs(dir.Z) * size.Z)
+end
+
+-- Its cable, from its back to a plug on the floor under a socket on the nearest wall. Until it is in, the TV is off
+local function addPower()
+	local power = { on = false }
+	local cord = make("Model", { Name = "Noise90Power" }, nil)
+	local socket = make("Part", { Name = "Socket", Size = Vector3.new(0.7, 0.9, 0.1), Color = rgb(226, 222, 208), Material = Enum.Material.SmoothPlastic,
+		Anchored = true, CanCollide = false, CanQuery = false, CanTouch = false }, cord)
+	local plug = make("Part", { Name = "Plug", Size = Vector3.new(0.34, 0.26, 0.5), Color = rgb(25, 25, 28), Material = Enum.Material.SmoothPlastic,
+		Anchored = true, CanCollide = false, CanTouch = false }, cord)
+	local start = make("Attachment", { Name = "CableStart", Position = -tvAxes.f * reach(tvMain.Size, tvAxes.f) }, tvMain)
+	local finish = make("Attachment", { Name = "CableEnd", Position = Vector3.new(0, 0, 0.25) }, plug)
+	make("Beam", { Name = "Cable", Attachment0 = start, Attachment1 = finish, Width0 = 0.1, Width1 = 0.1, Segments = 16, FaceCamera = true,
+		CurveSize0 = 1.5, CurveSize1 = -1.5, Color = ColorSequence.new(rgb(20, 20, 22)), LightInfluence = 1, Transparency = NumberSequence.new(0) }, cord)
+	power.prompt = newPrompt(plug, "Plug in", "TV cable", 0.3, 8)
+	function power.place(inward)
+		if power.on then return end
+		local base = tvMain.Position
+		local floorY = (floorUnder(base) or base - Vector3.new(0, 3, 0)).Y
+		local mid = Vector3.new(base.X, floorY + 1.2, base.Z)
+		local right = inward:Cross(Vector3.new(0, 1, 0))
+		local best = nil
+		for _, dir in ipairs({ -inward, right, -right }) do
+			local hit = cast(mid, dir * 14)
+			if hit and math.abs(hit.Normal.Y) < 0.3 and (not best or (hit.Position - mid).Magnitude < (best.Position - mid).Magnitude) then best = hit end
+		end
+		local spot, normal = mid + inward * 2.5, inward
+		if best then spot, normal = best.Position + best.Normal * 0.06, best.Normal end
+		socket.CFrame = CFrame.lookAt(spot, spot + normal)
+		local lying = Vector3.new(spot.X, floorY + 0.13, spot.Z) + normal * 1.4
+		plug.CFrame = CFrame.lookAt(lying, lying - normal)
+		power.socket, power.normal = spot, normal
+		cord.Parent = folder
+	end
+	on(power.prompt.Triggered, function()
+		if power.on or not power.socket then return end
+		power.on, power.prompt.Enabled = true, false
+		local from = plug.CFrame
+		local goal = CFrame.lookAt(power.socket + power.normal * 0.26, power.socket)
+		task.spawn(function()
+			local t0 = os.clock()
+			while alive and os.clock() - t0 < 0.3 do
+				local u = (os.clock() - t0) / 0.3
+				plug.CFrame = from:Lerp(goal, u * u)
+				RunService.Heartbeat:Wait()
+			end
+			plug.CFrame = goal
+			oneShot(SOUNDS.click, plug)
+			oneShot(SOUNDS.bulb, plug, { Volume = CONFIG.Volume * 0.4, PlaybackSpeed = 1.5 })
+			local zap = make("ParticleEmitter", { Rate = 0, Lifetime = NumberRange.new(0.15, 0.35), Speed = NumberRange.new(4, 9), SpreadAngle = Vector2.new(60, 60),
+				Size = NumberSequence.new(0.08, 0), Color = ColorSequence.new(PALE), LightEmission = 1 }, plug)
+			zap:Emit(14)
+		end)
+	end)
+	return power
+end
+
+-- Rabbit ears on top of it: turn them (hold) or there is no picture to see, only NO SIGNAL
+local function addAntenna()
+	local antenna = { tuned = false }
+	local up = tvAxes.u
+	local top = tvMain.CFrame * CFrame.new(up * reach(tvMain.Size, up))
+	local base = make("Part", { Name = "AntennaBase", Size = Vector3.new(0.7, 0.22, 0.5), Color = rgb(35, 35, 40), Material = Enum.Material.SmoothPlastic,
+		Anchored = true, CanCollide = false, CanTouch = false, CFrame = top * CFrame.new(0, 0.11, 0) }, tv)
+	local rods = {}
+	for i, side in ipairs({ -1, 1 }) do
+		rods[i] = make("Part", { Name = "AntennaRod", Size = Vector3.new(0.05, 1.9, 0.05), Color = rgb(200, 200, 208), Material = Enum.Material.Metal,
+			Anchored = true, CanCollide = false, CanQuery = false, CanTouch = false,
+			CFrame = base.CFrame * CFrame.Angles(0, 0, side * math.rad(30)) * CFrame.new(0, 0.95, 0) }, tv)
+	end
+	antenna.prompt = newPrompt(base, "Tune", "Antenna", 1.5, 8)
+	antenna.labels = {}
+	for _, record in ipairs(screens) do
+		if record.own then
+			table.insert(antenna.labels, make("TextLabel", { Name = "NoSignal", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 0.25),
+				Position = UDim2.fromScale(0, 0.375), ZIndex = 6, Font = Enum.Font.Arcade, TextScaled = true, TextColor3 = Color3.new(1, 1, 1),
+				Text = "NO SIGNAL", Visible = false }, record.gui))
+		end
+	end
+	on(antenna.prompt.Triggered, function()
+		if antenna.tuned then return end
+		antenna.tuned, antenna.prompt.Enabled = true, false
+		for _, label in ipairs(antenna.labels) do label.Visible = false end
+		oneShot(SOUNDS.click, base)
+		task.spawn(function() -- the ears swing round to the signal
+			local turn = math.rad(70)
+			local t0 = os.clock()
+			while alive and os.clock() - t0 < 0.5 do
+				local u = (os.clock() - t0) / 0.5
+				for i, rod in ipairs(rods) do
+					local side = if i == 1 then -1 else 1
+					rod.CFrame = base.CFrame * CFrame.Angles(0, turn * u * u * (3 - 2 * u), side * math.rad(30)) * CFrame.new(0, 0.95, 0)
+				end
+				RunService.Heartbeat:Wait()
+			end
+		end)
+	end)
+	return antenna
+end
+
+-- The remote: on the floor of the room. In your hand, it pauses the tape or it, 3 seconds each time, 4 times
+local remote = { model = nil, tool = nil, uses = 4 }
+local function giveRemote()
+	local tool = make("Tool", { Name = "Remote", CanBeDropped = false, RequiresHandle = true, ToolTip = "Pause (4)" }, nil)
+	make("Part", { Name = "Handle", Size = Vector3.new(0.45, 0.16, 1.2), Color = rgb(28, 28, 32), CanCollide = false, Massless = true }, tool)
+	on(tool.Activated, function()
+		local noise = current
+		local out = noise ~= nil and not noise.gone and (state == "chase" or state == "phase" or state == "emerging")
+		if remote.uses <= 0 or frozen() or not (out or state == "tape") then return end
+		remote.uses -= 1
+		tool.ToolTip = ("Pause (%d)"):format(remote.uses)
+		pausedUntil = os.clock() + 3
+		oneShot(SOUNDS.click, tool:FindFirstChild("Handle"))
+		if out then
+			noise:emitter("PauseIcon", true)
+			local pause = noise:sound("Pause")
+			if pause then pause:Play() end
+			task.delay(3, function() if noise.model.Parent then noise:emitter("PauseIcon", false) end end)
+		end
+	end)
+	tool.Parent = LocalPlayer:FindFirstChildOfClass("Backpack") or LocalPlayer.Character
+	table.insert(owned, tool)
+	remote.tool = tool
+end
+function placeRemote(avoid)
+	if remote.tool then return end
+	if not remote.model then
+		local m = make("Model", { Name = "Noise90Remote" }, nil)
+		local shell = make("Part", { Name = "Body", Size = Vector3.new(0.45, 0.16, 1.2), Color = rgb(28, 28, 32), Material = Enum.Material.SmoothPlastic,
+			Anchored = true, CanCollide = false, CanTouch = false }, m)
+		make("Part", { Name = "Button", Size = Vector3.new(0.14, 0.05, 0.14), Color = rgb(220, 30, 30), Material = Enum.Material.Neon, Anchored = true,
+			CanCollide = false, CanQuery = false, CanTouch = false, CFrame = CFrame.new(0, 0.09, -0.4) }, m)
+		m.PrimaryPart = shell
+		local take = newPrompt(shell, "Take", "Remote", 0.2, 8)
+		on(take.Triggered, function()
+			if remote.tool then return end
+			oneShot(SOUNDS.click, shell)
+			giveRemote()
+			m:Destroy()
+		end)
+		remote.model = m
+	end
+	local spot = floorSpots(1, avoid)[1]
+	if spot then
+		remote.model:PivotTo(CFrame.new(spot + Vector3.new(0, 0.08, 0)) * CFrame.Angles(0, math.random() * math.pi * 2, 0))
+		remote.model.Parent = folder
+	end
+end
+
 SETUPS = {}
 
 -- Above the door, on its ceiling arm (the hammer works here)
@@ -1239,8 +1439,9 @@ end
 function SETUPS.Table()
 	footTV()
 	local desk = makeTable()
-	local setup = { name = "Table" }
+	local setup = { name = "Table", power = addPower(), antenna = addAntenna() }
 	function setup.place()
+		if setup.power.on then return true end -- it stays once you have plugged it in
 		local at, inward = wallSpot(3.8)
 		if not at then return false end
 		standAt(desk, shortSide(desk), at, inward)
@@ -1248,6 +1449,7 @@ function SETUPS.Table()
 		local _, top = spanY(desk)
 		standAt(tv, flat(outwardOf(screen)), Vector3.new(at.X, top, at.Z) - inward * 0.3, inward)
 		tv.Parent = folder
+		setup.power.place(inward)
 		return true
 	end
 	return setup
@@ -1270,12 +1472,13 @@ function SETUPS.Computer()
 	local back = tvMain:FindFirstChild("Metal") or tvMain
 	local function front() return flat(screen.Position - back.Position) or flat(screen.CFrame.LookVector) end
 	local record = addScreen(screen, nil, front())
-	record.gui.Enabled = true -- a computer: its screen is on while it waits
+	record.gui.Enabled, record.own = true, true -- a computer: its screen is on while it waits
 	picture = record.picture
 	measureTV()
 	local desk = makeTable()
-	local setup = { name = "Computer" }
+	local setup = { name = "Computer", power = addPower() }
 	function setup.place()
+		if setup.power.on then return true end
 		local at, inward = wallSpot(3.8)
 		if not at then return false end
 		standAt(desk, shortSide(desk), at, inward)
@@ -1283,6 +1486,7 @@ function SETUPS.Computer()
 		local _, top = spanY(desk)
 		standAt(pc, front(), Vector3.new(at.X, top, at.Z), inward)
 		pc.Parent = folder
+		setup.power.place(inward)
 		return true
 	end
 	return setup
@@ -1386,10 +1590,36 @@ function SETUPS.Cart()
 			entry.model:PivotTo(hand.CFrame * CFrame.new(0, -hand.Size.Y / 2 - 0.15, -0.3) * CFrame.Angles(0, 0, math.pi / 2))
 		end
 	end)
+	-- Eject, once it is out: the disc jumps out, the tape stops, and it is pulled back into its TV
+	local function eject()
+		local noise = current
+		if disc.ejected or not (noise and not noise.gone and (state == "chase" or state == "phase")) then return end
+		disc.ejected, disc.insert.Enabled = true, false
+		state = "done"
+		local out = make("Part", { Name = "Disc", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.03, 1, 1), Color = rgb(205, 210, 220),
+			Material = Enum.Material.Foil, Reflectance = 0.25, CanQuery = false, CanTouch = false,
+			CFrame = (drive or player).CFrame * CFrame.Angles(0, 0, math.pi / 2) }, folder)
+		out.AssemblyLinearVelocity = (flat(outwardOf(screen)) or Vector3.new(0, 0, 1)) * 9 + Vector3.new(0, 7, 0)
+		oneShot(SOUNDS.click, player)
+		oneShot(SOUNDS.whir, player, { Volume = CONFIG.Volume * 0.6, PlaybackSpeed = 1.6 })
+		if light then light.Material, light.Color = Enum.Material.SmoothPlastic, Color3.new(0.15, 0.15, 0.15) end
+		screensOff()
+		task.spawn(climbBack, noise)
+	end
+	on(RunService.Heartbeat, function()
+		if disc.inserted and not disc.ejected then
+			local noise = current
+			disc.insert.Enabled = noise ~= nil and not noise.gone and (state == "chase" or state == "phase")
+		end
+	end)
 	-- Into the drive: the sleeve flat, sliding in; the player's light comes on
 	on(disc.insert.Triggered, function()
+		if disc.inserted then
+			eject()
+			return
+		end
 		local entry = disc.carried
-		if not entry or disc.inserted then return end
+		if not entry then return end
 		disc.inserted, disc.carried = entry, nil
 		disc.insert.Enabled = false
 		for _, other in ipairs(disc.entries) do other.prompt.Enabled = false end
@@ -1407,16 +1637,18 @@ function SETUPS.Cart()
 			oneShot(SOUNDS.click, player)
 			oneShot(SOUNDS.whir, player, { Volume = CONFIG.Volume * 0.6 })
 			if light then light.Material, light.Color = Enum.Material.Neon, BLUE end
+			disc.insert.ActionText, disc.insert.HoldDuration, disc.insert.Enabled = "Eject", 2.5, false
 		end)
 	end)
 
-	local setup = { name = "Cart", trigger = "disc" }
+	local setup = { name = "Cart", trigger = "disc", power = addPower() }
 	function setup.place()
-		if disc.carried or disc.inserted then return true end -- it stays once you have a disc
+		if disc.carried or disc.inserted or setup.power.on then return true end -- it stays once you have touched it
 		local at, inward = wallSpot(2.8)
 		if not at then return false end
 		standAt(cart, flat(outwardOf(screen)), at, inward)
 		cart.Parent = folder
+		setup.power.place(inward)
 		local spots = floorSpots(#disc.entries, { at })
 		for i, entry in ipairs(disc.entries) do
 			entry.spot = CFrame.new(spots[i] + Vector3.new(0, 0.07, 0)) * CFrame.Angles(0, math.random() * math.pi * 2, 0)
@@ -1502,11 +1734,10 @@ end
 function SETUPS.Pedestal()
 	footTV()
 	local ped, top = makePedestal()
-	local setup = { name = "Pedestal", ped = ped, onIt = false, carrying = false }
+	local setup = { name = "Pedestal", ped = ped, onIt = false, carrying = false, power = addPower(), antenna = addAntenna() }
 	local pick = newPrompt(tvMain, "Pick up", "TV", 0.4, 9)
 	local put = newPrompt(top, "Put the TV here", "Pedestal", 0.2, 10)
 	put.Enabled = false
-	for _, record in ipairs(screens) do record.gui.Enabled = false end -- off until it stands there
 	on(pick.Triggered, function()
 		if setup.onIt or setup.carrying then return end
 		setup.carrying, pick.Enabled, put.Enabled = true, false, true
@@ -1538,8 +1769,6 @@ function SETUPS.Pedestal()
 			tv:PivotTo(goal)
 			setup.onIt = true
 			oneShot(SOUNDS.click, tvMain)
-			for _, record in ipairs(screens) do record.gui.Enabled = true end
-			if hum then hum:Play() end
 			if math.random() < CONFIG.PedestalFall then -- one day it gives way
 				task.delay(3 + math.random() * 9, function()
 					if alive and (state == "waiting" or state == "tape") then topple(setup) end
@@ -1548,58 +1777,23 @@ function SETUPS.Pedestal()
 		end)
 	end)
 	function setup.place()
-		if setup.onIt or setup.carrying then return true end -- it stays once you have it
+		if setup.onIt or setup.carrying or setup.power.on then return true end -- it stays once you have touched it
 		local at, inward = wallSpot(2.2)
 		if not at then return false end
 		setup.at, setup.inward = at, inward
 		standAt(ped, flat(ped.PrimaryPart.CFrame.LookVector), at, inward)
 		ped.Parent = folder
+		-- the socket by the pedestal, the TV on the floor somewhere along the way
+		local before = tv:GetPivot()
+		standAt(tv, nil, at, nil)
+		setup.power.place(inward)
+		tv:PivotTo(before)
 		local spot = floorSpots(1, { at })[1]
 		lieTV(spot, flat(spot - at) or inward)
 		tv.Parent = folder
 		return true
 	end
 	function setup.ready() return setup.onIt end
-	return setup
-end
-
----- S-90's three TVs: blue, red, green ----
-
-local RAINBOW = { { name = "BLUE", color = rgb(40, 110, 255) }, { name = "RED", color = rgb(255, 40, 40) }, { name = "GREEN", color = rgb(40, 220, 70) } }
-rainbow = {} -- { model, main, screen, record, color, name, prompt }
-
-function SETUPS.Rainbow()
-	local order = { 1, 2, 3 }
-	for i = 3, 2, -1 do
-		local j = math.random(i)
-		order[i], order[j] = order[j], order[i]
-	end
-	for i = 1, 3 do
-		local c = RAINBOW[order[i]]
-		footTV()
-		local record = screens[#screens]
-		record.tint, record.picture.ImageColor3 = c.color, c.color
-		make("Highlight", { FillColor = c.color, OutlineColor = c.color, FillTransparency = 0.6, OutlineTransparency = 0.3,
-			DepthMode = Enum.HighlightDepthMode.Occluded }, tv)
-		local entry = { model = tv, main = tvMain, screen = screen, record = record, color = c.color, name = c.name }
-		entry.prompt = newPrompt(tvMain, "Choose", c.name, 0, 10)
-		entry.prompt.Enabled = false
-		rainbow[i] = entry
-	end
-	local middle = rainbow[2] -- "the" TV
-	tv, tvMain, screen, picture = middle.model, middle.main, middle.screen, middle.record.picture
-	local setup = { name = "Rainbow" }
-	function setup.place()
-		local at, inward = wallSpot(5.5)
-		if not at then return false end
-		local right = inward:Cross(Vector3.new(0, 1, 0))
-		for i, entry in ipairs(rainbow) do
-			local p = at + right * (i - 2) * 4.2
-			standAt(entry.model, flat(outwardOf(entry.screen)), floorUnder(p + Vector3.new(0, 3, 0)) or p, inward)
-			entry.model.Parent = folder
-		end
-		return true
-	end
 	return setup
 end
 
@@ -1663,10 +1857,9 @@ function SETUPS.Screens()
 	return setup
 end
 
-local SETUP_NAMES = { "Ceiling", "Table", "Cart", "Pedestal", "Teller", "Computer", "Rainbow", "Screens" }
+local SETUP_NAMES = { "Ceiling", "Table", "Cart", "Pedestal", "Teller", "Computer", "Screens" }
 g90Mode = nil -- "Paper" or "Computer"
 function chooseSetup()
-	if V.phase == "colors" then return "Rainbow" end
 	local want = nil
 	for _, name in ipairs(SETUP_NAMES) do
 		if name:lower() == tostring(CONFIG.Setup):lower() then want = name end
@@ -1739,7 +1932,8 @@ local function faceAt(record, frame, t)
 	end
 end
 
--- X-60's own tape: static, its name, its face coming closer and closer, a red flash. Shorter than the others
+-- X-60's own tape (shorter than the others): yellow static, its name, then the wiki's faces: one in the middle coming
+-- closer, two orbiting it and changing face as they go; a flash
 local X60_LENGTH = 7.4
 local function x60Frame(record, t)
 	local picture, face = record.picture, record.face
@@ -1750,14 +1944,26 @@ local function x60Frame(record, t)
 		Font = Enum.Font.Arcade, TextScaled = true, TextColor3 = BLUE, Text = "X-60", ZIndex = 4, Visible = false }, record.gui)
 	record.title.Visible = t > 1.4 and t < 3.4 and math.random() < 0.8
 	record.title.Position = UDim2.fromScale(rnd(0.02), 0.06 + rnd(0.02))
-	if t > 2.4 and t < 6.2 then
-		local u = math.clamp((t - 2.4) / 3.4, 0, 1)
-		face.Visible = math.random() < 0.9
-		face.Size = UDim2.fromScale(0.25 + 0.7 * u * u, 0.25 + 0.7 * u * u)
-		face.Position = UDim2.fromScale(0.5 + rnd(0.02 * u), 0.55 + rnd(0.02 * u))
-		face.ImageTransparency = 0.1
-	else
-		face.Visible = false
+	if not record.orbit then
+		record.orbit = {}
+		for i = 1, 2 do
+			record.orbit[i] = make("ImageLabel", { Name = "Orbit", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), ZIndex = 3,
+				Size = UDim2.fromScale(0.22, 0.22), Visible = false }, record.gui)
+			make("UIAspectRatioConstraint", { AspectRatio = 1 }, record.orbit[i])
+		end
+	end
+	local showing = t > 2.4 and t < 6.2
+	local u = math.clamp((t - 2.4) / 3.4, 0, 1)
+	face.Visible = showing and math.random() < 0.92
+	face.Size = UDim2.fromScale(0.22 + 0.5 * u * u, 0.22 + 0.5 * u * u)
+	face.Position = UDim2.fromScale(0.5 + rnd(0.02 * u), 0.52 + rnd(0.02 * u))
+	face.ImageTransparency = 0.05
+	for i, label in ipairs(record.orbit) do
+		local a = t * 3 + i * math.pi
+		local r = 0.18 + 0.2 * u
+		label.Visible = showing and math.random() < 0.9
+		label.Position = UDim2.fromScale(0.5 + math.cos(a) * r, 0.52 + math.sin(a) * r * 0.75)
+		label.Image = image(V.orbit and V.orbit[(math.floor(t * 2.5) + i * 2) % #V.orbit + 1]) or face.Image
 	end
 	local flashing = t > 6 and t < 6.3
 	picture.ImageTransparency = if flashing then 1 else 0
@@ -1810,8 +2016,9 @@ local function playTape(trigger)
 	while alive and state == "tape" and clock < length do
 		local dt = RunService.RenderStepped:Wait()
 		local seeing = (trigger == "away" or trigger == "dontlook") and lookingAtAny()
-		if trigger == "away" and seeing ~= paused then -- C-90: it waits while you look at it
-			paused = seeing
+		local stop = (trigger == "away" and seeing) or frozen() -- C-90 waits while you look at it; the remote pauses any tape
+		if stop ~= paused then
+			paused = stop
 			if audio then if paused then audio:Pause() else audio:Resume() end end
 			if playingVideo then pcall(function() if paused then video:Pause() else video:Play() end end) end
 		end
@@ -1857,6 +2064,7 @@ local function playTape(trigger)
 		record.face.Visible = false
 		record.picture.ImageTransparency = 0
 		if record.title then record.title.Visible = false end
+		for _, label in ipairs(record.orbit or {}) do label.Visible = false end
 	end
 	tint.TintColor = Color3.new(1, 1, 1)
 	if state ~= "tape" then return false end -- the TV was broken meanwhile
@@ -1865,7 +2073,7 @@ local function playTape(trigger)
 end
 
 -- The screens go dark: the tape is over and nothing came out
-local function screensOff()
+function screensOff()
 	for _, record in ipairs(screens) do
 		record.picture.Image = ""
 		record.picture.BackgroundColor3 = Color3.new(0, 0, 0)
@@ -2149,6 +2357,7 @@ local function chase(noise)
 			crumbs = table.move(crumbs, cursor, #crumbs, 1, {})
 			cursor = 1
 		end
+		if frozen() then continue end -- the remote: it stands where it is
 
 		local distance = pathLength(here)
 		if not rushing and distance > CONFIG.FarDistance and os.clock() - lastScream > CONFIG.ScreamCooldown then
@@ -3616,6 +3825,10 @@ local function walkTo(noise, target, speed, maxTime, backwards)
 	noise.rig:play(noise.anims.Walk, if backwards then -speed / 10 else speed / 10)
 	while alive and not noise.gone and os.clock() - t0 < (maxTime or 10) do
 		local dt = RunService.Heartbeat:Wait()
+		if frozen() then
+			t0 += dt
+			continue
+		end
 		local to = (target - noise.position) * Vector3.new(1, 0, 1)
 		if to.Magnitude < 0.6 then return true end
 		local dir = to.Unit
@@ -3646,7 +3859,7 @@ local function vanish(noise, hidden)
 end
 
 -- Back into its TV: it walks backwards to where it came out, and climbs in the way it came out (its Emerge, backwards)
-local function climbBack(noise)
+function climbBack(noise)
 	local home = noise.home
 	if noise.gone or not noise.model.Parent then return end
 	if not home or not home.torso or not noise.anims.Emerge then
@@ -3687,6 +3900,10 @@ local function hunt(noise, maxTime)
 		local dt = RunService.Heartbeat:Wait()
 		local _, humanoid, root = body()
 		if not root then return "dead" end
+		if frozen() then
+			t0 += dt
+			continue
+		end
 		local budget = (humanoid.WalkSpeed + 2) * dt
 		local facing = nil
 		while budget > 0 do
@@ -3723,7 +3940,11 @@ local function dash(noise, from, to, speed, check)
 	if ff then ff:Play() end
 	local t0 = os.clock()
 	while alive and state == "phase" do
-		RunService.Heartbeat:Wait()
+		local dt = RunService.Heartbeat:Wait()
+		if frozen() then
+			t0 += dt
+			continue
+		end
 		local u = math.min((os.clock() - t0) * speed / length, 1)
 		setAt(noise, from:Lerp(to, u), dir)
 		if check(noise, u) then
@@ -3760,40 +3981,173 @@ function PHASES.chase(noise)
 	chase(noise)
 end
 
--- A-90, X-90: its face (freeze), then it rebounds across the room and back, looking in the lockers (X-90: and under the tables)
-function PHASES.rebound(noise)
-	state = "phase"
-	setLevel(noise, true)
-	local a, b = noise.position, acrossRoom(noise)
-	local function check(n, u)
-		local _, humanoid, root = body()
-		if not root then return true end
-		if not n.checked and u >= 0.5 then -- halfway: every hiding place of the room, at once
-			n.checked = true
-			local kind, place = hiding()
-			if kind and V.checks[kind] then
-				bang(place)
-				if hurt(90) then return true end
+-- The room's lights, off or on (DOORS' own way)
+local function roomLights(on)
+	pcall(function()
+		local events = require(game:GetService("ReplicatedStorage").ModulesClient.Module_Events)
+		events.toggle(roomModel(), on)
+	end)
+end
+-- A streak of its colour behind it
+local function addTrail(noise, lifetime)
+	local a0 = make("Attachment", { Name = "TrailTop", Position = Vector3.new(0, 1.8, 0) }, noise.root)
+	local a1 = make("Attachment", { Name = "TrailBottom", Position = Vector3.new(0, -1.8, 0) }, noise.root)
+	return make("Trail", { Name = "Streak", Attachment0 = a0, Attachment1 = a1, Lifetime = lifetime, FaceCamera = true, LightEmission = 1,
+		Color = ColorSequence.new(BLUE), Transparency = NumberSequence.new(0.1, 1), Enabled = false }, noise.root)
+end
+-- Every screen shows its face (between two rebounds it is in there)
+local function faceOnScreens(on)
+	for _, record in ipairs(screens) do
+		record.face.Visible = on
+		if on then
+			record.face.Position, record.face.Size, record.face.ImageTransparency = UDim2.fromScale(0.5, 0.5), UDim2.fromScale(0.8, 0.8), 0
+			record.picture.ImageColor3 = record.tint
+		end
+	end
+end
+
+--[[ A-90, X-90 (the wiki): rebounds that check the lockers (X-90: and the tables). The room goes dark; between two rebounds it
+     is in its TV, its face on the screen. Each time: its face on your screen (freeze), then out of the TV across the room to the
+     way in and back, faster than you can follow, a streak of its colour behind it; every locker of the room it passes is
+     thrown about, and if you are in one, it has you. X-90 does it four at a time ]]
+local function sweep(noise, from, to, places)
+	local dir = to - from
+	local length2 = math.max(dir:Dot(dir), 1)
+	local marks = {}
+	for _, place in ipairs(places) do
+		local u = math.clamp((place:GetPivot().Position - from):Dot(dir) / length2, 0, 1)
+		table.insert(marks, { place = place, u = u })
+	end
+	local passed = false
+	return dash(noise, from, to, V.dash, function(n, u)
+		for _, mark in ipairs(marks) do
+			if not mark.done and u >= mark.u then
+				mark.done = true
+				bang(mark.place)
+				local kind, inside = hiding()
+				if inside == mark.place and V.checks[kind] and hurt(90) then return true end
 			end
 		end
-		if not n.passed and (root.Position - n.position).Magnitude < 6 and humanoid.MoveDirection.Magnitude > 0.4 then
-			n.passed = true -- you moved as it went by
+		local _, humanoid, root = body()
+		if not root then return true end
+		if not passed and (root.Position - n.position).Magnitude < 6 and humanoid.MoveDirection.Magnitude > 0.4 then
+			passed = true -- you moved as it went by
 			if hurt(90) then return true end
 		end
 		return false
+	end)
+end
+
+function PHASES.rebound(noise)
+	state = "phase"
+	setLevel(noise, true)
+	roomLights(false)
+	local a, b = noise.position, acrossRoom(noise)
+	local places = {}
+	for kind in pairs(V.checks) do
+		for _, place in ipairs(hidingPlaces(kind, a)) do table.insert(places, place) end
 	end
-	for _ = 1, rounds() do
-		if not (alive and state == "phase") then break end
+	local streak = addTrail(noise, V.trail or 0.4)
+	local total, done, volley = rounds(), 0, V.volley or 1
+	local gap = V.gap[1] + math.random() * (V.gap[2] - V.gap[1])
+	while alive and state == "phase" and done < total do
+		-- In its TV
+		vanish(noise, true)
+		setAt(noise, a)
+		faceOnScreens(true)
+		if not hold(gap) then break end
+		oneShot(A90.spawn, screen, { Volume = CONFIG.Volume, PlaybackSpeed = if volley > 1 then 1.6 else 1.2, RollOffMaxDistance = 200 })
 		if faceCheck({ rule = "still" }) == "dead" then break end
-		noise.checked, noise.passed = false, false
-		if not dash(noise, a, b, V.dash, check) then break end
-		noise.checked, noise.passed = false, false
-		if not dash(noise, b, a, V.dash, check) then break end
-		noise.rig:play(noise.anims.Walk, 0)
-		if not hold(V.gap[1] + math.random() * (V.gap[2] - V.gap[1])) then break end
+		faceOnScreens(false)
+		local alright = true
+		for _ = 1, volley do
+			if done >= total or not alright then break end
+			done += 1
+			vanish(noise, false)
+			noise:burst("FlashParticle", 30)
+			streak.Enabled = true
+			blueFlash(if volley > 1 then 0.5 else 0.3)
+			shake(if volley > 1 then 6 else 3)
+			alright = sweep(noise, a, b, places) and sweep(noise, b, a, places)
+			streak.Enabled = false
+		end
+		if not alright then break end
+		gap = math.max(gap * 0.85, 0.8) -- sooner and sooner
+	end
+	faceOnScreens(false)
+	roomLights(true)
+	if alive and state == "phase" then
+		vanish(noise, false)
+		climbBack(noise)
+		state = "done"
+	end
+end
+
+--[[ Pix-90 (the wiki's three frames: a smile, an open mouth, a wide one). It creeps closer in pixel jumps. Now and then its face
+     pops up on your screen: move while it is there and its mouth opens wider (it jumps closer); the third time it jumps at you ]]
+local pixelGui = make("ScreenGui", { Name = "Noise90Pixel", IgnoreGuiInset = true, DisplayOrder = 100000, ResetOnSpawn = false, Enabled = false }, hud)
+local pixelFace = make("ImageLabel", { Name = "Face", AnchorPoint = Vector2.new(0.5, 0.5), BackgroundTransparency = 1,
+	ResampleMode = Enum.ResamplerMode.Pixelated }, pixelGui)
+make("UIAspectRatioConstraint", { AspectRatio = 1 }, pixelFace)
+-- -> true when you moved (or turned) while it watched
+local function pixelWatch(stage)
+	local camera = workspace.CurrentCamera
+	pixelFace.Image = image(V.faces[stage]) or ""
+	local size = 0.18 + stage * 0.08
+	pixelFace.Size = UDim2.fromScale(size, size)
+	pixelFace.Position = UDim2.fromScale(0.2 + math.random() * 0.6, 0.25 + math.random() * 0.5)
+	pixelGui.Enabled = true
+	oneShot(A90.spawn, SoundService, { Volume = CONFIG.Volume * 0.6, PlaybackSpeed = 1.8 - stage * 0.25 })
+	local look0, t0, moved = camera.CFrame.LookVector, os.clock(), false
+	while alive and os.clock() - t0 < (V.window or 1.3) do
+		task.wait(1 / 6) -- six frames a second, as it is
+		pixelFace.Position += UDim2.fromScale(math.random(-1, 1) * 0.004, math.random(-1, 1) * 0.004)
+		local _, humanoid = body()
+		if not humanoid then break end
+		if humanoid.MoveDirection.Magnitude > 0.4 or (look0 - camera.CFrame.LookVector).Magnitude > 0.4 then moved = true end
+	end
+	pixelGui.Enabled = false
+	return moved
+end
+
+function PHASES.pixel(noise)
+	state = "phase"
+	noise.stage = 1
+	for _ = 1, rounds() do
+		-- Creeping: a jump of a few pixels at a time
+		local creep, t0 = 4 + math.random() * 4, os.clock()
+		while alive and state == "phase" and os.clock() - t0 < creep do
+			if not hold(0.35) then return end
+			local _, _, root = body()
+			if not root then return end
+			local to = (root.Position - noise.position) * Vector3.new(1, 0, 1)
+			if to.Magnitude > 7 then
+				setAt(noise, noise.position + to.Unit * math.min(1.5, to.Magnitude - 7), to.Unit)
+				noise:burst("PauseBlack", 6)
+			end
+		end
+		if not (alive and state == "phase") then return end
+		if pixelWatch(noise.stage) then
+			noise.stage += 1
+			oneShot(SOUNDS.glitch, noise.root, { Volume = CONFIG.Volume })
+			local _, _, root = body()
+			if root then
+				local to = (root.Position - noise.position) * Vector3.new(1, 0, 1)
+				if noise.stage > #V.faces then -- the third time: on you
+					setAt(noise, root.Position - (if to.Magnitude > 0.1 then to.Unit else Vector3.new(0, 0, 1)) * 2.5, to.Magnitude > 0.1 and to.Unit or nil)
+					noise.rig:play(noise.anims.Jumpscare, 2)
+					blueFlash(0.9)
+					if hurt(90) then return end
+					noise.stage = 1
+				elseif to.Magnitude > 4 then -- half the way, at once
+					setAt(noise, noise.position + to * 0.5, to.Unit)
+				end
+			end
+			noise:burst("FlashParticle", 20)
+		end
 	end
 	if alive and state == "phase" then
-		climbBack(noise)
+		fizzle(noise)
 		state = "done"
 	end
 end
@@ -3904,6 +4258,16 @@ function PHASES.screen(noise)
 		local result = faceCheck({ rule = V.rule, frenzy = true, flash = if x then yellow else Color3.new(1, 0, 0),
 			laugh = if CONFIG.Laugh ~= "" then CONFIG.Laugh else A90.spawn, laughSpeed = if CONFIG.Laugh ~= "" then 1 else 1.6 })
 		if result == "dead" then return end
+		if result == "hit" and V.noRegen and not noise.noHealing then -- the wiki: once it has hit you, you do not heal any more
+			local _, humanoid = body()
+			if humanoid then
+				noise.noHealing = true
+				local lowest = humanoid.Health
+				on(humanoid:GetPropertyChangedSignal("Health"), function()
+					if humanoid.Health > lowest then humanoid.Health = lowest else lowest = humanoid.Health end
+				end)
+			end
+		end
 	end
 	if alive and state == "phase" then
 		fizzle(noise)
@@ -4032,24 +4396,49 @@ function PHASES.g90(noise)
 	end
 end
 
--- S-90, XS-90: a colour is named (written in another colour): choose its TV in time. XS-90: or be hiding when time is up
+--[[ S-90, XS-90 (INTERMINABLE FEVER): the room goes dark and its TV glows a colour. Its face comes up with its buttons, as
+     misspelt as on the wiki (redn, geen, bule; XS-90 also yell, magnet, cyn): click its colour in time. Meanwhile it splits
+     into three that circle you, one of them its colour (Interminable Rooms' S-90). Wrong, or too late:
+     "LEARN THE COLORS OF THE RAINBOW. FOOL." and you are kicked. XS-90: much less time, but hiding saves you ]]
+local COLORS = { { name = "redn", color = rgb(255, 0, 0) }, { name = "geen", color = rgb(0, 255, 0) }, { name = "bule", color = rgb(0, 0, 255) },
+	{ name = "yell", color = rgb(255, 255, 0) }, { name = "magnet", color = rgb(255, 0, 255) }, { name = "cyn", color = rgb(0, 255, 255) } }
 local colorGui = nil
-local function showColor(word, ink, seconds)
-	if not colorGui then
-		colorGui = make("ScreenGui", { Name = "Noise90Colors", IgnoreGuiInset = true, DisplayOrder = 100001, ResetOnSpawn = false }, hud)
-		local faceL = make("ImageLabel", { Name = "Face", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0.04),
-			Size = UDim2.fromScale(0.16, 0.16), BackgroundTransparency = 1, Image = image(V.face) or "" }, colorGui)
-		make("UIAspectRatioConstraint", {}, faceL)
-		make("TextLabel", { Name = "Word", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0.22), Size = UDim2.fromScale(0.5, 0.12),
-			BackgroundTransparency = 1, Font = Enum.Font.Arcade, TextScaled = true, TextStrokeTransparency = 0.2 }, colorGui)
-		local bar = make("Frame", { Name = "Bar", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0.36), Size = UDim2.fromScale(0.4, 0.012),
-			BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0 }, colorGui)
-		make("UICorner", { CornerRadius = UDim.new(1, 0) }, bar)
+-- Its face and its buttons; -> the colour you clicked, or nil when the time is up
+local function askColor(count, seconds)
+	if colorGui then colorGui:Destroy() end
+	colorGui = make("ScreenGui", { Name = "Noise90Colors", IgnoreGuiInset = true, DisplayOrder = 100001, ResetOnSpawn = false }, hud)
+	local faceL = make("ImageLabel", { Name = "Face", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0.06),
+		Size = UDim2.fromScale(0.3, 0.3), BackgroundTransparency = 1, Image = image(V.face) or "" }, colorGui)
+	make("UIAspectRatioConstraint", { AspectRatio = 1 }, faceL)
+	local row = make("Frame", { Name = "Buttons", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0.42),
+		Size = UDim2.fromScale(math.min(0.14 * count, 0.9), 0.07), BackgroundTransparency = 1 }, colorGui)
+	make("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		Padding = UDim.new(0.02, 0) }, row)
+	local chosen = nil
+	local order = {}
+	for i = 1, count do table.insert(order, COLORS[i]) end
+	for i = #order, 2, -1 do
+		local j = math.random(i)
+		order[i], order[j] = order[j], order[i]
 	end
-	colorGui.Enabled = true
-	colorGui.Word.Text, colorGui.Word.TextColor3 = word, ink
-	colorGui.Bar.Size = UDim2.fromScale(0.4, 0.012)
-	TweenService:Create(colorGui.Bar, TweenInfo.new(seconds, Enum.EasingStyle.Linear), { Size = UDim2.fromScale(0, 0.012) }):Play()
+	for _, c in ipairs(order) do
+		local button = make("TextButton", { Name = c.name, Text = c.name, Size = UDim2.fromScale(1 / count - 0.02, 1), BackgroundColor3 = Color3.new(1, 1, 1),
+			TextColor3 = c.color, Font = Enum.Font.Arcade, TextScaled = true, BorderSizePixel = 0, Modal = true, AutoButtonColor = true }, row)
+		button.MouseButton1Click:Connect(function() chosen = chosen or c end)
+	end
+	local bar = make("Frame", { Name = "Bar", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0.51), Size = UDim2.fromScale(0.4, 0.012),
+		BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0 }, colorGui)
+	TweenService:Create(bar, TweenInfo.new(seconds, Enum.EasingStyle.Linear), { Size = UDim2.fromScale(0, 0.012) }):Play()
+	local freed = mainGame and mainGame.freemouse
+	if mainGame then mainGame.freemouse = true end -- DOORS: the mouse free to click
+	local t0 = os.clock()
+	while alive and state == "phase" and not chosen and os.clock() - t0 < seconds do
+		faceL.Position = UDim2.fromScale(0.5 + rnd(0.004), 0.06 + rnd(0.004))
+		RunService.Heartbeat:Wait()
+	end
+	if mainGame then mainGame.freemouse = freed end
+	colorGui.Enabled = false
+	return chosen
 end
 local FOOL = "LEARN THE COLORS OF THE RAINBOW. FOOL."
 local function fool()
@@ -4079,79 +4468,137 @@ end
 
 function PHASES.colors(noise)
 	state = "phase"
-	noise.rig:play(noise.anims.Walk, 0)
-	for round = 1, rounds() do
-		if not hold(1.5) then return end
-		local target = rainbow[math.random(#rainbow)]
-		local others = {}
-		for _, e in ipairs(rainbow) do
-			if e ~= target then table.insert(others, e) end
-		end
-		local ink = others[math.random(#others)].color
-		local seconds = V.time[math.min(round, #V.time)]
-		local chosen = nil
-		local picks = {}
-		for _, e in ipairs(rainbow) do
-			e.prompt.Enabled = true
-			table.insert(picks, e.prompt.Triggered:Connect(function() chosen = chosen or e end))
-		end
-		oneShot(A90.spawn, SoundService, { Volume = CONFIG.Volume * 0.6, PlaybackSpeed = 0.8 })
-		showColor(target.name, ink, seconds)
-		local t0 = os.clock()
-		while alive and state == "phase" and not chosen and os.clock() - t0 < seconds do RunService.Heartbeat:Wait() end
-		for _, c in ipairs(picks) do c:Disconnect() end
-		for _, e in ipairs(rainbow) do e.prompt.Enabled = false end
-		if colorGui then colorGui.Enabled = false end
-		if not (alive and state == "phase") then return end
-		local safe = chosen == target or (V.hard and not chosen and hiding() ~= nil)
-		if safe then
-			oneShot(SOUNDS.click, (chosen or target).main)
-			local record = (chosen or target).record
-			record.picture.ImageColor3 = Color3.new(1, 1, 1)
-			task.delay(0.3, function() record.picture.ImageColor3 = record.tint end)
-		elseif V.hard then
-			faceCheck({ force = true, window = 0.3, frenzy = true, damage = math.huge }) -- no way out
-			return
-		else
-			fool()
-			return
+	local count = V.colors or 3
+	local pick = COLORS[math.random(count)]
+	-- Dark room, its TV (and every screen) glowing that colour, and it glows that colour too
+	roomLights(false)
+	for _, record in ipairs(screens) do
+		record.face.Visible = false
+		record.picture.Image, record.picture.BackgroundColor3 = "", pick.color
+		for _, light in ipairs(record.part:GetDescendants()) do
+			if light:IsA("Light") then light.Enabled, light.Color, light.Brightness, light.Range = true, pick.color, 4, 30 end
 		end
 	end
-	if alive and state == "phase" then
+	noise.glow.FillColor, noise.glow.OutlineColor, noise.glow.FillTransparency = pick.color, pick.color, 0.3
+	noise.light.Color, noise.light.Brightness = pick.color, 4
+	noise.rig:play(noise.anims.Walk, 0)
+	if not hold(1.2) then return end
+	-- It splits into three that circle you: one is its colour
+	local others = {}
+	for i = 1, count do
+		if COLORS[i] ~= pick then table.insert(others, COLORS[i]) end
+	end
+	local ring = { pick, table.remove(others, math.random(#others)), table.remove(others, math.random(#others)) }
+	local clones = {}
+	for i, c in ipairs(ring) do
+		local core = make("Part", { Name = "S90Clone", Size = Vector3.new(1, 1, 1), Transparency = 1, Anchored = true, CanCollide = false,
+			CanQuery = false, CanTouch = false }, folder)
+		local board = make("BillboardGui", { Size = UDim2.new(4.5, 0, 4.5, 0), LightInfluence = 0, MaxDistance = 300 }, core)
+		make("ImageLabel", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Image = image(V.face) or "", ImageColor3 = c.color }, board)
+		make("PointLight", { Color = c.color, Brightness = 3, Range = 12 }, core)
+		clones[i] = { part = core, angle = i * math.pi * 2 / 3 }
+	end
+	vanish(noise, true)
+	noise:burst("FlashParticle", 30)
+	oneShot(SOUNDS.glitch, noise.root, { Volume = CONFIG.Volume })
+	local circling = on(RunService.Heartbeat, function(dt)
+		local _, _, root = body()
+		if not root then return end
+		for _, clone in ipairs(clones) do
+			clone.angle += dt * 1.4
+			clone.part.CFrame = CFrame.new(root.Position + Vector3.new(math.cos(clone.angle) * 7, 1.5 + math.sin(clone.angle * 3) * 0.4, math.sin(clone.angle) * 7))
+		end
+	end)
+	local chosen = askColor(count, V.time or 7)
+	circling:Disconnect()
+	for _, clone in ipairs(clones) do clone.part:Destroy() end
+	if not (alive and state == "phase") then return end
+	local safe = chosen == pick or (V.hard and not chosen and hiding() ~= nil)
+	roomLights(true)
+	if safe then
+		oneShot(SOUNDS.click, SoundService)
+		vanish(noise, false)
 		fizzle(noise)
 		screensOff()
 		state = "done"
+	else
+		fool()
 	end
 end
 
--- X-60: a warning (it screams, the screen shakes), then it rushes the room twice: hide
+--[[ X-60 (the wiki): it goes off the way you came, then rushes back to your room, faster and faster, loud static and quiet
+     screams; in the room it stops for 9 seconds, slowly going down, and goes. Hide in any hiding place (it sees you if you
+     do not, while it rushes and while it stays) ]]
 function PHASES.rush(noise)
 	state = "phase"
+	local static = sound(files.static, { Looped = true, Volume = CONFIG.Volume * 1.8, RollOffMinDistance = 25, RollOffMaxDistance = 400 }, noise.root)
+	if static then static:Play() end
 	scream(noise)
-	shake(6)
 	pcall(function()
 		local events = require(game:GetService("ReplicatedStorage").ModulesClient.Module_Events)
 		events.flicker(roomModel(), 2.5)
 	end)
-	local base = noise.root.CFrame
-	local t0 = os.clock()
-	while alive and state == "phase" and os.clock() - t0 < 2.6 do -- it shakes where it stands
-		noise.root.CFrame = base * CFrame.new(rnd(0.25), rnd(0.1), rnd(0.25))
-		RunService.Heartbeat:Wait()
-	end
+	-- Off down the way you came, out of sight
+	vanish(noise, true)
+	if not hold(2.6) then return end
+	local route = {}
+	for i = math.max(1, #trail - 90), #trail do table.insert(route, trail[i]) end
+	local finish = acrossRoom(noise)
+	local exit = roomModel() and roomModel():FindFirstChild("RoomExit")
+	if exit then finish = exit.Position end
+	table.insert(route, finish)
+	if #route < 2 then table.insert(route, 1, finish + (noise.look or Vector3.new(0, 0, 1)) * 60) end
+	vanish(noise, false)
 	setLevel(noise, true)
-	local a, b = noise.position, acrossRoom(noise)
-	local function check(n)
+	noise.rig:play(noise.anims.HijackWalk or noise.anims.Walk, 3)
+	local streak = addTrail(noise, 0.5)
+	streak.Enabled = true
+	local function seen(range)
 		local _, _, root = body()
-		if not root then return true end
-		if (root.Position - n.position).Magnitude < 14 and not hiding() then return hurt(math.huge) end
-		return false
+		if not root or hiding() then return false end
+		local to = root.Position - noise.position
+		if to.Magnitude > range then return false end
+		local hit = cast(noise.position, to)
+		return not hit or (hit.Position - noise.position).Magnitude > to.Magnitude - 1.5
 	end
-	for _ = 1, 2 do
-		if not dash(noise, a, b, 90, check) or not dash(noise, b, a, 90, check) then break end
+	local screamAt = os.clock() + 1.5
+	setAt(noise, route[1])
+	local i, t0 = 2, os.clock()
+	while alive and state == "phase" and route[i] do
+		local dt = RunService.Heartbeat:Wait()
+		if not frozen() then
+			local speed = 60 + 100 * math.min((os.clock() - t0) / 4, 1) -- faster and faster
+			local budget = speed * dt
+			while budget > 0 and route[i] do
+				local to = (route[i] - noise.position) * Vector3.new(1, 0, 1)
+				if to.Magnitude <= budget then
+					budget -= to.Magnitude
+					setAt(noise, route[i], if to.Magnitude > 0.05 then to.Unit else nil)
+					i += 1
+				else
+					setAt(noise, noise.position + to.Unit * budget, to.Unit)
+					budget = 0
+				end
+			end
+		end
+		if os.clock() >= screamAt then
+			screamAt = os.clock() + 1.5 + math.random() * 2
+			oneShot(files.scream, noise.root, { Volume = CONFIG.Volume * 0.25, PlaybackSpeed = 0.7 + math.random() * 0.6 })
+		end
+		if seen(14) and hurt(math.huge) then return end
 	end
+	streak.Enabled = false
+	-- In your room: 9 seconds, slowly going down
+	local base = noise.root.CFrame
+	t0 = os.clock()
+	while alive and state == "phase" and os.clock() - t0 < 9 do
+		RunService.Heartbeat:Wait()
+		noise.root.CFrame = base - Vector3.new(0, (os.clock() - t0) / 9 * 3, 0)
+		if seen(30) and hurt(math.huge) then return end
+	end
+	if static then static:Destroy() end
 	if alive and state == "phase" then
-		climbBack(noise)
+		fizzle(noise)
 		state = "done"
 	end
 end
@@ -4173,11 +4620,26 @@ local function run()
 	end
 	while alive and not setup.place() do task.wait(1) end
 	if hammer then placeHammer() end
+	placeRemote({ screen.Position })
 	hum = sound(files.static, { Looped = true, Volume = 0.15 * CONFIG.Volume, RollOffMaxDistance = 50 }, screen)
-	if hum then
-		table.insert(owned, hum)
-		if not setup.ready then hum:Play() end -- the pedestal's: once the TV stands on it
+	if hum then table.insert(owned, hum) end
+	-- On once it is plugged in; it can start once it is on, tuned and (the pedestal) standing there
+	local function powered() return not setup.power or setup.power.on end
+	local function ready()
+		return powered() and (not setup.antenna or setup.antenna.tuned) and (not setup.ready or setup.ready())
 	end
+	local wasOn = nil
+	local function power()
+		local on = powered()
+		if on == wasOn then return end
+		wasOn = on
+		for _, record in ipairs(screens) do
+			if record.own then record.gui.Enabled = on end
+		end
+		for _, label in ipairs(setup.antenna and setup.antenna.labels or {}) do label.Visible = on and not setup.antenna.tuned end
+		if hum then if on then hum:Play() else hum:Stop() end end
+	end
+	power()
 
 	-- Waiting: static on its screens. What sets it off: you stare at it, come close, open a drawer, put a disc in
 	local trigger = setup.trigger or V.trigger
@@ -4190,9 +4652,20 @@ local function run()
 		if CONFIG.FollowDoors and latestRoom() ~= room then -- a new room: the TV is there now (until you have touched it)
 			room = latestRoom()
 			if setup.place() and hammer then placeHammer() end
+			placeRemote({ screen.Position })
 			seen = 0
 		end
-		if not setup.ready or setup.ready() then
+		power()
+		if powered() and files.sheets[1] and not ready() then -- static only, rolling: no signal yet
+			frame = (frame + dt * TAPE.fps) % 20
+			for _, record in ipairs(screens) do
+				if record.gui.Enabled then
+					sheetFrame(record.picture, 2 + math.floor(frame))
+					record.picture.ImageRectOffset += Vector2.new(0, (os.clock() * 300) % TAPE.height - TAPE.height / 2)
+				end
+			end
+		end
+		if ready() then
 			if files.sheets[1] then -- the tape's first second, static, over and over
 				frame = (frame + dt * TAPE.fps) % 20
 				for _, record in ipairs(screens) do
@@ -4258,7 +4731,7 @@ local cleanup = function()
 	pcall(function() RunService:UnbindFromRenderStep("NoiseCutscene") end)
 	for _, c in ipairs(connections) do c:Disconnect() end
 	if restoreCutscene then pcall(restoreCutscene) end
-	for _, i in ipairs({ folder, overlay, tint, blur, faceGui }) do i:Destroy() end
+	for _, i in ipairs({ folder, overlay, tint, blur, faceGui, pixelGui }) do i:Destroy() end
 	for _, i in ipairs(owned) do pcall(function() i:Destroy() end) end
 	if colorGui then colorGui:Destroy() end
 	local bars = hud:FindFirstChild("NoiseCutscene")
