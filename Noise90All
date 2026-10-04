@@ -1,0 +1,41 @@
+--[[
+        NOISE 90 ALL -- every "-90" of Noise90, one after another: the quick way to have them all
+
+        Each one: its TV anywhere in the room (no battery, nothing to turn), and out it comes at
+        once, no tape. Its discs are written in the Noise Journal as it comes. Once it is over
+        (gone, or you got through it), the next one, in the Journal's order:
+            B-90, C-90, Ransom//90, A-90, X-90, G-90, Pix-90, Trollface-90, XTrollface-90,
+            S-90, XS-90, X-60, A-404
+
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/Noise90All"))()
+
+        Noise90's settings work here too, before the loadstring (_G.Noise90 = { Volume = 0.5 }).
+        One change: S-90, XS-90 and A-404 kill you instead of kicking you out, or the rest would
+        never come (Kick = true to be kicked all the same).
+]]
+
+local URL = "https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/Noise90"
+local TYPES = { "B-90", "C-90", "Ransom//90", "A-90", "X-90", "G-90", "Pix-90", "Trollface-90", "XTrollface-90", "S-90", "XS-90", "X-60", "A-404" }
+local Players = game:GetService("Players")
+
+local settings = if type(_G.Noise90) == "table" then _G.Noise90 else {}
+local source = game:HttpGet(URL)
+
+local function living()
+	local character = Players.LocalPlayer.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	return humanoid ~= nil and humanoid.Health > 0
+end
+
+task.spawn(function()
+	for _, name in ipairs(TYPES) do
+		while not living() do task.wait(1) end -- dead: the next one once you are back
+		local options = { Kick = false }
+		for k, v in pairs(settings) do options[k] = v end
+		options.Type, options.RandomPos, options.Now = name, true, true
+		_G.Noise90 = options -- Noise90 reads it (and clears it)
+		local over = loadstring(source)()
+		repeat task.wait(1) until over()
+		task.wait(2)
+	end
+end)

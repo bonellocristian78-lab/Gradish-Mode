@@ -28,6 +28,7 @@ mod rather than playing it.
 | Hellish Time Ever (K = an entity, spam it) | `.../HellishTimeEver` |
 | Noise: a TV above the door, a blue tape, a hammer, a crucifix | `.../Noise` |
 | Noise 90: every "-90" (and A-404) as a Noise (`_G.Type = "A-90"`, ...), all in one | `.../Noise90` |
+| Noise 90, all of them one after another: out at once, every disc in the Journal | `.../Noise90All` |
 | DOORS' walk, run, crouch and jump in any game | `.../DoorsAnimations` |
 | Universal Custom Assets: animator with Studio controls (Ctrl + U I O) | `.../UniversalAssets` |
 | The same, obfuscated | `.../UniversalAssets.obf` |
@@ -402,12 +403,11 @@ wiki's words and how to survive), spine, the disc and its label, a clear lid. Ta
 one and it is a real item in your inventory, its cover for its icon; hold it to put
 it in the player. **Click** or **right-click** it in your hand (or **Inspect**, `R`,
 on the floor; a button on touch screens) to look at it close: drag to turn it, wheel to zoom, open the case, flip
-it. A disc may be **dirty** (the player reads it, says `DISC ERR` and gives it back:
-hold **Wipe** while you inspect it) or **scratched** (the tape skips, and what
-comes out is angrier); `DiscWear = false` keeps them clean, `"dirty"` or
-`"scratched"` makes them all so. The player: its tray slides out, the case goes
+it. The player reads every disc (no more dirty ones and no more `DISC ERR`); one may
+be **scratched** (the tape skips, and what comes out is angrier); `DiscWear = false`
+or `"clean"` keeps them clean, `"scratched"` makes them all so. The player: its tray slides out, the case goes
 down on it and opens, the disc goes in; its display says `NO DISC`, `READ`,
-`PLAY 00:07`, `PAUSE`, `DISC ERR`, `EJECT`; **Pause** (`F`) holds the tape for 2.5 s
+`PLAY 00:07`, `PAUSE`, `EJECT`; **Pause** (`F`) holds the tape for 2.5 s
 (then 10 s to rest); once it is out, **Eject** throws the disc out and pulls it back
 into its TV. The TV has a power light (red in standby, green on) and switches on
 and off like an old tube.
@@ -444,7 +444,27 @@ the TV (its table, its cart, its pedestal, its computer) stands anywhere in the
 room instead of by the far wall, out of the way of the doors, looking into the
 room, on a battery: a 6 V lantern battery lies somewhere in the room; take it and
 put it in the box on the TV's side (its lid shuts, the TV comes on). With it, `Auto` never takes the ceiling or the room's own screens (B-90, whose
-only setup is the ceiling, gets one of the carts). The TV is a little bigger
+only setup is the ceiling, gets one of the carts).
+
+**Never in a wall**: a table, a cart, the Teller, the pedestal (and the TV lying
+by it) only stand where their whole shape is clear of the walls and of the room's
+furniture, by the far wall or (`RandomPos`) anywhere in the room seen from its path;
+a table turns along the room when that is the only way it fits. Where nothing fits
+(the Luggage cart is 5.4 wide), it waits for the next room where it does, so
+nothing comes out of a wall any more.
+
+**`Noise90All`**: every type, one after another, the quick way to have them all.
+
+```lua
+loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/Noise90All"))()
+```
+
+Each one's TV stands anywhere in the room (`RandomPos`, no battery, no antenna,
+never the pedestal) and it comes out at once, no tape (`Now = true`); its discs
+are written in the Noise Journal as it comes. Once it is over (gone, or you got
+through it) the next one comes, in the Journal's order. Your `_G.Noise90` settings
+carry over; S-90, XS-90 and A-404 kill you instead of kicking you out (`Kick = true`
+to be kicked), or the rest would never come. The TV is a little bigger
 or smaller each time (`TVScale`). Every setting is at the top of the script
 (`_G.Noise90 = { ... }`). The props come from `assets/noise/NoiseWorld.rbxm`,
 the faces from `assets/noise/Wiki_*.png` (the wikis'; G-90's `Face_G90.png`), the discs' art from
@@ -700,6 +720,7 @@ Over 400 simulated seeds: no spacing violations, about 12 encounters per run.
 | `HTE/` | the models Hellish Time Ever summons |
 | `DoorsAnimations` | DOORS' character animations, recorded in DOORS and played anywhere |
 | `Noise` / `Noise90` | Noise (B-90); every "-90" as a Noise, `_G.Type` |
+| `Noise90All` | every Noise 90 one after another (fills the Noise Journal) |
 | `assets/noise/` | Noise's kit, tape and sheets; Noise 90's props kit, grey sheets and faces |
 | `UniversalAssets` / `.obf` | the animator for DOORS' things and custom assets, readable and obfuscated |
 | `GradishCheck` | the config report |

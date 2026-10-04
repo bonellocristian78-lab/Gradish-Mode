@@ -56,9 +56,8 @@
                            survive), spine, the disc and its label. Taken, a disc is an item in your inventory (its
                            cover is its icon): hold it to put it in. Click or right-click it in your hand (or Inspect,
                            R, on the floor) to look at it close: turn it, zoom, open the case, flip it. One may be
-                           dirty (the player will not read it: wipe it) or scratched (the tape skips and what comes
-                           out is angrier). The player: its tray, its display (NO DISC, READ, PLAY 00:07, PAUSE,
-                           DISC ERR, EJECT), its Pause (F) while the tape plays
+                           scratched (the tape skips and what comes out is angrier). The player: its tray, its
+                           display (NO DISC, READ, PLAY 00:07, PAUSE, EJECT), its Pause (F) while the tape plays
             AVCart         the disc player on a school AV cart: grey steel, three shelves, the TV strapped on top
             Console        the disc player in a 70s walnut TV console: open its doors first
             Luggage        the disc player on the hotel's brass luggage cart: the TV on a suitcase, the player on a
@@ -99,9 +98,11 @@
                 Rounds = 0,             -- rebounds, faces or colours (0 = the type's own)
                 PedestalFall = 0.5,     -- the chance the pedestal gives way
                 RandomPos = false,      -- the TV anywhere in the room, on a battery (also _G.RandomPos = true)
+                Now = false,            -- it comes out at once: no waiting, no tape, no battery, no antenna, no
+                                        -- pedestal; its discs written in the Journal as it comes (Noise90All's way)
                 Kick = true,            -- S-90 kicks you out of the game (false: it kills you)
-                DiscWear = true,        -- a disc may be dirty (wipe it) or scratched (it skips); false: always clean;
-                                        -- or "dirty", "scratched", "clean" for every disc
+                DiscWear = true,        -- a disc may be scratched (it skips); false: always clean;
+                                        -- or "scratched", "clean" for every disc
                 Laugh = "",             -- a sound id for Trollface-90's laugh (A-90's sound, faster, without one)
                 G90 = "",               -- "Paper" or "Computer" (empty: either)
                 Hammer = true,          -- a hammer on the floor to break the TV (Ceiling)
@@ -140,6 +141,7 @@ local CONFIG = {
 	Rounds = 0,
 	PedestalFall = 0.5,
 	RandomPos = false,
+	Now = false,
 	Kick = true,
 	DiscWear = true,
 	Laugh = "",
@@ -384,13 +386,13 @@ task.spawn(function() -- all of it now, so nothing waits later
 	for _, face in ipairs(wanted) do
 		if type(face) == "string" and not face:find("^rbxasset") then files.faces[face] = asset(face) end
 	end
-	-- Its disc: covers, spine, label; the dirt and the scratches a disc may have
+	-- Its disc: covers, spine, label; the scratches a disc may have
 	for _, d in ipairs(V.discs or { { art = V.art } }) do
 		for _, part in ipairs({ "_Front.jpg", "_Back.jpg", "_Spine.jpg", "_Label.png", "_Photo.png" }) do
 			files.discs[d.art .. part:match("^(.-)%.")] = asset("Disc_" .. d.art .. part)
 		end
 	end
-	files.discs.Dirt, files.discs.Scratch = asset("Disc_Dirt.png"), asset("Disc_Scratch.png")
+	files.discs.Scratch = asset("Disc_Scratch.png")
 	files.journal = asset("Noise_Journal.png")
 	filesReady = true
 end)
@@ -1187,7 +1189,7 @@ local function placeHammer()
 end
 
 ---====== WHERE ITS TV IS: the setups ======---
-local newPrompt, SETUPS, disc, g90Mode, joinWorldScreens, chooseSetup, closeInspect -- what the rest needs of the setups
+local newPrompt, SETUPS, disc, g90Mode, joinWorldScreens, chooseSetup, closeInspect, journal -- what the rest needs of the setups
 do
 
 local function customPrompt(p)
@@ -1218,11 +1220,6 @@ local function standAt(model, front, at, facing)
 	local bottom = spanY(model)
 	model:PivotTo(model:GetPivot() + Vector3.new(at.X - cf.X, at.Y - bottom, at.Z - cf.Z))
 end
--- The short side of a model's box: a table's front
-local function shortSide(model)
-	local cf, size = model:GetBoundingBox()
-	return flat(if size.X < size.Z then cf.RightVector else cf.LookVector)
-end
 
 -- The far wall of the room (where the exit is) and the way into the room from it; ahead of you anywhere else
 local function farWall()
@@ -1247,70 +1244,116 @@ local function clearAround(at, r)
 	end
 	return true
 end
--- A clear spot on the floor by the far wall, beside the door (not in front of it), with `r` studs of room around it
-local function wallSpot(r, avoid)
+-- Spots on the floor by the far wall, beside the door (not in front of it), with `r` studs of room around them, the best first;
+-- last, for a narrow room, as far to one side as it goes
+local function wallSpots(r)
+	local list = {}
 	local door, inward = farWall()
-	if not door then return nil, nil end
+	if not door then return list end
 	local right = inward:Cross(Vector3.new(0, 1, 0))
 	local start = door + inward * 1.5
 	local sides = if math.random() < 0.5 then { 6, -6, 8, -8, 4.5, -4.5, 10, -10 } else { -6, 6, -8, 8, -4.5, 4.5, -10, 10 }
 	for _, d in ipairs({ r + 1, r + 2.5, r + 4.5 }) do
 		for _, side in ipairs(sides) do
 			local p = door + inward * d + right * side
-			local far = true
-			for _, q in ipairs(avoid or {}) do
-				if (p - q).Magnitude < r * 2 then far = false end
-			end
-			if far and not cast(start, p - start) then
+			if not cast(start, p - start) then
 				local floor = cast(p, Vector3.new(0, -10, 0))
-				if floor and floor.Normal.Y > 0.8 and clearAround(floor.Position, r) then return floor.Position, inward end
+				if floor and floor.Normal.Y > 0.8 and clearAround(floor.Position, r) then table.insert(list, { at = floor.Position, inward = inward }) end
 			end
 		end
 	end
-	-- A narrow room: as far to one side as it fits, out of the way of the door
-	local p = door + inward * (r + 3)
-	local aside = 0
-	for _, sign in ipairs({ 1, -1 }) do
-		local hit = cast(p, right * sign * 12)
-		local room = (if hit then (hit.Position - p).Magnitude else 12) - r - 0.3
-		if room > math.abs(aside) then aside = room * sign end
+	for _, d in ipairs({ r + 3, r + 6 }) do
+		local p = door + inward * d
+		local aside = 0
+		for _, sign in ipairs({ 1, -1 }) do
+			local hit = cast(p, right * sign * 12)
+			local room = (if hit then (hit.Position - p).Magnitude else 12) - r - 0.3
+			if room > math.abs(aside) then aside = room * sign end
+		end
+		p += right * aside
+		table.insert(list, { at = floorUnder(p) or (p - Vector3.new(0, 3, 0)), inward = inward })
 	end
-	p += right * aside
-	return floorUnder(p) or (p - Vector3.new(0, 3, 0)), inward
+	return list
 end
--- RandomPos: anywhere in the room, `r` studs clear around it, out of the way of its doors; looking into the room
-local function randomSpot(r)
+-- RandomPos: spots anywhere in the room, `r` studs clear around them, out of the way of its doors, looking at the way through.
+-- In the room for sure: seen from its way through (its path's nodes; or the line between its doors) and on its own floor
+local function randomSpots(r)
 	local room = roomModel()
 	local entrance, exit = room and room:FindFirstChild("RoomEntrance"), room and room:FindFirstChild("RoomExit")
-	if not (entrance and exit) then return wallSpot(r) end
+	if not (entrance and exit) then return wallSpots(r) end
 	local a, b = entrance.Position, exit.Position
-	local side = (flat(b - a) or Vector3.new(0, 0, 1)):Cross(Vector3.new(0, 1, 0))
+	local way = flat(a - b) or Vector3.new(0, 0, 1) -- towards the way in
+	local anchors = {}
+	local nodes = room:FindFirstChild("PathfindNodes")
+	for _, n in ipairs(nodes and nodes:GetChildren() or {}) do
+		if n:IsA("BasePart") then table.insert(anchors, n.Position + Vector3.new(0, 2, 0)) end
+	end
+	if #anchors == 0 then
+		for i = 2, 8 do table.insert(anchors, a:Lerp(b, i / 10) + Vector3.new(0, 1, 0)) end
+	end
+	local rooms = workspace:FindFirstChild("CurrentRooms")
+	local function ok(floor) -- this room's floor (not the next room's, not outside), away from its doors
+		local own = not (floor.Instance and rooms and floor.Instance:IsDescendantOf(rooms)) or floor.Instance:IsDescendantOf(room)
+		return floor.Normal.Y > 0.8 and own and (floor.Position - a).Magnitude > r + 5 and (floor.Position - b).Magnitude > r + 5
+	end
+	local list = {}
 	for _ = 1, 40 do
-		local mid = a:Lerp(b, 0.15 + math.random() * 0.7) + Vector3.new(0, 1, 0)
-		local reach = rnd(16)
-		local wall = cast(mid, side * reach) -- not through a wall: as far as the room goes
-		if wall then reach = math.sign(reach) * math.max((wall.Position - mid).Magnitude - r - 0.5, 0) end
-		local floor = cast(mid + side * reach, Vector3.new(0, -12, 0))
-		if floor and floor.Normal.Y > 0.8 and clearAround(floor.Position, r)
-			and (floor.Position - a).Magnitude > r + 5 and (floor.Position - b).Magnitude > r + 5 then
-			-- to the side: looking at the way through; on it: looking at the way in
-			return floor.Position, if math.abs(reach) > 1.5 then flat(mid - floor.Position) else flat(a - b)
+		local mid = anchors[math.random(#anchors)]
+		local dir = flat(Vector3.new(rnd(1), 0, rnd(1))) or way
+		local reach = 2 + math.random() * 14
+		local wall = cast(mid, dir * reach) -- not through a wall: as far as the room goes
+		if wall then reach = math.max((wall.Position - mid).Magnitude - r - 0.5, 0) end
+		local floor = cast(mid + dir * reach, Vector3.new(0, -12, 0))
+		if floor and ok(floor) and clearAround(floor.Position, r) then
+			table.insert(list, { at = floor.Position, inward = if reach > 1.5 then flat(mid - floor.Position) or way else way })
 		end
 	end
-	for _ = 1, 20 do -- a narrow room: halfway between its walls, anywhere along it, looking at the way in
-		local mid = a:Lerp(b, 0.2 + math.random() * 0.6) + Vector3.new(0, 1, 0)
+	local side = way:Cross(Vector3.new(0, 1, 0))
+	for _, mid in ipairs(anchors) do -- a narrow room: halfway between its walls, looking at the way in
 		local one, other = cast(mid, side * 20), cast(mid, -side * 20)
 		local floor = cast(if one and other then (one.Position + other.Position) / 2 else mid, Vector3.new(0, -12, 0))
-		if floor and floor.Normal.Y > 0.8 and (floor.Position - a).Magnitude > r + 5 and (floor.Position - b).Magnitude > r + 5 then
-			return floor.Position, flat(a - b)
-		end
+		if floor and ok(floor) then table.insert(list, { at = floor.Position, inward = way }) end
 	end
-	return wallSpot(r)
+	for _, spot in ipairs(wallSpots(r)) do table.insert(list, spot) end
+	return list
 end
--- Where it stands: by the far wall, or (RandomPos) anywhere in the room
-local function spotFor(r)
-	if CONFIG.RandomPos then return randomSpot(r) end
-	return wallSpot(r)
+-- In no wall and no furniture where it stands now (it may touch them): nothing solid of the world inside its box
+local overlap = OverlapParams.new()
+overlap.FilterType = Enum.RaycastFilterType.Exclude
+local function fits(model)
+	overlap.FilterDescendantsInstances = { folder, model, LocalPlayer.Character }
+	local cf, size = model:GetBoundingBox()
+	local ok, parts = pcall(function()
+		return workspace:GetPartBoundsInBox(cf + Vector3.new(0, 0.2, 0), size - Vector3.new(0.4, 0.4, 0.4), overlap)
+	end)
+	if not ok or type(parts) ~= "table" then return true end -- no way to tell
+	for _, p in ipairs(parts) do
+		if p.CanCollide then return false end
+	end
+	return true
+end
+-- Where it stands: by the far wall, or (RandomPos) anywhere in the room; the first spot where `put(at, inward)` (it stands
+-- `models` there) leaves it in no wall. Nil when it fits nowhere here: they stay where they were, for a room where it fits
+local function settle(r, models, put)
+	local was = {}
+	for i, m in ipairs(models) do was[i] = m:GetPivot() end
+	for _, spot in ipairs(if CONFIG.RandomPos then randomSpots(r) else wallSpots(r)) do
+		if put(spot.at, spot.inward) then return spot.at, spot.inward end
+	end
+	for i, m in ipairs(models) do m:PivotTo(was[i]) end
+	return nil, nil
+end
+-- A table at `at` and what stands on it (looking along `inward`): its long side along the wall, or (a narrow room) along the room
+local function onTable(desk, thing, front, at, inward)
+	for turn = 1, 2 do
+		local cf, size = desk:GetBoundingBox()
+		local short = if size.X < size.Z then cf.RightVector else cf.LookVector -- its front
+		standAt(desk, flat(if turn == 1 then short else short:Cross(Vector3.new(0, 1, 0))), at, inward)
+		local _, top = spanY(desk)
+		standAt(thing, front(), Vector3.new(at.X, top, at.Z) - inward * 0.3, inward)
+		if fits(desk) and fits(thing) then return true end
+	end
+	return false
 end
 -- Spots on the floor of the room along the way through it, clear of walls and furniture, apart from each other and from `avoid`
 local function floorSpots(count, avoid)
@@ -1540,12 +1583,13 @@ end
 
 -- The TV is on as it is; with RandomPos (anywhere in the room) it needs its battery
 local function addPower()
-	if CONFIG.RandomPos then return addBattery() end
+	if CONFIG.RandomPos and not CONFIG.Now then return addBattery() end
 	return nil
 end
 
 -- Rabbit ears on top of it: turn them (hold) or there is no picture to see, only NO SIGNAL
 local function addAntenna()
+	if CONFIG.Now then return nil end -- it comes out at once
 	local antenna = { tuned = false }
 	local up = tvAxes.u
 	local top = tvMain.CFrame * CFrame.new(up * reach(tvMain.Size, up))
@@ -1602,12 +1646,11 @@ function SETUPS.Table()
 	local setup = { name = "Table", power = addPower(), antenna = addAntenna() }
 	function setup.place()
 		if setup.power and setup.power.on then return true end -- it stays once its battery is in
-		local at, inward = spotFor(3.8)
+		local at, inward = settle(3.8, { desk, tv }, function(at, inward)
+			return onTable(desk, tv, function() return flat(outwardOf(screen)) end, at, inward)
+		end)
 		if not at then return false end
-		standAt(desk, shortSide(desk), at, inward)
 		desk.Parent = folder
-		local _, top = spanY(desk)
-		standAt(tv, flat(outwardOf(screen)), Vector3.new(at.X, top, at.Z) - inward * 0.3, inward)
 		tv.Parent = folder
 		if setup.power then setup.power.place(inward) end
 		return true
@@ -1639,12 +1682,9 @@ function SETUPS.Computer()
 	local setup = { name = "Computer", power = addPower() }
 	function setup.place()
 		if setup.power and setup.power.on then return true end
-		local at, inward = spotFor(3.8)
+		local at, inward = settle(3.8, { desk, pc }, function(at, inward) return onTable(desk, pc, front, at, inward) end)
 		if not at then return false end
-		standAt(desk, shortSide(desk), at, inward)
 		desk.Parent = folder
-		local _, top = spanY(desk)
-		standAt(pc, front(), Vector3.new(at.X, top, at.Z), inward)
 		pc.Parent = folder
 		if setup.power then setup.power.place(inward) end
 		return true
@@ -1665,9 +1705,11 @@ function SETUPS.Teller()
 	measureTV()
 	local setup = { name = "Teller" }
 	function setup.place()
-		local at, inward = spotFor(2.4)
+		local at = settle(2.4, { teller }, function(at, inward)
+			standAt(teller, flat(outwardOf(screen)), at, inward)
+			return fits(teller)
+		end)
 		if not at then return false end
-		standAt(teller, flat(outwardOf(screen)), at, inward)
 		teller.Parent = folder
 		return true
 	end
@@ -1677,7 +1719,7 @@ end
 ---- The Stairwell's TV cart and its disc player ----
 --[[ The discs lie in the room, each in its case: the front cover, the back (the wiki's words, how to survive), the spine,
      the disc with its label. Take one; right-click it (or Inspect) to look at it close: turn it, open the case, flip it.
-     A disc may be dirty (the player will not read it: wipe it) or scratched (the tape skips, and what comes out is angrier).
+     A disc may be scratched (the tape skips, and what comes out is angrier).
      The player: its tray slides out for the disc and back in, its display says what it is doing, Pause holds the tape,
      and once it is out, Eject pulls it back into its TV ]]
 
@@ -1711,14 +1753,14 @@ local DISC_TEXT = {
 		"Wait for it to go. Do not try to get past it." },
 }
 local SoundService = game:GetService("SoundService")
-local CONDITION = { clean = "Clean", dirty = "Dirty: the player will not read it. Wipe it.", scratched = "Scratched: it will skip. What comes out will be angrier." }
+local CONDITION = { clean = "Clean", scratched = "Scratched: it will skip. What comes out will be angrier." }
 
 disc = { carried = nil, inserted = nil, entries = {}, insert = nil, scratched = false }
 
 ---- The Noise Journal: every disc you have found, kept in the executor's folder from one run to the next ----
 
 local JOURNAL_FILE = CONFIG.Folder .. "/Journal.txt"
-local journal = { found = {}, runs = 0 } -- found[art] = { times, first (os.time) }
+journal = { found = {}, runs = 0 } -- found[art] = { times, first (os.time) }
 pcall(function()
 	if not (isfile and isfile(JOURNAL_FILE)) then return end
 	for line in readfile(JOURNAL_FILE):gmatch("[^\n]+") do
@@ -1783,12 +1825,6 @@ local function takeDisc(entry)
 	oneShot(SOUNDS.click, SoundService, { Volume = CONFIG.Volume * 0.6 })
 	journal.note(entry)
 end
--- Back in your hand (the player gave it back)
-local function backInHand(entry)
-	local _, humanoid = body()
-	entry.tool.Parent = backpack()
-	if humanoid then humanoid:EquipTool(entry.tool) else entry.model.Parent = nil end
-end
 
 -- The case open (1) or shut (0): the lid and the cover in it swing up on the spine
 local function setLid(model, rest, u)
@@ -1801,7 +1837,7 @@ end
 -- A disc lying flat, its label the right way up (a cylinder's round face is its +X; its picture's top, its +Y)
 local DISC_FLAT = CFrame.fromMatrix(Vector3.new(), Vector3.new(0, 1, 0), Vector3.new(0, 0, -1), Vector3.new(-1, 0, 0))
 -- A disc in its case, lying flat, the cover up: tray (the back cover under it), spine, the disc on its rosette, the clear
--- lid with the front cover in it. Its art from the kit's folder; dirty or scratched, it shows
+-- lid with the front cover in it. Its art from the kit's folder; scratched, it shows
 local function makeDisc(entry)
 	local m = make("Model", { Name = "Noise90Disc" }, nil)
 	local function piece(name, size, cf, props)
@@ -1824,9 +1860,7 @@ local function makeDisc(entry)
 	local cd = piece("Disc", Vector3.new(0.012, 1.02, 1.02), CFrame.new(0, 0.062, 0) * DISC_FLAT,
 		{ Shape = Enum.PartType.Cylinder, Color = rgb(205, 210, 220), Material = Enum.Material.Foil, Reflectance = 0.2 })
 	decal(cd, Enum.NormalId.Right, art .. "_Label", 1)
-	if entry.condition ~= "clean" then
-		decal(cd, Enum.NormalId.Right, if entry.condition == "dirty" then "Dirt" else "Scratch", 2).Name = "Wear"
-	end
+	if entry.condition == "scratched" then decal(cd, Enum.NormalId.Right, "Scratch", 2).Name = "Wear" end
 	piece("Lid", Vector3.new(1.3, 0.02, 1.15), CFrame.new(0, 0.11, 0), { Material = Enum.Material.Glass, Color = rgb(225, 230, 240), Transparency = 0.6 })
 	decal(piece("Cover", Vector3.new(1.24, 0.008, 1.1), CFrame.new(0, 0.096, 0) * CFrame.Angles(0, math.pi, 0)), Enum.NormalId.Top, art .. "_Front")
 	make("PointLight", { Name = "Glint", Color = BLUE, Brightness = 0.5, Range = 4 }, tray)
@@ -1841,10 +1875,10 @@ local function makeDisc(entry)
 	return m
 end
 
----- A disc close up: turn it (drag), zoom (wheel), open the case, flip it, wipe it ----
+---- A disc close up: turn it (drag), zoom (wheel), open the case, flip it ----
 
 local UserInputService = game:GetService("UserInputService")
-local inspect = { entry = nil, yaw = 0.4, pitch = 0.5, dist = 2.4, lid = 0, lidGoal = 0, wiping = false, dragging = false }
+local inspect = { entry = nil, yaw = 0.4, pitch = 0.5, dist = 2.4, lid = 0, lidGoal = 0, dragging = false }
 local inspectGui = make("ScreenGui", { Name = "Noise90Inspect", IgnoreGuiInset = true, DisplayOrder = 100003, ResetOnSpawn = false, Enabled = false }, hud)
 table.insert(owned, inspectGui)
 make("Frame", { Name = "Backdrop", Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 0.3, BorderSizePixel = 0 }, inspectGui)
@@ -1916,10 +1950,8 @@ end
 local function button(name, text, x, y)
 	return UI.button({ Name = name, Text = text, Position = UDim2.fromScale(x, y), Size = UDim2.fromScale(0.26, 0.065) }, panel)
 end
-local bOpen, bFlip, bWipe = button("OpenCase", "Open", 0.09, 0.77), button("Flip", "Flip", 0.37, 0.77), button("Wipe", "Wipe", 0.65, 0.77)
+local bOpen, bFlip = button("OpenCase", "Open", 0.23, 0.77), button("Flip", "Flip", 0.51, 0.77)
 local bDone = button("Done", "Done", 0.37, 0.85)
-local wipeBar = make("Frame", { Name = "WipeBar", Position = UDim2.fromScale(0.65, 0.85), Size = UDim2.fromScale(0, 0.012),
-	BackgroundColor3 = UI.ink, BorderSizePixel = 0 }, panel)
 -- On your screen while you hold a disc: inspect it (for touch screens; right-click on a computer)
 local handGui = make("ScreenGui", { Name = "Noise90Hand", ResetOnSpawn = false, Enabled = false }, hud)
 table.insert(owned, handGui)
@@ -1933,16 +1965,14 @@ local function refreshPanel()
 	pTitle.Text, pAbout.Text, pSurvive.Text = entry.title, text[1], "How to survive: <b>" .. text[2] .. "</b>" -- as the Journal says it
 	pState.Text = "Condition: " .. CONDITION[entry.condition]
 	dressPhoto(entry)
-	pState.TextColor3 = if entry.condition == "clean" then rgb(46, 120, 52) elseif entry.condition == "dirty" then rgb(170, 110, 20) else UI.red
-	bWipe.Visible = entry.condition == "dirty"
-	wipeBar.Visible = entry.condition == "dirty"
+	pState.TextColor3 = if entry.condition == "clean" then rgb(46, 120, 52) else UI.red
 	bOpen.Text = if inspect.lidGoal > 0.5 then "Close" else "Open"
 end
 
 function closeInspect()
 	if not inspect.entry then return end
 	if inspect.view then inspect.view:Destroy() end
-	inspect.entry, inspect.view, inspect.wiping, inspect.dragging = nil, nil, false, false
+	inspect.entry, inspect.view, inspect.dragging = nil, nil, false
 	inspectGui.Enabled = false
 	bDone.Modal = false
 	if mainGame and inspect.freed ~= nil then mainGame.freemouse = inspect.freed end
@@ -1972,16 +2002,6 @@ function openInspect(entry)
 	inspectGui.Enabled = true
 	oneShot(SOUNDS.click, SoundService, { Volume = CONFIG.Volume * 0.5, PlaybackSpeed = 1.3 })
 end
--- The dirt comes off: on the disc in your hand and on the one you are looking at
-local function wiped(entry)
-	entry.condition = "clean"
-	for _, model in ipairs({ entry.model, inspect.view }) do
-		local wear = model and model:FindFirstChild("Disc") and model.Disc:FindFirstChild("Wear")
-		if wear then wear:Destroy() end
-	end
-	oneShot(SOUNDS.click, SoundService, { Volume = CONFIG.Volume * 0.6, PlaybackSpeed = 0.8 })
-	refreshPanel()
-end
 
 on(bOpen.MouseButton1Click, function()
 	inspect.lidGoal = if inspect.lidGoal > 0.5 then 0 else 1
@@ -1989,8 +2009,6 @@ on(bOpen.MouseButton1Click, function()
 end)
 on(bFlip.MouseButton1Click, function() inspect.flip = (inspect.flip or 0) + math.pi end)
 on(bDone.MouseButton1Click, closeInspect)
-on(bWipe.MouseButton1Down, function() inspect.wiping = true end)
-on(bWipe.MouseButton1Up, function() inspect.wiping = false end)
 on(bInspect.MouseButton1Click, function() if disc.carried then openInspect(disc.carried) end end)
 on(UserInputService.InputBegan, function(input)
 	local kind = input.UserInputType
@@ -2005,7 +2023,7 @@ on(UserInputService.InputBegan, function(input)
 end)
 on(UserInputService.InputEnded, function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-		inspect.dragging, inspect.wiping = false, false
+		inspect.dragging = false
 	end
 end)
 on(UserInputService.InputChanged, function(input)
@@ -2027,13 +2045,6 @@ on(RunService.RenderStepped, function(dt)
 	view:PivotTo(CFrame.Angles(0, inspect.yaw, 0) * CFrame.Angles(inspect.pitch * 0.4 + inspect.turn, 0, 0))
 	setLid(view, entry.rest, inspect.lid)
 	viewCam.CFrame = CFrame.lookAt(Vector3.new(0, inspect.dist * 0.82, inspect.dist * 0.58), Vector3.new(0, 0.05, 0))
-	if inspect.wiping and entry.condition == "dirty" then -- round and round with a sleeve
-		entry.wipe = (entry.wipe or 0) + dt / 2
-		local wear = view:FindFirstChild("Disc") and view.Disc:FindFirstChild("Wear")
-		if wear then wear.Transparency = entry.wipe end
-		wipeBar.Size = UDim2.fromScale(0.26 * math.min(entry.wipe, 1), 0.012)
-		if entry.wipe >= 1 then wiped(entry) end
-	end
 end)
 
 ---- The Noise Journal's book: every disc there is; the ones you have found written in, the others ??? ----
@@ -2233,7 +2244,7 @@ local function discCart(name, cart, player, drive, light)
 	for _, d in ipairs(discs) do
 		local roll, wear = math.random(), tostring(CONFIG.DiscWear):lower()
 		local entry = { title = d.title, disc = d.disc, art = d.art or V.art,
-			condition = if CONDITION[wear] then wear elseif not CONFIG.DiscWear or roll < 0.5 then "clean" elseif roll < 0.8 then "dirty" else "scratched" }
+			condition = if CONDITION[wear] then wear elseif not CONFIG.DiscWear or roll < 0.8 then "clean" else "scratched" }
 		makeDisc(entry)
 		on(entry.look.Triggered, function() openInspect(entry) end)
 		table.insert(disc.entries, entry)
@@ -2288,7 +2299,7 @@ local function discCart(name, cart, player, drive, light)
 		end
 	end)
 	-- In: the tray comes out, the case goes down on the player and opens, the disc onto the tray, the tray in. The player
-	-- reads it: a dirty one comes back out (wipe it); a good one plays
+	-- reads it and plays it
 	on(disc.insert.Triggered, function()
 		if disc.inserted then
 			eject()
@@ -2324,19 +2335,6 @@ local function discCart(name, cart, player, drive, light)
 			say("READ", 1.3)
 			oneShot(SOUNDS.whir, player, { Volume = CONFIG.Volume * 0.4, PlaybackSpeed = 0.7 })
 			task.wait(1.3)
-			if entry.condition == "dirty" then -- it cannot read it: back out, back in its case, back in your hand
-				say("DISC ERR", 2.5)
-				oneShot(SOUNDS.crack, player, { Volume = CONFIG.Volume * 0.3, PlaybackSpeed = 2 })
-				hideDisc(part, false)
-				slide(0, 1, part)
-				part.CFrame = entry.model.Tray.CFrame * entry.rest.disc
-				setLid(entry.model, entry.rest, 0)
-				task.wait(0.2)
-				slide(1, 0)
-				disc.carried, disc.busy = nil, false
-				backInHand(entry)
-				return
-			end
 			disc.inserted, disc.carried = entry, nil
 			entry.tool:Destroy()
 			entry.tool = nil
@@ -2354,9 +2352,11 @@ local function discCart(name, cart, player, drive, light)
 	local setup = { name = name, trigger = "disc", power = addPower() }
 	function setup.place()
 		if disc.taken or disc.inserted or disc.busy or (setup.power and setup.power.on) then return true end -- it stays once you have touched it
-		local at, inward = spotFor(2.8)
+		local at, inward = settle(2.8, { cart }, function(at, inward)
+			standAt(cart, flat(outwardOf(screen)), at, inward)
+			return fits(cart)
+		end)
 		if not at then return false end
-		standAt(cart, flat(outwardOf(screen)), at, inward)
 		cart.Parent = folder
 		trayAt(0)
 		if setup.power then setup.power.place(inward) end
@@ -2815,14 +2815,18 @@ function SETUPS.Pedestal()
 	end)
 	function setup.place()
 		if setup.onIt or setup.carrying or (setup.power and setup.power.on) then return true end -- it stays once you have touched it
-		local at, inward = spotFor(2.2)
+		local at, inward = settle(2.2, { ped }, function(at, inward)
+			standAt(ped, flat(ped.PrimaryPart.CFrame.LookVector), at, inward)
+			return fits(ped)
+		end)
 		if not at then return false end
 		setup.at, setup.inward = at, inward
-		standAt(ped, flat(ped.PrimaryPart.CFrame.LookVector), at, inward)
 		ped.Parent = folder
-		-- the TV on the floor somewhere along the way; its battery (RandomPos) somewhere else
-		local spot = floorSpots(1, { at })[1]
-		lieTV(spot, flat(spot - at) or inward)
+		-- the TV on the floor somewhere along the way, in no wall; its battery (RandomPos) somewhere else
+		for _, spot in ipairs(floorSpots(4, { at })) do
+			lieTV(spot, flat(spot - at) or inward)
+			if fits(tv) then break end
+		end
 		tv.Parent = folder
 		if setup.power then setup.power.place(inward) end
 		return true
@@ -2907,10 +2911,10 @@ function chooseSetup()
 	end
 	if want then return want end
 	local list = V.setups
-	if CONFIG.RandomPos then -- anywhere in the room: not above the door, not the room's own screens (a cart, if nothing else)
-		list = {}
+	if CONFIG.RandomPos then -- anywhere in the room: not above the door, not the room's own screens (a cart, if nothing else);
+		list = {}              -- coming out at once (Now), not from a TV lying on the floor by its pedestal
 		for _, name in ipairs(V.setups) do
-			if name ~= "Ceiling" and name ~= "Screens" then table.insert(list, name) end
+			if name ~= "Ceiling" and name ~= "Screens" and not (CONFIG.Now and name == "Pedestal") then table.insert(list, name) end
 		end
 		if #list == 0 then list = CARTS end
 	elseif #findScreens() >= 2 then
@@ -5833,7 +5837,10 @@ local function run()
 	if dontLook and trigger == "look" then trigger = "dontlook" end
 	local seen, room, frame = 0, latestRoom(), 0
 	drawers = 0
-	while alive and state == "waiting" do
+	if CONFIG.Now then -- at once: its discs in the Journal, no waiting, no tape
+		for _, d in ipairs(V.discs or { { art = V.art } }) do journal.note({ art = d.art or V.art }) end
+	end
+	while alive and state == "waiting" and not CONFIG.Now do
 		local dt = RunService.RenderStepped:Wait()
 		if CONFIG.FollowDoors and latestRoom() ~= room then -- a new room: the TV is there now (until you have touched it)
 			room = latestRoom()
@@ -5893,7 +5900,7 @@ local function run()
 	if setup.name ~= "Screens" then joinWorldScreens() end -- the Archives: every screen plays it
 
 	-- The tape; then out it comes, and does its thing
-	if not playTape(trigger) or not alive then
+	if not (CONFIG.Now or playTape(trigger)) or not alive then
 		if alive and state == "tape" then -- you never looked: the TV goes dark
 			screensOff()
 			state = "done"
@@ -5926,3 +5933,5 @@ end
 if getgenv then getgenv().__NoiseCleanup = cleanup end
 
 task.spawn(run)
+-- Whether it is over: gone, broken, crucified, or run again (Noise90All waits on it)
+return function() return not alive or state == "done" or state == "broken" or state == "crucified" end
