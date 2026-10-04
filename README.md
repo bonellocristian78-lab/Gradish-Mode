@@ -27,7 +27,7 @@ mod rather than playing it.
 | DOORS optimizer (max graphics, less lag) | `.../DoorsOptimizer` |
 | Hellish Time Ever (K = an entity, spam it) | `.../HellishTimeEver` |
 | Noise: a TV above the door, a blue tape, a hammer, a crucifix | `.../Noise` |
-| Noise 90: every "-90" as a Noise (`_G.Type = "A-90"`, ...), all in one | `.../Noise90` |
+| Noise 90: every "-90" (and A-404) as a Noise (`_G.Type = "A-90"`, ...), all in one | `.../Noise90` |
 | DOORS' walk, run, crouch and jump in any game | `.../DoorsAnimations` |
 | Universal Custom Assets: animator with Studio controls (Ctrl + U I O) | `.../UniversalAssets` |
 | The same, obfuscated | `.../UniversalAssets.obf` |
@@ -376,27 +376,32 @@ description.
 | `S-90` | you stare at it | dark room, its TV glows one colour; its buttons (redn, geen, bule) while three of it circle you: click its colour. Wrong: "LEARN THE COLORS OF THE RAINBOW. FOOL." and a kick (`Kick = false`: you die) |
 | `XS-90` | you come close | inverted, red pupils: six colours, much less time, or hide |
 | `X-60` | you stare at it | its own tape (its six yellow faces, two orbiting the middle one); then it rushes back the way you came, faster and faster, loud static, and stays 9 s in your room slowly going down: hide |
+| `A-404` | you stare at it | Interminable Rooms' glitched one (its wiki's head, faces and static). Docile, blue: it stands between you and the way on, an invisible wall across the room, its mouth moving: "This is a glitched server, please join a new one." It goes in 20 to 40 s. Try to get past it (or open the next door) and it is angered, red: its head and its face come apart all over your screen, swap, and it kicks you with `ERROR CODE 404`, hiding or not (`Kick = false`: you die) |
+
+Every one is in its own colours, body and all: the kit's Noise is blue (B-90 in
+it), and only B-90 keeps that blue now.
 
 | Setup | Where the TV is |
 |---|---|
 | `Ceiling` | above the door on its ceiling arm (the hammer only here) |
-| `Table` | on the Archives' wooden table by the far wall: plug it in (the socket is on the nearest wall), turn its antenna (until then: NO SIGNAL) |
-| `Cart` | the Stairwell's TV cart with its disc player: plug it in; the discs (one per type, two for B-90) lie in the room; take one, put it in. Once it is out, hold **Eject**: the disc jumps out and it is pulled back into its TV |
+| `Table` | on the Archives' wooden table by the far wall: turn its antenna (until then: NO SIGNAL) |
+| `Cart` | the Stairwell's TV cart with its disc player: the discs (one per type, two for B-90) lie in the room; take one, hold it, put it in. Once it is out, hold **Eject**: the disc jumps out and it is pulled back into its TV |
 | `AVCart` | the disc player on a school AV cart: grey steel, three shelves with a lip, casters, a push handle, the TV strapped on top, tapes underneath, a power strip, PROPERTY OF THE HOTEL |
 | `Console` | the disc player in a 70s walnut TV console: speaker cloth behind slats, brass knobs, a doily under the TV. **Open** its doors before a disc goes in |
 | `Luggage` | the disc player on the hotel's brass luggage cart: red carpet, brass posts and bar with hooks, the TV on a strapped suitcase (its luggage tag says which one it is), the player on a vanity case |
-| `Pedestal` | a pedestal by the far wall, the TV on the floor: pick it up, put it on, plug it in, tune it. The pedestal may give way (`PedestalFall`): the TV falls, cracks, and keeps playing |
+| `Pedestal` | a pedestal by the far wall, the TV on the floor: pick it up, put it on, tune it. The pedestal may give way (`PedestalFall`): the TV falls, cracks, and keeps playing |
 | `Teller` | the Teller's screen (it says NOW SERVING until the tape covers it) |
-| `Computer` | a computer on a table (G-90's): plug it in |
+| `Computer` | a computer on a table (G-90's) |
 | `Screens` | the room's own screens (the Archives' monitors, the Teller's, the terminals): every one plays the tape, and Noise comes out of them in pieces — a leg from one, an arm from another — that fly together |
 
-A remote lies in every room: take it, and it pauses the tape or the entity for
-3 seconds, 4 times.
+There is no plug and no remote any more: the TV is on as it is (with `RandomPos`,
+once its battery is in).
 
 **The discs** (`Cart`): each lies in its case — front cover, back cover (the
 wiki's words and how to survive), spine, the disc and its label, a clear lid. Take
-one and **right-click** it (or **Inspect**, `R`, on the floor; a button on touch
-screens) to look at it close: drag to turn it, wheel to zoom, open the case, flip
+one and it is a real item in your inventory, its cover for its icon; hold it to put
+it in the player. **Click** or **right-click** it in your hand (or **Inspect**, `R`,
+on the floor; a button on touch screens) to look at it close: drag to turn it, wheel to zoom, open the case, flip
 it. A disc may be **dirty** (the player reads it, says `DISC ERR` and gives it back:
 hold **Wipe** while you inspect it) or **scratched** (the tape skips, and what
 comes out is angrier); `DiscWear = false` keeps them clean, `"dirty"` or
@@ -406,6 +411,13 @@ down on it and opens, the disc goes in; its display says `NO DISC`, `READ`,
 (then 10 s to rest); once it is out, **Eject** throws the disc out and pulls it back
 into its TV. The TV has a power light (red in standby, green on) and switches on
 and off like an old tube.
+
+**The Noise Journal**: a book in your inventory (with its icon) every time you run
+the script. Every disc you find is written in it and kept in the executor's
+folder (`Noise/Journal.txt`), from one run to the next: open it (DOORS' Journal,
+two pages) and pick a tape to read its page: its picture, what it is, how to
+survive, how many times and when you first found it. The ones you have not found
+yet are `???` under a black bar.
 
 Inspecting a disc: its covers and its label read the right way up; the back is a
 page of DOORS' Journal with the entity's picture taped on it (the wiki's face; for
@@ -430,13 +442,13 @@ tape too.
 **`_G.RandomPos = true`** (any capitals, or `RandomPos = true` in `_G.Noise90`):
 the TV (its table, its cart, its pedestal, its computer) stands anywhere in the
 room instead of by the far wall, out of the way of the doors, looking into the
-room. There is no socket near it: a 6 V lantern battery lies somewhere in the
-room; take it and put it in the box on the TV's side (its lid shuts, the TV comes
-on). With it, `Auto` never takes the ceiling or the room's own screens (B-90, whose
+room, on a battery: a 6 V lantern battery lies somewhere in the room; take it and
+put it in the box on the TV's side (its lid shuts, the TV comes on). With it, `Auto` never takes the ceiling or the room's own screens (B-90, whose
 only setup is the ceiling, gets one of the carts). The TV is a little bigger
 or smaller each time (`TVScale`). Every setting is at the top of the script
 (`_G.Noise90 = { ... }`). The props come from `assets/noise/NoiseWorld.rbxm`,
-the faces from `assets/noise/Wiki_*.png` (the wikis'; G-90's `Face_G90.png`), the tinted tape from
+the faces from `assets/noise/Wiki_*.png` (the wikis'; G-90's `Face_G90.png`), the discs' art from
+`assets/noise/Disc_*`, the journal's icon `Noise_Journal.png`, the tinted tape from
 `assets/noise/NoiseFramesGray_*.jpg`.
 
 Still to come: the troll laugh (any sound id in `Laugh`; A-90's sound sped up

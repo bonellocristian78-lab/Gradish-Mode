@@ -40,14 +40,21 @@
             X-60           Its own tape: its six yellow faces, two orbiting the middle one. Then it goes off the way
                            you came and rushes back, faster and faster, loud static, quiet screams; it stays 9
                            seconds in your room, slowly going down. Hide
+            A-404          Interminable Rooms' glitched one: a black hollow circle for a head on its static. Docile
+                           (blue), it stands between you and the way on, in your way: "This is a glitched server,
+                           please join a new one." and it goes in 20 to 40 seconds. Try to get past it and it is
+                           angered (red): its head and its face come apart on your screen and it kicks you
+                           (ERROR CODE 404), hiding or not
+        Every one is in its own colours, body and all (no more of the kit's blue but on B-90).
 
         THE SETUPS (Auto: the type's own, at random, "Cart" being any of the four carts; in the Archives every screen there is)
             Ceiling        above the door, hanging from the ceiling on its arm (the hammer works here)
-            Table          on a table against the far wall: plug it in, turn its antenna
-            Cart           the Stairwell's TV cart with its disc player: plug it in, find the disc, put it in;
+            Table          on a table against the far wall: turn its antenna
+            Cart           the Stairwell's TV cart with its disc player: find the disc, put it in;
                            once it is out, hold "Eject" and the disc pulls it back into its TV.
                            The discs come in their cases: front cover, back cover (the wiki's words and how to
-                           survive), spine, the disc and its label. Right-click the one in your hand (or Inspect,
+                           survive), spine, the disc and its label. Taken, a disc is an item in your inventory (its
+                           cover is its icon): hold it to put it in. Click or right-click it in your hand (or Inspect,
                            R, on the floor) to look at it close: turn it, zoom, open the case, flip it. One may be
                            dirty (the player will not read it: wipe it) or scratched (the tape skips and what comes
                            out is angrier). The player: its tray, its display (NO DISC, READ, PLAY 00:07, PAUSE,
@@ -56,16 +63,18 @@
             Console        the disc player in a 70s walnut TV console: open its doors first
             Luggage        the disc player on the hotel's brass luggage cart: the TV on a suitcase, the player on a
                            vanity case
-            Pedestal       a pedestal by the far wall and the TV on the floor: pick it up, put it there, plug it
-                           in, turn its antenna. The pedestal may give way: the TV falls, cracks, and keeps going
+            Pedestal       a pedestal by the far wall and the TV on the floor: pick it up, put it there, turn its
+                           antenna. The pedestal may give way: the TV falls, cracks, and keeps going
             Teller         the Teller's screen
-            Computer       a computer on a table (G-90's): plug it in
+            Computer       a computer on a table (G-90's)
             Screens        every screen in the room plays the tape, and Noise comes out of them in pieces
                            (a leg from one, an arm from another) that come together
-        And a remote lies in every room: take it, and it pauses the tape or it for 3 seconds, 4 times.
-        RandomPos: the TV (its table, its cart, its pedestal) anywhere in the room instead of by the far wall,
-        and no wall socket near it: a 6 V battery lies in the room; take it and put it in the box on the TV's side.
+        The TV is on as it is. RandomPos: the TV (its table, its cart, its pedestal) anywhere in the room instead
+        of by the far wall, on a battery: a 6 V battery lies in the room; take it and put it in the box on its side.
         With RandomPos, Auto never takes the ceiling or the room's own screens (B-90: one of the carts).
+        THE NOISE JOURNAL: a book in your inventory (its icon, every run). Every disc you find is written in it and
+        kept in the executor's folder (Noise/Journal.txt) from one run to the next: open it to read the page of each
+        one (its picture, what it is, how to survive, when you found it); the ones you have not found are ???.
 
         Every setting, with its default. All optional, before the loadstring:
 
@@ -222,8 +231,16 @@ local TYPES = {
 	["X-60"] = { color = YELLOW, face = "Wiki_X60_1.png", orbit = { "Wiki_X60_2.png", "Wiki_X60_3.png", "Wiki_X60_4.png", "Wiki_X60_5.png", "Wiki_X60_6.png" },
 		trigger = "look", setups = { "Ceiling", "Cart" }, phase = "rush", tape = "X-60",
 		hints = { "You died to X-60.", "The Orbiting Monstrosities.", "When you hear the static, hide. It stays for a while." } },
+	-- Interminable Rooms' wiki (A-404): a black hollow circle for a head, a frowning mouth, big round eyes, static around it.
+	-- Docile (its light blue): in the middle of the room, in your way, "This is a glitched server, please join a new one.", gone
+	-- in 20 to 40 seconds. Angered (its light red): godspeed; its head and its face come apart, swap, and it kicks you
+	["A-404"] = { color = rgb(255, 30, 30), docile = rgb(124, 124, 239), face = "Wiki_A404_Docile.png", angry = "Wiki_A404.png",
+		talk = { "Wiki_A404_Talk_1.png", "Wiki_A404_Talk_2.png", "Wiki_A404_Talk_3.png", "Wiki_A404_Talk_4.png" },
+		heads = { "Wiki_A404_Head_1.png", "Wiki_A404_Head_2.png", "Wiki_A404_Head_3.png" }, mouth = "Wiki_A404_Face.png", static = "Wiki_A404_Static.png",
+		trigger = "look", setups = { "Ceiling", "Table", "Cart", "Pedestal" }, phase = "glitch",
+		hints = { "You died to A-404.", "This is a glitched server, please join a new one.", "When it stands in your way, wait for it to go. Do not try to get past it." } },
 }
-local ORDER = { "B-90", "C-90", "Ransom//90", "A-90", "X-90", "G-90", "Pix-90", "Trollface-90", "XTrollface-90", "S-90", "XS-90", "X-60" }
+local ORDER = { "B-90", "C-90", "Ransom//90", "A-90", "X-90", "G-90", "Pix-90", "Trollface-90", "XTrollface-90", "S-90", "XS-90", "X-60", "A-404" }
 
 -- "b90", "ransom 90", "XTROLLFACE-90"... all the same as the list's
 local function typeNamed(name)
@@ -240,9 +257,11 @@ if not typeName then
 end
 local V = TYPES[typeName]
 V.name = typeName
--- The art of its disc (its covers, its label)
-V.art = ({ ["B-90"] = "B90Look", ["C-90"] = "C90", ["Ransom//90"] = "Ransom90", ["A-90"] = "A90", ["X-90"] = "X90", ["G-90"] = "G90",
-	["Pix-90"] = "Pix90", ["Trollface-90"] = "Troll90", ["XTrollface-90"] = "XTroll90", ["S-90"] = "S90", ["XS-90"] = "XS90", ["X-60"] = "X60" })[typeName]
+-- The art of each one's disc (its covers, its label, its photo); B-90's two are in its discs
+local ART = { ["B-90"] = "B90Look", ["C-90"] = "C90", ["Ransom//90"] = "Ransom90", ["A-90"] = "A90", ["X-90"] = "X90", ["G-90"] = "G90",
+	["Pix-90"] = "Pix90", ["Trollface-90"] = "Troll90", ["XTrollface-90"] = "XTroll90", ["S-90"] = "S90", ["XS-90"] = "XS90", ["X-60"] = "X60",
+	["A-404"] = "A404" }
+V.art = ART[typeName]
 
 -- The tape: 179 frames at 15 per second, 12 to a sheet (3 x 4 of 320 x 240)
 local TAPE = { frames = 179, fps = 15, sheets = 15, columns = 3, rows = 4, width = 320, height = 240 }
@@ -358,8 +377,8 @@ task.spawn(function() -- all of it now, so nothing waits later
 	else -- the same tape in grey: any colour tints it
 		for i = 1, TAPE.sheets do files.sheets[i] = asset(("NoiseFramesGray_%02d.jpg"):format(i)) end
 	end
-	local wanted = { V.face, V.angry }
-	for _, list in ipairs({ V.faces or {}, V.orbit or {} }) do
+	local wanted = { V.face, V.angry, V.mouth, V.static }
+	for _, list in ipairs({ V.faces or {}, V.orbit or {}, V.talk or {}, V.heads or {} }) do
 		for _, face in ipairs(list) do table.insert(wanted, face) end
 	end
 	for _, face in ipairs(wanted) do
@@ -372,6 +391,7 @@ task.spawn(function() -- all of it now, so nothing waits later
 		end
 	end
 	files.discs.Dirt, files.discs.Scratch = asset("Disc_Dirt.png"), asset("Disc_Scratch.png")
+	files.journal = asset("Noise_Journal.png")
 	filesReady = true
 end)
 
@@ -637,7 +657,7 @@ end
 ---====== NOISE ======---
 
 local current = nil -- the Noise of now
-local pausedUntil = 0 -- the remote's pause: everything of it stands still until then
+local pausedUntil = 0 -- the disc player's Pause: everything of it stands still until then
 local function frozen() return os.clock() < pausedUntil end
 local tapeStartedAt = 0 -- when the tape began (the disc player's clock)
 local climbBack -- below, with its ways: back into its TV
@@ -677,6 +697,14 @@ local function makeNoise(name)
 		if p:IsA("BasePart") then p.Anchored, p.CanCollide, p.CanTouch, p.CanQuery, p.Massless = p == root, false, false, false, true end
 	end
 	paint(model, 0)
+	if V.name ~= "B-90" then -- its body in its colour too, not the kit's blue (B-90's is the kit's own)
+		for _, p in ipairs(model:GetDescendants()) do
+			if p:IsA("BasePart") then
+				local _, saturation, value = p.Color:ToHSV()
+				if saturation >= 0.15 then p.Color = BLUE:Lerp(DEEP, math.clamp(1 - value, 0, 1)) end
+			end
+		end
+	end
 	-- Its face (the wiki's) instead of its head; X-60's other faces orbit it
 	local face = image(V.face)
 	local faceLabel, orbiters = nil, {}
@@ -1159,7 +1187,7 @@ local function placeHammer()
 end
 
 ---====== WHERE ITS TV IS: the setups ======---
-local newPrompt, SETUPS, disc, g90Mode, joinWorldScreens, chooseSetup, placeRemote, closeInspect -- what the rest needs of the setups
+local newPrompt, SETUPS, disc, g90Mode, joinWorldScreens, chooseSetup, closeInspect -- what the rest needs of the setups
 do
 
 local function customPrompt(p)
@@ -1405,66 +1433,11 @@ local function makeTable()
 	return desk
 end
 
----- More to do with a TV: its plug, its antenna; and a remote in the room ----
+---- More to do with a TV: its battery (RandomPos), its antenna ----
 
 -- How far a box reaches along a direction of its own space
 local function reach(size, dir)
 	return 0.5 * (math.abs(dir.X) * size.X + math.abs(dir.Y) * size.Y + math.abs(dir.Z) * size.Z)
-end
-
--- Its cable, from its back to a plug on the floor under a socket on the nearest wall. Until it is in, the TV is off
-local function addPlug()
-	local power = { on = false }
-	local cord = make("Model", { Name = "Noise90Power" }, nil)
-	local socket = make("Part", { Name = "Socket", Size = Vector3.new(0.7, 0.9, 0.1), Color = rgb(226, 222, 208), Material = Enum.Material.SmoothPlastic,
-		Anchored = true, CanCollide = false, CanQuery = false, CanTouch = false }, cord)
-	local plug = make("Part", { Name = "Plug", Size = Vector3.new(0.34, 0.26, 0.5), Color = rgb(25, 25, 28), Material = Enum.Material.SmoothPlastic,
-		Anchored = true, CanCollide = false, CanTouch = false }, cord)
-	local start = make("Attachment", { Name = "CableStart", Position = -tvAxes.f * reach(tvMain.Size, tvAxes.f) }, tvMain)
-	local finish = make("Attachment", { Name = "CableEnd", Position = Vector3.new(0, 0, 0.25) }, plug)
-	make("Beam", { Name = "Cable", Attachment0 = start, Attachment1 = finish, Width0 = 0.1, Width1 = 0.1, Segments = 16, FaceCamera = true,
-		CurveSize0 = 1.5, CurveSize1 = -1.5, Color = ColorSequence.new(rgb(20, 20, 22)), LightInfluence = 1, Transparency = NumberSequence.new(0) }, cord)
-	power.prompt = newPrompt(plug, "Plug in", "TV cable", 0.3, 8)
-	function power.place(inward)
-		if power.on then return end
-		local base = tvMain.Position
-		local floorY = (floorUnder(base) or base - Vector3.new(0, 3, 0)).Y
-		local mid = Vector3.new(base.X, floorY + 1.2, base.Z)
-		local right = inward:Cross(Vector3.new(0, 1, 0))
-		local best = nil
-		for _, dir in ipairs({ -inward, right, -right }) do
-			local hit = cast(mid, dir * 14)
-			if hit and math.abs(hit.Normal.Y) < 0.3 and (not best or (hit.Position - mid).Magnitude < (best.Position - mid).Magnitude) then best = hit end
-		end
-		local spot, normal = mid + inward * 2.5, inward
-		if best then spot, normal = best.Position + best.Normal * 0.06, best.Normal end
-		socket.CFrame = CFrame.lookAt(spot, spot + normal)
-		local lying = Vector3.new(spot.X, floorY + 0.13, spot.Z) + normal * 1.4
-		plug.CFrame = CFrame.lookAt(lying, lying - normal)
-		power.socket, power.normal = spot, normal
-		cord.Parent = folder
-	end
-	on(power.prompt.Triggered, function()
-		if power.on or not power.socket then return end
-		power.on, power.prompt.Enabled = true, false
-		local from = plug.CFrame
-		local goal = CFrame.lookAt(power.socket + power.normal * 0.26, power.socket)
-		task.spawn(function()
-			local t0 = os.clock()
-			while alive and os.clock() - t0 < 0.3 do
-				local u = (os.clock() - t0) / 0.3
-				plug.CFrame = from:Lerp(goal, u * u)
-				RunService.Heartbeat:Wait()
-			end
-			plug.CFrame = goal
-			oneShot(SOUNDS.click, plug)
-			oneShot(SOUNDS.bulb, plug, { Volume = CONFIG.Volume * 0.4, PlaybackSpeed = 1.5 })
-			local zap = make("ParticleEmitter", { Rate = 0, Lifetime = NumberRange.new(0.15, 0.35), Speed = NumberRange.new(4, 9), SpreadAngle = Vector2.new(60, 60),
-				Size = NumberSequence.new(0.08, 0), Color = ColorSequence.new(PALE), LightEmission = 1 }, plug)
-			zap:Emit(14)
-		end)
-	end)
-	return power
 end
 
 -- RandomPos: no wall socket near it. A 6 V lantern battery lies somewhere in the room: take it, put it in the box on the TV's
@@ -1565,10 +1538,10 @@ local function addBattery()
 	return power
 end
 
--- Plugged into the wall; with RandomPos (nowhere near a socket), a battery
+-- The TV is on as it is; with RandomPos (anywhere in the room) it needs its battery
 local function addPower()
 	if CONFIG.RandomPos then return addBattery() end
-	return addPlug()
+	return nil
 end
 
 -- Rabbit ears on top of it: turn them (hold) or there is no picture to see, only NO SIGNAL
@@ -1613,55 +1586,6 @@ local function addAntenna()
 	return antenna
 end
 
--- The remote: on the floor of the room. In your hand, it pauses the tape or it, 3 seconds each time, 4 times
-local remote = { model = nil, tool = nil, uses = 4 }
-local function giveRemote()
-	local tool = make("Tool", { Name = "Remote", CanBeDropped = false, RequiresHandle = true, ToolTip = "Pause (4)" }, nil)
-	make("Part", { Name = "Handle", Size = Vector3.new(0.45, 0.16, 1.2), Color = rgb(28, 28, 32), CanCollide = false, Massless = true }, tool)
-	on(tool.Activated, function()
-		local noise = current
-		local out = noise ~= nil and not noise.gone and (state == "chase" or state == "phase" or state == "emerging")
-		if remote.uses <= 0 or frozen() or not (out or state == "tape") then return end
-		remote.uses -= 1
-		tool.ToolTip = ("Pause (%d)"):format(remote.uses)
-		pausedUntil = os.clock() + 3
-		oneShot(SOUNDS.click, tool:FindFirstChild("Handle"))
-		if out then
-			noise:emitter("PauseIcon", true)
-			local pause = noise:sound("Pause")
-			if pause then pause:Play() end
-			task.delay(3, function() if noise.model.Parent then noise:emitter("PauseIcon", false) end end)
-		end
-	end)
-	tool.Parent = LocalPlayer:FindFirstChildOfClass("Backpack") or LocalPlayer.Character
-	table.insert(owned, tool)
-	remote.tool = tool
-end
-function placeRemote(avoid)
-	if remote.tool then return end
-	if not remote.model then
-		local m = make("Model", { Name = "Noise90Remote" }, nil)
-		local shell = make("Part", { Name = "Body", Size = Vector3.new(0.45, 0.16, 1.2), Color = rgb(28, 28, 32), Material = Enum.Material.SmoothPlastic,
-			Anchored = true, CanCollide = false, CanTouch = false }, m)
-		make("Part", { Name = "Button", Size = Vector3.new(0.14, 0.05, 0.14), Color = rgb(220, 30, 30), Material = Enum.Material.Neon, Anchored = true,
-			CanCollide = false, CanQuery = false, CanTouch = false, CFrame = CFrame.new(0, 0.09, -0.4) }, m)
-		m.PrimaryPart = shell
-		local take = newPrompt(shell, "Take", "Remote", 0.2, 8)
-		on(take.Triggered, function()
-			if remote.tool then return end
-			oneShot(SOUNDS.click, shell)
-			giveRemote()
-			m:Destroy()
-		end)
-		remote.model = m
-	end
-	local spot = floorSpots(1, avoid)[1]
-	if spot then
-		remote.model:PivotTo(CFrame.new(spot + Vector3.new(0, 0.08, 0)) * CFrame.Angles(0, math.random() * math.pi * 2, 0))
-		remote.model.Parent = folder
-	end
-end
-
 SETUPS = {}
 
 -- Above the door, on its ceiling arm (the hammer works here)
@@ -1677,7 +1601,7 @@ function SETUPS.Table()
 	local desk = makeTable()
 	local setup = { name = "Table", power = addPower(), antenna = addAntenna() }
 	function setup.place()
-		if setup.power.on then return true end -- it stays once you have plugged it in
+		if setup.power and setup.power.on then return true end -- it stays once its battery is in
 		local at, inward = spotFor(3.8)
 		if not at then return false end
 		standAt(desk, shortSide(desk), at, inward)
@@ -1685,7 +1609,7 @@ function SETUPS.Table()
 		local _, top = spanY(desk)
 		standAt(tv, flat(outwardOf(screen)), Vector3.new(at.X, top, at.Z) - inward * 0.3, inward)
 		tv.Parent = folder
-		setup.power.place(inward)
+		if setup.power then setup.power.place(inward) end
 		return true
 	end
 	return setup
@@ -1714,7 +1638,7 @@ function SETUPS.Computer()
 	local desk = makeTable()
 	local setup = { name = "Computer", power = addPower() }
 	function setup.place()
-		if setup.power.on then return true end
+		if setup.power and setup.power.on then return true end
 		local at, inward = spotFor(3.8)
 		if not at then return false end
 		standAt(desk, shortSide(desk), at, inward)
@@ -1722,7 +1646,7 @@ function SETUPS.Computer()
 		local _, top = spanY(desk)
 		standAt(pc, front(), Vector3.new(at.X, top, at.Z), inward)
 		pc.Parent = folder
-		setup.power.place(inward)
+		if setup.power then setup.power.place(inward) end
 		return true
 	end
 	return setup
@@ -1783,23 +1707,87 @@ local DISC_TEXT = {
 		"Sprint towards the closest hiding spot when it spawns." },
 	X60 = { "The Orbiting Monstrosities. Six faces, mainly yellow with hints of black; two constantly orbit another in the middle. Loud static, quiet screams. It gets faster, then stops for 9 seconds in your room, slowly descending.",
 		"Hide in any hiding spot." },
+	A404 = { "The only one of Section A after A-399. In a glitched server it stands in the middle of the room, docile, its light blue, and tells you to join a new one. Angered, its light red: godspeed. It kicks everyone, hiding or not.",
+		"Wait for it to go. Do not try to get past it." },
 }
 local SoundService = game:GetService("SoundService")
 local CONDITION = { clean = "Clean", dirty = "Dirty: the player will not read it. Wipe it.", scratched = "Scratched: it will skip. What comes out will be angrier." }
 
 disc = { carried = nil, inserted = nil, entries = {}, insert = nil, scratched = false }
 
-local function takeDisc(entry)
-	if disc.inserted or disc.busy or disc.carried == entry then return end
-	local old = disc.carried
-	if old then -- the other one goes back where it was
-		old.model:PivotTo(old.spot)
-		old.take.Enabled, old.look.Enabled = true, true
+---- The Noise Journal: every disc you have found, kept in the executor's folder from one run to the next ----
+
+local JOURNAL_FILE = CONFIG.Folder .. "/Journal.txt"
+local journal = { found = {}, runs = 0 } -- found[art] = { times, first (os.time) }
+pcall(function()
+	if not (isfile and isfile(JOURNAL_FILE)) then return end
+	for line in readfile(JOURNAL_FILE):gmatch("[^\n]+") do
+		local art, times, first = line:match("^(%w+) (%d+) (%d+)$")
+		if art then
+			journal.found[art] = { times = tonumber(times), first = tonumber(first) }
+		elseif line:match("^runs %d+$") then
+			journal.runs = tonumber(line:match("%d+"))
+		end
 	end
-	disc.carried = entry
+end)
+function journal.save()
+	local lines = { "runs " .. journal.runs }
+	for art, f in pairs(journal.found) do table.insert(lines, ("%s %d %d"):format(art, f.times, f.first)) end
+	pcall(function()
+		if isfolder and makefolder and not isfolder(CONFIG.Folder) then makefolder(CONFIG.Folder) end
+		writefile(JOURNAL_FILE, table.concat(lines, "\n"))
+	end)
+end
+function journal.note(entry)
+	local f = journal.found[entry.art] or { times = 0, first = os.time() }
+	f.times += 1
+	journal.found[entry.art] = f
+	journal.save()
+	if journal.refresh then journal.refresh() end
+end
+journal.runs += 1
+journal.save() -- every run: saved
+
+local openInspect -- (the close look, further down)
+-- A disc you take is an item: in your inventory, its cover for an icon; in your hand when you hold it; clicked, looked at
+local function discTool(entry)
+	local tool = make("Tool", { Name = entry.title, ToolTip = "Noise tape", CanBeDropped = false, RequiresHandle = false,
+		TextureId = files.discs[entry.art .. "_Front"] or "" }, nil)
+	on(tool.Equipped, function()
+		if disc.busy or disc.inserted then return end
+		disc.carried = entry
+		entry.model.Parent = folder
+		if disc.insert then disc.insert.Enabled = not disc.locked end
+	end)
+	on(tool.Unequipped, function()
+		if disc.busy or disc.carried ~= entry then return end
+		disc.carried = nil
+		entry.model.Parent = nil
+		if disc.insert and not disc.inserted then disc.insert.Enabled = false end
+	end)
+	on(tool.Activated, function()
+		if disc.carried == entry then openInspect(entry) end
+	end)
+	return tool
+end
+local function backpack() return LocalPlayer:FindFirstChildOfClass("Backpack") or LocalPlayer.Character end
+
+local function takeDisc(entry)
+	if disc.inserted or disc.busy or entry.tool then return end
 	entry.take.Enabled, entry.look.Enabled = false, false
-	oneShot(SOUNDS.click, entry.parts.tray)
-	if disc.insert then disc.insert.Enabled = not disc.locked end
+	entry.model.Parent = nil -- in your inventory now
+	entry.tool = discTool(entry)
+	entry.tool.Parent = backpack()
+	table.insert(owned, entry.tool)
+	disc.taken = true
+	oneShot(SOUNDS.click, SoundService, { Volume = CONFIG.Volume * 0.6 })
+	journal.note(entry)
+end
+-- Back in your hand (the player gave it back)
+local function backInHand(entry)
+	local _, humanoid = body()
+	entry.tool.Parent = backpack()
+	if humanoid then humanoid:EquipTool(entry.tool) else entry.model.Parent = nil end
 end
 
 -- The case open (1) or shut (0): the lid and the cover in it swing up on the spine
@@ -1874,10 +1862,10 @@ make("ImageLabel", { Name = "BorderImage", Size = UDim2.fromScale(1, 1), Backgro
 make("ImageLabel", { Name = "Smudge", Position = UDim2.fromScale(0.25, 0.14), Size = UDim2.fromScale(0.7, 0.4), BackgroundTransparency = 1,
 	Image = UI.smudge, ImageTransparency = 0.8 }, panel)
 -- Inside the border: as big as the page lets the writing be (not bigger than `most`)
-local function line(name, x, y, w, h, font, most)
+local function line(name, x, y, w, h, font, most, parent)
 	local label = UI.label({ Name = name, Position = UDim2.fromScale(x, y), Size = UDim2.fromScale(w, h), TextWrapped = true,
 		TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, FontFace = font, TextColor3 = UI.ink,
-		RichText = true, Text = "" }, panel)
+		RichText = true, Text = "" }, parent or panel)
 	make("UITextSizeConstraint", { MaxTextSize = most, MinTextSize = 10 }, label)
 	return label
 end
@@ -1959,7 +1947,7 @@ function closeInspect()
 	bDone.Modal = false
 	if mainGame and inspect.freed ~= nil then mainGame.freemouse = inspect.freed end
 end
-local function openInspect(entry)
+function openInspect(entry)
 	if inspect.entry then closeInspect() end
 	local view = entry.model:Clone()
 	for _, d in ipairs(view:GetDescendants()) do
@@ -2047,6 +2035,136 @@ on(RunService.RenderStepped, function(dt)
 		if entry.wipe >= 1 then wiped(entry) end
 	end
 end)
+
+---- The Noise Journal's book: every disc there is; the ones you have found written in, the others ??? ----
+
+do
+local J = { pages = {} } -- its pages (every disc, in the order of the types) and its pieces
+for _, name in ipairs(ORDER) do
+	for _, d in ipairs(TYPES[name].discs or { { title = name, art = ART[name] } }) do
+		table.insert(J.pages, { title = d.title, art = d.art, type = TYPES[name] })
+	end
+end
+J.gui = make("ScreenGui", { Name = "Noise90Journal", IgnoreGuiInset = true, DisplayOrder = 100004, ResetOnSpawn = false, Enabled = false }, hud)
+table.insert(owned, J.gui)
+make("Frame", { Name = "Backdrop", Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 0.35, BorderSizePixel = 0 }, J.gui)
+J.cover = make("Frame", { Name = "Book", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.46), Size = UDim2.fromScale(0.8, 0.78),
+	BackgroundColor3 = rgb(92, 52, 32), BorderSizePixel = 0 }, J.gui)
+make("UIAspectRatioConstraint", { AspectRatio = 1.5 }, J.cover)
+make("UICorner", { CornerRadius = UDim.new(0, 12) }, J.cover)
+make("UIStroke", { Color = rgb(52, 30, 18), Thickness = 4 }, J.cover)
+for _, side in ipairs({ { "Left", 0.025 }, { "Right", 0.51 } }) do -- its two pages, the Journal's border on each
+	J[side[1]] = make("Frame", { Name = side[1], Position = UDim2.fromScale(side[2], 0.04), Size = UDim2.fromScale(0.465, 0.92),
+		BackgroundColor3 = UI.paper, BorderSizePixel = 0 }, J.cover)
+	make("UICorner", { CornerRadius = UDim.new(0, 4) }, J[side[1]])
+	make("ImageLabel", { Name = "BorderImage", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Image = "rbxassetid://125810982882185",
+		ImageTransparency = 0.1 }, J[side[1]])
+end
+J.title = line("Title", 0.1, 0.06, 0.8, 0.1, UI.hand, 60, J.Left)
+J.title.Text, J.title.Rotation = "Noise Tapes", -2
+J.count = line("Count", 0.1, 0.16, 0.8, 0.05, UI.writing, 26, J.Left)
+J.list = make("ScrollingFrame", { Name = "List", Position = UDim2.fromScale(0.1, 0.23), Size = UDim2.fromScale(0.8, 0.69), BackgroundTransparency = 1,
+	BorderSizePixel = 0, ScrollBarThickness = 4, ScrollBarImageColor3 = UI.ink, AutomaticCanvasSize = Enum.AutomaticSize.Y,
+	CanvasSize = UDim2.new() }, J.Left)
+J.name = line("Title", 0.1, 0.07, 0.45, 0.1, UI.hand, 54, J.Right)
+J.name.Rotation = -3
+J.seen = line("Seen", 0.1, 0.18, 0.45, 0.12, UI.writing, 24, J.Right)
+J.about = line("About", 0.1, 0.44, 0.8, 0.3, UI.writing, 30, J.Right)
+J.survive = line("Survive", 0.1, 0.76, 0.8, 0.13, UI.writing, 30, J.Right)
+J.photo = make("Frame", { Name = "Photo", Position = UDim2.fromScale(0.58, 0.06), Size = UDim2.fromScale(0.34, 0.34), Rotation = 3,
+	BackgroundTransparency = 1 }, J.Right)
+make("UIAspectRatioConstraint", { AspectRatio = 1 }, J.photo)
+J.print = make("ImageLabel", { Name = "Print", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1 }, J.photo)
+J.close = UI.button({ Name = "Close", Text = "Close", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0.875),
+	Size = UDim2.fromScale(0.12, 0.06) }, J.gui)
+
+-- One disc's page: its picture (the photo with its face, or its cover), what it is, how to survive, when you found it
+function J.show(item)
+	J.shown = item
+	local found = item and journal.found[item.art]
+	J.photo.Visible = found ~= nil
+	if not found then
+		J.name.Text, J.seen.Text, J.survive.Text = "", "", ""
+		J.about.Text = if item then "<b>???</b> You have not found this tape yet." else "Pick one of your tapes on the left."
+		return
+	end
+	local text = DISC_TEXT[item.art] or { "", "" }
+	J.name.Text, J.about.Text, J.survive.Text = item.title, text[1], "How to survive: <b>" .. text[2] .. "</b>"
+	J.seen.Text = ("Found %d time%s, first on %s"):format(found.times, if found.times == 1 then "" else "s", os.date("%d/%m/%Y", found.first))
+	local face = item.type.face
+	local file = if type(face) == "string" and not face:find("^rbxasset") then "_Photo" else "_Front" -- its face is in the photo, or its cover
+	J.print.Image = files.discs[item.art .. file] or ""
+	if not files.discs[item.art .. file] then
+		task.spawn(function()
+			local id = asset("Disc_" .. item.art .. file .. (if file == "_Photo" then ".png" else ".jpg"))
+			files.discs[item.art .. file] = id
+			if J.shown == item then J.print.Image = id or "" end
+		end)
+	end
+end
+-- The list: every disc, the ones found by their name, the others ??? and a black bar
+function journal.refresh()
+	for _, c in ipairs(J.list:GetChildren()) do c:Destroy() end
+	make("UIListLayout", { Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder }, J.list)
+	local count = 0
+	for i, item in ipairs(J.pages) do
+		local found = journal.found[item.art] ~= nil
+		if found then count += 1 end
+		local row = make("TextButton", { Name = item.art, LayoutOrder = i, Size = UDim2.new(1, -8, 0, 32), BackgroundTransparency = 1,
+			AutoButtonColor = false, FontFace = UI.writing, TextScaled = true, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = UI.ink,
+			Text = if found then ("%d. %s"):format(i, item.title) else ("%d. ???"):format(i) }, J.list)
+		make("UITextSizeConstraint", { MaxTextSize = 26 }, row)
+		if not found then
+			make("Frame", { Name = "Redacted", Position = UDim2.fromScale(0.22, 0.3), Size = UDim2.fromScale(0.5, 0.4), BackgroundColor3 = UI.ink,
+				BorderSizePixel = 0 }, row)
+		end
+		on(row.MouseButton1Click, function()
+			oneShot(SOUNDS.click, SoundService, { Volume = CONFIG.Volume * 0.4, PlaybackSpeed = 1.4 })
+			J.show(item)
+		end)
+	end
+	J.count.Text = ("Found: %d of %d"):format(count, #J.pages)
+	J.show(J.shown)
+end
+function J.shut()
+	if not J.gui.Enabled then return end
+	J.gui.Enabled, J.close.Modal = false, false
+	if mainGame and J.freed ~= nil then mainGame.freemouse = J.freed end
+end
+function J.open()
+	if J.gui.Enabled then
+		J.shut()
+		return
+	end
+	journal.refresh()
+	J.gui.Enabled, J.close.Modal = true, true -- the mouse free to click (only while it is open)
+	J.freed = mainGame and mainGame.freemouse
+	if mainGame then mainGame.freemouse = true end
+	oneShot(SOUNDS.click, SoundService, { Volume = CONFIG.Volume * 0.5, PlaybackSpeed = 0.8 })
+end
+on(J.close.MouseButton1Click, J.shut)
+on(UserInputService.InputBegan, function(input)
+	if J.gui.Enabled and (input.KeyCode == Enum.KeyCode.Escape or input.KeyCode == Enum.KeyCode.Backspace) then J.shut() end
+end)
+-- The journal itself: an item with its icon, in your inventory every run (and again after you respawn)
+function J.give()
+	if not alive or (journal.tool and journal.tool.Parent) then return end
+	local tool = make("Tool", { Name = "Noise Journal", ToolTip = "Your Noise tapes", CanBeDropped = false, RequiresHandle = false,
+		TextureId = files.journal or "" }, nil)
+	on(tool.Activated, J.open)
+	tool.Parent = backpack()
+	table.insert(owned, tool)
+	journal.tool = tool
+end
+task.spawn(function()
+	while alive and not filesReady do task.wait(0.2) end
+	J.give()
+end)
+on(LocalPlayer.CharacterAdded, function()
+	task.wait(1)
+	J.give()
+end)
+end
 
 -- The disc player's cart, whatever it is built of: `cart` (its TV in it, tv/tvMain/screen set), the player's body, the drive
 -- its tray comes out of, its light. Until `disc.locked` is let go (the Console's doors), no disc goes in
@@ -2179,6 +2297,7 @@ local function discCart(name, cart, player, drive, light)
 		local entry = disc.carried
 		if not entry or disc.busy or disc.locked then return end
 		disc.busy, disc.insert.Enabled = true, false
+		entry.tool.Parent = nil -- out of your inventory, into the player
 		closeInspect()
 		task.spawn(function()
 			say("OPEN", 1)
@@ -2214,10 +2333,13 @@ local function discCart(name, cart, player, drive, light)
 				setLid(entry.model, entry.rest, 0)
 				task.wait(0.2)
 				slide(1, 0)
-				disc.carried, disc.busy, disc.insert.Enabled = entry, false, true
+				disc.carried, disc.busy = nil, false
+				backInHand(entry)
 				return
 			end
 			disc.inserted, disc.carried = entry, nil
+			entry.tool:Destroy()
+			entry.tool = nil
 			for _, other in ipairs(disc.entries) do other.take.Enabled, other.look.Enabled = false, false end
 			entry.look.Enabled = true -- the empty case on the player: you can still read it
 			if entry.disc then CONFIG.Disc = entry.disc end
@@ -2231,13 +2353,13 @@ local function discCart(name, cart, player, drive, light)
 
 	local setup = { name = name, trigger = "disc", power = addPower() }
 	function setup.place()
-		if disc.carried or disc.inserted or disc.busy or setup.power.on then return true end -- it stays once you have touched it
+		if disc.taken or disc.inserted or disc.busy or (setup.power and setup.power.on) then return true end -- it stays once you have touched it
 		local at, inward = spotFor(2.8)
 		if not at then return false end
 		standAt(cart, flat(outwardOf(screen)), at, inward)
 		cart.Parent = folder
 		trayAt(0)
-		setup.power.place(inward)
+		if setup.power then setup.power.place(inward) end
 		local spots = floorSpots(#disc.entries, { at })
 		for i, entry in ipairs(disc.entries) do
 			entry.spot = CFrame.new(spots[i] + Vector3.new(0, 0.01, 0)) * CFrame.Angles(0, math.random() * math.pi * 2, 0)
@@ -2692,20 +2814,17 @@ function SETUPS.Pedestal()
 		end)
 	end)
 	function setup.place()
-		if setup.onIt or setup.carrying or setup.power.on then return true end -- it stays once you have touched it
+		if setup.onIt or setup.carrying or (setup.power and setup.power.on) then return true end -- it stays once you have touched it
 		local at, inward = spotFor(2.2)
 		if not at then return false end
 		setup.at, setup.inward = at, inward
 		standAt(ped, flat(ped.PrimaryPart.CFrame.LookVector), at, inward)
 		ped.Parent = folder
-		-- the socket by the pedestal, the TV on the floor somewhere along the way
-		local before = tv:GetPivot()
-		standAt(tv, nil, at, nil)
-		setup.power.place(inward)
-		tv:PivotTo(before)
+		-- the TV on the floor somewhere along the way; its battery (RandomPos) somewhere else
 		local spot = floorSpots(1, { at })[1]
 		lieTV(spot, flat(spot - at) or inward)
 		tv.Parent = folder
+		if setup.power then setup.power.place(inward) end
 		return true
 	end
 	function setup.ready() return setup.onIt end
@@ -2945,7 +3064,7 @@ local function playTape(trigger)
 	while alive and state == "tape" and clock < length do
 		local dt = RunService.RenderStepped:Wait()
 		local seeing = (trigger == "away" or trigger == "dontlook") and lookingAtAny()
-		local stop = (trigger == "away" and seeing) or frozen() -- C-90 waits while you look at it; the remote pauses any tape
+		local stop = (trigger == "away" and seeing) or frozen() -- C-90 waits while you look at it; Pause holds any tape
 		if stop ~= paused then
 			paused = stop
 			if audio then if paused then audio:Pause() else audio:Resume() end end
@@ -3296,7 +3415,7 @@ local function chase(noise)
 			crumbs = table.move(crumbs, cursor, #crumbs, 1, {})
 			cursor = 1
 		end
-		if frozen() then continue end -- the remote: it stands where it is
+		if frozen() then continue end -- paused: it stands where it is
 
 		local distance = pathLength(here)
 		if not rushing and distance > CONFIG.FarDistance and os.clock() - lastScream > CONFIG.ScreamCooldown then
@@ -5544,6 +5663,129 @@ function PHASES.rush(noise)
 	end
 end
 
+--[[ A-404 (Interminable Rooms' wiki). Docile: its light blue, it stands between you and the way on, in your way, its mouth
+     moving: "This is a glitched server, please join a new one." 20 to 40 seconds, and it is gone. Try to get past it (or open
+     the next door) and it is angered: red, godspeed, its head and its face come apart on your screen, swap, and it kicks you
+     (ERROR CODE 404), hiding or not ]]
+local GLITCHED = "This is a glitched server, please join a new one."
+-- Its jumpscare: on its static, its head and its face apart, all over your screen, glitching; they swap again and again; the kick
+local function kicked404()
+	local gui = make("ScreenGui", { Name = "Noise90Error", IgnoreGuiInset = true, DisplayOrder = 100005, ResetOnSpawn = false }, hud)
+	table.insert(owned, gui)
+	make("ImageLabel", { Name = "Static", Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(0, 0, 0), BorderSizePixel = 0,
+		Image = image(V.static) or "", ImageColor3 = V.color, ScaleType = Enum.ScaleType.Tile, TileSize = UDim2.fromOffset(160, 160) }, gui)
+	local function layer(name, file, size)
+		local l = make("ImageLabel", { Name = name, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(size, size),
+			BackgroundTransparency = 1, Image = image(file) or "" }, gui)
+		make("UIAspectRatioConstraint", { AspectRatio = 1 }, l)
+		return l
+	end
+	local head, face = layer("Head", V.heads[1], 0.7), layer("Face", V.mouth, 0.45)
+	oneShot(files.scream, SoundService, { Volume = CONFIG.Volume * 1.6, PlaybackSpeed = 0.8 })
+	oneShot(SOUNDS.glitch, SoundService, { Volume = CONFIG.Volume * 1.2 })
+	local t0 = os.clock()
+	while alive and os.clock() - t0 < 1.6 do -- apart, all over, glitching
+		head.Image = image(V.heads[math.random(#V.heads)]) or head.Image
+		head.Position = UDim2.fromScale(0.25 + math.random() * 0.5, 0.25 + math.random() * 0.5)
+		face.Position, face.Rotation = UDim2.fromScale(0.25 + math.random() * 0.5, 0.25 + math.random() * 0.5), rnd(20)
+		shake(4)
+		task.wait(0.06)
+	end
+	for _ = 1, 8 do -- they swap
+		head.Position, face.Position = face.Position, head.Position
+		head.Size, face.Size = face.Size, head.Size
+		task.wait(0.09)
+	end
+	if not alive then return end
+	if CONFIG.Kick then
+		LocalPlayer:Kick("ERROR CODE 404")
+	else
+		hurt(math.huge)
+		task.delay(1, function() gui:Destroy() end)
+	end
+end
+function PHASES.glitch(noise)
+	state = "phase"
+	local _, _, root = body()
+	if not root then return end
+	local room = roomModel()
+	local exit = room and room:FindFirstChild("RoomExit")
+	local along = (exit and flat(exit.Position - root.Position)) or flat(root.CFrame.LookVector) or Vector3.new(0, 0, -1)
+	local spot = if exit then root.Position:Lerp(exit.Position, 0.5) else root.Position + along * 12 -- between you and the way on
+	local static = make("ParticleEmitter", { Name = "A404Static", Texture = image(V.static) or "", Rate = 14, Lifetime = NumberRange.new(0.12, 0.25),
+		Speed = NumberRange.new(0), Size = NumberSequence.new(5.5), Rotation = NumberRange.new(0, 360), LockedToPart = true, LightEmission = 0.4,
+		ZOffset = -1 }, noise.model:FindFirstChild("Head") or noise.root)
+	static:SetAttribute("KeepColor", true)
+	local function lit(color) -- all of it in that colour: its light, its glow, its static (and white), its body
+		noise.glow.FillColor, noise.glow.OutlineColor, noise.light.Color = color, color, color
+		static.Color = ColorSequence.new(color, Color3.new(1, 1, 1))
+		for _, d in ipairs(noise.model:GetDescendants()) do
+			if d:IsA("ParticleEmitter") and not d:GetAttribute("KeepColor") then
+				d.Color = ColorSequence.new(color)
+			elseif d:IsA("Texture") then
+				d.Color3 = color:Lerp(Color3.new(0, 0, 0), 0.5)
+			elseif d:IsA("BasePart") then
+				local _, saturation = d.Color:ToHSV()
+				if saturation >= 0.15 then d.Color = color:Lerp(Color3.new(0, 0, 0), 0.25) end
+			end
+		end
+	end
+	lit(V.docile)
+	walkTo(noise, spot + Vector3.new(0, 3, 0), 14, 6)
+	if not (alive and state == "phase") then return end
+	noise.rig:play(noise.anims.Walk, 0)
+	-- In your way: a wall across the room where it stands
+	local mid, side = noise.position, along:Cross(Vector3.new(0, 1, 0))
+	local function reachTo(dir) local hit = cast(mid, dir * 30) return if hit then (hit.Position - mid).Magnitude else 15 end
+	local right, left = reachTo(side), reachTo(-side)
+	local wall = make("Part", { Name = "A404Wall", Size = Vector3.new(right + left, 14, 1), Anchored = true, CanCollide = true, CanQuery = false,
+		CanTouch = false, Transparency = 1, CFrame = CFrame.lookAt(mid + side * (right - left) / 2, mid + side * (right - left) / 2 + along) }, folder)
+	-- What it says, at the bottom of your screen
+	local said = make("ScreenGui", { Name = "Noise90Caption", ResetOnSpawn = false, DisplayOrder = 99990 }, hud)
+	table.insert(owned, said)
+	local words = UI.label({ Name = "Caption", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.84), Size = UDim2.fromScale(0.6, 0.05),
+		Text = "" }, said, true)
+	local stay, t0, room0, angered = 20 + math.random() * 20, os.clock(), latestRoom(), false
+	while alive and state == "phase" and os.clock() - t0 < stay do
+		RunService.Heartbeat:Wait()
+		local _, _, r = body()
+		if not r then break end
+		local talking = (os.clock() - t0) % 7 < 3.2 -- it says it, and again
+		words.Text = if talking then GLITCHED else ""
+		if noise.face then
+			noise.face.Image = (if talking then image(V.talk[math.floor(os.clock() * 7) % #V.talk + 1]) else image(V.face)) or noise.face.Image
+		end
+		setAt(noise, noise.position, flat(r.Position - noise.position))
+		local near = ((r.Position - noise.position) * Vector3.new(1, 0, 1)).Magnitude < 5
+		if near or (r.Position - mid):Dot(along) > 1.5 or latestRoom() ~= room0 then -- you tried to get past it
+			angered = true
+			break
+		end
+	end
+	wall:Destroy()
+	said:Destroy()
+	if not (alive and state == "phase") then return end
+	if not angered then -- its time is up: gone
+		static.Enabled = false
+		fizzle(noise)
+		state = "done"
+		return
+	end
+	-- Angered: red, its D8 face, godspeed: in front of you at once
+	setLevel(noise, true)
+	lit(V.color)
+	if noise.face then noise.face.Image = image(V.angry) or noise.face.Image end
+	blueFlash(0.9)
+	shake(8)
+	local _, _, r = body()
+	if r then
+		local facing = flat(r.CFrame.LookVector) or along
+		setAt(noise, r.Position + facing * 3, -facing)
+	end
+	kicked404()
+	state = "done"
+end
+
 ---====== RUN ======---
 
 local function run()
@@ -5561,10 +5803,9 @@ local function run()
 	end
 	while alive and not setup.place() do task.wait(1) end
 	if hammer then placeHammer() end
-	placeRemote({ screen.Position })
 	hum = sound(files.static, { Looped = true, Volume = 0.15 * CONFIG.Volume, RollOffMaxDistance = 50 }, screen)
 	if hum then table.insert(owned, hum) end
-	-- On once it is plugged in; it can start once it is on, tuned and (the pedestal) standing there
+	-- On (with RandomPos, once its battery is in); it can start once it is on, tuned and (the pedestal) standing there
 	local function powered() return not setup.power or setup.power.on end
 	local function ready()
 		return powered() and (not setup.antenna or setup.antenna.tuned) and (not setup.ready or setup.ready())
@@ -5597,7 +5838,6 @@ local function run()
 		if CONFIG.FollowDoors and latestRoom() ~= room then -- a new room: the TV is there now (until you have touched it)
 			room = latestRoom()
 			if setup.place() and hammer then placeHammer() end
-			placeRemote({ screen.Position })
 			seen = 0
 		end
 		power()
