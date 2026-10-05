@@ -9,9 +9,14 @@
         way DOORS' moves (out of the floor, the run). If DOORS' joints are not the new one's, the new one plays its own
         animations (emerge, run, idle).
 
-        Glitch: the same Seek, broken. It flickers black, purple and cyan, its limbs jump off their joints, it freezes
-        for a moment and snaps on, it leaves glitched copies of itself behind, its lights and eyes stutter and its sounds
-        warble.
+        Glitch: Seek made of DOORS' Glitch (ReplicatedStorage.Entities.Glitch). Its purple body under Glitch's cube
+        texture, Glitch's cube particles (white, red, cyan), Glitch's pink light. Its eyes are glitched: Seek's eye and
+        Glitch's cube in turns, cyan and pink. Its hands are clusters of cubes that never keep still. Cubes break off
+        it all the time, its colours flicker, its limbs jump off their joints, it hangs a moment and snaps on, its
+        sounds warble, and when it is close Glitch's cubes flash on your screen.
+
+        Light on the game: nothing is made while it runs (its cubes are always the same few, moved), DOORS' Seek is
+        hidden once (not every frame), no shadows from it, fewer goo particles.
 
         Only you see it. Run it again to change type; getgenv().__NewSeek() takes it off.
         Its model is assets/seek/NewSeek.rbxm, downloaded once into the executor's folder (NewSeek/).
@@ -20,6 +25,7 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
+local LocalPlayer = Players.LocalPlayer
 
 local GLITCH = tostring(_G.Type or "Normal"):lower():find("glitch") ~= nil
 local NAMES = { SeekMovingNewClone = true, SeekMoving = true } -- DOORS' Seek, now and before
@@ -28,9 +34,25 @@ local URLS = {
 	"https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/assets/seek/NewSeek.rbxm",
 	"https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/claude/sei-qui-con-noi-ye4k62/assets/seek/NewSeek.rbxm",
 }
--- The glitch's colours (DOORS' Glitch: purple and cyan on black) and its sound
-local GLITCH_COLORS = { Color3.fromRGB(150, 0, 255), Color3.fromRGB(0, 255, 255), Color3.fromRGB(0, 0, 0), Color3.fromRGB(255, 255, 255) }
-local GLITCH_SOUND = "rbxassetid://10237953274"
+local MAX_RATE = 15 -- its goo particles, at most this many a second each (they were 30)
+
+-- DOORS' Glitch, as in ReplicatedStorage.Entities.Glitch and MainUI.MainFrame.GlitchEffect
+local G = {
+	body = Color3.fromRGB(58, 52, 103), -- its purple
+	texture = "rbxassetid://10216168173", -- its cube texture, black, 3 studs a tile, on its sides
+	cube = "rbxassetid://10216044269", -- its cube (its particles; the cubes on your screen)
+	light = Color3.fromRGB(255, 56, 186), -- its pink light
+	cyan = Color3.fromRGB(0, 255, 213),
+	red = Color3.fromRGB(255, 0, 0),
+	black = Color3.fromRGB(0, 0, 0),
+	white = Color3.fromRGB(255, 255, 255),
+	sound = "rbxassetid://10237953274",
+}
+G.flicker = { G.cyan, G.light, G.black, G.white, G.red }
+G.cubes = ColorSequence.new({ -- its particles' colours
+	ColorSequenceKeypoint.new(0, G.white), ColorSequenceKeypoint.new(0.354, G.white), ColorSequenceKeypoint.new(0.361, G.red),
+	ColorSequenceKeypoint.new(0.516, G.cyan), ColorSequenceKeypoint.new(0.524, G.white), ColorSequenceKeypoint.new(1, G.white),
+})
 
 -- The one before comes off first
 local SESSION = if getgenv then getgenv() else _G
@@ -100,7 +122,9 @@ if saves then
 	saves:Destroy()
 end
 
--- The template as it will be worn: no DOORS module on it, nothing that moves it, touches or collides
+---====== THE TEMPLATE, ONCE: what every Seek will wear ======---
+
+-- No DOORS module on it, nothing that moves it, touches or collides; no shadows; fewer goo particles
 template.Name = "NewSeek"
 template:SetAttribute("LoadModule", nil)
 for _, d in ipairs(template:GetDescendants()) do
@@ -108,7 +132,69 @@ for _, d in ipairs(template:GetDescendants()) do
 		or d:IsA("Animation") or d:IsA("LuaSourceContainer") or d.Name == "Hitbox" then
 		d:Destroy()
 	elseif d:IsA("BasePart") then
-		d.Anchored, d.CanCollide, d.CanTouch, d.CanQuery, d.Massless = false, false, false, false, true
+		d.Anchored, d.CanCollide, d.CanTouch, d.CanQuery, d.Massless, d.CastShadow = false, false, false, false, true, false
+	elseif d:IsA("Light") then
+		d.Shadows = false
+	elseif d:IsA("ParticleEmitter") then
+		d.Rate = math.min(d.Rate, MAX_RATE)
+	end
+end
+
+local SIDES = { Enum.NormalId.Right, Enum.NormalId.Back, Enum.NormalId.Left, Enum.NormalId.Front } -- (Glitch's: its four sides)
+local HANDS = { ["Left Hand"] = true, ["Right Hand"] = true, LeftHand = true, RightHand = true }
+local function make(class, props, parent)
+	local i = Instance.new(class)
+	for k, v in pairs(props) do i[k] = v end
+	i.Parent = parent
+	return i
+end
+local function cubeEmitter(parent, rate)
+	return make("ParticleEmitter", { Name = "GlitchCubes", Texture = G.cube, Color = G.cubes, Rate = rate, Lifetime = NumberRange.new(0.2, 0.3),
+		Size = NumberSequence.new(2), Speed = NumberRange.new(0), Rotation = NumberRange.new(0, 180), ZOffset = -3, LightInfluence = 0,
+		Brightness = 1.17 }, parent)
+end
+
+-- Glitch: the whole Seek made of DOORS' Glitch
+if GLITCH then
+	for _, d in ipairs(template:GetDescendants()) do
+		if d:IsA("ParticleEmitter") then
+			d.Enabled = false -- (its goo: Glitch's cubes instead, below)
+		elseif d:IsA("Light") then
+			d.Color = G.light
+		elseif d:IsA("BasePart") and d.Transparency < 1 and d.Name ~= "Eye" and d.Name ~= "Black" and not HANDS[d.Name] then
+			d.Color, d.Material = G.body, Enum.Material.SmoothPlastic
+			for _, side in ipairs(SIDES) do
+				make("Texture", { Name = "GlitchTexture", Texture = G.texture, Color3 = G.black, StudsPerTileU = 3, StudsPerTileV = 3, Face = side }, d)
+			end
+			if d.Name:find("Torso") or d.Name:find("Upper") or d.Name == "Head" then cubeEmitter(d, 6) end
+		end
+	end
+	-- Its eyes: black, glitched (their faces swap between Seek's eye and Glitch's cube while it runs)
+	for _, eye in ipairs(template:GetDescendants()) do
+		if eye:IsA("BasePart") and eye.Name == "Eye" then
+			eye.Color, eye.Material = G.black, Enum.Material.Neon
+			for _, decal in ipairs(eye:GetChildren()) do
+				if decal:IsA("Decal") then
+					decal:SetAttribute("SeekEye", decal.Texture)
+					decal.Color3 = G.light
+				end
+			end
+			cubeEmitter(eye, 4).Size = NumberSequence.new(0.8)
+		end
+	end
+	-- Its hands: clusters of cubes on the hand (the hand itself unseen), each on its weld so it can jump about
+	for _, hand in ipairs(template:GetDescendants()) do
+		if hand:IsA("BasePart") and HANDS[hand.Name] then
+			hand.Transparency = 1
+			for i = 1, 6 do
+				local s = 0.35 + math.random() * 0.5
+				local cube = make("Part", { Name = "GlitchHandCube", Size = Vector3.new(s, s, s), Color = if i % 3 == 0 then G.cyan else G.body,
+					Material = if i % 3 == 0 then Enum.Material.Neon else Enum.Material.SmoothPlastic, Anchored = false, CanCollide = false,
+					CanTouch = false, CanQuery = false, Massless = true, CastShadow = false }, hand)
+				make("Weld", { Name = "GlitchWeld", Part0 = hand, Part1 = cube, C0 = CFrame.new((math.random() - 0.5) * 1.2, (math.random() - 0.5) * 1.6,
+					(math.random() - 0.5) * 1.2) }, cube)
+			end
+		end
 	end
 end
 
@@ -134,26 +220,39 @@ local function motorsOf(model)
 	return list
 end
 
--- DOORS' own, out of sight (only for you): its parts, faces, lights, particles; its sounds stay
-local function hideable(d)
-	if d:IsA("BasePart") or d:IsA("Decal") then return "LocalTransparencyModifier", 1, 0 end
-	if d:IsA("ParticleEmitter") or d:IsA("Light") or d:IsA("Beam") or d:IsA("Trail") or d:IsA("Fire") or d:IsA("Smoke") then
-		return "Enabled", false, d.Enabled
-	end
-	return nil
-end
+-- DOORS' own, out of sight (only for you), once: its parts and faces (nothing of the server touches that), its lights and
+-- particles (switched back off if the server switches them on). Its sounds stay
 local function hide(entry, d)
-	local property, value, was = hideable(d)
-	if not property then return end
-	table.insert(entry.hidden, { d, property, value, was })
-	d[property] = value
+	if d:IsA("BasePart") or d:IsA("Decal") then
+		table.insert(entry.hidden, { d, "LocalTransparencyModifier", d.LocalTransparencyModifier })
+		d.LocalTransparencyModifier = 1
+	elseif d:IsA("ParticleEmitter") or d:IsA("Light") or d:IsA("Beam") or d:IsA("Trail") or d:IsA("Fire") or d:IsA("Smoke") then
+		table.insert(entry.hidden, { d, "Enabled", d.Enabled })
+		d.Enabled = false
+		table.insert(entry.watch, d:GetPropertyChangedSignal("Enabled"):Connect(function()
+			if d.Enabled then d.Enabled = false end
+		end))
+	elseif d:IsA("Sound") then
+		table.insert(entry.sounds, d)
+	end
+end
+
+-- Glitch: the cubes that break off it, always the same few (hidden until used)
+local POOL = 14
+local function newPool(copy)
+	local pool = {}
+	for i = 1, POOL do
+		pool[i] = { part = make("Part", { Name = "GlitchCube", Anchored = true, CanCollide = false, CanTouch = false, CanQuery = false,
+			CastShadow = false, Transparency = 1, Size = Vector3.new(1, 1, 1) }, copy), until_ = 0 }
+	end
+	return pool
 end
 
 local function dress(original)
 	if worn[original] or not original.Parent then return end
 	local copy = template:Clone()
 	local theirRoot, ourRoot = rootPart(original), rootPart(copy)
-	local entry = { original = original, copy = copy, hidden = {}, ours = motorsOf(copy), theirs = motorsOf(original) }
+	local entry = { original = original, copy = copy, hidden = {}, watch = {}, sounds = {}, ours = motorsOf(copy), theirs = motorsOf(original) }
 	-- What follows what: their rig's Root (our Root on it), or else their PrimaryPart (our Figure on it)
 	if theirRoot and ourRoot then
 		entry.follow, entry.anchor = theirRoot, ourRoot
@@ -176,24 +275,25 @@ local function dress(original)
 		if motor.Part1 then entry.byPart[motor.Part1.Name] = motor end
 	end
 	entry.time, entry.anim, entry.emerged = 0, nil, false
-	-- The glitch: its parts' colours, its lights and eyes as they were
-	entry.parts, entry.colors, entry.lights, entry.decals = {}, {}, {}, {}
-	for _, d in ipairs(copy:GetDescendants()) do
-		if d:IsA("BasePart") and d.Transparency < 1 then
-			table.insert(entry.parts, d)
-			entry.colors[d] = { d.Color, d.Material }
-		elseif d:IsA("Light") then
-			table.insert(entry.lights, { d, d.Color, d.Brightness })
-		elseif d:IsA("Decal") then
-			table.insert(entry.decals, { d, d.Color3 })
-		end
-	end
 	if GLITCH then
-		local s = Instance.new("Sound")
-		s.Name, s.SoundId, s.Volume, s.RollOffMaxDistance = "Glitch", GLITCH_SOUND, 0.6, 120
-		s.Parent = entry.anchor
-		entry.sound = s
-		entry.nextFlicker, entry.nextGhost, entry.nextFreeze, entry.nextWarble, entry.frozenUntil = 0, 0, os.clock() + 1, 0, 0
+		entry.body, entry.base, entry.eyes, entry.handCubes, entry.lights = {}, {}, {}, {}, {}
+		for _, d in ipairs(copy:GetDescendants()) do
+			if d:IsA("BasePart") and d:FindFirstChild("GlitchTexture") then
+				table.insert(entry.body, d)
+				entry.base[d] = d.Color -- (what a flicker always goes back to)
+			elseif d:IsA("Decal") and d:GetAttribute("SeekEye") then
+				table.insert(entry.eyes, d)
+			elseif d:IsA("Weld") and d.Name == "GlitchWeld" then
+				table.insert(entry.handCubes, d)
+			elseif d:IsA("Light") then
+				table.insert(entry.lights, { d, d.Brightness })
+			end
+		end
+		entry.pool, entry.flickered = newPool(copy), {}
+		entry.sound = make("Sound", { Name = "Glitch", SoundId = G.sound, Volume = 0.6, RollOffMaxDistance = 120 }, entry.anchor)
+		local now = os.clock()
+		entry.nextFlicker, entry.nextBurst, entry.nextFreeze, entry.nextWarble, entry.nextEyes, entry.nextHands, entry.frozenUntil =
+			now, now, now + 1, now, now, now, 0
 	end
 	entry.anchor.CFrame = entry.follow.CFrame
 	copy.Parent = folder
@@ -207,62 +307,97 @@ local function undress(original)
 	if not entry then return end
 	worn[original] = nil
 	entry.added:Disconnect()
+	for _, c in ipairs(entry.watch) do c:Disconnect() end
 	entry.copy:Destroy()
 	if original.Parent then -- (taken off while it is still here: DOORS' own back)
-		for _, h in ipairs(entry.hidden) do pcall(function() h[1][h[2]] = h[4] end) end
+		for _, h in ipairs(entry.hidden) do pcall(function() h[1][h[2]] = h[3] end) end
 	end
 end
 
 ---====== THE GLITCH ======---
 
--- A copy of it as it stands, made of blocks (as DOORS' Glitch is) in one glitch colour, that fades
-local function ghost(entry)
-	local color = GLITCH_COLORS[math.random(1, 2)]
-	local offset = Vector3.new(math.random(-10, 10) / 10, math.random(-3, 3) / 10, math.random(-10, 10) / 10)
-	for _, p in ipairs(entry.parts) do
-		local g = Instance.new("Part")
-		g.Name, g.Anchored, g.CanCollide, g.CanTouch, g.CanQuery = "NewSeekGhost", true, false, false, false
-		g.Size, g.CFrame, g.Color, g.Material, g.Transparency = p.Size, p.CFrame + offset, color, Enum.Material.Neon, 0.55
-		g.Parent = folder
-		TweenService:Create(g, TweenInfo.new(0.3), { Transparency = 1 }):Play()
-		task.delay(0.32, function() g:Destroy() end)
+-- Glitch's cubes flashing on your screen when it is close: always the same few labels
+local screen = nil
+local screenCubes = {}
+if GLITCH then
+	screen = make("ScreenGui", { Name = "NewSeekGlitch", IgnoreGuiInset = true, ResetOnSpawn = false, DisplayOrder = 50 },
+		if gethui then gethui() else LocalPlayer:WaitForChild("PlayerGui"))
+	for i = 1, 6 do
+		screenCubes[i] = make("ImageLabel", { Name = "GlitchEffect", Image = G.cube, BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5),
+			Size = UDim2.fromScale(0.12, 0.12), Visible = false }, screen)
 	end
 end
+local screenUntil, nextScreen = 0, 0
+
+local function rnd(a) return (math.random() * 2 - 1) * a end
 
 local function glitch(entry, now)
-	if now >= entry.nextFlicker then -- a few of its parts in a glitch colour for a frame or two
-		entry.nextFlicker = now + 0.05 + math.random() * 0.12
-		for _, p in ipairs(entry.parts) do
-			local was = entry.colors[p]
-			if math.random() < 0.18 then
-				p.Color, p.Material = GLITCH_COLORS[math.random(#GLITCH_COLORS)], Enum.Material.Neon
-			else
-				p.Color, p.Material = was[1], was[2]
+	-- A part or two in a glitch colour for a moment (only those: the rest is never touched)
+	if now >= entry.nextFlicker then
+		entry.nextFlicker = now + 0.06 + math.random() * 0.12
+		for _, p in ipairs(entry.flickered) do p.Color = entry.base[p] end
+		table.clear(entry.flickered)
+		for _ = 1, math.random(1, 2) do
+			local p = entry.body[math.random(math.max(#entry.body, 1))]
+			if p then
+				table.insert(entry.flickered, p)
+				p.Color = G.flicker[math.random(#G.flicker)]
 			end
 		end
-		for _, l in ipairs(entry.lights) do
-			local on = math.random() < 0.75
-			l[1].Color = if on then GLITCH_COLORS[math.random(1, 2)] else l[2]
-			l[1].Brightness = if on then l[3] * (0.3 + math.random() * 1.5) else 0
+		for _, l in ipairs(entry.lights) do l[1].Brightness = if math.random() < 0.2 then 0 else l[2] * (0.5 + math.random()) end
+	end
+	-- Its eyes: Seek's eye and Glitch's cube in turns, pink and cyan
+	if now >= entry.nextEyes then
+		entry.nextEyes = now + 0.08 + math.random() * 0.22
+		for _, decal in ipairs(entry.eyes) do
+			local cube = math.random() < 0.45
+			decal.Texture = if cube then G.cube else decal:GetAttribute("SeekEye")
+			decal.Color3 = if cube then G.cyan else G.light
 		end
-		for _, d in ipairs(entry.decals) do d[1].Color3 = if math.random() < 0.3 then GLITCH_COLORS[math.random(1, 2)] else d[2] end
 	end
-	if now >= entry.nextGhost then
-		entry.nextGhost = now + 0.25 + math.random() * 0.45
-		ghost(entry)
+	-- Its hands: their cubes jump about
+	if now >= entry.nextHands then
+		entry.nextHands = now + 0.1
+		for _ = 1, 3 do
+			local weld = entry.handCubes[math.random(math.max(#entry.handCubes, 1))]
+			if weld then weld.C0 = CFrame.new(rnd(0.6), rnd(0.8), rnd(0.6)) * CFrame.Angles(rnd(1), rnd(1), rnd(1)) end
+		end
 	end
-	if now >= entry.nextFreeze then -- it hangs a moment, then snaps on
+	-- Cubes break off it
+	if now >= entry.nextBurst then
+		entry.nextBurst = now + 0.15 + math.random() * 0.2
+		for _ = 1, math.random(2, 4) do
+			local p = entry.body[math.random(math.max(#entry.body, 1))]
+			for _, c in ipairs(entry.pool) do
+				if p and now >= c.until_ then
+					local s = 0.5 + math.random() * 1.6
+					c.part.Size = Vector3.new(s, s, s)
+					c.part.CFrame = p.CFrame * CFrame.new(rnd(p.Size.X), rnd(p.Size.Y), rnd(p.Size.Z)) * CFrame.Angles(rnd(1), rnd(1), rnd(1))
+					local roll = math.random()
+					c.part.Color = if roll < 0.55 then G.body elseif roll < 0.75 then G.black elseif roll < 0.9 then G.cyan else G.light
+					c.part.Material = if roll >= 0.75 then Enum.Material.Neon else Enum.Material.SmoothPlastic
+					c.part.Transparency = 0
+					c.until_ = now + 0.08 + math.random() * 0.18
+					break
+				end
+			end
+		end
+	end
+	for _, c in ipairs(entry.pool) do
+		if c.part.Transparency == 0 and now >= c.until_ then c.part.Transparency = 1 end
+	end
+	-- It hangs a moment, then snaps on
+	if now >= entry.nextFreeze then
 		entry.nextFreeze = now + 1 + math.random() * 2.5
 		entry.frozenUntil = now + 0.08 + math.random() * 0.18
-		if entry.sound then
-			entry.sound.PlaybackSpeed = 0.7 + math.random() * 0.8
-			entry.sound:Play()
-		end
+		entry.sound.PlaybackSpeed = 0.7 + math.random() * 0.8
+		entry.sound:Play()
 	end
-	if now >= entry.nextWarble then -- DOORS' Seek's own sounds warble
+	-- DOORS' Seek's own sounds warble
+	if now >= entry.nextWarble then
 		entry.nextWarble = now + 0.4 + math.random() * 0.8
-		for _, s in ipairs(entry.original:GetDescendants()) do
-			if s:IsA("Sound") and s.IsPlaying then
+		for _, s in ipairs(entry.sounds) do
+			if s.Parent and s.IsPlaying then
 				local speed = s.PlaybackSpeed
 				s.PlaybackSpeed = speed * (0.75 + math.random() * 0.5)
 				task.delay(0.08, function() if s.Parent then s.PlaybackSpeed = speed end end)
@@ -272,17 +407,34 @@ local function glitch(entry, now)
 	end
 end
 
+-- Close to it: Glitch's cubes on your screen for a moment
+local function screenGlitch(now, nearest)
+	if screenUntil > 0 and now >= screenUntil then
+		screenUntil = 0
+		for _, l in ipairs(screenCubes) do l.Visible = false end
+	end
+	if nearest > 35 or now < nextScreen then return end
+	nextScreen = now + 0.6 + math.random() * 0.8 * (nearest / 35 + 0.3)
+	screenUntil = now + 0.05 + math.random() * 0.1
+	for i, l in ipairs(screenCubes) do
+		l.Visible = i <= math.random(2, #screenCubes)
+		l.Position = UDim2.fromScale(math.random(), math.random())
+		l.Rotation = math.random(0, 1) * 180
+		local s = 0.06 + math.random() * 0.12
+		l.Size = UDim2.fromScale(s, s)
+	end
+end
+
 ---====== EVERY FRAME: on DOORS' Seek, joint by joint ======---
 
-local function animate(entry, dt, now)
+local function animate(entry, dt)
 	if entry.mirror then
 		for name, motor in pairs(entry.ours) do
 			local theirs = entry.theirs[name]
 			if theirs then
 				local t = theirs.Transform
 				if GLITCH and math.random() < 0.06 then -- a limb jumps off its joint
-					t = t * CFrame.new(math.random(-4, 4) / 10, math.random(-4, 4) / 10, math.random(-4, 4) / 10)
-						* CFrame.Angles(math.random(-5, 5) / 10, math.random(-5, 5) / 10, 0)
+					t = t * CFrame.new(rnd(0.4), rnd(0.4), rnd(0.4)) * CFrame.Angles(rnd(0.5), rnd(0.5), 0)
 				end
 				motor.Transform = t
 			end
@@ -314,23 +466,27 @@ end
 
 table.insert(connections, RunService.RenderStepped:Connect(function(dt)
 	local now = os.clock()
+	local nearest = math.huge
+	local character = LocalPlayer.Character
+	local me = character and character:FindFirstChild("HumanoidRootPart")
 	for original, entry in pairs(worn) do
 		if not original:IsDescendantOf(workspace) then
 			undress(original)
 		else
-			for _, h in ipairs(entry.hidden) do h[1][h[2]] = h[3] end -- (the server may switch its lights back on)
 			if GLITCH then glitch(entry, now) end
 			if not (GLITCH and now < entry.frozenUntil) then
 				entry.anchor.CFrame = entry.follow.CFrame
-				animate(entry, dt, now)
+				animate(entry, dt)
 			end
+			if me then nearest = math.min(nearest, (entry.anchor.Position - me.Position).Magnitude) end
 		end
 	end
+	if GLITCH then screenGlitch(now, nearest) end
 end))
 
 -- DOORS' Seek, now and every time it comes
 local function consider(d)
-	if d:IsA("Model") and NAMES[d.Name] and not d:IsDescendantOf(folder) then
+	if NAMES[d.Name] and d:IsA("Model") and not d:IsDescendantOf(folder) then
 		task.delay(0.1, dress, d) -- (its pieces arrive with it)
 	end
 end
@@ -341,4 +497,5 @@ SESSION.__NewSeek = function()
 	for _, c in ipairs(connections) do c:Disconnect() end
 	for original in pairs(worn) do undress(original) end
 	folder:Destroy()
+	if screen then screen:Destroy() end
 end
