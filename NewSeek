@@ -1,0 +1,344 @@
+--[[
+        NEW SEEK -- DOORS' Seek with another body, and its glitched version
+
+            _G.Type = "Normal"   -- or "Glitch"
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/claude/sei-qui-con-noi-ye4k62/NewSeek"))()
+
+        Every Seek that comes (SeekMovingNewClone, SeekMoving) wears the new one: DOORS' own is still there (the server
+        moves it, its hit and its cutscenes are its own) but you see the new one in its place, moving joint by joint the
+        way DOORS' moves (out of the floor, the run). If DOORS' joints are not the new one's, the new one plays its own
+        animations (emerge, run, idle).
+
+        Glitch: the same Seek, broken. It flickers black, purple and cyan, its limbs jump off their joints, it freezes
+        for a moment and snaps on, it leaves glitched copies of itself behind, its lights and eyes stutter and its sounds
+        warble.
+
+        Only you see it. Run it again to change type; getgenv().__NewSeek() takes it off.
+        Its model is assets/seek/NewSeek.rbxm, downloaded once into the executor's folder (NewSeek/).
+]]
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+
+local GLITCH = tostring(_G.Type or "Normal"):lower():find("glitch") ~= nil
+local NAMES = { SeekMovingNewClone = true, SeekMoving = true } -- DOORS' Seek, now and before
+local FOLDER, FILE = "NewSeek", "NewSeek.rbxm"
+local URLS = {
+	"https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/assets/seek/NewSeek.rbxm",
+	"https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/claude/sei-qui-con-noi-ye4k62/assets/seek/NewSeek.rbxm",
+}
+-- The glitch's colours (DOORS' Glitch: purple and cyan on black) and its sound
+local GLITCH_COLORS = { Color3.fromRGB(150, 0, 255), Color3.fromRGB(0, 255, 255), Color3.fromRGB(0, 0, 0), Color3.fromRGB(255, 255, 255) }
+local GLITCH_SOUND = "rbxassetid://10237953274"
+
+-- The one before comes off first
+local SESSION = if getgenv then getgenv() else _G
+if SESSION.__NewSeek then pcall(SESSION.__NewSeek) end
+
+---====== ITS MODEL ======---
+
+local function isModel(data) return type(data) == "string" and data:sub(1, 8) == "<roblox!" end
+local function loadModel()
+	local path = FOLDER .. "/" .. FILE
+	pcall(function()
+		if not isfolder(FOLDER) then makefolder(FOLDER) end
+		if isfile(path) and isModel(readfile(path)) then return end
+		for _, url in ipairs(URLS) do
+			local ok, data = pcall(function() return game:HttpGet(url) end)
+			if ok and isModel(data) then -- (never a "404: Not Found" page)
+				writefile(path, data)
+				return
+			end
+		end
+	end)
+	local ok, objects = pcall(function() return game:GetObjects(getcustomasset(path)) end)
+	if ok and type(objects) == "table" and objects[1] then return objects[1] end
+	return nil
+end
+local template = loadModel()
+if not template then
+	warn("[NewSeek] its model could not be loaded")
+	return
+end
+
+---====== ITS OWN ANIMATIONS (when DOORS' joints are not its own): the KeyframeSequences of its AnimSaves ======---
+
+local STYLE = { Linear = "Linear", Cubic = "Cubic", CubicV2 = "Cubic", Elastic = "Elastic", Bounce = "Bounce" }
+local function prepare(kfs)
+	local joints, length = {}, 0
+	local frames = kfs:GetKeyframes()
+	table.sort(frames, function(a, b) return a.Time < b.Time end)
+	for _, frame in ipairs(frames) do
+		length = math.max(length, frame.Time)
+		for _, d in ipairs(frame:GetDescendants()) do
+			if d:IsA("Pose") and d.Weight > 0 then
+				joints[d.Name] = joints[d.Name] or {}
+				table.insert(joints[d.Name], { t = frame.Time, cf = d.CFrame, style = d.EasingStyle.Name, dir = d.EasingDirection.Name })
+			end
+		end
+	end
+	return { joints = joints, length = length, looped = kfs.Loop }
+end
+local function poseOf(list, time)
+	local a, b = list[1], nil
+	for i = 2, #list do
+		if list[i].t <= time then a = list[i] else b = list[i] break end
+	end
+	if not b or a.style == "Constant" or time <= a.t then return a.cf end
+	local dir = a.dir -- the old styles have In and Out swapped, as in Roblox
+	if a.style ~= "CubicV2" and a.style ~= "Linear" then dir = if dir == "In" then "Out" elseif dir == "Out" then "In" else dir end
+	local alpha = TweenService:GetValue((time - a.t) / (b.t - a.t), Enum.EasingStyle[STYLE[a.style] or "Linear"], Enum.EasingDirection[dir])
+	return a.cf:Lerp(b.cf, alpha)
+end
+local ANIMS = {}
+local saves = template:FindFirstChild("AnimSaves", true)
+if saves then
+	for _, kfs in ipairs(saves:GetChildren()) do
+		if kfs:IsA("KeyframeSequence") then ANIMS[kfs.Name:lower()] = prepare(kfs) end
+	end
+	saves:Destroy()
+end
+
+-- The template as it will be worn: no DOORS module on it, nothing that moves it, touches or collides
+template.Name = "NewSeek"
+template:SetAttribute("LoadModule", nil)
+for _, d in ipairs(template:GetDescendants()) do
+	if d:IsA("BodyMover") or d:IsA("BodyGyro") or d:IsA("BodyVelocity") or d:IsA("Animator") or d:IsA("AnimationController")
+		or d:IsA("Animation") or d:IsA("LuaSourceContainer") or d.Name == "Hitbox" then
+		d:Destroy()
+	elseif d:IsA("BasePart") then
+		d.Anchored, d.CanCollide, d.CanTouch, d.CanQuery, d.Massless = false, false, false, false, true
+	end
+end
+
+---====== WEARING IT ======---
+
+local folder = Instance.new("Folder")
+folder.Name = "NewSeekSkins"
+folder.Parent = workspace
+local worn = {} -- DOORS' Seek -> what goes with it
+local connections = {}
+
+local function rootPart(model)
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("BasePart") and d.Name == "Root" then return d end
+	end
+	return nil
+end
+local function motorsOf(model)
+	local list = {}
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("Motor6D") then list[d.Name] = d end
+	end
+	return list
+end
+
+-- DOORS' own, out of sight (only for you): its parts, faces, lights, particles; its sounds stay
+local function hideable(d)
+	if d:IsA("BasePart") or d:IsA("Decal") then return "LocalTransparencyModifier", 1, 0 end
+	if d:IsA("ParticleEmitter") or d:IsA("Light") or d:IsA("Beam") or d:IsA("Trail") or d:IsA("Fire") or d:IsA("Smoke") then
+		return "Enabled", false, d.Enabled
+	end
+	return nil
+end
+local function hide(entry, d)
+	local property, value, was = hideable(d)
+	if not property then return end
+	table.insert(entry.hidden, { d, property, value, was })
+	d[property] = value
+end
+
+local function dress(original)
+	if worn[original] or not original.Parent then return end
+	local copy = template:Clone()
+	local theirRoot, ourRoot = rootPart(original), rootPart(copy)
+	local entry = { original = original, copy = copy, hidden = {}, ours = motorsOf(copy), theirs = motorsOf(original) }
+	-- What follows what: their rig's Root (our Root on it), or else their PrimaryPart (our Figure on it)
+	if theirRoot and ourRoot then
+		entry.follow, entry.anchor = theirRoot, ourRoot
+	else
+		entry.follow, entry.anchor = original.PrimaryPart or original:FindFirstChildWhichIsA("BasePart", true), copy.PrimaryPart or ourRoot
+	end
+	if not (entry.follow and entry.anchor) then
+		copy:Destroy()
+		return
+	end
+	entry.anchor.Anchored = true
+	-- Its joints: DOORS' own, if they are its own; or its own animations
+	local same = 0
+	for name in pairs(entry.ours) do
+		if entry.theirs[name] then same += 1 end
+	end
+	entry.mirror = same >= 5
+	entry.byPart = {} -- (its own animations name the part a joint moves, not the joint)
+	for _, motor in pairs(entry.ours) do
+		if motor.Part1 then entry.byPart[motor.Part1.Name] = motor end
+	end
+	entry.time, entry.anim, entry.emerged = 0, nil, false
+	-- The glitch: its parts' colours, its lights and eyes as they were
+	entry.parts, entry.colors, entry.lights, entry.decals = {}, {}, {}, {}
+	for _, d in ipairs(copy:GetDescendants()) do
+		if d:IsA("BasePart") and d.Transparency < 1 then
+			table.insert(entry.parts, d)
+			entry.colors[d] = { d.Color, d.Material }
+		elseif d:IsA("Light") then
+			table.insert(entry.lights, { d, d.Color, d.Brightness })
+		elseif d:IsA("Decal") then
+			table.insert(entry.decals, { d, d.Color3 })
+		end
+	end
+	if GLITCH then
+		local s = Instance.new("Sound")
+		s.Name, s.SoundId, s.Volume, s.RollOffMaxDistance = "Glitch", GLITCH_SOUND, 0.6, 120
+		s.Parent = entry.anchor
+		entry.sound = s
+		entry.nextFlicker, entry.nextGhost, entry.nextFreeze, entry.nextWarble, entry.frozenUntil = 0, 0, os.clock() + 1, 0, 0
+	end
+	entry.anchor.CFrame = entry.follow.CFrame
+	copy.Parent = folder
+	for _, d in ipairs(original:GetDescendants()) do hide(entry, d) end
+	entry.added = original.DescendantAdded:Connect(function(d) hide(entry, d) end)
+	worn[original] = entry
+end
+
+local function undress(original)
+	local entry = worn[original]
+	if not entry then return end
+	worn[original] = nil
+	entry.added:Disconnect()
+	entry.copy:Destroy()
+	if original.Parent then -- (taken off while it is still here: DOORS' own back)
+		for _, h in ipairs(entry.hidden) do pcall(function() h[1][h[2]] = h[4] end) end
+	end
+end
+
+---====== THE GLITCH ======---
+
+-- A copy of it as it stands, made of blocks (as DOORS' Glitch is) in one glitch colour, that fades
+local function ghost(entry)
+	local color = GLITCH_COLORS[math.random(1, 2)]
+	local offset = Vector3.new(math.random(-10, 10) / 10, math.random(-3, 3) / 10, math.random(-10, 10) / 10)
+	for _, p in ipairs(entry.parts) do
+		local g = Instance.new("Part")
+		g.Name, g.Anchored, g.CanCollide, g.CanTouch, g.CanQuery = "NewSeekGhost", true, false, false, false
+		g.Size, g.CFrame, g.Color, g.Material, g.Transparency = p.Size, p.CFrame + offset, color, Enum.Material.Neon, 0.55
+		g.Parent = folder
+		TweenService:Create(g, TweenInfo.new(0.3), { Transparency = 1 }):Play()
+		task.delay(0.32, function() g:Destroy() end)
+	end
+end
+
+local function glitch(entry, now)
+	if now >= entry.nextFlicker then -- a few of its parts in a glitch colour for a frame or two
+		entry.nextFlicker = now + 0.05 + math.random() * 0.12
+		for _, p in ipairs(entry.parts) do
+			local was = entry.colors[p]
+			if math.random() < 0.18 then
+				p.Color, p.Material = GLITCH_COLORS[math.random(#GLITCH_COLORS)], Enum.Material.Neon
+			else
+				p.Color, p.Material = was[1], was[2]
+			end
+		end
+		for _, l in ipairs(entry.lights) do
+			local on = math.random() < 0.75
+			l[1].Color = if on then GLITCH_COLORS[math.random(1, 2)] else l[2]
+			l[1].Brightness = if on then l[3] * (0.3 + math.random() * 1.5) else 0
+		end
+		for _, d in ipairs(entry.decals) do d[1].Color3 = if math.random() < 0.3 then GLITCH_COLORS[math.random(1, 2)] else d[2] end
+	end
+	if now >= entry.nextGhost then
+		entry.nextGhost = now + 0.25 + math.random() * 0.45
+		ghost(entry)
+	end
+	if now >= entry.nextFreeze then -- it hangs a moment, then snaps on
+		entry.nextFreeze = now + 1 + math.random() * 2.5
+		entry.frozenUntil = now + 0.08 + math.random() * 0.18
+		if entry.sound then
+			entry.sound.PlaybackSpeed = 0.7 + math.random() * 0.8
+			entry.sound:Play()
+		end
+	end
+	if now >= entry.nextWarble then -- DOORS' Seek's own sounds warble
+		entry.nextWarble = now + 0.4 + math.random() * 0.8
+		for _, s in ipairs(entry.original:GetDescendants()) do
+			if s:IsA("Sound") and s.IsPlaying then
+				local speed = s.PlaybackSpeed
+				s.PlaybackSpeed = speed * (0.75 + math.random() * 0.5)
+				task.delay(0.08, function() if s.Parent then s.PlaybackSpeed = speed end end)
+				break
+			end
+		end
+	end
+end
+
+---====== EVERY FRAME: on DOORS' Seek, joint by joint ======---
+
+local function animate(entry, dt, now)
+	if entry.mirror then
+		for name, motor in pairs(entry.ours) do
+			local theirs = entry.theirs[name]
+			if theirs then
+				local t = theirs.Transform
+				if GLITCH and math.random() < 0.06 then -- a limb jumps off its joint
+					t = t * CFrame.new(math.random(-4, 4) / 10, math.random(-4, 4) / 10, math.random(-4, 4) / 10)
+						* CFrame.Angles(math.random(-5, 5) / 10, math.random(-5, 5) / 10, 0)
+				end
+				motor.Transform = t
+			end
+		end
+		return
+	end
+	-- Its own: emerge once, then run while it moves, idle while it stands
+	local at = entry.anchor.Position
+	local pace = if entry.last then ((at - entry.last) * Vector3.new(1, 0, 1)).Magnitude / math.max(dt, 1e-3) else 0
+	entry.last = at
+	local want
+	if not entry.emerged and ANIMS.emerge then
+		want = ANIMS.emerge
+	else
+		want = if pace > 3 then ANIMS.run else (ANIMS.idle or ANIMS.run)
+	end
+	if not want then return end
+	if entry.anim ~= want then entry.anim, entry.time = want, 0 end
+	entry.time += dt
+	if entry.time >= want.length then
+		if want == ANIMS.emerge then entry.emerged = true end
+		entry.time = if want.looped and want.length > 0 then entry.time % want.length else want.length
+	end
+	for name, list in pairs(want.joints) do
+		local motor = entry.byPart[name]
+		if motor then motor.Transform = poseOf(list, entry.time) end
+	end
+end
+
+table.insert(connections, RunService.RenderStepped:Connect(function(dt)
+	local now = os.clock()
+	for original, entry in pairs(worn) do
+		if not original:IsDescendantOf(workspace) then
+			undress(original)
+		else
+			for _, h in ipairs(entry.hidden) do h[1][h[2]] = h[3] end -- (the server may switch its lights back on)
+			if GLITCH then glitch(entry, now) end
+			if not (GLITCH and now < entry.frozenUntil) then
+				entry.anchor.CFrame = entry.follow.CFrame
+				animate(entry, dt, now)
+			end
+		end
+	end
+end))
+
+-- DOORS' Seek, now and every time it comes
+local function consider(d)
+	if d:IsA("Model") and NAMES[d.Name] and not d:IsDescendantOf(folder) then
+		task.delay(0.1, dress, d) -- (its pieces arrive with it)
+	end
+end
+for _, d in ipairs(workspace:GetDescendants()) do consider(d) end
+table.insert(connections, workspace.DescendantAdded:Connect(consider))
+
+SESSION.__NewSeek = function()
+	for _, c in ipairs(connections) do c:Disconnect() end
+	for original in pairs(worn) do undress(original) end
+	folder:Destroy()
+end
