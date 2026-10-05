@@ -30,6 +30,7 @@ mod rather than playing it.
 | Noise 90: every "-90" (A-404 and R-90 too) as a Noise (`_G.Type = "A-90"`, ...), all in one | `.../Noise90` |
 | Noise 90, all of them: a new one every 10 s (the others stay), out at once, every disc in the Journal | `.../Noise90All` |
 | DOORS' walk, run, crouch and jump in any game | `.../DoorsAnimations` |
+| Morph: anybody's avatar on you (`_G.User = "name"`), only you see it | `.../Morph` |
 | Scanners: DOORS' radar (Nokia) or the NVCS tablet (`_G.Scanner = { Type = "Tablet" }`) | `.../ObjectScanner` |
 | Universal Custom Assets: animator with Studio controls (Ctrl + U I O) | `.../UniversalAssets` |
 | The same, obfuscated | `.../UniversalAssets.obf` |

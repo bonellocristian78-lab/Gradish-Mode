@@ -1,0 +1,234 @@
+--[[
+        MORPH -- you, with anybody's avatar (DOORS, or any game)
+
+            _G.User = "Roblox"   -- their username (or their user id)
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/claude/sei-qui-con-noi-ye4k62/Morph"))()
+
+        Their clothes, their accessories (hats, hair, the ones on the face and the body), their face (or their
+        dynamic head) and their skin colours, on your character. Your body keeps its shape (DOORS' animations
+        move it). In first person you see what DOORS shows of you: hats and hair never get in your eyes.
+
+        Only you see it: a script on your side cannot change what the server sends to the others.
+        It stays when you die and come back. Run it again with another name to change; with your own to go back.
+]]
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
+
+local wanted = _G.User
+if wanted == nil or tostring(wanted) == "" then
+	warn("[Morph] whose avatar? _G.User = \"their name\" before the loadstring")
+	return
+end
+
+-- The one before stops: its respawn hook, its first person, what it put on you
+local SESSION = if getgenv then getgenv() else _G
+if SESSION.__Morph then pcall(SESSION.__Morph) end
+
+-- Who: a user id as it is, a name (with or without @) looked up
+local userId = tonumber(wanted)
+if not userId then
+	local name = tostring(wanted):gsub("^@", "")
+	local ok, id = pcall(function() return Players:GetUserIdFromNameAsync(name) end)
+	if not (ok and id) then
+		warn(("[Morph] nobody is called %q"):format(name))
+		return
+	end
+	userId = id
+end
+
+-- Their avatar, as Roblox puts it on a character of theirs: accessories, clothes, face, body colours, body parts.
+-- If that is refused, the list of what they wear, each piece loaded by its id
+local function appearance()
+	local ok, model = pcall(function() return Players:GetCharacterAppearanceAsync(userId) end)
+	if ok and model then return model end
+	local okInfo, info = pcall(function() return Players:GetCharacterAppearanceInfoAsync(userId) end)
+	if not (okInfo and type(info) == "table") then return nil end
+	model = Instance.new("Model")
+	for _, asset in ipairs(info.assets or {}) do
+		pcall(function()
+			for _, o in ipairs(game:GetObjects("rbxassetid://" .. asset.id)) do o.Parent = model end
+		end)
+	end
+	local c = info.bodyColors
+	if type(c) == "table" then
+		local colors = Instance.new("BodyColors")
+		colors.HeadColor, colors.TorsoColor = BrickColor.new(c.headColorId or 1), BrickColor.new(c.torsoColorId or 1)
+		colors.LeftArmColor, colors.RightArmColor = BrickColor.new(c.leftArmColorId or 1), BrickColor.new(c.rightArmColorId or 1)
+		colors.LeftLegColor, colors.RightLegColor = BrickColor.new(c.leftLegColorId or 1), BrickColor.new(c.rightLegColorId or 1)
+		colors.Parent = model
+	end
+	return model
+end
+local look = appearance()
+if not look then
+	warn("[Morph] their avatar could not be loaded")
+	return
+end
+
+-- Which body colour goes on which part (R15 and R6)
+local COLOR_OF = {
+	Head = "HeadColor3", UpperTorso = "TorsoColor3", LowerTorso = "TorsoColor3", Torso = "TorsoColor3",
+	LeftUpperArm = "LeftArmColor3", LeftLowerArm = "LeftArmColor3", LeftHand = "LeftArmColor3", ["Left Arm"] = "LeftArmColor3",
+	RightUpperArm = "RightArmColor3", RightLowerArm = "RightArmColor3", RightHand = "RightArmColor3", ["Right Arm"] = "RightArmColor3",
+	LeftUpperLeg = "LeftLegColor3", LeftLowerLeg = "LeftLegColor3", LeftFoot = "LeftLegColor3", ["Left Leg"] = "LeftLegColor3",
+	RightUpperLeg = "RightLegColor3", RightLowerLeg = "RightLegColor3", RightFoot = "RightLegColor3", ["Right Leg"] = "RightLegColor3",
+}
+local WEARS = { "Shirt", "Pants", "ShirtGraphic", "BodyColors", "CharacterMesh" }
+local function worn(d)
+	if d:IsA("Accessory") then return true end
+	for _, class in ipairs(WEARS) do
+		if d:IsA(class) then return true end
+	end
+	return false
+end
+
+local added = {} -- what it put on you
+local restore = {} -- { instance, property, value }: your head and face, hidden behind theirs
+local follow = {} -- { part, the part whose first-person transparency it takes }
+
+-- An accessory on you: its handle's attachment on the attachment of yours with the same name (old hats: on the head)
+local function attach(character, accessory)
+	local handle = accessory:FindFirstChild("Handle")
+	if not (handle and handle:IsA("BasePart")) then return end
+	local own = handle:FindFirstChildOfClass("Attachment")
+	local target = nil
+	if own then
+		for _, d in ipairs(character:GetDescendants()) do
+			if d:IsA("Attachment") and d.Name == own.Name and d.Parent:IsA("BasePart") and not d:FindFirstAncestorOfClass("Accessory") then
+				target = d
+				break
+			end
+		end
+	end
+	local head = character:FindFirstChild("Head")
+	if not (target or head) then return end
+	for _, j in ipairs(handle:GetChildren()) do
+		if j:IsA("JointInstance") or j:IsA("WeldConstraint") then j:Destroy() end
+	end
+	for _, p in ipairs(accessory:GetDescendants()) do
+		if p:IsA("BasePart") then p.Anchored, p.CanCollide, p.CanTouch, p.CanQuery, p.Massless = false, false, false, false, true end
+	end
+	local weld = Instance.new("Weld")
+	weld.Name = "AccessoryWeld"
+	if target then
+		weld.Part0, weld.C0, weld.Part1, weld.C1 = target.Parent, target.CFrame, handle, own.CFrame
+	else
+		weld.Part0, weld.C0, weld.Part1, weld.C1 = head, CFrame.new(0, head.Size.Y / 2, 0), handle, accessory.AttachmentPoint
+	end
+	weld.Parent = handle
+	accessory.Parent = character
+	table.insert(added, accessory)
+	for _, p in ipairs(accessory:GetDescendants()) do
+		if p:IsA("BasePart") then table.insert(follow, { p, weld.Part0 }) end
+	end
+end
+
+-- Their head, if it is a mesh of its own (a dynamic head, a package's): the one fitted to the standard body if there is one
+local function theirHead()
+	local best = nil
+	for _, d in ipairs(look:GetDescendants()) do
+		if d:IsA("MeshPart") and d.Name == "Head" and not d:FindFirstAncestorOfClass("Accessory") then
+			if d.Parent and d.Parent.Name == "R15Fixed" then return d end
+			best = best or d
+		end
+	end
+	return best
+end
+
+local function apply(character)
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	local head = character:FindFirstChild("Head")
+	if not (humanoid and head) then return end
+	table.clear(added)
+	table.clear(restore)
+	table.clear(follow)
+	-- Off: your clothes, accessories, colours
+	for _, d in ipairs(character:GetChildren()) do
+		if worn(d) then d:Destroy() end
+	end
+	-- On: theirs
+	local colors = look:FindFirstChildOfClass("BodyColors")
+	for _, d in ipairs(look:GetChildren()) do
+		if d:IsA("Shirt") or d:IsA("Pants") or d:IsA("ShirtGraphic") or d:IsA("BodyColors")
+			or (d:IsA("CharacterMesh") and humanoid.RigType == Enum.HumanoidRigType.R6) then
+			local copy = d:Clone()
+			copy.Parent = character
+			table.insert(added, copy)
+		elseif d:IsA("Accessory") then
+			attach(character, d:Clone())
+		end
+	end
+	if colors then
+		for _, p in ipairs(character:GetChildren()) do
+			if p:IsA("BasePart") and COLOR_OF[p.Name] then p.Color = colors[COLOR_OF[p.Name]] end
+		end
+	end
+	-- The face: their dynamic head over yours (yours hidden), or their face on your head
+	local mesh = theirHead()
+	local face = look:FindFirstChild("face") or look:FindFirstChild("Face")
+	if mesh then
+		local copy = mesh:Clone()
+		copy.Name = "MorphHead"
+		copy.Anchored, copy.CanCollide, copy.CanTouch, copy.CanQuery, copy.Massless = false, false, false, false, true
+		if colors then copy.Color = colors.HeadColor3 end
+		copy.CFrame = head.CFrame
+		local weld = Instance.new("Weld")
+		weld.Part0, weld.Part1 = head, copy
+		weld.Parent = copy
+		copy.Parent = character
+		table.insert(added, copy)
+		table.insert(follow, { copy, head })
+		for _, d in ipairs(copy:GetDescendants()) do
+			if d:IsA("BasePart") then table.insert(follow, { d, head }) end
+		end
+		table.insert(restore, { head, "Transparency", head.Transparency })
+		head.Transparency = 1
+		for _, d in ipairs(head:GetChildren()) do
+			if d:IsA("Decal") then
+				table.insert(restore, { d, "Transparency", d.Transparency })
+				d.Transparency = 1
+			end
+		end
+	elseif face and face:IsA("Decal") then
+		local mine = head:FindFirstChild("face") or head:FindFirstChildOfClass("Decal")
+		if mine then
+			table.insert(restore, { mine, "Texture", mine.Texture })
+			mine.Texture = face.Texture
+		else
+			local copy = face:Clone()
+			copy.Parent = head
+			table.insert(added, copy)
+		end
+	end
+end
+
+-- First person: what it put on you shows as much as the part it hangs from (DOORS hides your head, shows your arms)
+RunService:BindToRenderStep("Morph", Enum.RenderPriority.Last.Value, function()
+	for _, pair in ipairs(follow) do
+		pair[1].LocalTransparencyModifier = pair[2].LocalTransparencyModifier
+	end
+end)
+
+-- Now, and every time you come back
+local function onCharacter(character)
+	character:WaitForChild("Humanoid", 10)
+	character:WaitForChild("Head", 10)
+	if not LocalPlayer:HasAppearanceLoaded() then
+		local t0 = os.clock()
+		while not LocalPlayer:HasAppearanceLoaded() and os.clock() - t0 < 8 do task.wait(0.1) end
+	end
+	task.wait(0.3) -- (the game finishes dressing you first)
+	if character.Parent then apply(character) end
+end
+local respawn = LocalPlayer.CharacterAdded:Connect(function(character) task.spawn(onCharacter, character) end)
+if LocalPlayer.Character then apply(LocalPlayer.Character) end
+
+SESSION.__Morph = function()
+	respawn:Disconnect()
+	RunService:UnbindFromRenderStep("Morph")
+	for _, i in ipairs(added) do pcall(function() i:Destroy() end) end
+	for _, r in ipairs(restore) do pcall(function() r[1][r[2]] = r[3] end) end
+	table.clear(follow)
+end
