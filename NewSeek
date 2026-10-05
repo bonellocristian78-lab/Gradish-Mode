@@ -5,13 +5,16 @@
             loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/claude/sei-qui-con-noi-ye4k62/NewSeek"))()
 
         Every Seek that comes (SeekMovingNewClone, SeekMoving) wears the new one: DOORS' own is still there (the server
-        moves it, its hit and its cutscenes are its own) but you see the new one in its place, moving joint by joint the
-        way DOORS' moves (out of the floor, the run). If DOORS' joints are not the new one's, the new one plays its own
-        animations (emerge, run, idle).
+        moves it, its hit and its cutscenes are its own) but you see the new one in its place. Each part of the new one's
+        body goes where DOORS' part of the same name is, every frame (out of the floor, the run). If DOORS' Seek has not
+        those parts, the new one follows it whole and plays DOORS' joints, or its own animations (emerge, run, idle).
+        DOORS' own is hidden only once the new one is in its place. What it found and how it follows it is written in
+        NewSeek/SeekStructure.txt (and the console, F9).
 
-        Glitch: Seek made of DOORS' Glitch (ReplicatedStorage.Entities.Glitch). Its purple body under Glitch's cube
-        texture, Glitch's cube particles (white, red, cyan), Glitch's pink light. Its eyes are glitched: Seek's eye and
-        Glitch's cube in turns, cyan and pink. Its hands are clusters of cubes that never keep still. Cubes break off
+        Glitch: Seek made of DOORS' Glitch (ReplicatedStorage.Entities.Glitch). Its purple body, glowing, under Glitch's
+        cube texture, Glitch's cube particles (white, red, cyan), Glitch's pink light. Its eyes are glitched: a glowing
+        cube of Glitch's on each, flickering pink, cyan and white, and their faces swap between Seek's eye and the cube.
+        Its hands are clusters of glowing cubes that never keep still. Cubes break off
         it all the time, its colours flicker, its limbs jump off their joints, it hangs a moment and snaps on, its
         sounds warble, and when it is close Glitch's cubes flash on your screen.
 
@@ -162,23 +165,29 @@ if GLITCH then
 		elseif d:IsA("Light") then
 			d.Color = G.light
 		elseif d:IsA("BasePart") and d.Transparency < 1 and d.Name ~= "Eye" and d.Name ~= "Black" and not HANDS[d.Name] then
-			d.Color, d.Material = G.body, Enum.Material.SmoothPlastic
+			d.Color, d.Material = G.body, Enum.Material.Neon -- (it glows: it is seen in the dark, as DOORS' Glitch is)
 			for _, side in ipairs(SIDES) do
 				make("Texture", { Name = "GlitchTexture", Texture = G.texture, Color3 = G.black, StudsPerTileU = 3, StudsPerTileV = 3, Face = side }, d)
 			end
 			if d.Name:find("Torso") or d.Name:find("Upper") or d.Name == "Head" then cubeEmitter(d, 6) end
 		end
 	end
-	-- Its eyes: black, glitched (their faces swap between Seek's eye and Glitch's cube while it runs)
+	-- Its eyes: glitched. Their faces swap between Seek's eye and Glitch's cube while it runs, and on each one a glowing
+	-- cube of Glitch's (seen from anywhere, bigger than the eye) flickers pink, cyan and white
 	for _, eye in ipairs(template:GetDescendants()) do
 		if eye:IsA("BasePart") and eye.Name == "Eye" then
-			eye.Color, eye.Material = G.black, Enum.Material.Neon
+			eye.Color, eye.Material = G.cyan, Enum.Material.Neon
 			for _, decal in ipairs(eye:GetChildren()) do
 				if decal:IsA("Decal") then
 					decal:SetAttribute("SeekEye", decal.Texture)
 					decal.Color3 = G.light
 				end
 			end
+			local size = math.max(eye.Size.X, eye.Size.Y) * 3 + 0.6
+			local board = make("BillboardGui", { Name = "GlitchEye", Size = UDim2.fromScale(size, size), LightInfluence = 0, AlwaysOnTop = false,
+				MaxDistance = 200 }, eye)
+			make("ImageLabel", { Name = "Cube", Image = G.cube, ImageColor3 = G.light, BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1),
+				AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5) }, board)
 			cubeEmitter(eye, 4).Size = NumberSequence.new(0.8)
 		end
 	end
@@ -186,13 +195,15 @@ if GLITCH then
 	for _, hand in ipairs(template:GetDescendants()) do
 		if hand:IsA("BasePart") and HANDS[hand.Name] then
 			hand.Transparency = 1
-			for i = 1, 6 do
-				local s = 0.35 + math.random() * 0.5
-				local cube = make("Part", { Name = "GlitchHandCube", Size = Vector3.new(s, s, s), Color = if i % 3 == 0 then G.cyan else G.body,
-					Material = if i % 3 == 0 then Enum.Material.Neon else Enum.Material.SmoothPlastic, Anchored = false, CanCollide = false,
-					CanTouch = false, CanQuery = false, Massless = true, CastShadow = false }, hand)
-				make("Weld", { Name = "GlitchWeld", Part0 = hand, Part1 = cube, C0 = CFrame.new((math.random() - 0.5) * 1.2, (math.random() - 0.5) * 1.6,
-					(math.random() - 0.5) * 1.2) }, cube)
+			local reach = hand.Size * 0.6
+			for i = 1, 8 do
+				local s = 0.5 + math.random() * 0.5
+				local cube = make("Part", { Name = "GlitchHandCube", Size = Vector3.new(s, s, s), Color = ({ G.body, G.cyan, G.light, G.body })[i % 4 + 1],
+					Material = Enum.Material.Neon, Anchored = false, CanCollide = false, CanTouch = false, CanQuery = false, Massless = true,
+					CastShadow = false }, hand)
+				cube:SetAttribute("Reach", reach)
+				make("Weld", { Name = "GlitchWeld", Part0 = hand, Part1 = cube, C0 = CFrame.new((math.random() - 0.5) * reach.X * 2,
+					(math.random() - 0.5) * reach.Y * 2, (math.random() - 0.5) * reach.Z * 2) }, cube)
 			end
 		end
 	end
@@ -206,11 +217,32 @@ folder.Parent = workspace
 local worn = {} -- DOORS' Seek -> what goes with it
 local connections = {}
 
-local function rootPart(model)
+-- Its body's parts, by name: each of ours goes where DOORS' own of that name is, every frame
+local BODY = { "UpperTorso", "LowerTorso", "Head", "LeftUpperArm", "LeftLowerArm", "RightUpperArm", "RightLowerArm", "LeftUpperLeg",
+	"LeftLowerLeg", "RightUpperLeg", "RightLowerLeg", "Left Hand", "Right Hand", "LeftHand", "RightHand", "LeftFoot", "RightFoot" }
+local function partsByName(model) -- (only the names there is one of)
+	local found, count = {}, {}
 	for _, d in ipairs(model:GetDescendants()) do
-		if d:IsA("BasePart") and d.Name == "Root" then return d end
+		if d:IsA("BasePart") then
+			count[d.Name] = (count[d.Name] or 0) + 1
+			found[d.Name] = d
+		end
 	end
-	return nil
+	for name, n in pairs(count) do
+		if n > 1 then found[name] = nil end
+	end
+	return found
+end
+-- Its rig's Root (the one in SeekRig before any other)
+local function rootPart(model)
+	local any = nil
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("BasePart") and d.Name == "Root" then
+			if d.Parent and d.Parent.Name == "SeekRig" then return d end
+			any = any or d
+		end
+	end
+	return any
 end
 local function motorsOf(model)
 	local list = {}
@@ -248,35 +280,77 @@ local function newPool(copy)
 	return pool
 end
 
+-- What it found in DOORS' Seek and how it follows it, in the executor's folder (NewSeek/SeekStructure.txt) and the console:
+-- if the new one is not where DOORS' is, that file says why
+local function describe(original, entry)
+	pcall(function()
+		local top = original:GetFullName()
+		local lines = { "NewSeek on " .. top .. (if os.date then " at " .. os.date("%Y-%m-%d %H:%M:%S") else ""), "mode: " .. entry.mode, "" }
+		local pivot = original:GetPivot()
+		for _, d in ipairs(original:GetDescendants()) do
+			if #lines > 500 then break end
+			local path = d:GetFullName():sub(#top + 2)
+			if d:IsA("BasePart") then
+				local at = pivot:PointToObjectSpace(d.Position)
+				table.insert(lines, ("part  %s [%s] size %.2f %.2f %.2f at %.2f %.2f %.2f transparency %.2f anchored %s"):format(path, tostring(d.ClassName),
+					d.Size.X, d.Size.Y, d.Size.Z, at.X, at.Y, at.Z, d.Transparency, tostring(d.Anchored)))
+			elseif d:IsA("JointInstance") then
+				table.insert(lines, ("joint %s [%s] %s -> %s"):format(path, tostring(d.ClassName), d.Part0 and d.Part0.Name or "-", d.Part1 and d.Part1.Name or "-"))
+			elseif d:IsA("Bone") or d:IsA("AnimationController") or d:IsA("Humanoid") or d:IsA("Model") then
+				table.insert(lines, ("%s  %s"):format(tostring(d.ClassName), path))
+			end
+		end
+		if not isfolder(FOLDER) then makefolder(FOLDER) end
+		writefile(FOLDER .. "/SeekStructure.txt", table.concat(lines, "\n"))
+	end)
+	print(("[NewSeek] %s: %s"):format(original.Name, entry.mode))
+end
+
 local function dress(original)
 	if worn[original] or not original.Parent then return end
 	local copy = template:Clone()
-	local theirRoot, ourRoot = rootPart(original), rootPart(copy)
 	local entry = { original = original, copy = copy, hidden = {}, watch = {}, sounds = {}, ours = motorsOf(copy), theirs = motorsOf(original) }
-	-- What follows what: their rig's Root (our Root on it), or else their PrimaryPart (our Figure on it)
-	if theirRoot and ourRoot then
-		entry.follow, entry.anchor = theirRoot, ourRoot
+	-- Part by part: each of its body's parts on DOORS' own of the same name (its pose is DOORS', whatever its joints)
+	local theirParts, ourParts = partsByName(original), partsByName(copy)
+	entry.pairs = {}
+	for _, name in ipairs(BODY) do
+		if theirParts[name] and ourParts[name] then table.insert(entry.pairs, { ourParts[name], theirParts[name] }) end
+	end
+	if #entry.pairs >= 4 then
+		entry.pose = true
+		for _, pair in ipairs(entry.pairs) do pair[1].Anchored = true end
+		entry.anchor = entry.pairs[1][1]
+		entry.mode = ("part by part (%d parts)"):format(#entry.pairs)
 	else
-		entry.follow, entry.anchor = original.PrimaryPart or original:FindFirstChildWhichIsA("BasePart", true), copy.PrimaryPart or ourRoot
+		-- Or else whole: our Root on their rig's Root, or our Figure on their PrimaryPart; its joints DOORS' or its own animations
+		local theirRoot, ourRoot = rootPart(original), rootPart(copy)
+		if theirRoot and ourRoot then
+			entry.follow, entry.anchor = theirRoot, ourRoot
+		else
+			entry.follow, entry.anchor = original.PrimaryPart or original:FindFirstChildWhichIsA("BasePart", true), copy.PrimaryPart or ourRoot
+		end
+		if not (entry.follow and entry.anchor) then
+			warn("[NewSeek] nothing in " .. original.Name .. " to follow: left as it is")
+			copy:Destroy()
+			return
+		end
+		entry.anchor.Anchored = true
+		entry.mode = ("whole, on its %s"):format(entry.follow.Name)
 	end
-	if not (entry.follow and entry.anchor) then
-		copy:Destroy()
-		return
-	end
-	entry.anchor.Anchored = true
 	-- Its joints: DOORS' own, if they are its own; or its own animations
 	local same = 0
 	for name in pairs(entry.ours) do
 		if entry.theirs[name] then same += 1 end
 	end
 	entry.mirror = same >= 5
+	if not entry.pose then entry.mode = entry.mode .. (if entry.mirror then (" (its %d joints)"):format(same) else " (its own animations)") end
 	entry.byPart = {} -- (its own animations name the part a joint moves, not the joint)
 	for _, motor in pairs(entry.ours) do
 		if motor.Part1 then entry.byPart[motor.Part1.Name] = motor end
 	end
 	entry.time, entry.anim, entry.emerged = 0, nil, false
 	if GLITCH then
-		entry.body, entry.base, entry.eyes, entry.handCubes, entry.lights = {}, {}, {}, {}, {}
+		entry.body, entry.base, entry.eyes, entry.eyeCubes, entry.handCubes, entry.lights = {}, {}, {}, {}, {}, {}
 		for _, d in ipairs(copy:GetDescendants()) do
 			if d:IsA("BasePart") and d:FindFirstChild("GlitchTexture") then
 				table.insert(entry.body, d)
@@ -285,6 +359,8 @@ local function dress(original)
 				table.insert(entry.eyes, d)
 			elseif d:IsA("Weld") and d.Name == "GlitchWeld" then
 				table.insert(entry.handCubes, d)
+			elseif d:IsA("ImageLabel") and d.Parent and d.Parent.Name == "GlitchEye" then
+				table.insert(entry.eyeCubes, d)
 			elseif d:IsA("Light") then
 				table.insert(entry.lights, { d, d.Brightness })
 			end
@@ -295,11 +371,17 @@ local function dress(original)
 		entry.nextFlicker, entry.nextBurst, entry.nextFreeze, entry.nextWarble, entry.nextEyes, entry.nextHands, entry.frozenUntil =
 			now, now, now + 1, now, now, now, 0
 	end
-	entry.anchor.CFrame = entry.follow.CFrame
+	if entry.pose then
+		for _, pair in ipairs(entry.pairs) do pair[1].CFrame = pair[2].CFrame end
+	else
+		entry.anchor.CFrame = entry.follow.CFrame
+	end
 	copy.Parent = folder
+	-- Only now, with the new one in its place: DOORS' own out of sight
 	for _, d in ipairs(original:GetDescendants()) do hide(entry, d) end
 	entry.added = original.DescendantAdded:Connect(function(d) hide(entry, d) end)
 	worn[original] = entry
+	describe(original, entry)
 end
 
 local function undress(original)
@@ -354,13 +436,25 @@ local function glitch(entry, now)
 			decal.Texture = if cube then G.cube else decal:GetAttribute("SeekEye")
 			decal.Color3 = if cube then G.cyan else G.light
 		end
+		for _, label in ipairs(entry.eyeCubes) do
+			label.Visible = math.random() < 0.8
+			label.ImageColor3 = ({ G.light, G.cyan, G.white })[math.random(1, 3)]
+			label.Rotation = math.random(0, 1) * 180
+			local s = 0.7 + math.random() * 0.6
+			label.Size = UDim2.fromScale(s, s)
+		end
 	end
 	-- Its hands: their cubes jump about
 	if now >= entry.nextHands then
 		entry.nextHands = now + 0.1
-		for _ = 1, 3 do
+		for _ = 1, 4 do
 			local weld = entry.handCubes[math.random(math.max(#entry.handCubes, 1))]
-			if weld then weld.C0 = CFrame.new(rnd(0.6), rnd(0.8), rnd(0.6)) * CFrame.Angles(rnd(1), rnd(1), rnd(1)) end
+			local reach = weld and weld.Part1 and weld.Part1:GetAttribute("Reach")
+			if reach then
+				weld.C0 = CFrame.new(rnd(reach.X), rnd(reach.Y), rnd(reach.Z)) * CFrame.Angles(rnd(1), rnd(1), rnd(1))
+				local s = 0.5 + math.random() * 0.5
+				weld.Part1.Size = Vector3.new(s, s, s)
+			end
 		end
 	end
 	-- Cubes break off it
@@ -425,9 +519,17 @@ local function screenGlitch(now, nearest)
 	end
 end
 
----====== EVERY FRAME: on DOORS' Seek, joint by joint ======---
+---====== EVERY FRAME: on DOORS' Seek, part by part (or whole, joint by joint) ======---
 
 local function animate(entry, dt)
+	if entry.pose then -- each part on DOORS' own (Glitch: now and then one jumps off)
+		for _, pair in ipairs(entry.pairs) do
+			local cf = pair[2].CFrame
+			if GLITCH and math.random() < 0.05 then cf = cf * CFrame.new(rnd(0.4), rnd(0.4), rnd(0.4)) * CFrame.Angles(rnd(0.5), rnd(0.5), 0) end
+			pair[1].CFrame = cf
+		end
+		return
+	end
 	if entry.mirror then
 		for name, motor in pairs(entry.ours) do
 			local theirs = entry.theirs[name]
@@ -475,7 +577,7 @@ table.insert(connections, RunService.RenderStepped:Connect(function(dt)
 		else
 			if GLITCH then glitch(entry, now) end
 			if not (GLITCH and now < entry.frozenUntil) then
-				entry.anchor.CFrame = entry.follow.CFrame
+				if not entry.pose then entry.anchor.CFrame = entry.follow.CFrame end
 				animate(entry, dt)
 			end
 			if me then nearest = math.min(nearest, (entry.anchor.Position - me.Position).Magnitude) end
