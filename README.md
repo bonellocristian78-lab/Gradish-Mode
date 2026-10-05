@@ -27,7 +27,7 @@ mod rather than playing it.
 | DOORS optimizer (max graphics, less lag) | `.../DoorsOptimizer` |
 | Hellish Time Ever (K = an entity, spam it) | `.../HellishTimeEver` |
 | Noise: a TV above the door, a blue tape, a hammer, a crucifix | `.../Noise` |
-| Noise 90: every "-90" (and A-404) as a Noise (`_G.Type = "A-90"`, ...), all in one | `.../Noise90` |
+| Noise 90: every "-90" (A-404 and R-90 too) as a Noise (`_G.Type = "A-90"`, ...), all in one | `.../Noise90` |
 | Noise 90, all of them: a new one every 10 s (the others stay), out at once, every disc in the Journal | `.../Noise90All` |
 | DOORS' walk, run, crouch and jump in any game | `.../DoorsAnimations` |
 | Scanners: DOORS' radar (Nokia) or the NVCS tablet (`_G.Scanner = { Type = "Tablet" }`) | `.../ObjectScanner` |
@@ -374,7 +374,8 @@ one no longer freezes the game when it appears.
 
 Faces, colours and ways come from the wikis (Interminable Rooms fanmade, Interminable
 Rooms, INTERMINABLE FEVER); G-90 has no picture there, so its face is drawn from its
-description.
+description. R-90 is on no wiki: it was made here from a design sent on a Discord
+server (its face, its body and its black spots are cut from it), and so was its way.
 
 | Type | What sets the tape off | What it does |
 |---|---|---|
@@ -391,6 +392,7 @@ description.
 | `XS-90` | you come close | inverted, red pupils: six colours, much less time, or hide |
 | `X-60` | you stare at it | its own tape (its six yellow faces, two orbiting the middle one); then it rushes back the way you came, faster and faster, loud static, and stays 9 s in your room slowly going down: hide |
 | `A-404` | you stare at it | Interminable Rooms' glitched one (its wiki's head, faces and static). Docile, blue: it stands between you and the way on, an invisible wall across the room, its mouth moving: "This is a glitched server, please join a new one." It goes in 20 to 40 s. Try to get past it (or open the next door) and it is angered, red: its head and its face come apart all over your screen, swap, and it kicks you with `ERROR CODE 404`, hiding or not (`Kick = false`: you die) |
+| `R-90` | you come close | red with black spots, white eyes, a red and yellow toothy grin. **Red light, green light**: it stands a little before the door with its back to you. GREEN LIGHT (the room green): walk. "..." (amber, a click): it is about to turn. RED LIGHT (the room red): it turns round and grins; move and it is on you, 90, then it goes back to its place and the game goes on. Get through the door and it has lost; after 6 rounds it gives up |
 
 Every one is in its own colours, body and all: the kit's Noise is blue (B-90 in
 it), and only B-90 keeps that blue now.
@@ -480,7 +482,7 @@ carry over; S-90, XS-90 and A-404 kill you instead of kicking you out (`Kick = t
 to be kicked), or a kick would end them all. The TV is a little bigger
 or smaller each time (`TVScale`). Every setting is at the top of the script
 (`_G.Noise90 = { ... }`). The props come from `assets/noise/NoiseWorld.rbxm`,
-the faces from `assets/noise/Wiki_*.png` (the wikis'; G-90's `Face_G90.png`), the discs' art from
+the faces from `assets/noise/Wiki_*.png` (the wikis'; G-90's `Face_G90.png`, R-90's `Face_R90.png` and its spots `Speckle_R90.png`), the discs' art from
 `assets/noise/Disc_*`, the journal's icon `Noise_Journal.png`, the tinted tape from
 `assets/noise/NoiseFramesGray_*.jpg`.
 
