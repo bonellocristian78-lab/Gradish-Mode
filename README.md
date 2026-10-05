@@ -31,7 +31,7 @@ mod rather than playing it.
 | Noise 90, all of them: a new one every 10 s (the others stay), out at once, every disc in the Journal | `.../Noise90All` |
 | DOORS' walk, run, crouch and jump in any game | `.../DoorsAnimations` |
 | Morph: anybody's avatar on you (`_G.User = "name"`), only you see it | `.../Morph` |
-| New Seek: DOORS' Seek with another body (`assets/seek/NewSeek.rbxm`); `_G.Type = "Glitch"` for its glitched version | `.../NewSeek` |
+| New Seek: DOORS' Seek with another body (`assets/seek/NewSeek.rbxm`); `_G.Type = "Glitch"`: made of DOORS' Glitch (its purple, cube texture and particles, pink light), glitched eyes, hands of cubes | `.../NewSeek` |
 | Scanners: DOORS' radar (Nokia) or the NVCS tablet (`_G.Scanner = { Type = "Tablet" }`) | `.../ObjectScanner` |
 | Universal Custom Assets: animator with Studio controls (Ctrl + U I O) | `.../UniversalAssets` |
 | The same, obfuscated | `.../UniversalAssets.obf` |
