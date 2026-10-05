@@ -5,7 +5,7 @@
         once, no tape. Its discs are written in the Noise Journal as it comes. Every 10 seconds the
         next one, in the Journal's order; the ones before it stay and go on:
             B-90, C-90, Ransom//90, A-90, X-90, G-90, Pix-90, Trollface-90, XTrollface-90,
-            S-90, XS-90, X-60, A-404
+            S-90, XS-90, X-60, A-404, R-90
 
             loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/Noise90All"))()
 
@@ -20,7 +20,7 @@ local SOURCES = {
 	"https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/Noise90",
 	"https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/claude/sei-qui-con-noi-ye4k62/Noise90",
 }
-local TYPES = { "B-90", "C-90", "Ransom//90", "A-90", "X-90", "G-90", "Pix-90", "Trollface-90", "XTrollface-90", "S-90", "XS-90", "X-60", "A-404" }
+local TYPES = { "B-90", "C-90", "Ransom//90", "A-90", "X-90", "G-90", "Pix-90", "Trollface-90", "XTrollface-90", "S-90", "XS-90", "X-60", "A-404", "R-90" }
 local Players = game:GetService("Players")
 
 local settings = if type(_G.Noise90) == "table" then _G.Noise90 else {}

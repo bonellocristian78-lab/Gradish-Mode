@@ -48,6 +48,10 @@
                            please join a new one." and it goes in 20 to 40 seconds. Try to get past it and it is
                            angered (red): its head and its face come apart on your screen and it kicks you
                            (ERROR CODE 404), hiding or not
+            R-90           Made here, from a design sent on Discord: red, black spots all over, white eyes and a
+                           toothy grin. Red light, green light: it goes and stands by the way on, its back to you.
+                           Green light: walk. Amber: it is about to turn. Red light: it turns round and grins; move
+                           and it is on you (90). Get through the door and it has lost; after six rounds it gives up
         Every one is in its own colours, body and all (no more of the kit's blue but on B-90).
         Every one can be crucified: a crucifix in your inventory, and in your hand when it is about to get you (it catches
         you, its face on your screen, S-90's wrong colour, A-404's kick) it is chained, rewound and goes down into its
@@ -247,8 +251,14 @@ local TYPES = {
 		heads = { "Wiki_A404_Head_1.png", "Wiki_A404_Head_2.png", "Wiki_A404_Head_3.png" }, mouth = "Wiki_A404_Face.png", static = "Wiki_A404_Static.png",
 		trigger = "look", setups = { "Ceiling", "Table", "Cart", "Pedestal" }, phase = "glitch",
 		hints = { "You died to A-404.", "This is a glitched server, please join a new one.", "When it stands in your way, wait for it to go. Do not try to get past it." } },
+	-- Made here, from a Discord server's design: red, black spots all over (speckle), white eyes, a red and yellow toothy grin.
+	-- Red light, green light: gap (seconds of green), window (seconds of red), dash (how fast it is on you)
+	["R-90"] = { color = rgb(235, 20, 20), face = "Face_R90.png", speckle = "Speckle_R90.png", trigger = "near",
+		setups = { "Table", "Cart", "Pedestal", "Ceiling" }, phase = "redlight", rounds = 6, gap = { 2.5, 5 }, window = 2.2, dash = 70,
+		hints = { "You died to R-90.", "Red light, green light.", "Walk while the light is green. When it turns round, do not move." } },
 }
-local ORDER = { "B-90", "C-90", "Ransom//90", "A-90", "X-90", "G-90", "Pix-90", "Trollface-90", "XTrollface-90", "S-90", "XS-90", "X-60", "A-404" }
+local ORDER = { "B-90", "C-90", "Ransom//90", "A-90", "X-90", "G-90", "Pix-90", "Trollface-90", "XTrollface-90", "S-90", "XS-90", "X-60", "A-404",
+	"R-90" }
 
 -- "b90", "ransom 90", "XTROLLFACE-90"... all the same as the list's
 local function typeNamed(name)
@@ -268,7 +278,7 @@ V.name = typeName
 -- The art of each one's disc (its covers, its label, its photo); B-90's two are in its discs
 local ART = { ["B-90"] = "B90Look", ["C-90"] = "C90", ["Ransom//90"] = "Ransom90", ["A-90"] = "A90", ["X-90"] = "X90", ["G-90"] = "G90",
 	["Pix-90"] = "Pix90", ["Trollface-90"] = "Troll90", ["XTrollface-90"] = "XTroll90", ["S-90"] = "S90", ["XS-90"] = "XS90", ["X-60"] = "X60",
-	["A-404"] = "A404" }
+	["A-404"] = "A404", ["R-90"] = "R90" }
 V.art = ART[typeName]
 
 -- The tape: 179 frames at 15 per second, 12 to a sheet (3 x 4 of 320 x 240)
@@ -401,7 +411,7 @@ task.spawn(function() -- all of it now, so nothing waits later
 		for i = 1, TAPE.sheets do files.sheets[i] = asset(("NoiseFramesGray_%02d.jpg"):format(i)) end
 	end
 	local wanted = { V.face, V.angry, V.mouth, V.static }
-	for _, list in ipairs({ V.faces or {}, V.orbit or {}, V.talk or {}, V.heads or {} }) do
+	for _, list in ipairs({ V.faces or {}, V.orbit or {}, V.talk or {}, V.heads or {}, { V.speckle } }) do
 		for _, face in ipairs(list) do table.insert(wanted, face) end
 	end
 	for _, face in ipairs(wanted) do
@@ -760,6 +770,17 @@ local function makeNoise(name)
 	noise.textures = {}
 	for _, d in ipairs(model:GetDescendants()) do
 		if d:IsA("Texture") then table.insert(noise.textures, d) end
+	end
+	local speckle = image(V.speckle)
+	if speckle then -- R-90: black spots all over it
+		for _, p in ipairs(model:GetDescendants()) do
+			if p:IsA("BasePart") and p ~= root and p.Transparency < 0.9 then
+				for _, side in ipairs(Enum.NormalId:GetEnumItems()) do
+					make("Texture", { Name = "Speckle", Texture = speckle, Face = side, StudsPerTileU = 2, StudsPerTileV = 2,
+						OffsetStudsU = math.random() * 2, OffsetStudsV = math.random() * 2 }, p):SetAttribute("KeepColor", true)
+				end
+			end
+		end
 	end
 	noise.light.Shadows = false
 	function noise:sound(name) return self.root:FindFirstChild(name) end
@@ -5844,6 +5865,106 @@ function PHASES.glitch(noise)
 	if crucified(noise) then return end -- a crucifix in your hand: no kick, it is crucified
 	kicked404()
 	state = "done"
+end
+
+-- R-90: red light, green light. It stands by the way on, its back to you: green, walk; amber, it is about to turn; red, it
+-- turns round and grins, and if you move it is on you (90), then back to its place. Through the door: it has lost. After its
+-- rounds it gives up
+function PHASES.redlight(noise)
+	state = "phase"
+	local _, _, root = body()
+	if not root then return end
+	local room = roomModel()
+	local exit = room and room:FindFirstChild("RoomExit")
+	local spot = if exit then exit.Position + (flat(root.Position - exit.Position) or Vector3.new(0, 0, 1)) * 8 -- a little before the door
+		else root.Position + (flat(root.CFrame.LookVector) or Vector3.new(0, 0, -1)) * 30
+	spot = Vector3.new(spot.X, root.Position.Y, spot.Z)
+	walkTo(noise, spot, 18, 6)
+	if not (alive and state == "phase") then return end
+	noise.rig:play(noise.anims.Walk, 0)
+	-- The light, at the bottom of your screen
+	local said = make("ScreenGui", { Name = "Noise90Caption", ResetOnSpawn = false, DisplayOrder = 99990 }, hud)
+	table.insert(owned, said)
+	local words = UI.label({ Name = "Caption", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.84), Size = UDim2.fromScale(0.6, 0.05),
+		Text = "" }, said, true)
+	local function light(text, color, roomColor, away) -- what it says, the room's tint, its light; its back to you, or its grin
+		words.Text, words.TextColor3 = text, color
+		tint.TintColor, noise.light.Color = roomColor, color
+		if noise.face then noise.face.Parent.Enabled = not away end
+	end
+	local room0 = latestRoom()
+	-- `seconds` of one light, turned away from you (or to you). -> "door" (you are through), "moved" (on red), or nil
+	local function during(seconds, away)
+		local t0 = os.clock()
+		while alive and state == "phase" and os.clock() - t0 < seconds do
+			local dt = RunService.Heartbeat:Wait()
+			if frozen() then
+				t0 += dt
+				continue
+			end
+			if latestRoom() ~= room0 then return "door" end
+			local _, humanoid, r = body()
+			if not r then return nil end
+			local to = flat(r.Position - noise.position)
+			if to then setAt(noise, noise.position, if away then -to else to) end
+			local excused = LocalPlayer:GetAttribute("Stunned") == true or LocalPlayer:GetAttribute("InCutscene") == true
+				or LocalPlayer:GetAttribute("Invincibility") == true
+			if not away and os.clock() - t0 > 0.25 and not excused and humanoid.MoveDirection.Magnitude > 0.4 then return "moved" end
+		end
+		return nil
+	end
+	local outcome = nil
+	for _ = 1, rounds() do
+		light("GREEN LIGHT", Color3.fromRGB(80, 255, 110), Color3.fromRGB(190, 255, 195), true)
+		outcome = during(V.gap[1] + math.random() * (V.gap[2] - V.gap[1]), true)
+		if outcome or not (alive and state == "phase") then break end
+		light("...", Color3.fromRGB(255, 200, 40), Color3.fromRGB(255, 235, 190), true) -- amber: it is about to turn
+		oneShot(SOUNDS.click, noise.root, { Volume = CONFIG.Volume * 2, RollOffMinDistance = 60 })
+		outcome = during(0.7, true)
+		if outcome or not (alive and state == "phase") then break end
+		light("RED LIGHT", V.color, Color3.fromRGB(255, 150, 150), false)
+		oneShot(A90.spawn, noise.root, { Volume = CONFIG.Volume * 1.2, PlaybackSpeed = 0.8, RollOffMinDistance = 60 })
+		noise:burst("FlashParticle", 15)
+		outcome = during(V.window, false)
+		if outcome == "moved" then -- caught: it is on you
+			outcome = nil
+			setLevel(noise, true)
+			scream(noise)
+			noise.rig:play(noise.anims.HijackWalk or noise.anims.Walk, 3)
+			local t0, got = os.clock(), false
+			while alive and state == "phase" and os.clock() - t0 < 5 do
+				local dt = RunService.Heartbeat:Wait()
+				local _, _, r = body()
+				if not r then break end
+				local d = ((r.Position - noise.position) * Vector3.new(1, 0, 1)).Magnitude
+				if d < CONFIG.KillDistance then
+					got = true
+					break
+				end
+				local to = flat(r.Position - noise.position)
+				setAt(noise, noise.position + to * math.min(V.dash * dt, d), to)
+			end
+			if got then
+				noise.rig:play(noise.anims.Jumpscare, 2)
+				local kill = noise:sound("KillPlayer")
+				if kill then kill:Play() end
+				if hurt(90) then break end -- dead
+			end
+			if not (alive and state == "phase") then break end -- crucified
+			setLevel(noise, false)
+			walkTo(noise, spot, 18, 6) -- back to its place: the game goes on
+			noise.rig:play(noise.anims.Walk, 0)
+		elseif outcome or not (alive and state == "phase") then
+			break
+		end
+	end
+	said:Destroy()
+	tint.TintColor = Color3.new(1, 1, 1)
+	if noise.face then noise.face.Parent.Enabled = true end
+	if alive and state == "phase" then -- through the door, or its rounds are over: gone
+		fizzle(noise)
+		state = "done"
+	end
 end
 
 ---====== RUN ======---
