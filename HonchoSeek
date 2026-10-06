@@ -338,6 +338,7 @@ local function clean(model, keepAnchored) -- nothing of DOORS' in it, nothing th
 end
 clean(honcho, false)
 honcho.Name = "HonchoSeek"
+if floorPart then floorPart:Destroy() end -- (only where his feet are, in the kit)
 for _, piece in ipairs({ kitEye, kitArm }) do
 	if piece then
 		clean(piece, true)
@@ -436,13 +437,14 @@ local function dressSeek(original)
 	end
 	local copy = honcho:Clone()
 	local root = copy:FindFirstChild("RootPart")
-	root.Anchored = true
-	local entry = { original = original, copy = copy, root = root, follow = follow, hidden = {}, watch = {}, motors = {}, ties = {},
-		state = "emerge", time = 0, seen = {}, born = os.clock(), floor = nil, look = nil }
-	for _, m in ipairs(copy:GetDescendants()) do
-		if m:IsA("Motor6D") and m.Part1 then
-			entry.motors[m.Part1.Name] = m
-			if m.Part1.Name:find("^Tie") then table.insert(entry.ties, m) end
+	-- Every part of his anchored, each put where his pose says, every frame (his joints are not used: nothing waits on when
+	-- Roblox applies them)
+	local entry = { original = original, copy = copy, root = root, follow = follow, hidden = {}, watch = {}, parts = {},
+		state = "emerge", time = 0, seen = {}, born = os.clock(), floor = nil, look = nil, running = 0 }
+	for _, p in ipairs(copy:GetDescendants()) do
+		if p:IsA("BasePart") then
+			p.Anchored = true
+			if p == root or HJ[p.Name] then table.insert(entry.parts, { p, p.Name }) end
 		end
 	end
 	entry.footsteps = copy:FindFirstChild("Footsteps", true)
@@ -550,9 +552,15 @@ end
 
 ---====== EVERY FRAME ======---
 
+local TIE = { "TieTop", "TieUpper", "TieMiddle", "TieLower", "TieBottom" }
+
 local function floorUnder(entry, at)
-	probe.FilterDescendantsInstances = { folder, entry.original, LocalPlayer.Character }
-	local hit = workspace:Raycast(at + Vector3.new(0, 2, 0), Vector3.new(0, -30, 0), probe)
+	-- From your height when you are near (the chase is on one floor; DOORS' Seek may start under it), or else from its own
+	local character = LocalPlayer.Character
+	local me = character and character:FindFirstChild("HumanoidRootPart")
+	local from = if me and math.abs(me.Position.Y - at.Y) < 20 then me.Position.Y + 3 else at.Y + 2
+	probe.FilterDescendantsInstances = { folder, entry.original, character }
+	local hit = workspace:Raycast(Vector3.new(at.X, from, at.Z), Vector3.new(0, -30, 0), probe)
 	if hit then entry.floor = hit.Position.Y end
 	return entry.floor or (at.Y - 5.8)
 end
@@ -570,8 +578,10 @@ local function stepSeek(entry, dt, now)
 		local pos = Vector3.new(at.X, floorUnder(entry, at) - HON_FLOOR, at.Z)
 		entry.root.CFrame = CFrame.lookAt(pos, pos + (entry.look or Vector3.new(0, 0, -1)))
 	end
-	-- Which: out of the floor (until it runs), the run (as fast as it goes), the crucifix
-	if entry.state == "emerge" and (entry.pace or 0) > 6 then entry.state, entry.time = "run", 0 end
+	-- Which: out of the floor (until it really runs: fast for a moment, not one jump of its place), the run (as fast as it
+	-- goes), the crucifix
+	entry.running = if (entry.pace or 0) > 8 and (entry.pace or 0) < 200 then entry.running + dt else 0
+	if entry.state == "emerge" and entry.running > 0.25 then entry.state, entry.time = "run", 0 end
 	if entry.state == "emerge" then
 		anim = ANIMS.emerge
 		if anim and entry.time >= anim.length then
@@ -589,20 +599,26 @@ local function stepSeek(entry, dt, now)
 		anim = ANIMS.cruxend
 	end
 	entry.time += dt * speed
+	local T = {}
 	if anim then
 		local t = entry.time
 		if anim == ANIMS.cruxloop and ANIMS.cruxstart then t -= ANIMS.cruxstart.length end
 		t = if anim.looped and anim.length > 0 then t % anim.length else math.min(t, anim.length)
-		for name, list in pairs(anim.joints) do
-			local motor = entry.motors[name]
-			if motor then motor.Transform = poseAt(list, t) end
-		end
+		for name, list in pairs(anim.joints) do T[name] = poseAt(list, t) end
 	end
-	-- His tie swings (more as he runs); his footsteps while he runs
+	-- His tie swings (more as he runs)
 	local swing = if entry.state == "run" then 0.25 else 0.08
-	for i, m in ipairs(entry.ties) do
-		m.Transform = CFrame.Angles(math.sin(now * 9 + i * 0.7) * swing * (0.5 + i * 0.15), 0, math.sin(now * 5.3 + i) * swing * 0.4)
+	for i, name in ipairs(TIE) do
+		T[name] = CFrame.Angles(math.sin(now * 9 + i * 0.7) * swing * (0.5 + i * 0.15), 0, math.sin(now * 5.3 + i) * swing * 0.4)
 	end
+	-- His pose, part by part, where his RootPart is
+	local w = honFK(T)
+	local toWorld = entry.root.CFrame * HROOT:Inverse()
+	for _, pair in ipairs(entry.parts) do
+		local cf = w[pair[2]]
+		if cf and pair[1] ~= entry.root then pair[1].CFrame = toWorld * cf end
+	end
+	-- His footsteps while he runs
 	if entry.footsteps then
 		local running = entry.state == "run" and (entry.pace or 0) > 3
 		if running and not entry.footsteps.IsPlaying then entry.footsteps:Play() elseif not running and entry.footsteps.IsPlaying then entry.footsteps:Stop() end
