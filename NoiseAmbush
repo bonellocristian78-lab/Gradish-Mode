@@ -1,0 +1,699 @@
+--[[
+        NOISE AMBUSH -- Noise rebounds through the rooms like Ambush, faster every time
+
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/claude/sei-qui-con-noi-ye4k62/NoiseAmbush"))()
+
+        The lights of your room flicker, static far away. Noise (Noise90's kit: its body and its own animations) comes out
+        of the floor in the oldest room loaded and runs to the newest with its hijacked walk, then back, then again: 3 to
+        6 times, each faster, a pause of a moment at each end (the hiding place you came out of too soon...). As it nears,
+        its static on your screen and in your ears, the screen shaking, its scream when it is close. Not hidden where it
+        sees you: its jumpscare, your death.
+
+        Only you see it. Run it again: a new one (the one before goes). Outside DOORS it runs along a line through you.
+]]
+
+local NAME = "NoiseAmbush"
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local Lighting = game:GetService("Lighting")
+local SoundService = game:GetService("SoundService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local CollectionService = game:GetService("CollectionService")
+local LocalPlayer = Players.LocalPlayer
+
+local REPO = "https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/claude/sei-qui-con-noi-ye4k62/"
+local VOLUME = 1
+
+---====== SESSION: the one before (of this same script) goes first; the files already loaded are kept ======---
+
+local GENV = if getgenv then getgenv() else _G
+local KEY = "__Surprise_" .. NAME
+if GENV[KEY] then pcall(GENV[KEY]) end
+GENV.__SurpriseFiles = GENV.__SurpriseFiles or {}
+GENV.__SurpriseKits = GENV.__SurpriseKits or {}
+
+local function make(class, props, parent)
+	local i = Instance.new(class)
+	for k, v in pairs(props) do i[k] = v end
+	i.Parent = parent
+	return i
+end
+local function rnd(a) return (math.random() * 2 - 1) * a end
+local function pick(list) return list[math.random(#list)] end
+local function flat(v) return v * Vector3.new(1, 0, 1) end
+
+local hud = if gethui then gethui() else LocalPlayer:WaitForChild("PlayerGui")
+local folder = make("Folder", { Name = NAME }, workspace)
+local screen = make("ScreenGui", { Name = NAME, IgnoreGuiInset = true, DisplayOrder = 100010, ResetOnSpawn = false }, hud)
+local mainGame = nil -- DOORS' Main_Game: its camera shake
+pcall(function() mainGame = require(LocalPlayer.PlayerGui.MainUI.Initiator.Main_Game) end)
+
+local alive = true
+local connections, cleanups = {}, {}
+local function on(signal, fn)
+	local c = signal:Connect(fn)
+	table.insert(connections, c)
+	return c
+end
+local function later(fn) table.insert(cleanups, fn) end -- (undone when it ends, the last first)
+local function stop()
+	if not alive then return end
+	alive = false
+	for _, c in ipairs(connections) do c:Disconnect() end
+	for i = #cleanups, 1, -1 do pcall(cleanups[i]) end
+	folder:Destroy()
+	screen:Destroy()
+	if GENV[KEY] == stop then GENV[KEY] = nil end
+end
+GENV[KEY] = stop
+-- Waits, as long as it is about; false once it is gone
+local function wait(seconds)
+	local t0 = os.clock()
+	repeat RunService.Heartbeat:Wait() until not alive or os.clock() - t0 >= seconds
+	return alive
+end
+
+---====== FILES: downloaded once into the executor's folder, then read from there ======---
+
+local MAGIC = { mp3 = { "ID3", "\255\251", "\255\243", "\255\242" }, png = { "\137PNG" }, rbxm = { "<roblox!" } }
+local function valid(name, data)
+	if type(data) ~= "string" or #data < 16 then return false end
+	for _, start in ipairs(MAGIC[name:match("%.(%w+)$")] or {}) do
+		if data:sub(1, #start) == start then return true end
+	end
+	return false
+end
+-- A content ID for a file of the repository's `path`, kept in the folder `dir`; nil without the executor's support
+local function file(dir, path, name)
+	if type(name) ~= "string" then return nil end
+	local here = dir .. "/" .. name
+	if GENV.__SurpriseFiles[here] then return GENV.__SurpriseFiles[here] end
+	pcall(function()
+		if not isfolder(dir) then makefolder(dir) end
+		if isfile(here) and valid(name, readfile(here)) then return end
+		local data = game:HttpGet(REPO .. path .. name)
+		if valid(name, data) then writefile(here, data) end -- an error page is never kept
+	end)
+	local ok, id = pcall(function() return isfile(here) and getcustomasset(here) end)
+	if not (ok and type(id) == "string") then return nil end
+	GENV.__SurpriseFiles[here] = id
+	return id
+end
+local function sfx(name) return file("Surprise", "assets/surprise/", name .. ".mp3") end
+-- A kit (.rbxm), loaded once a game (what is used of it is always a copy)
+local function kit(dir, path, name)
+	local here = dir .. "/" .. name
+	if GENV.__SurpriseKits[here] then return GENV.__SurpriseKits[here] end
+	local id = file(dir, path, name)
+	if not id then return nil end
+	local ok, objects = pcall(function() return game:GetObjects(id) end)
+	if not (ok and type(objects) == "table" and objects[1]) then return nil end
+	GENV.__SurpriseKits[here] = objects[1]
+	return objects[1]
+end
+-- A copy of a kit's model as a thing to look at: nothing of DOORS' in it, nothing that collides or casts shadows
+local function clean(model)
+	model:SetAttribute("LoadModule", nil)
+	local all = model:GetDescendants()
+	table.insert(all, model)
+	for _, d in ipairs(all) do
+		for _, tag in ipairs(CollectionService:GetTags(d)) do CollectionService:RemoveTag(d, tag) end
+		if d:IsA("LuaSourceContainer") or d:IsA("ProximityPrompt") or d:IsA("TouchTransmitter") or d:IsA("Animation")
+			or d:IsA("AnimationController") or d:IsA("Animator") or d:IsA("BodyMover") then
+			d:Destroy()
+		elseif d:IsA("BasePart") then
+			d.CanCollide, d.CanTouch, d.CanQuery, d.Massless, d.CastShadow = false, false, false, true, false
+		elseif d:IsA("Light") then
+			d.Shadows = false
+		elseif d:IsA("ParticleEmitter") then
+			d.Rate = math.min(d.Rate, 15)
+		end
+	end
+	return model
+end
+
+---====== YOU ======---
+
+local P = {}
+function P.body()
+	local character = LocalPlayer.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	if humanoid and root and humanoid.Health > 0 then return character, humanoid, root end
+	return nil, nil, nil
+end
+function P.hiding()
+	local character = LocalPlayer.Character
+	return character ~= nil and character:GetAttribute("Hiding") == true
+end
+function P.crouching()
+	local character = LocalPlayer.Character
+	return character ~= nil and character:GetAttribute("Crouching") == true
+end
+function P.speed()
+	local _, _, root = P.body()
+	return if root then flat(root.AssemblyLinearVelocity).Magnitude else 0
+end
+-- How straight you look at a point (1: right at it), 0 if something is between
+function P.looks(at)
+	local camera = workspace.CurrentCamera
+	local from = camera.CFrame.Position
+	local to = at - from
+	if to.Magnitude < 0.1 then return 1 end
+	local dot = camera.CFrame.LookVector:Dot(to.Unit)
+	if dot < 0.5 then return dot end
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	params.FilterDescendantsInstances = { folder, LocalPlayer.Character }
+	params.RespectCanCollide = true
+	local hit = workspace:Raycast(from, to * 0.97, params)
+	if hit then return 0 end
+	return dot
+end
+
+---====== THE ROOMS ======---
+
+local W = {}
+local probe = RaycastParams.new()
+probe.FilterType = Enum.RaycastFilterType.Exclude
+probe.RespectCanCollide = true -- (the rooms' invisible parts, their nodes, their entrances: not walls, not floors)
+function W.cast(from, direction)
+	probe.FilterDescendantsInstances = { folder, LocalPlayer.Character }
+	return workspace:Raycast(from, direction, probe)
+end
+function W.latest()
+	local data = ReplicatedStorage:FindFirstChild("GameData")
+	local latest = data and data:FindFirstChild("LatestRoom")
+	return latest and latest.Value or nil
+end
+function W.rooms()
+	local all = workspace:FindFirstChild("CurrentRooms")
+	if not all then return nil end
+	local list = {}
+	for _, r in ipairs(all:GetChildren()) do
+		if tonumber(r.Name) then table.insert(list, r) end
+	end
+	table.sort(list, function(a, b) return tonumber(a.Name) < tonumber(b.Name) end)
+	return if #list > 0 then list else nil
+end
+function W.room(n)
+	local all = workspace:FindFirstChild("CurrentRooms")
+	return all and n and all:FindFirstChild(tostring(n)) or nil
+end
+function W.floor(p)
+	local hit = W.cast(p + Vector3.new(0, 3, 0), Vector3.new(0, -40, 0))
+	return if hit then hit.Position else p
+end
+function W.over(p, lift) return W.floor(p) + Vector3.new(0, lift or 0, 0) end
+-- The way through a room: its entrance, its nodes, its exit (on the floor)
+function W.points(room)
+	local pts = {}
+	local entrance, exit = room:FindFirstChild("RoomEntrance"), room:FindFirstChild("RoomExit")
+	if entrance and entrance:IsA("BasePart") then table.insert(pts, entrance.Position) end
+	local nodes = room:FindFirstChild("PathfindNodes") or room:FindFirstChild("Nodes")
+	if nodes then
+		local list = {}
+		for _, n in ipairs(nodes:GetChildren()) do
+			if n:IsA("BasePart") then table.insert(list, n) end
+		end
+		table.sort(list, function(a, b) return (tonumber(a.Name) or 0) < (tonumber(b.Name) or 0) end)
+		for _, n in ipairs(list) do table.insert(pts, n.Position) end
+	end
+	if exit and exit:IsA("BasePart") then table.insert(pts, exit.Position) end
+	if #pts == 0 then table.insert(pts, room:GetPivot().Position) end
+	for i, p in ipairs(pts) do pts[i] = W.floor(p) end
+	return pts
+end
+-- Every room's points, once ({ number, point }), to tell which room a point is in: W.at(map, p)
+function W.map()
+	local map = {}
+	for _, room in ipairs(W.rooms() or {}) do
+		for _, p in ipairs(W.points(room)) do table.insert(map, { tonumber(room.Name), p }) end
+	end
+	return map
+end
+function W.at(map, p)
+	local best, bestDistance = nil, math.huge
+	for _, m in ipairs(map) do
+		local d = (m[2] - p).Magnitude
+		if d < bestDistance then best, bestDistance = m[1], d end
+	end
+	return best
+end
+-- The room you are in (the one nearest to you), its number
+function W.here()
+	local _, _, root = P.body()
+	return W.at(W.map(), if root then root.Position else workspace.CurrentCamera.CFrame.Position)
+end
+-- From room a to room b (either way), through every room between
+function W.route(a, b)
+	local pts = {}
+	local step = if a <= b then 1 else -1
+	for n = a, b, step do
+		local room = W.room(n)
+		if room then
+			local list = W.points(room)
+			for i = (if step > 0 then 1 else #list), (if step > 0 then #list else 1), step do table.insert(pts, list[i]) end
+		end
+	end
+	return pts
+end
+-- A runner's way: from the oldest room loaded, through yours, to the newest; outside DOORS, a line through you
+function W.runway()
+	local list = W.rooms()
+	if list and #list > 1 then return W.route(tonumber(list[1].Name), tonumber(list[#list].Name)) end
+	local _, _, root = P.body()
+	local camera = workspace.CurrentCamera
+	local at = W.floor(if root then root.Position else camera.CFrame.Position)
+	local look = flat(camera.CFrame.LookVector)
+	look = if look.Magnitude > 0.01 then look.Unit else Vector3.new(0, 0, -1)
+	return { at - look * 220, at, at + look * 120 }
+end
+-- The hiding places of a room ("locker": wardrobes, lockers, closets...; "bed": beds, tables...; "all")
+local LOW = { "Bed", "Table", "Desk", "Cot", "Bench" }
+local HIDES = { "Wardrobe", "Locker", "Closet", "Cabinet", "HidingSpot", "Toolshed", "Fridge", "Bed", "Table", "Desk", "Cot", "Bench" }
+function W.kindOf(name)
+	for _, word in ipairs(LOW) do
+		if name:find(word) then return "bed" end
+	end
+	return "locker"
+end
+local function isHiding(model)
+	if not model:IsA("Model") or model:IsDescendantOf(folder) then return false end
+	for _, word in ipairs(HIDES) do
+		if model.Name:find(word) then return true end
+	end
+	return false
+end
+function W.spots(room, kind)
+	local list = {}
+	for _, d in ipairs(room and room:GetDescendants() or {}) do
+		if isHiding(d) and (kind == "all" or W.kindOf(d.Name) == kind) and not (d.Parent and isHiding(d.Parent)) then table.insert(list, d) end
+	end
+	return list
+end
+-- The hiding place you are in, or nil
+function W.yourSpot()
+	local _, _, root = P.body()
+	if not root or not P.hiding() then return nil end
+	local best, bestDistance = nil, 12
+	for _, room in ipairs(W.rooms() or {}) do
+		for _, d in ipairs(W.spots(room, "all")) do
+			local distance = (d:GetPivot().Position - root.Position).Magnitude
+			if distance < bestDistance then best, bestDistance = d, distance end
+		end
+	end
+	return best
+end
+-- The lights of a room
+function W.lights(room)
+	local list = {}
+	for _, d in ipairs(room and room:GetDescendants() or {}) do
+		if d:IsA("Light") then table.insert(list, d) end
+	end
+	return list
+end
+
+---====== EFFECTS ======---
+
+local FX = {}
+local flashFrame = make("Frame", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, BorderSizePixel = 0, ZIndex = 1 }, screen)
+local STATIC = "rbxassetid://8681113503" -- DOORS' static (A-90's)
+local staticFrame = make("ImageLabel", { Size = UDim2.fromScale(1.2, 1.2), Position = UDim2.fromScale(-0.1, -0.1), BackgroundTransparency = 1,
+	Image = STATIC, ScaleType = Enum.ScaleType.Tile, TileSize = UDim2.fromOffset(256, 256), ImageTransparency = 1, ZIndex = 0 }, screen)
+local captionLabel = make("TextLabel", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.84), Size = UDim2.fromScale(0.7, 0.06),
+	BackgroundTransparency = 1, Text = "", TextScaled = true, Font = Enum.Font.Oswald, TextColor3 = Color3.new(1, 1, 1), TextStrokeTransparency = 0.2,
+	TextTransparency = 1, ZIndex = 6 }, screen)
+local tint = make("ColorCorrectionEffect", { Name = NAME .. "Tint", Enabled = false }, Lighting)
+later(function() tint:Destroy() end)
+
+local shakeNow = 0
+function FX.shake(power)
+	if power <= 0 then return end
+	local ok = mainGame and mainGame.camShaker and pcall(function() mainGame.camShaker:ShakeOnce(power, 12, 0, 0.45) end)
+	if not ok then shakeNow = math.max(shakeNow, power) end
+end
+local shakeName = NAME .. "Shake" .. math.random(1, 1e6)
+RunService:BindToRenderStep(shakeName, (Enum.RenderPriority.Camera and Enum.RenderPriority.Camera.Value or 200) + 1, function(dt)
+	if shakeNow <= 0.05 then return end
+	local camera = workspace.CurrentCamera
+	camera.CFrame *= CFrame.Angles(math.rad(rnd(shakeNow * 0.3)), math.rad(rnd(shakeNow * 0.3)), math.rad(rnd(shakeNow * 0.15)))
+	shakeNow = math.max(0, shakeNow - dt * 14)
+end)
+later(function() RunService:UnbindFromRenderStep(shakeName) end)
+-- The screen shaking as it comes: harder the nearer it is (every quarter of a second at most)
+local nearAt = 0
+function FX.near(pos, range, power)
+	local _, _, root = P.body()
+	if not root or os.clock() < nearAt then return end
+	local u = 1 - (root.Position - pos).Magnitude / range
+	if u <= 0 then return end
+	nearAt = os.clock() + 0.25
+	FX.shake(power * u)
+end
+local captionId = 0
+function FX.caption(text, color, seconds)
+	captionId += 1
+	local id = captionId
+	captionLabel.Text, captionLabel.TextColor3, captionLabel.TextTransparency = text, color or Color3.new(1, 1, 1), 0
+	task.delay(seconds or 3.2, function()
+		if captionId == id and captionLabel.Parent then TweenService:Create(captionLabel, TweenInfo.new(0.6), { TextTransparency = 1 }):Play() end
+	end)
+end
+function FX.flash(color, strength)
+	flashFrame.BackgroundColor3 = color
+	flashFrame.BackgroundTransparency = 1 - (strength or 0.6)
+	TweenService:Create(flashFrame, TweenInfo.new(0.7), { BackgroundTransparency = 1 }):Play()
+end
+-- Static over the screen: 0 none, 1 all of it
+function FX.static(amount)
+	staticFrame.ImageTransparency = 1 - math.clamp(amount, 0, 0.85)
+	if amount > 0 then staticFrame.Position = UDim2.fromScale(-0.1 + rnd(0.05), -0.1 + rnd(0.05)) end
+end
+-- The colour of everything: a colour and how much (0 off)
+function FX.tint(color, amount)
+	tint.Enabled = amount > 0
+	tint.TintColor = Color3.new(1, 1, 1):Lerp(color, math.clamp(amount, 0, 1))
+	tint.Saturation = -0.3 * amount
+end
+-- DOORS' own flicker of a room's lights (or its lights off and on)
+function FX.flicker(room, seconds)
+	if not room then return end
+	local ok = pcall(function() require(ReplicatedStorage.ModulesClient.Module_Events).flicker(room, seconds) end)
+	if ok then return end
+	task.spawn(function()
+		local lights = {}
+		for _, l in ipairs(W.lights(room)) do
+			if l.Enabled then table.insert(lights, l) end
+		end
+		local t0 = os.clock()
+		while os.clock() - t0 < seconds do
+			for _, l in ipairs(lights) do l.Enabled = math.random() < 0.5 end
+			task.wait(0.07)
+		end
+		for _, l in ipairs(lights) do l.Enabled = true end
+	end)
+end
+-- DOORS' own shattering of a room's lights (or its lights off, with the sound of glass)
+function FX.shatter(room, at)
+	if not room then return end
+	local ok = pcall(function() require(ReplicatedStorage.ModulesClient.Module_Events).shatter(room) end)
+	if ok then return end
+	FX.once("rbxassetid://6737581315", at) -- (DOORS' glass)
+	for _, l in ipairs(W.lights(room)) do l.Enabled = false end
+end
+-- A room dark, until it ends (only for you)
+function FX.dark(room)
+	for _, l in ipairs(W.lights(room)) do
+		if l.Enabled then
+			l.Enabled = false
+			later(function() l.Enabled = true end)
+		end
+	end
+end
+function FX.sound(id, parent, props)
+	if not id then return nil end
+	local s = make("Sound", { SoundId = id, Volume = VOLUME }, parent or SoundService)
+	for k, v in pairs(props or {}) do s[k] = v end
+	return s
+end
+function FX.once(id, parent, props)
+	local s = FX.sound(id, parent or SoundService, props)
+	if not s then return nil end
+	s:Play()
+	s.Ended:Connect(function() s:Destroy() end)
+	task.delay(20, function() if s.Parent then s:Destroy() end end)
+	return s
+end
+function FX.loop(id, parent, props)
+	local s = FX.sound(id, parent, props)
+	if not s then return nil end
+	s.Looped = true
+	s:Play()
+	return s
+end
+-- Its face in yours: the camera on `part` a moment (from your side of it, closer and closer, shaking), its sound; then
+-- `after`. (The camera is set after DOORS' own has moved it, every frame)
+function FX.face(part, sound, color, after)
+	local camera = workspace.CurrentCamera
+	local away = flat(camera.CFrame.Position - part.Position)
+	away = if away.Magnitude > 0.1 then away.Unit else Vector3.new(0, 0, 1)
+	local distance = math.clamp(part.Size.Magnitude * 1.6, 3, 14)
+	local name = NAME .. "Face" .. math.random(1, 1e6)
+	local t0 = os.clock()
+	RunService:BindToRenderStep(name, Enum.RenderPriority.Last.Value, function()
+		local u = math.min((os.clock() - t0) / 0.9, 1)
+		local from = part.Position + away * distance * (1 - u * 0.6) + Vector3.new(rnd(0.3), rnd(0.3), rnd(0.3))
+		camera.CFrame = CFrame.lookAt(from, part.Position)
+	end)
+	FX.once(sound, SoundService, { Volume = VOLUME * 2 })
+	FX.flash(color, 0.5)
+	FX.shake(8)
+	task.wait(0.9)
+	RunService:UnbindFromRenderStep(name)
+	if after then after() end
+end
+
+---====== WHAT IT DOES TO YOU ======---
+
+local HURT = {}
+-- DOORS' death screen: "You died to ...", and its tips
+function HURT.kill(name, hints)
+	local _, humanoid = P.body()
+	if not humanoid then return end
+	pcall(function() ReplicatedStorage.GameStats["Player_" .. LocalPlayer.Name].Total.DeathCause.Value = name end)
+	if firesignal then
+		task.spawn(function()
+			pcall(function()
+				local death = LocalPlayer.PlayerGui.MainUI:FindFirstChild("Death")
+				if not death then return end
+				if not death.Visible then death:GetPropertyChangedSignal("Visible"):Wait() end
+				firesignal(ReplicatedStorage.RemotesFolder.DeathHint.OnClientEvent, hints, "Blue")
+			end)
+		end)
+	end
+	humanoid.Health = 0
+end
+-- `amount` of your health; true if it was the last of it (then: its jumpscare, `face`, and your death)
+function HURT.damage(amount, name, hints, color, face, sound)
+	local _, humanoid = P.body()
+	if not humanoid then return false end
+	if humanoid.Health - amount <= 0 then
+		if face then
+			FX.face(face, sound, color, function() HURT.kill(name, hints) end)
+		else
+			HURT.kill(name, hints)
+		end
+		return true
+	end
+	humanoid.Health -= amount
+	FX.flash(color, 0.45)
+	FX.shake(5)
+	return false
+end
+
+---====== GOING ======---
+
+-- You, unhidden, within `reach` of `pos`, nothing solid between: your root; else nil
+local function exposed(pos, reach)
+	local character, _, root = P.body()
+	if not root or P.hiding() then return nil end
+	local to = root.Position - pos
+	if to.Magnitude > reach then return nil end
+	if to.Magnitude > 2 then
+		local hit = W.cast(pos, to)
+		if hit and not hit.Instance:IsDescendantOf(character) then return nil end
+	end
+	return root
+end
+-- Along `pts` at `speed` studs a second (a number, or a function of the time gone); step(pos, dir, dt) every frame, true
+-- from it stops it. -> where it stopped
+local function travel(pts, speed, step)
+	local pos = pts[1]
+	if not pos then return nil end
+	local i, t, dir = 2, 0, Vector3.new(0, 0, -1)
+	if pts[2] and (pts[2] - pos).Magnitude > 1e-3 then dir = (pts[2] - pos).Unit end
+	while alive and i <= #pts do
+		local dt = RunService.Heartbeat:Wait()
+		t += dt
+		local left = (if type(speed) == "function" then speed(t) else speed) * dt
+		while left > 0 and i <= #pts do
+			local to = pts[i] - pos
+			local d = to.Magnitude
+			if d > 1e-3 then dir = to.Unit end
+			if d <= left then
+				pos, i, left = pts[i], i + 1, left - d
+			else
+				pos, left = pos + dir * left, 0
+			end
+		end
+		if step(pos, dir, dt) then return pos end
+	end
+	return pos
+end
+-- A model held as one: place(cf) puts the frame `ref` (a CFrame) at cf, every part of it with it (all anchored)
+local function rigid(model, ref)
+	local parts = {}
+	for _, p in ipairs(model:GetDescendants()) do
+		if p:IsA("BasePart") then
+			p.Anchored = true
+			table.insert(parts, { p, ref:ToObjectSpace(p.CFrame) })
+		end
+	end
+	return function(cf)
+		for _, e in ipairs(parts) do e[1].CFrame = cf * e[2] end
+	end
+end
+-- The same way backwards
+local function reversed(pts)
+	local back = {}
+	for i = #pts, 1, -1 do table.insert(back, pts[i]) end
+	return back
+end
+---====== NOISE: the kit's body (assets/noise/NoiseKitV2.rbxm, Noise90's own), playing its own animations ======---
+
+local NOISE_STYLE = { Linear = "Linear", Cubic = "Cubic", CubicV2 = "Cubic", Elastic = "Elastic", Bounce = "Bounce" }
+local function prepareAnim(kfs)
+	local joints, length = {}, 0
+	local frames = kfs:GetKeyframes()
+	table.sort(frames, function(a, b) return a.Time < b.Time end)
+	for _, frame in ipairs(frames) do
+		length = math.max(length, frame.Time)
+		for _, d in ipairs(frame:GetDescendants()) do
+			if d:IsA("Pose") and d.Weight > 0 then
+				joints[d.Name] = joints[d.Name] or {}
+				table.insert(joints[d.Name], { t = frame.Time, cf = d.CFrame, style = d.EasingStyle.Name, dir = d.EasingDirection.Name })
+			end
+		end
+	end
+	return { joints = joints, length = length, looped = kfs.Loop }
+end
+local function animPose(list, time)
+	local a, b = list[1], nil
+	for i = 2, #list do
+		if list[i].t <= time then a = list[i] else b = list[i] break end
+	end
+	if not b or a.style == "Constant" or time <= a.t then return a.cf end
+	local dir = a.dir -- the old styles have In and Out swapped, as in Roblox
+	if a.style ~= "CubicV2" and a.style ~= "Linear" then dir = if dir == "In" then "Out" elseif dir == "Out" then "In" else dir end
+	local alpha = TweenService:GetValue((time - a.t) / (b.t - a.t), Enum.EasingStyle[NOISE_STYLE[a.style] or "Linear"], Enum.EasingDirection[dir])
+	return a.cf:Lerp(b.cf, alpha)
+end
+-- Noise (nil without the kit): { model, root, hip (its root over the floor), anims, :play(name, speed), :step(dt) }; its
+-- animations are its joints' Transforms, set every frame before physics
+local function loadNoise()
+	local source = kit("Noise", "assets/noise/", "NoiseKitV2.rbxm")
+	local inner = source and source:FindFirstChild("Noise (B-90)")
+	local model = source and (source:FindFirstChild("NoiseModel") or (inner and inner:FindFirstChild("NoiseModel")))
+	if not model then return nil end
+	model = model:Clone()
+	local anims = {}
+	local saves = model:FindFirstChild("AnimSaves")
+	for _, name in ipairs({ "Emerge", "Walk", "HijackWalk", "Jumpscare" }) do
+		local kfs = saves and saves:FindFirstChild(name)
+		if kfs then anims[name] = prepareAnim(kfs) end
+	end
+	if saves then saves:Destroy() end
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("Sound") and d.SoundId == "" and type(d:GetAttribute("id")) == "string" then d.SoundId = d:GetAttribute("id") end
+	end
+	clean(model)
+	model.Name = "Noise"
+	local root = model.PrimaryPart or model:FindFirstChild("HumanoidRootPart") or model:FindFirstChildWhichIsA("BasePart", true)
+	for _, p in ipairs(model:GetDescendants()) do
+		if p:IsA("BasePart") then p.Anchored = p == root end
+	end
+	local box, size = model:GetBoundingBox()
+	local noise = { model = model, root = root, anims = anims, motors = {}, anim = nil, time = 0, speed = 1,
+		hip = root.Position.Y - (box.Y - size.Y / 2) }
+	for _, m in ipairs(model:GetDescendants()) do
+		if m:IsA("Motor6D") and m.Part1 then noise.motors[m.Part1.Name] = m end
+	end
+	function noise:play(name, speed)
+		local anim = self.anims[name]
+		if not anim then return end
+		if anim ~= self.anim then self.time = 0 end
+		self.anim, self.speed = anim, speed or 1
+	end
+	function noise:step(dt)
+		local anim = self.anim
+		if not anim then return end
+		self.time += dt * self.speed
+		local t = if anim.looped and anim.length > 0 then self.time % anim.length else math.clamp(self.time, 0, anim.length)
+		for name, list in pairs(anim.joints) do
+			local motor = self.motors[name]
+			if motor then motor.Transform = animPose(list, t) end
+		end
+	end
+	-- Its feet on the floor at `pos`, facing `look`
+	function noise:place(pos, look)
+		local at = pos + Vector3.new(0, self.hip, 0)
+		look = flat(look or Vector3.new(0, 0, -1))
+		root.CFrame = CFrame.lookAt(at, at + (if look.Magnitude > 1e-3 then look.Unit else Vector3.new(0, 0, -1)))
+	end
+	on(RunService.PreSimulation or RunService.Stepped, function(a, b) noise:step(if type(b) == "number" then b else a) end)
+	model.Parent = folder
+	return noise
+end
+
+local BLUE = Color3.fromRGB(70, 130, 255)
+local REACH = 14
+local HINTS = { "You died to Noise.", "It comes back, again and again, faster each time.", "Stay hidden until the static is gone for good." }
+
+local noise = loadNoise()
+if not noise then
+	warn("[NoiseAmbush] its kit could not be loaded")
+	stop()
+	return
+end
+
+local pts = W.runway()
+local head = noise.model:FindFirstChild("Head", true) or noise.root
+local scream = file("Noise", "assets/noise/", "NoiseScream.mp3")
+local walk = if noise.anims.HijackWalk then "HijackWalk" else "Walk"
+noise:place(pts[1], pts[2] - pts[1])
+FX.flicker(W.room(W.here()), 2)
+local static = FX.loop(file("Noise", "assets/noise/", "NoiseStatic.mp3"), noise.root, { Volume = 1.4 * VOLUME, RollOffMinDistance = 15,
+	RollOffMaxDistance = 260 })
+
+-- Out of the floor
+noise:play("Emerge", 1)
+wait(if noise.anims.Emerge then noise.anims.Emerge.length else 1)
+
+local got = false
+local passes = math.random(3, 6)
+for pass = 1, passes do
+	if not alive then break end
+	local speed = 45 + pass * 20
+	local way = if pass % 2 == 1 then pts else reversed(pts)
+	noise:play(walk, math.clamp(speed / 18, 1, 4))
+	local screamed = false
+	travel(way, speed, function(pos, dir, dt)
+		noise:place(pos, dir)
+		local _, _, me = P.body()
+		local d = if me then (me.Position - noise.root.Position).Magnitude else math.huge
+		FX.static(if d < 90 then (1 - d / 90) * 0.75 else 0)
+		FX.near(pos, 100, 6)
+		if not screamed and d < 60 then
+			screamed = true
+			FX.once(scream, noise.root, { Volume = 2 * VOLUME, RollOffMinDistance = 20 })
+		end
+		if not got and exposed(noise.root.Position, REACH) then
+			got = true
+			noise:play("Jumpscare", 1)
+			task.spawn(FX.face, head, scream, BLUE, function() HURT.kill("Noise", HINTS) end)
+		end
+		return false
+	end)
+	FX.static(0)
+	if pass < passes then wait(1 + math.random() * 2.5) end -- (at the end, a moment: then back)
+end
+
+-- Gone, in a burst of static
+if static then static:Stop() end
+FX.static(0.8)
+FX.once(file("Noise", "assets/noise/", "NoiseStatic.mp3"), SoundService, { Volume = 0.6 * VOLUME })
+wait(0.35)
+FX.static(0)
+stop()
