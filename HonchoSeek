@@ -4,10 +4,11 @@
             loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/claude/sei-qui-con-noi-ye4k62/HonchoSeek"))()
 
         Every Seek that comes (SeekMovingNewClone, SeekMoving) is Honcho for you: DOORS' Seek is still there (the server
-        moves it; its hit, its cutscenes and its chase song are DOORS') but you see Honcho in its place, on the floor where
-        it runs, turned the way it goes. He moves with Seek's own animations, made for his body (his three-piece spine,
-        long arms, three-piece legs and feet): he crawls out of the floor (emerge), runs, and when a crucifix gets him he
-        is pulled up, held and goes down (cruxstart, cruxloop, cruxend). His tie swings as he runs.
+        moves it; its hit, its cutscenes and its chase song are DOORS') but you see Honcho in its place. Every frame he takes
+        DOORS' Seek's own pose, part by part, made for his body (his three-piece spine, long arms, three-piece legs, feet):
+        every animation of Seek's is his as it plays (out of the floor, the run, the grab, the crucifix, anything), on Seek's
+        Root (under the floor when Seek is). His tie swings. If DOORS' Seek has not Seek's body, he plays Seek's animations
+        from the kit instead (emerge, run, cruxstart, cruxloop, cruxend).
 
         Sounds: Seek's own are silent; Honcho's instead: his footsteps while he runs, his scream when he is out of the floor,
         when he gets you and when the crucifix takes him. The chase song is DOORS' (ReplicatedStorage.FloorReplicated.
@@ -164,7 +165,7 @@ local function yawOnly(R)
 	return rotBetween(Vector3.new(0, 0, -1), f.Unit)
 end
 local function jointH(w, child) local j = HJ[child] return (w[j.p0] * j.c0).Position end
-local function jointS(w, child) local j = SJ[child] return (w[j.p0] * j.c0).Position end
+local function jointS(w, sj, child) local j = sj[child] return (w[j.p0] * j.c0).Position end
 
 local CORNERS = {}
 for _, x in ipairs({ -0.5, 0.5 }) do
@@ -195,11 +196,11 @@ local HON_FLOOR = if floorPart then floorPart.Position.Y - floorPart.Size.Y / 2 
 local SEEK_FLOOR0 = math.min(s0.LeftLowerLeg.Position.Y, s0.RightLowerLeg.Position.Y) - 1.2
 local K = (HROOT:VectorToObjectSpace(h0.Pelvis.Position).Y - HON_FLOOR) / (s0.LowerTorso.Position.Y - SEEK_FLOOR0)
 local SEEK_FLOOR = SEEK_FLOOR0
-local HEAD_LIFT = 0.6
+local HEAD_LIFT = 0 -- (his head exactly as Seek's)
 
--- Honcho's joints for one pose of Seek's: { [part] = Transform }
-local function retarget(seekT)
-	local ws = seekFK(seekT)
+-- Honcho's joints for one pose of Seek's: ws, its parts from its Root; rest, its parts at rest; sj, its joints.
+-- -> { [part] = Transform }
+local function retargetWorld(ws, rest, sj)
 	local T, wh = {}, { RootPart = HROOT }
 	local function place(name, R, pos)
 		local j = HJ[name]
@@ -218,8 +219,8 @@ local function retarget(seekT)
 		place(name, rotBetween(jointH(wh, child) - jointH(wh, name), target) * rot(wh[name]))
 	end
 	-- His pelvis: Seek's hips' turn since its rest, and their way up and down (scaled)
-	local turn = rot(ws.LowerTorso) * rot(s0.LowerTorso):Inverse()
-	local move = (ws.LowerTorso.Position - s0.LowerTorso.Position) * K
+	local turn = rot(ws.LowerTorso) * rot(rest.LowerTorso):Inverse()
+	local move = (ws.LowerTorso.Position - rest.LowerTorso.Position) * K
 	place("Pelvis", toH(turn) * rot(h0.Pelvis), rot(HJ.Pelvis.c0):VectorToObjectSpace(HROOT:VectorToWorldSpace(Vector3.new(0, move.Y, 0))))
 	-- His spine: its three pieces share Seek's bend from hips to chest
 	local spine = sdir(ws.LowerTorso.Position, ws.UpperTorso.Position)
@@ -229,8 +230,8 @@ local function retarget(seekT)
 		place(name, ID:Lerp(rotBetween(jointH(wh, "Neck") - jointH(wh, name), spine), shares[i]) * rot(wh[name]))
 	end
 	-- His head: Seek's head's own turn beyond its chest's, on his chest; lifted toward upright; his neck halfway
-	local chest = rot(ws.UpperTorso) * rot(s0.UpperTorso):Inverse()
-	local head = rot(ws.Head) * rot(s0.Head):Inverse()
+	local chest = rot(ws.UpperTorso) * rot(rest.UpperTorso):Inverse()
+	local head = rot(ws.Head) * rot(rest.Head):Inverse()
 	local Rhead = (rot(wh.UpperTorso) * rot(h0.UpperTorso):Inverse()) * toH(chest:Inverse() * head) * rot(h0.Head)
 	Rhead = ID:Lerp(rotBetween(Rhead:VectorToWorldSpace(UP), HROOT:VectorToWorldSpace(UP)), HEAD_LIFT) * Rhead
 	follow("Neck")
@@ -239,7 +240,7 @@ local function retarget(seekT)
 	-- His arms: the shoulder pad on his chest, the upper arm along Seek's, the forearm along Seek's, the rest straight
 	for _, side in ipairs({ "Left", "Right" }) do
 		follow(side .. "Shoulder")
-		local shoulder, elbow, wrist = jointS(ws, side .. "UpperArm"), jointS(ws, side .. "LowerArm"), ws[side .. " Hand"].Position
+		local shoulder, elbow, wrist = jointS(ws, sj, side .. "UpperArm"), jointS(ws, sj, side .. "LowerArm"), ws[side .. " Hand"].Position
 		aim(side .. "UpperArm", side .. "UpperWrist", sdir(shoulder, elbow))
 		aim(side .. "UpperWrist", side .. "LowerWrist", sdir(elbow, wrist))
 		follow(side .. "LowerWrist")
@@ -247,7 +248,7 @@ local function retarget(seekT)
 	end
 	-- His legs: the thigh along Seek's, both shin pieces along Seek's shin, the foot flat, turned as his hips
 	for _, side in ipairs({ "Left", "Right" }) do
-		local hip, knee = jointS(ws, side .. "UpperLeg"), jointS(ws, side .. "LowerLeg")
+		local hip, knee = jointS(ws, sj, side .. "UpperLeg"), jointS(ws, sj, side .. "LowerLeg")
 		local foot = ws[side .. "LowerLeg"] * Vector3.new(0, -1.1, 0)
 		aim(side .. "UpperLeg", side .. "MiddleLeg", sdir(hip, knee))
 		aim(side .. "MiddleLeg", side .. "LowerLeg", sdir(knee, foot))
@@ -265,6 +266,7 @@ local function retarget(seekT)
 	T.Pelvis = T.Pelvis + rot(HJ.Pelvis.c0):VectorToObjectSpace(HROOT:VectorToWorldSpace(Vector3.new(0, lift, 0)))
 	return T
 end
+local function retarget(seekT) return retargetWorld(seekFK(seekT), s0, SJ) end
 
 -- The kit's animations, each keyframe made Honcho's: { joints = { [part] = { { t, cf }, ... } }, length, looped }
 local function posesOf(frame)
@@ -369,6 +371,21 @@ local function partsByName(model) -- (only the names there is one of)
 	end
 	return found
 end
+local SEEK_BONES = { "UpperTorso", "LowerTorso", "Head", "LeftUpperArm", "LeftLowerArm", "RightUpperArm", "RightLowerArm", "LeftUpperLeg",
+	"LeftLowerLeg", "RightUpperLeg", "RightLowerLeg" }
+-- DOORS' Seek's parts from its Root (its hands where it has them, else where the kit's Seek has them)
+local function liveWorld(live)
+	local inverse = live.root.CFrame:Inverse()
+	local ws = { Root = ID }
+	for _, name in ipairs(SEEK_BONES) do ws[name] = inverse * live.parts[name].CFrame end
+	for _, side in ipairs({ "Left", "Right" }) do
+		local hand = live.parts[side .. " Hand"] or live.parts[side .. "Hand"]
+		local j = SJ[side .. " Hand"]
+		ws[side .. " Hand"] = if hand then inverse * hand.CFrame else ws[side .. "LowerArm"] * j.c0 * j.c1inv
+	end
+	return ws
+end
+
 local function rootOf(model) -- its rig's Root (the one in SeekRig first), or its PrimaryPart
 	local any = nil
 	for _, d in ipairs(model:GetDescendants()) do
@@ -469,16 +486,37 @@ local function dressSeek(original)
 			end
 		end))
 	end
+	-- Live: if DOORS' Seek has Seek's body, its own pose every frame, made his: every animation of its (out of the floor, the
+	-- run, the grab, the crucifix...) is his, as it plays. Its joints are its own where it has them, the kit's Seek's for the rest
+	local theirs = partsByName(original)
+	local missing = {}
+	for _, name in ipairs(SEEK_BONES) do
+		if not theirs[name] then table.insert(missing, name) end
+	end
+	if #missing == 0 and follow.Name == "Root" then
+		local sj = {}
+		for name, j in pairs(SJ) do sj[name] = j end
+		for _, d in ipairs(original:GetDescendants()) do
+			if (d:IsA("Motor6D") or d:IsA("Weld") or d:IsA("ManualWeld")) and d.Part0 and d.Part1 and SJ[d.Part1.Name] then
+				sj[d.Part1.Name] = { p0 = d.Part0.Name, c0 = d.C0, c1inv = d.C1:Inverse() }
+			end
+		end
+		local rest = { Root = ID }
+		for _, j in ipairs(SEEK_RIG) do
+			local joint = sj[j[1]]
+			if rest[joint.p0] then rest[j[1]] = rest[joint.p0] * joint.c0 * joint.c1inv end
+		end
+		if rest.LowerTorso and rest.UpperTorso and rest.Head then
+			entry.live = { parts = theirs, root = follow, sj = sj, rest = rest }
+		end
+	end
 	copy.Parent = folder
 	-- Only now, Honcho in its place: DOORS' Seek out of sight and silent
 	for _, d in ipairs(original:GetDescendants()) do hide(entry, d, true) end
 	table.insert(entry.watch, original.DescendantAdded:Connect(function(d) hide(entry, d, true) end))
 	seeks[original] = entry
-	describe(original, ("Honcho on its %s (%d of its animations made his)"):format(follow.Name, (function()
-		local n = 0
-		for _ in pairs(ANIMS) do n += 1 end
-		return n
-	end)()))
+	describe(original, if entry.live then "live: DOORS' Seek's own pose, every frame, made Honcho's"
+		else ("its animations from the kit (DOORS' Seek has no %s)"):format(if #missing > 0 then table.concat(missing, ", ") else "Root"))
 end
 
 local function undressSeek(original, gone)
@@ -486,7 +524,7 @@ local function undressSeek(original, gone)
 	if not entry then return end
 	seeks[original] = nil
 	unhide(entry, not gone)
-	if gone and entry.state == "crux" and ANIMS.cruxend then -- taken by the crucifix: he goes down before he goes
+	if gone and not entry.live and entry.state == "crux" and ANIMS.cruxend then -- taken by the crucifix: he goes down before he goes
 		entry.state, entry.time = "cruxend", 0
 		entry.leaving = true
 		seeks[{}] = entry -- (kept a moment longer, on its own)
@@ -565,7 +603,43 @@ local function floorUnder(entry, at)
 	return entry.floor or (at.Y - 5.8)
 end
 
+local function poseParts(entry, T, now)
+	local swing = if (entry.pace or 0) > 3 then 0.25 else 0.08 -- (his tie swings, more as he runs)
+	for i, name in ipairs(TIE) do
+		T[name] = CFrame.Angles(math.sin(now * 9 + i * 0.7) * swing * (0.5 + i * 0.15), 0, math.sin(now * 5.3 + i) * swing * 0.4)
+	end
+	local w = honFK(T)
+	local toWorld = entry.root.CFrame * HROOT:Inverse()
+	for _, pair in ipairs(entry.parts) do
+		local cf = w[pair[2]]
+		if cf and pair[1] ~= entry.root then pair[1].CFrame = toWorld * cf end
+	end
+end
+local function sounds(entry)
+	if entry.footsteps then -- his footsteps while he runs
+		local running = (entry.pace or 0) > 3 and (not entry.state or entry.state == "run" or entry.live ~= nil)
+		if running and not entry.footsteps.IsPlaying then entry.footsteps:Play() elseif not running and entry.footsteps.IsPlaying then entry.footsteps:Stop() end
+		entry.footsteps.PlaybackSpeed = math.clamp((entry.pace or 0) / 22, 0.6, 1.5)
+	end
+end
+
 local function stepSeek(entry, dt, now)
+	if entry.live and not entry.leaving then
+		-- On DOORS' Seek's Root, his floor where Seek's is (under it when Seek is), turned as it is; its pose, made his
+		local root = entry.live.root
+		local at = root.Position
+		entry.pace = ((at - (entry.last or at)) * Vector3.new(1, 0, 1)).Magnitude / math.max(dt, 1e-3)
+		entry.last = at
+		entry.running = if entry.pace > 8 and entry.pace < 200 then entry.running + dt else 0
+		if entry.running > 0.25 and not entry.screamed then -- the chase starts: his scream
+			entry.screamed = true
+			entry.scream:Play()
+		end
+		entry.root.CFrame = root.CFrame * CFrame.new(0, SEEK_FLOOR - HON_FLOOR, 0)
+		poseParts(entry, retargetWorld(liveWorld(entry.live), entry.live.rest, entry.live.sj), now)
+		sounds(entry)
+		return
+	end
 	local anim
 	if not entry.leaving then
 		-- Where: DOORS' Seek's place, on the floor under it, turned the way it goes
@@ -606,24 +680,8 @@ local function stepSeek(entry, dt, now)
 		t = if anim.looped and anim.length > 0 then t % anim.length else math.min(t, anim.length)
 		for name, list in pairs(anim.joints) do T[name] = poseAt(list, t) end
 	end
-	-- His tie swings (more as he runs)
-	local swing = if entry.state == "run" then 0.25 else 0.08
-	for i, name in ipairs(TIE) do
-		T[name] = CFrame.Angles(math.sin(now * 9 + i * 0.7) * swing * (0.5 + i * 0.15), 0, math.sin(now * 5.3 + i) * swing * 0.4)
-	end
-	-- His pose, part by part, where his RootPart is
-	local w = honFK(T)
-	local toWorld = entry.root.CFrame * HROOT:Inverse()
-	for _, pair in ipairs(entry.parts) do
-		local cf = w[pair[2]]
-		if cf and pair[1] ~= entry.root then pair[1].CFrame = toWorld * cf end
-	end
-	-- His footsteps while he runs
-	if entry.footsteps then
-		local running = entry.state == "run" and (entry.pace or 0) > 3
-		if running and not entry.footsteps.IsPlaying then entry.footsteps:Play() elseif not running and entry.footsteps.IsPlaying then entry.footsteps:Stop() end
-		entry.footsteps.PlaybackSpeed = math.clamp((entry.pace or 0) / 22, 0.6, 1.5)
-	end
+	poseParts(entry, T, now)
+	sounds(entry)
 end
 
 table.insert(connections, RunService.RenderStepped:Connect(function(dt)
