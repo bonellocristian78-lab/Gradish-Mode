@@ -32,6 +32,7 @@ mod rather than playing it.
 | DOORS' walk, run, crouch and jump in any game | `.../DoorsAnimations` |
 | Morph: anybody's avatar on you (`_G.User = "name"`), only you see it | `.../Morph` |
 | New Seek: DOORS' Seek with another body (`assets/seek/NewSeek.rbxm`); `_G.Type = "Glitch"`: made of DOORS' Glitch (its purple, cube texture and particles, pink light), glitched eyes, hands of cubes | `.../NewSeek` |
+| Honcho Seek: DOORS' Seek is Honcho (Seek's animations made for his body), Honcho's sounds (DOORS' chase song kept), the kit's eyes and hands on the walls | `.../HonchoSeek` |
 | Scanners: DOORS' radar (Nokia) or the NVCS tablet (`_G.Scanner = { Type = "Tablet" }`) | `.../ObjectScanner` |
 | Universal Custom Assets: animator with Studio controls (Ctrl + U I O) | `.../UniversalAssets` |
 | The same, obfuscated | `.../UniversalAssets.obf` |

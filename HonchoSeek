@@ -1,0 +1,692 @@
+--[[
+        HONCHO SEEK -- DOORS' Seek is Honcho: his body, his sounds; the eyes and the hands on the walls are the kit's
+
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/claude/sei-qui-con-noi-ye4k62/HonchoSeek"))()
+
+        Every Seek that comes (SeekMovingNewClone, SeekMoving) is Honcho for you: DOORS' Seek is still there (the server
+        moves it; its hit, its cutscenes and its chase song are DOORS') but you see Honcho in its place, on the floor where
+        it runs, turned the way it goes. He moves with Seek's own animations, made for his body (his three-piece spine,
+        long arms, three-piece legs and feet): he crawls out of the floor (emerge), runs, and when a crucifix gets him he
+        is pulled up, held and goes down (cruxstart, cruxloop, cruxend). His tie swings as he runs.
+
+        Sounds: Seek's own are silent; Honcho's instead: his footsteps while he runs, his scream when he is out of the floor,
+        when he gets you and when the crucifix takes him. The chase song is DOORS' (ReplicatedStorage.FloorReplicated.
+        SeekMusic): never touched.
+
+        The eyes on the walls (SeekEye) and the hands out of the walls (Seek_Arm) are the kit's, each where DOORS' own is
+        (the hands follow DOORS' own as they grab), DOORS' own hidden.
+
+        Only you see it. getgenv().__HonchoSeek() takes it all off. What it found in DOORS' Seek and how it follows it is
+        written in HonchoSeek/SeekStructure.txt. Its kit is assets/seek/HonchoSeek.rbxm, downloaded once into the
+        executor's folder (HonchoSeek/).
+]]
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local CollectionService = game:GetService("CollectionService")
+local LocalPlayer = Players.LocalPlayer
+
+local NAMES = { SeekMovingNewClone = true, SeekMoving = true } -- DOORS' Seek, now and before
+local FOLDER, FILE = "HonchoSeek", "HonchoSeek.rbxm"
+local URLS = {
+	"https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/assets/seek/HonchoSeek.rbxm",
+	"https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/claude/sei-qui-con-noi-ye4k62/assets/seek/HonchoSeek.rbxm",
+}
+local SCREAM = "rbxassetid://82613796053949" -- Honcho's ("archives_honcho_cutscenelanding", LSPLASH's)
+local MAX_RATE = 15 -- particles a second, at most, each
+local ARM_RANGE = 140 -- studs: the hands farther than this from you are not moved (they do not grab there)
+
+-- The one before comes off first
+local SESSION = if getgenv then getgenv() else _G
+if SESSION.__HonchoSeek then pcall(SESSION.__HonchoSeek) end
+
+---====== THE KIT ======---
+
+local function isModel(data) return type(data) == "string" and data:sub(1, 8) == "<roblox!" end
+local function loadKit()
+	local path = FOLDER .. "/" .. FILE
+	pcall(function()
+		if not isfolder(FOLDER) then makefolder(FOLDER) end
+		if isfile(path) and isModel(readfile(path)) then return end
+		for _, url in ipairs(URLS) do
+			local ok, data = pcall(function() return game:HttpGet(url) end)
+			if ok and isModel(data) then -- (never a "404: Not Found" page)
+				writefile(path, data)
+				return
+			end
+		end
+	end)
+	local ok, objects = pcall(function() return game:GetObjects(getcustomasset(path)) end)
+	if ok and type(objects) == "table" and objects[1] then return objects[1] end
+	return nil
+end
+local kit = loadKit()
+local honcho = kit and kit:FindFirstChild("Honcho")
+if not (honcho and honcho:FindFirstChild("RootPart")) then
+	warn("[HonchoSeek] its kit could not be loaded")
+	return
+end
+local kitEye, kitArm = kit:FindFirstChild("Eye"), kit:FindFirstChild("Seek_Arm")
+
+---====== SEEK'S ANIMATIONS, MADE FOR HONCHO ======---
+--[[ The kit's AnimSaves are Seek's (poses of Seek's joints). For each keyframe: Seek's body in that pose (its rig below,
+     from seekidk.rbxm; its left arm a mirror of its right, as its animations were made on), then Honcho's joints turned so
+     that each of his bones points where Seek's does: his pelvis turns as Seek's hips, his three spine pieces share Seek's
+     bend, his head looks as Seek's (lifted a little: it looks ahead, not at the floor), his long arms and three-piece legs
+     along Seek's, his feet flat. Seek's way forward is left out (where he goes is DOORS' Seek's); up and down is kept,
+     scaled, with his lowest point where Seek's is (under the floor as much of him as of Seek) ]]
+local ID = CFrame.new()
+local UP = Vector3.new(0, 1, 0)
+local function rot(cf) return cf - cf.Position end
+
+-- Seek's rig: { part, its parent, C0, C1, size }, parents first; its root (Root) at the origin, unturned
+local SEEK_RIG = {
+	{ "UpperTorso", "Root", CFrame.new(0.06886, -0.00026, -0.08232, 1, 0, 0, 0, 1, 0, 0, 0, 1), CFrame.new(-0.00149, -0.6522, 0.32526, 1, -0.00271, 0.00097, 0.00277, 0.81883, -0.57403, 0.00076, 0.57403, 0.81883), Vector3.new(1.8844, 2.0938, 1.2062) },
+	{ "RightUpperArm", "UpperTorso", CFrame.new(0.73478, 0.3453, -0.00837, 1, 0, 0, -0, 1, 0, 0, 0, 1), CFrame.new(-0.59587, 0.57632, 0.00151, 0.71882, 0.69519, -0.00093, -0.69519, 0.71881, -0.00348, -0.00175, 0.00315, 0.99999), Vector3.new(1.7019, 1.8276, 0.5863) },
+	{ "RightLowerArm", "RightUpperArm", CFrame.new(0.58366, -0.47067, -0.03382, 0.71882, 0.69519, -0.00093, -0.69519, 0.71881, -0.00348, -0.00175, 0.00315, 0.99999), CFrame.new(-0.60226, 0.85772, 0.00247, 0.68925, 0.72452, -0.00105, -0.72452, 0.68924, -0.00364, -0.00191, 0.00327, 0.99999), Vector3.new(2.1206, 1.9670, 0.4753) },
+	{ "Right Hand", "RightLowerArm", CFrame.new(1.17294, -1.3811, -0.1167, 0.98158, -0.1801, -0.06379, 0.17273, 0.97918, -0.10662, 0.08166, 0.09364, 0.99225), CFrame.new(0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1), Vector3.new(1.1674, 1.6975, 1.0081) },
+	{ "LowerTorso", "UpperTorso", CFrame.new(0.02499, -1.53859, -0.19141, 1, -0.00271, 0.00097, 0.00277, 0.81883, -0.57403, 0.00076, 0.57403, 0.81883), CFrame.new(-0.00144, 0.36233, 0.30781, 1, 0.00277, 0.00075, -0.0027, 0.82044, 0.57173, 0.00097, -0.57173, 0.82044), Vector3.new(1.4399, 1.4695, 1.1647) },
+	{ "LeftUpperLeg", "LowerTorso", CFrame.new(-0.41058, -0.37458, -0.04164, 1, 0, 0, 0, 1, 0, 0, 0, 1), CFrame.new(0, 0.82896, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1), Vector3.new(0.7415, 2.6086, 1.0880) },
+	{ "LeftLowerLeg", "LeftUpperLeg", CFrame.new(-0.09052, -0.84928, -0.17233, 1, 0, 0, 0, 1, 0, 0, 0, 1), CFrame.new(-0.19111, 1.47121, 0.2248, 0.90073, 0.13828, 0.41179, 0.16579, 0.76679, -0.62012, -0.40151, 0.62683, 0.66774), Vector3.new(0.5151, 2.3295, 1.1200) },
+	{ "RightUpperLeg", "LowerTorso", CFrame.new(0.37051, -0.32354, -0.01776, 1, 0, 0, 0, 1, 0, 0, 0, 1), CFrame.new(0, 0.82896, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1), Vector3.new(0.9894, 2.4744, 1.1935) },
+	{ "RightLowerLeg", "RightUpperLeg", CFrame.new(0.09816, -0.90246, -0.21807, 1, 0, 0, 0, 1, 0, 0, 0, 1), CFrame.new(0.09974, 1.35335, 0.12263, 0.62797, -0.25546, -0.73512, -0.22265, 0.84613, -0.48424, 0.74571, 0.46776, 0.47447), Vector3.new(0.5450, 2.4633, 1.1677) },
+	{ "Head", "UpperTorso", CFrame.new(0.0313, 0.37179, 0.77239, 1, -0.00271, 0.00097, 0.00277, 0.81883, -0.57403, 0.00076, 0.57403, 0.81883), CFrame.new(-0.00473, -0.19682, 0.97652, 1, -0.00125, 0.00022, 0.00126, 0.96479, -0.26303, 0.00012, 0.26303, 0.96479), Vector3.new(1.2445, 1.3973, 1.3196) },
+	{ "LeftUpperArm", "UpperTorso", CFrame.new(-0.73478, 0.3453, -0.00837, 1, -0, 0, 0, 1, 0, 0, 0, 1), CFrame.new(0.59587, 0.57632, 0.00151, 0.71882, -0.69519, 0.00093, 0.69519, 0.71881, -0.00348, 0.00175, 0.00315, 0.99999), Vector3.new(1.7019, 1.8276, 0.5863) },
+	{ "LeftLowerArm", "LeftUpperArm", CFrame.new(-0.58366, -0.47067, -0.03382, 0.71882, -0.69519, 0.00093, 0.69519, 0.71881, -0.00348, 0.00175, 0.00315, 0.99999), CFrame.new(0.60226, 0.85772, 0.00247, 0.68925, -0.72452, 0.00105, 0.72452, 0.68924, -0.00364, 0.00191, 0.00327, 0.99999), Vector3.new(1.7874, 1.7275, 0.5165) },
+	{ "Left Hand", "LeftLowerArm", CFrame.new(-1.11893, -1.32516, -0.29968, 0.99782, -0.04756, 0.04578, 0.05882, 0.95537, -0.28951, -0.02997, 0.29157, 0.95608), CFrame.new(0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1), Vector3.new(1.1671, 1.6977, 1.0074) },
+}
+local SJ, SSIZE = {}, {}
+for _, j in ipairs(SEEK_RIG) do
+	SJ[j[1]] = { p0 = j[2], c0 = j[3], c1inv = j[4]:Inverse() }
+	SSIZE[j[1]] = j[5]
+end
+local function seekFK(T)
+	local w = { Root = ID }
+	for _, j in ipairs(SEEK_RIG) do
+		local s = SJ[j[1]]
+		w[j[1]] = w[s.p0] * s.c0 * (T[j[1]] or ID) * s.c1inv
+	end
+	return w
+end
+
+-- Honcho's rig, from the kit: his joints (a Motor6D before a weld), parents first from his RootPart (at the origin, turned
+-- as in the kit: his character's axes are his RootPart's)
+local HJ, HSIZE, HORDER = {}, {}, {}
+for _, d in ipairs(honcho:GetDescendants()) do
+	if (d:IsA("Motor6D") or d:IsA("Weld") or d:IsA("ManualWeld")) and d.Part0 and d.Part1 then
+		local name = d.Part1.Name
+		if not (HJ[name] and HJ[name].motor) then
+			HJ[name] = { p0 = d.Part0.Name, c0 = d.C0, c1inv = d.C1:Inverse(), motor = d:IsA("Motor6D") }
+		end
+	elseif d:IsA("BasePart") then
+		HSIZE[d.Name] = d.Size
+	end
+end
+do
+	local function visit(name)
+		for child, j in pairs(HJ) do
+			if j.p0 == name and not table.find(HORDER, child) then
+				table.insert(HORDER, child)
+				visit(child)
+			end
+		end
+	end
+	visit("RootPart")
+end
+local HROOT = rot(honcho.RootPart.CFrame)
+local function honFK(T)
+	local w = { RootPart = HROOT }
+	for _, name in ipairs(HORDER) do
+		local j = HJ[name]
+		if w[j.p0] then w[name] = w[j.p0] * j.c0 * (T[name] or ID) * j.c1inv end
+	end
+	return w
+end
+local s0, h0 = seekFK({}), honFK({})
+
+local function rotBetween(a, b) -- the smallest turn taking direction a onto b
+	a, b = a.Unit, b.Unit
+	local axis = a:Cross(b)
+	local s, c = axis.Magnitude, a:Dot(b)
+	if s < 1e-8 then
+		if c > 0 then return ID end
+		local p = if math.abs(a.X) < 0.9 then a:Cross(Vector3.new(1, 0, 0)) else a:Cross(UP)
+		return CFrame.fromAxisAngle(p.Unit, math.pi)
+	end
+	return CFrame.fromAxisAngle(axis / s, math.atan2(s, c))
+end
+local function toH(R) return HROOT * R * HROOT:Inverse() end -- a turn of Seek's world as one of Honcho's
+local function sdir(a, b) return HROOT:VectorToWorldSpace(b - a) end -- a direction of Seek's, in Honcho's world
+local function yawOnly(R)
+	local f = R:VectorToWorldSpace(Vector3.new(0, 0, -1))
+	f = Vector3.new(f.X, 0, f.Z)
+	if f.Magnitude < 1e-6 then return ID end
+	return rotBetween(Vector3.new(0, 0, -1), f.Unit)
+end
+local function jointH(w, child) local j = HJ[child] return (w[j.p0] * j.c0).Position end
+local function jointS(w, child) local j = SJ[child] return (w[j.p0] * j.c0).Position end
+
+local CORNERS = {}
+for _, x in ipairs({ -0.5, 0.5 }) do
+	for _, y in ipairs({ -0.5, 0.5 }) do
+		for _, z in ipairs({ -0.5, 0.5 }) do table.insert(CORNERS, Vector3.new(x, y, z)) end
+	end
+end
+local SEEK_BODY = { "LeftLowerLeg", "RightLowerLeg", "LeftUpperLeg", "RightUpperLeg", "LowerTorso", "UpperTorso", "Head", "LeftUpperArm",
+	"RightUpperArm", "LeftLowerArm", "RightLowerArm" }
+local HON_BODY = { "LeftFoot", "RightFoot", "LeftLowerLeg", "RightLowerLeg", "Pelvis", "UpperTorso", "Head", "LeftHand", "RightHand",
+	"LeftUpperArm", "RightUpperArm" }
+local function extent(w, names, sizes, turn) -- its lowest and highest point, up its character's axis
+	local lo, hi = math.huge, -math.huge
+	for _, n in ipairs(names) do
+		local cf, size = w[n], sizes[n]
+		if cf and size then
+			for _, c in ipairs(CORNERS) do
+				local y = turn:VectorToObjectSpace(cf * (size * c)).Y
+				lo, hi = math.min(lo, y), math.max(hi, y)
+			end
+		end
+	end
+	return lo, hi
+end
+-- The floors (Seek's: the bottom of its run; Honcho's: the kit's FloorPart) and how much bigger Honcho is
+local floorPart = honcho:FindFirstChild("FloorPart")
+local HON_FLOOR = if floorPart then floorPart.Position.Y - floorPart.Size.Y / 2 - honcho.RootPart.Position.Y else -6.39
+local SEEK_FLOOR0 = math.min(s0.LeftLowerLeg.Position.Y, s0.RightLowerLeg.Position.Y) - 1.2
+local K = (HROOT:VectorToObjectSpace(h0.Pelvis.Position).Y - HON_FLOOR) / (s0.LowerTorso.Position.Y - SEEK_FLOOR0)
+local SEEK_FLOOR = SEEK_FLOOR0
+local HEAD_LIFT = 0.6
+
+-- Honcho's joints for one pose of Seek's: { [part] = Transform }
+local function retarget(seekT)
+	local ws = seekFK(seekT)
+	local T, wh = {}, { RootPart = HROOT }
+	local function place(name, R, pos)
+		local j = HJ[name]
+		local Rt = rot(j.c0):Inverse() * rot(wh[j.p0]):Inverse() * R * rot(j.c1inv:Inverse())
+		local t = if pos then CFrame.new(pos) * Rt else Rt
+		T[name] = t
+		wh[name] = wh[j.p0] * j.c0 * t * j.c1inv
+	end
+	local function follow(name)
+		local j = HJ[name]
+		T[name] = ID
+		wh[name] = wh[j.p0] * j.c0 * j.c1inv
+	end
+	local function aim(name, child, target)
+		follow(name)
+		place(name, rotBetween(jointH(wh, child) - jointH(wh, name), target) * rot(wh[name]))
+	end
+	-- His pelvis: Seek's hips' turn since its rest, and their way up and down (scaled)
+	local turn = rot(ws.LowerTorso) * rot(s0.LowerTorso):Inverse()
+	local move = (ws.LowerTorso.Position - s0.LowerTorso.Position) * K
+	place("Pelvis", toH(turn) * rot(h0.Pelvis), rot(HJ.Pelvis.c0):VectorToObjectSpace(HROOT:VectorToWorldSpace(Vector3.new(0, move.Y, 0))))
+	-- His spine: its three pieces share Seek's bend from hips to chest
+	local spine = sdir(ws.LowerTorso.Position, ws.UpperTorso.Position)
+	local pieces, shares = { "LowerTorso", "MiddleTorso", "UpperTorso" }, { 1 / 3, 1 / 2, 1 }
+	for i, name in ipairs(pieces) do
+		for k = i, #pieces do follow(pieces[k]) end
+		place(name, ID:Lerp(rotBetween(jointH(wh, "Neck") - jointH(wh, name), spine), shares[i]) * rot(wh[name]))
+	end
+	-- His head: Seek's head's own turn beyond its chest's, on his chest; lifted toward upright; his neck halfway
+	local chest = rot(ws.UpperTorso) * rot(s0.UpperTorso):Inverse()
+	local head = rot(ws.Head) * rot(s0.Head):Inverse()
+	local Rhead = (rot(wh.UpperTorso) * rot(h0.UpperTorso):Inverse()) * toH(chest:Inverse() * head) * rot(h0.Head)
+	Rhead = ID:Lerp(rotBetween(Rhead:VectorToWorldSpace(UP), HROOT:VectorToWorldSpace(UP)), HEAD_LIFT) * Rhead
+	follow("Neck")
+	place("Neck", ID:Lerp(Rhead * rot(h0.Head):Inverse() * rot(h0.Neck) * rot(wh.Neck):Inverse(), 0.5) * rot(wh.Neck))
+	place("Head", Rhead)
+	-- His arms: the shoulder pad on his chest, the upper arm along Seek's, the forearm along Seek's, the rest straight
+	for _, side in ipairs({ "Left", "Right" }) do
+		follow(side .. "Shoulder")
+		local shoulder, elbow, wrist = jointS(ws, side .. "UpperArm"), jointS(ws, side .. "LowerArm"), ws[side .. " Hand"].Position
+		aim(side .. "UpperArm", side .. "UpperWrist", sdir(shoulder, elbow))
+		aim(side .. "UpperWrist", side .. "LowerWrist", sdir(elbow, wrist))
+		follow(side .. "LowerWrist")
+		follow(side .. "Hand")
+	end
+	-- His legs: the thigh along Seek's, both shin pieces along Seek's shin, the foot flat, turned as his hips
+	for _, side in ipairs({ "Left", "Right" }) do
+		local hip, knee = jointS(ws, side .. "UpperLeg"), jointS(ws, side .. "LowerLeg")
+		local foot = ws[side .. "LowerLeg"] * Vector3.new(0, -1.1, 0)
+		aim(side .. "UpperLeg", side .. "MiddleLeg", sdir(hip, knee))
+		aim(side .. "MiddleLeg", side .. "LowerLeg", sdir(knee, foot))
+		aim(side .. "LowerLeg", side .. "Ankle", sdir(knee, foot))
+		follow(side .. "Ankle")
+		place(side .. "Foot", toH(yawOnly(turn)) * rot(h0[side .. "Foot"]))
+	end
+	-- On the floor as Seek is: standing, his lowest point as Seek's; under the floor, as much of him under as of Seek
+	local sLo, sHi = extent(ws, SEEK_BODY, SSIZE, ID)
+	sLo, sHi = sLo * K - SEEK_FLOOR * K, sHi * K - SEEK_FLOOR * K
+	local hLo, hHi = extent(honFK(T), HON_BODY, HSIZE, HROOT)
+	hLo, hHi = hLo - HON_FLOOR, hHi - HON_FLOOR
+	local under = math.clamp(-sLo / math.max(sHi - sLo, 1e-3), 0, 1)
+	local lift = (sLo - hLo) * (1 - under) + (sHi - hHi) * under
+	T.Pelvis = T.Pelvis + rot(HJ.Pelvis.c0):VectorToObjectSpace(HROOT:VectorToWorldSpace(Vector3.new(0, lift, 0)))
+	return T
+end
+
+-- The kit's animations, each keyframe made Honcho's: { joints = { [part] = { { t, cf }, ... } }, length, looped }
+local function posesOf(frame)
+	local T = {}
+	for _, d in ipairs(frame:GetDescendants()) do
+		if d:IsA("Pose") and d.Weight > 0 then T[d.Name] = d.CFrame end
+	end
+	return T
+end
+local ANIMS = {}
+local saves = honcho:FindFirstChild("AnimSaves")
+if saves then
+	local run = saves:FindFirstChild("run")
+	if run then -- (Seek's floor: the bottom of its run)
+		local low = math.huge
+		for _, frame in ipairs(run:GetKeyframes()) do
+			local ws = seekFK(posesOf(frame))
+			for _, n in ipairs({ "LeftLowerLeg", "RightLowerLeg" }) do
+				for _, c in ipairs(CORNERS) do low = math.min(low, (ws[n] * (SSIZE[n] * c)).Y) end
+			end
+		end
+		SEEK_FLOOR = low
+	end
+	for _, kfs in ipairs(saves:GetChildren()) do
+		if kfs:IsA("KeyframeSequence") then
+			local anim = { joints = {}, length = 0, looped = kfs.Loop }
+			local frames = kfs:GetKeyframes()
+			table.sort(frames, function(a, b) return a.Time < b.Time end)
+			for _, frame in ipairs(frames) do
+				anim.length = math.max(anim.length, frame.Time)
+				for name, t in pairs(retarget(posesOf(frame))) do
+					anim.joints[name] = anim.joints[name] or {}
+					table.insert(anim.joints[name], { t = frame.Time, cf = t })
+				end
+			end
+			ANIMS[kfs.Name:lower()] = anim
+		end
+	end
+	saves:Destroy()
+end
+SESSION.__HonchoSeekAnimations = ANIMS -- (made for Honcho: to look at them)
+local function poseAt(list, time) -- (all its keyframes are linear)
+	local a, b = list[1], nil
+	for i = 2, #list do
+		if list[i].t <= time then a = list[i] else b = list[i] break end
+	end
+	if not b or time <= a.t then return a.cf end
+	return a.cf:Lerp(b.cf, (time - a.t) / (b.t - a.t))
+end
+
+---====== THE KIT, READY TO WEAR ======---
+
+local function clean(model, keepAnchored) -- nothing of DOORS' in it, nothing that collides, no shadows, fewer particles
+	model:SetAttribute("LoadModule", nil)
+	local all = model:GetDescendants()
+	table.insert(all, model)
+	for _, d in ipairs(all) do
+		for _, tag in ipairs(CollectionService:GetTags(d)) do CollectionService:RemoveTag(d, tag) end
+		if d:IsA("LuaSourceContainer") or d:IsA("ProximityPrompt") or d:IsA("TouchTransmitter") or d:IsA("Animation")
+			or d:IsA("AnimationController") or d:IsA("Animator") or d:IsA("BodyMover") then
+			d:Destroy()
+		elseif d:IsA("BasePart") then
+			d.CanCollide, d.CanTouch, d.CanQuery, d.Massless, d.CastShadow = false, false, false, true, false
+			d.Anchored = keepAnchored
+		elseif d:IsA("Light") then
+			d.Shadows = false
+		elseif d:IsA("ParticleEmitter") then
+			d.Rate = math.min(d.Rate, MAX_RATE)
+		end
+	end
+end
+clean(honcho, false)
+honcho.Name = "HonchoSeek"
+for _, piece in ipairs({ kitEye, kitArm }) do
+	if piece then
+		clean(piece, true)
+		for _, s in ipairs(piece:GetDescendants()) do
+			if s:IsA("Sound") then s:Destroy() end -- (DOORS' own eyes and hands still make theirs)
+		end
+	end
+end
+
+---====== WEARING IT ======---
+
+local folder = Instance.new("Folder")
+folder.Name = "HonchoSeekSkins"
+folder.Parent = workspace
+local connections = {}
+local seeks, eyes, arms = {}, {}, {} -- DOORS' own -> what goes with it
+
+local function partsByName(model) -- (only the names there is one of)
+	local found, count = {}, {}
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("BasePart") then
+			count[d.Name] = (count[d.Name] or 0) + 1
+			found[d.Name] = d
+		end
+	end
+	for name, n in pairs(count) do
+		if n > 1 then found[name] = nil end
+	end
+	return found
+end
+local function rootOf(model) -- its rig's Root (the one in SeekRig first), or its PrimaryPart
+	local any = nil
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("BasePart") and d.Name == "Root" then
+			if d.Parent and d.Parent.Name == "SeekRig" then return d end
+			any = any or d
+		end
+	end
+	return any or model.PrimaryPart or model:FindFirstChildWhichIsA("BasePart", true)
+end
+
+-- DOORS' own, out of sight and silent (only for you), once; switched back off if the server switches it on
+local function hide(entry, d, silence)
+	if d:IsA("BasePart") or d:IsA("Decal") then
+		table.insert(entry.hidden, { d, "LocalTransparencyModifier", d.LocalTransparencyModifier })
+		d.LocalTransparencyModifier = 1
+	elseif d:IsA("ParticleEmitter") or d:IsA("Light") or d:IsA("Beam") or d:IsA("Trail") or d:IsA("Fire") or d:IsA("Smoke") then
+		table.insert(entry.hidden, { d, "Enabled", d.Enabled })
+		d.Enabled = false
+		if entry.watch then
+			table.insert(entry.watch, d:GetPropertyChangedSignal("Enabled"):Connect(function() if d.Enabled then d.Enabled = false end end))
+		end
+	elseif silence and d:IsA("Sound") then
+		table.insert(entry.hidden, { d, "Volume", d.Volume })
+		d.Volume = 0
+		table.insert(entry.watch, d:GetPropertyChangedSignal("Volume"):Connect(function() if d.Volume ~= 0 then d.Volume = 0 end end))
+	end
+end
+local function unhide(entry, still)
+	if entry.watch then for _, c in ipairs(entry.watch) do c:Disconnect() end end
+	if still then for _, h in ipairs(entry.hidden) do pcall(function() h[1][h[2]] = h[3] end) end end
+end
+
+-- What it found in DOORS' Seek, in the executor's folder (HonchoSeek/SeekStructure.txt) and the console
+local function describe(original, mode)
+	pcall(function()
+		local top = original:GetFullName()
+		local lines = { "HonchoSeek on " .. top .. (if os.date then " at " .. os.date("%Y-%m-%d %H:%M:%S") else ""), "mode: " .. mode, "" }
+		for _, d in ipairs(original:GetDescendants()) do
+			if #lines > 500 then break end
+			local path = d:GetFullName():sub(#top + 2)
+			if d:IsA("BasePart") then
+				table.insert(lines, ("part  %s [%s] size %.2f %.2f %.2f transparency %.2f"):format(path, tostring(d.ClassName), d.Size.X, d.Size.Y,
+					d.Size.Z, d.Transparency))
+			elseif d:IsA("JointInstance") then
+				table.insert(lines, ("joint %s %s -> %s"):format(path, d.Part0 and d.Part0.Name or "-", d.Part1 and d.Part1.Name or "-"))
+			elseif d:IsA("Sound") or d:IsA("Animator") or d:IsA("Model") then
+				table.insert(lines, ("%s  %s"):format(tostring(d.ClassName), path))
+			end
+		end
+		if not isfolder(FOLDER) then makefolder(FOLDER) end
+		writefile(FOLDER .. "/SeekStructure.txt", table.concat(lines, "\n"))
+	end)
+	print(("[HonchoSeek] %s: %s"):format(original.Name, mode))
+end
+
+local probe = RaycastParams.new()
+probe.FilterType = Enum.RaycastFilterType.Exclude
+
+local function dressSeek(original)
+	if seeks[original] or not original:IsDescendantOf(workspace) then return end
+	local follow = rootOf(original)
+	if not follow then
+		warn("[HonchoSeek] nothing in " .. original.Name .. " to follow: left as it is")
+		return
+	end
+	local copy = honcho:Clone()
+	local root = copy:FindFirstChild("RootPart")
+	root.Anchored = true
+	local entry = { original = original, copy = copy, root = root, follow = follow, hidden = {}, watch = {}, motors = {}, ties = {},
+		state = "emerge", time = 0, seen = {}, born = os.clock(), floor = nil, look = nil }
+	for _, m in ipairs(copy:GetDescendants()) do
+		if m:IsA("Motor6D") and m.Part1 then
+			entry.motors[m.Part1.Name] = m
+			if m.Part1.Name:find("^Tie") then table.insert(entry.ties, m) end
+		end
+	end
+	entry.footsteps = copy:FindFirstChild("Footsteps", true)
+	entry.scream = Instance.new("Sound")
+	entry.scream.Name, entry.scream.SoundId, entry.scream.Volume, entry.scream.RollOffMinDistance = "HonchoScream", SCREAM, 2, 30
+	entry.scream.Parent = root
+	-- What DOORS plays on its Seek: the animations of its first seconds are its rise and its run; one after those, with it
+	-- standing still, is the crucifix
+	local animator = original:FindFirstChildWhichIsA("Animator", true)
+	if animator then
+		table.insert(entry.watch, animator.AnimationPlayed:Connect(function(track)
+			local id = track.Animation and track.Animation.AnimationId or ""
+			if os.clock() - entry.born < 4 then
+				entry.seen[id] = true
+			elseif not entry.seen[id] and entry.state ~= "crux" and entry.state ~= "cruxend" and (entry.pace or 0) < 3 then
+				entry.state, entry.time = "crux", 0
+				entry.scream.PlaybackSpeed = 0.8
+				entry.scream:Play()
+				table.insert(entry.watch, track.Stopped:Connect(function()
+					if entry.state == "crux" then entry.state, entry.time = "cruxend", 0 end
+				end))
+			end
+		end))
+	end
+	copy.Parent = folder
+	-- Only now, Honcho in its place: DOORS' Seek out of sight and silent
+	for _, d in ipairs(original:GetDescendants()) do hide(entry, d, true) end
+	table.insert(entry.watch, original.DescendantAdded:Connect(function(d) hide(entry, d, true) end))
+	seeks[original] = entry
+	describe(original, ("Honcho on its %s (%d of its animations made his)"):format(follow.Name, (function()
+		local n = 0
+		for _ in pairs(ANIMS) do n += 1 end
+		return n
+	end)()))
+end
+
+local function undressSeek(original, gone)
+	local entry = seeks[original]
+	if not entry then return end
+	seeks[original] = nil
+	unhide(entry, not gone)
+	if gone and entry.state == "crux" and ANIMS.cruxend then -- taken by the crucifix: he goes down before he goes
+		entry.state, entry.time = "cruxend", 0
+		entry.leaving = true
+		seeks[{}] = entry -- (kept a moment longer, on its own)
+		task.delay(ANIMS.cruxend.length + 0.2, function() entry.copy:Destroy() end)
+		return
+	end
+	entry.copy:Destroy()
+end
+
+-- The kit's eye where DOORS' own is (each piece on its piece: DOORS turns and sizes its veins at random); it blinks as it
+local function dressEye(original)
+	if eyes[original] or not kitEye or not original:IsDescendantOf(workspace) or original:IsDescendantOf(folder) then return end
+	local copy = kitEye:Clone()
+	local theirs = partsByName(original)
+	local matched = 0
+	for _, p in ipairs(copy:GetDescendants()) do
+		local t = p:IsA("BasePart") and theirs[p.Name]
+		if t then
+			p.CFrame = t.CFrame
+			if p.Name == "Veins" then p.Size = t.Size end
+			matched += 1
+		end
+	end
+	if matched == 0 then copy:PivotTo(original:GetPivot()) end
+	local entry = { copy = copy, hidden = {} }
+	local theirEye, ourEye = theirs.Eye, copy:FindFirstChild("Eye")
+	if theirEye and ourEye then
+		entry.blink = theirEye:GetPropertyChangedSignal("Transparency"):Connect(function()
+			ourEye.Transparency = theirEye.Transparency
+			for _, d in ipairs(ourEye:GetChildren()) do
+				if d:IsA("Decal") then d.Transparency = theirEye.Transparency end
+			end
+		end)
+	end
+	copy.Parent = folder
+	for _, d in ipairs(original:GetDescendants()) do hide(entry, d, false) end
+	eyes[original] = entry
+end
+
+-- The kit's hand where DOORS' own is, piece by piece, every frame (it grabs as DOORS' does)
+local function dressArm(original)
+	if arms[original] or not kitArm or not original:IsDescendantOf(workspace) or original:IsDescendantOf(folder) then return end
+	local copy = kitArm:Clone()
+	local theirs, ours = partsByName(original), partsByName(copy)
+	local entry = { copy = copy, hidden = {}, pairs = {} }
+	for name, part in pairs(ours) do
+		if theirs[name] then
+			table.insert(entry.pairs, { part, theirs[name] })
+			part.CFrame = theirs[name].CFrame
+		else
+			part.Transparency = 1 -- (nothing of DOORS' to stand on: unseen)
+		end
+	end
+	if #entry.pairs == 0 then
+		copy:Destroy()
+		return
+	end
+	entry.anchor = entry.pairs[1][2]
+	copy.Parent = folder
+	for _, d in ipairs(original:GetDescendants()) do hide(entry, d, false) end
+	arms[original] = entry
+end
+
+---====== EVERY FRAME ======---
+
+local function floorUnder(entry, at)
+	probe.FilterDescendantsInstances = { folder, entry.original, LocalPlayer.Character }
+	local hit = workspace:Raycast(at + Vector3.new(0, 2, 0), Vector3.new(0, -30, 0), probe)
+	if hit then entry.floor = hit.Position.Y end
+	return entry.floor or (at.Y - 5.8)
+end
+
+local function stepSeek(entry, dt, now)
+	local anim
+	if not entry.leaving then
+		-- Where: DOORS' Seek's place, on the floor under it, turned the way it goes
+		local at = entry.follow.Position
+		local flat = (at - (entry.last or at)) * Vector3.new(1, 0, 1)
+		entry.pace = flat.Magnitude / math.max(dt, 1e-3)
+		entry.last = at
+		local look = if entry.pace > 2 then flat.Unit else entry.follow.CFrame.LookVector * Vector3.new(1, 0, 1)
+		if look.Magnitude > 1e-3 then entry.look = (entry.look or look.Unit):Lerp(look.Unit, math.min(dt * 10, 1)) end
+		local pos = Vector3.new(at.X, floorUnder(entry, at) - HON_FLOOR, at.Z)
+		entry.root.CFrame = CFrame.lookAt(pos, pos + (entry.look or Vector3.new(0, 0, -1)))
+	end
+	-- Which: out of the floor (until it runs), the run (as fast as it goes), the crucifix
+	if entry.state == "emerge" and (entry.pace or 0) > 6 then entry.state, entry.time = "run", 0 end
+	if entry.state == "emerge" then
+		anim = ANIMS.emerge
+		if anim and entry.time >= anim.length then
+			entry.state, entry.time = "run", 0
+			entry.scream:Play() -- (out)
+		end
+	end
+	local speed = 1
+	if entry.state == "run" then
+		anim = ANIMS.run
+		speed = math.clamp((entry.pace or 0) / 20, 0.35, 1.6)
+	elseif entry.state == "crux" then
+		anim = if ANIMS.cruxstart and entry.time < ANIMS.cruxstart.length then ANIMS.cruxstart else ANIMS.cruxloop
+	elseif entry.state == "cruxend" then
+		anim = ANIMS.cruxend
+	end
+	entry.time += dt * speed
+	if anim then
+		local t = entry.time
+		if anim == ANIMS.cruxloop and ANIMS.cruxstart then t -= ANIMS.cruxstart.length end
+		t = if anim.looped and anim.length > 0 then t % anim.length else math.min(t, anim.length)
+		for name, list in pairs(anim.joints) do
+			local motor = entry.motors[name]
+			if motor then motor.Transform = poseAt(list, t) end
+		end
+	end
+	-- His tie swings (more as he runs); his footsteps while he runs
+	local swing = if entry.state == "run" then 0.25 else 0.08
+	for i, m in ipairs(entry.ties) do
+		m.Transform = CFrame.Angles(math.sin(now * 9 + i * 0.7) * swing * (0.5 + i * 0.15), 0, math.sin(now * 5.3 + i) * swing * 0.4)
+	end
+	if entry.footsteps then
+		local running = entry.state == "run" and (entry.pace or 0) > 3
+		if running and not entry.footsteps.IsPlaying then entry.footsteps:Play() elseif not running and entry.footsteps.IsPlaying then entry.footsteps:Stop() end
+		entry.footsteps.PlaybackSpeed = math.clamp((entry.pace or 0) / 22, 0.6, 1.5)
+	end
+end
+
+table.insert(connections, RunService.RenderStepped:Connect(function(dt)
+	local now = os.clock()
+	local gone = {}
+	for original, entry in pairs(seeks) do
+		if entry.leaving then
+			if entry.copy.Parent then stepSeek(entry, dt, now) else table.insert(gone, original) end
+		elseif not original:IsDescendantOf(workspace) then
+			table.insert(gone, original)
+		else
+			stepSeek(entry, dt, now)
+		end
+	end
+	for _, original in ipairs(gone) do -- (after the loop: the table is not changed while it is gone through)
+		if seeks[original] and seeks[original].leaving then seeks[original] = nil else undressSeek(original, true) end
+	end
+	local camera = workspace.CurrentCamera
+	local me = camera and camera.CFrame.Position
+	for original, entry in pairs(arms) do
+		if not original:IsDescendantOf(workspace) then
+			entry.copy:Destroy()
+			arms[original] = nil
+		elseif not me or (entry.anchor.Position - me).Magnitude < ARM_RANGE then
+			for _, pair in ipairs(entry.pairs) do pair[1].CFrame = pair[2].CFrame end
+		end
+	end
+end))
+
+-- When it gets you: his scream
+local function watchDeath(character)
+	local humanoid = character:WaitForChild("Humanoid", 10)
+	if not humanoid then return end
+	table.insert(connections, humanoid.Died:Connect(function()
+		local root = character:FindFirstChild("HumanoidRootPart")
+		for original, entry in pairs(seeks) do
+			if not entry.leaving and root and (entry.root.Position - root.Position).Magnitude < 25 then
+				entry.scream.PlaybackSpeed = 1
+				entry.scream:Play()
+			end
+		end
+	end))
+end
+if LocalPlayer.Character then task.spawn(watchDeath, LocalPlayer.Character) end
+table.insert(connections, LocalPlayer.CharacterAdded:Connect(watchDeath))
+
+-- DOORS' Seek, its eyes and its hands: now and every time they come
+local function consider(d)
+	if NAMES[d.Name] and d:IsA("Model") and not d:IsDescendantOf(folder) then
+		task.delay(0.1, dressSeek, d) -- (its pieces arrive with it)
+	elseif d.Name == "Seek_Arm" and d:IsA("Model") and not d:IsDescendantOf(folder) then
+		task.delay(0.1, dressArm, d)
+	end
+end
+for _, d in ipairs(workspace:GetDescendants()) do consider(d) end
+table.insert(connections, workspace.DescendantAdded:Connect(consider))
+for _, eye in ipairs(CollectionService:GetTagged("SeekEye")) do task.spawn(dressEye, eye) end
+table.insert(connections, CollectionService:GetInstanceAddedSignal("SeekEye"):Connect(function(eye) task.delay(0.1, dressEye, eye) end))
+table.insert(connections, CollectionService:GetInstanceRemovedSignal("SeekEye"):Connect(function(eye)
+	local entry = eyes[eye]
+	if entry then
+		eyes[eye] = nil
+		if entry.blink then entry.blink:Disconnect() end
+		entry.copy:Destroy()
+	end
+end))
+
+SESSION.__HonchoSeek = function()
+	for _, c in ipairs(connections) do c:Disconnect() end
+	for original, entry in pairs(seeks) do
+		if not entry.leaving then unhide(entry, original:IsDescendantOf(workspace)) end
+	end
+	for original, entry in pairs(eyes) do
+		if entry.blink then entry.blink:Disconnect() end
+		unhide(entry, original:IsDescendantOf(workspace))
+	end
+	for original, entry in pairs(arms) do unhide(entry, original:IsDescendantOf(workspace)) end
+	table.clear(seeks)
+	table.clear(eyes)
+	table.clear(arms)
+	folder:Destroy()
+end
