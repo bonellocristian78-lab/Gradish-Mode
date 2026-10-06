@@ -542,33 +542,44 @@ several: A-60's has X-60 and XX-60 too). One script, the name in `_G.Entity`.
 
 Each one comes with what its page has:
 
-- **its picture** on a billboard that faces you, in its light's colour (rainbow ones cycle).
-  105 of them move: their GIF, made a sheet of frames. A-60, X-60, XX-60, A-100, U-60, V-60
-  and a few more switch between their faces, quickly, as in the game.
+- **its picture** on a billboard that faces you, standing on the floor, in its light's
+  colour (rainbow ones cycle). 105 of them move: their GIF, made a sheet of frames. A-60,
+  X-60, XX-60, A-100, U-60, V-60 and a few more switch between their faces, quickly, as in
+  the game.
+- **what it looks like on its page** ("Appearance"), on it: its glow; sparks; lightning
+  (E-22, its light flashing); black smoke left behind (E-22, E-60, U-5); static around it
+  and its picture glitching (A-60, A-120, V-50, U-300); ovals going round it (E-142,
+  E-144); spinning (V-60, U-300); sound waves (V-35); twitching; huge (U-200, U-300,
+  U-400) or small (U-5); no light at all (U-5, V-50). The fast runners leave after-images.
+  217 pages say something of the kind.
 - **its sounds**: spawn (heard everywhere), ambience on it (and its far ambience as you
   get away), jumpscare, despawn, scream, locker breaking, explosions, its lines. 664 have
   them: the in-game ones, not the "origin" files, the old or unused ones. The ones the
   wiki has no sound for take their family's (X-246 sounds like A-246) or their kind's.
-- **what it does**, from its Behavior (or, where that says TBA, its Description):
+- **what it does**, from its Behavior (or, where that says TBA, its Description), and for
+  the best known ones what their page tells in full:
 
 | Kind | How many | What |
 |---|---|---|
-| runners | 315 | from the lobby (the oldest room loaded) to your room; unhidden in its way, you die. Rebounds (A-35 once, X-35 twice, A-221 10 to 20, A-219 100...), faster each time where it says so; idling (A-60 5 s), sinking (X-60), going on past you (A-332), back to the lobby (A-100), fake despawns (E-200, V-35); from ahead (A-200, A-246), a few rooms behind (A-245), your own room backwards (A-5, A-80, E-144, which strays after you when it sees you); in bursts (A-350), laggy (A-400), its name gliding across your screen (V-15), your screen covered (AN-55) |
-| checkers | (runners too) | at your room it goes to the hiding places one by one (`locker`: wardrobes, lockers, closets; `table`: beds, tables, desks): hidden in the one it checks, you die. A-100, A-150, A-315 (only the hidden), E-333, LKR-175, the Generic checkers... |
+| runners | 306 | from the lobby (the oldest room loaded) to your room; unhidden in its way, you die. Rebounds (A-35 once, X-35 twice, A-183 2 to 6, A-221 10 to 20, Scary Retro 10, A-219 100...), faster each time where it says so; A-120 and A-130 stop at the door each time, a little longer each time, and A-120 leaves an M-120 there (it shoots at you); idling (A-60 5 s), sinking (X-60, E-60), going on past you and back at you if you come out (A-332); from ahead (A-200, A-246: they come after you if they see you), a few rooms behind (A-245), your own room backwards (A-5, A-80: it flings you and takes half your health, E-144); A-183 and V-183 stop and scream when they see you, then change speed; in bursts (A-350), a room at a time with static (V-50), laggy (A-400); E-15 faster with every door you open; V-256's speed never the same, its bombs, then it fades and explodes; V-60 speeds up, idles, swells and pops; U-330 goes off and is suddenly back in your room, twice; U-380's clones rush back through; U-400 turns every light red; fake despawns with the rooms gone dark (V-35, E-200); V-15's messages across your screen ("EVIL IS COMING", "COMING IN HOT!"...) |
+| checkers | (runners too) | at your room it goes to the hiding places one by one (`locker`: wardrobes, lockers, closets; `table`: beds, tables, desks): hidden in the one it checks, you die. A-150 climbs out of a paper in your room and goes back into it; A-160 checks the 6 rooms before yours too; E-333 lockers in your room, tables in the one before, lockers in the one before that; Billy-140 splits in two (lockers, tables); A-100, A-315 (only the hidden), LKR-175... |
 | breakers | (runners too) | the hiding places it breaks can no longer be used (A-245, A-244, X-244, TABLE-244); V-100 and V-150 only lock them for a while |
-| wanderers | 210 | around your room: the E-1 family (E-1 only hurts with your light on it), the Boots (kick you away), Chasin Cleats Charles (charges), M-120 and Baby Bully Billy (shoot), Nuclear bomb (explodes), Noah (only the hidden) |
-| standing | 55 | in your room: A-258 screams so loud nothing else can be heard, A-0 kicks you if you are too fast (the anticheat), A-404 and E-0.6 guard the door, V-99 kills on touch, E-50 heals you (Take: 8 health), E-125 punishes hiding, AN-42 grows and explodes |
-| chasers, hoppers, lurkers | 52 | after you until you hide (Horror15, Bobertson); Evil Bike sends you back a room; the Ah thieves take an item (you get it back next run); V-5 hops at you; the lurkers wait in a corner and lunge when you come close |
-| on your screen | 10 | E-0 (one click), XE-0 (5-15), XXE-0 (10-100), MT-0 (it may clone), QT-0 (it bites), Joklanna; Trollface-90: stop moving and do not turn |
-| summoners | 12 | A-300 turns a colour and an entity of that colour comes; X-300, XX-300, E-300, XE-300, V-86 (one of A-200, A-300, E-144), PH-1 (Tiny Timbs Tonys) |
-| the rest | 21 | the Signardos are signs with their note; V-400 circles closer and closer; V-247 drops from the ceiling (its sound is the cue); E-42 crosses your room from a wall; XX-200 greys everything and says HIDE or DON'T HIDE |
+| wanderers | 205 | around your room: the E-1 family (E-1 only hurts with your light on it, and goes when the bulb of its room bursts), the Boots and Tiny Timbs Tony (kick you away), Chasin Cleats Charles (charges), JOLLY-1 (your light makes baubles that hurt), Ew-1 (your light makes it cry, sometimes a Fish), M-120 and Baby Bully Billy (shoot), Nuclear bomb (explodes), Noah (only the hidden), Bully Billy's line |
+| standing | 52 | in your room: A-258 (first its portal of sound waves, then it screams so loud nothing else can be heard), A-0 kicks you if you are too fast (the anticheat), A-404 and E-0.6 guard the door (E-0.6 blows you up), V-99 kills on touch, E-50 heals you (Take: 8 health), AN-42 grows and explodes |
+| chasers, hoppers, lurkers | 55 | after you until you hide (Horror15, Bobertson); XV-5 latches on; Evil Bike sends you back a room; the Ah thieves take an item (you get it back next run); V-5 shakes, charges up and hops at you; BOMBER-5 hops leaving bombs; Fish and the Vifos hop about; the lurkers wait in a corner and lunge when you come close |
+| with a way of their own | 13 | DG-1 digs into the floor and comes up under where you were; A-59 is here and gone all around what you look at, then comes for you; E-80 and XE-80: a tombstone drops on it, bounces, it gets angry (XE-80 throws it at you); E-125 is one of your lockers (red, glowing): hide in it and you are left with 1; ULB-278, TLAB-278, Purple and Sad Billy come out of a portal on the wall and break a locker or a bed (you inside: you die); V-79 speeds up, keeps going 7.9 s, stops and turns, seven times |
+| on your screen | 10 | E-0 (one click), XE-0 (5-15), XXE-0 (10-100), MT-0 (it may clone), QT-0 (it bites), all of a random colour, Joklanna; Trollface-90: stop moving and do not turn |
+| summoners | 12 | A-300 changes colour and the entity of that colour comes (A-15, A-35, A-60, A-100, A-200, A-245, Noah); X-300, XX-300, E-300, XE-300, V-86 (one of A-200, A-300, E-144), PH-1 (Tiny Timbs Tonys) |
+| the rest | 22 | the Signardos are signs with their note; V-400 circles closer and closer, seen through walls, faster if you hide; V-247 drops from the ceiling (its sound is the cue); E-42 crosses your room from a wall (XE-42 again and again); XX-200 greys everything and says HIDE or DON'T HIDE |
 
-And the game's effects: the lights flicker when a runner spawns, the screen shakes near the
-fast ones, the room takes its colour as it gets close. Caught: its jumpscare (its face
-all over the screen, its jumpscare sound), then DOORS' death screen, "You died to A-60."
-with the wiki's tips. Damage is the wiki's: instant death, a number, half your health
-(A-80), 1 left (E-125), or a kick out of the game (U-80, U-120, S-10...; `Kick = false`
-kills instead).
+And what you feel of them: the screen shakes all the way as one comes, the closer and the
+faster the harder (harder still for the ones whose page says so; E-142's rumble grows);
+the lights of the rooms it passes take its colour and flicker; the edges of your screen
+take its colour, with static near the fast and the glitchy ones; the lights flicker when
+a runner spawns. Caught: its jumpscare (its face all over the screen, its jumpscare
+sound), then DOORS' death screen, "You died to A-60." with the wiki's tips. Damage is the
+wiki's: instant death, a number, half your health (A-80), 1 left (E-125), or a kick out
+of the game (U-80, U-120, S-10...; `Kick = false` kills instead).
 
 The name as on the wiki (`"A-60"`, `"SCARY-60"`, `"Tiny Timbs Tony"`), any capitals,
 with or without the dash (`"a60"`). Where the same name is on more pages, the game's
