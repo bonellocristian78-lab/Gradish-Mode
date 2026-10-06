@@ -34,6 +34,16 @@ mod rather than playing it.
 | New Seek: DOORS' Seek with another body (`assets/seek/NewSeek.rbxm`); `_G.Type = "Glitch"`: made of DOORS' Glitch (its purple, cube texture and particles, pink light), glitched eyes, hands of cubes | `.../NewSeek` |
 | Honcho Seek: DOORS' Seek is Honcho (Seek's animations made for his body), Honcho's sounds (DOORS' chase song kept), the kit's eyes and hands on the walls | `.../HonchoSeek` |
 | Interminable Rooms: the 675 entities of its wiki in a panel (name and GIF, click to spawn; a tab where they cannot hurt you), or one with `_G.Entity = "A-60"`; their faces, GIFs, sounds and what they do | `.../InterminableRooms` |
+| Surprise: Honcho runs through the rooms like Rush (Seek's run made his) | `.../HonchoRush` |
+| Surprise: a huge Honcho walks to your room, booming; a wardrobe will not hide you, a bed will | `.../HonchoGiant` |
+| Surprise: Noise rebounds like Ambush, 3 to 6 times, faster each time | `.../NoiseAmbush` |
+| Surprise: Seek's eyes on the walls of your room; look at them and Seek's hands come out of the floor | `.../SeekEyes` |
+| Surprise: the Listener, a new blind one (like Figure, animated): it hears your steps, crouch or hide | `.../Listener` |
+| Surprise: a mass of Glitch's cubes rushes through the rooms in jerks, twice | `.../GlitchRush` |
+| Surprise: your Shadow does what you did, 4 s later: don't stop moving | `.../Shadow` |
+| Surprise: a blue ghost like Halt, "TURN AROUND" | `.../TurnAround` |
+| Surprise: dark room, "psst" behind you: look at it (like Screech) | `.../Psst` |
+| Surprise: A-60, A-15, A-35, A-100, A-200 and E-22 one behind the other | `.../EntityTrain` |
 | Scanners: DOORS' radar (Nokia) or the NVCS tablet (`_G.Scanner = { Type = "Tablet" }`) | `.../ObjectScanner` |
 | Universal Custom Assets: animator with Studio controls (Ctrl + U I O) | `.../UniversalAssets` |
 | The same, obfuscated | `.../UniversalAssets.obf` |
@@ -609,6 +619,37 @@ A-0, A-100, X-100 (A-100), XX-100 (A-100), SCARY-100, A-120, SCARY-120, SCAMY-12
 
 </details>
 
+## Surprises: ten one-shot entities
+
+Ten scripts, each a single event that comes the moment it is run and leaves when it is done.
+Only you see and hear them. Run one again and the one before goes (different ones can be
+about together). Their sounds (`assets/surprise/`, made for them) and the kits they use
+(HonchoSeek's, Noise 90's, Interminable Rooms' faces) are downloaded once into the
+executor's folder. Outside DOORS the runners come along a line through you.
+
+```lua
+loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/claude/sei-qui-con-noi-ye4k62/HonchoRush"))()
+```
+
+(the same with `HonchoGiant`, `NoiseAmbush`, `SeekEyes`, `Listener`, `GlitchRush`, `Shadow`,
+`TurnAround`, `Psst`, `EntityTrain`)
+
+| Script | What it does | How to live |
+|---|---|---|
+| `HonchoRush` | The lights flicker and Honcho screams far away. He comes out of the floor in the oldest room loaded and runs to the newest (HonchoSeek's kit, Seek's run made his, his footsteps, a rumble), the lights of every room flickering as he passes, the screen shaking as he nears; then he sinks back into the floor | hide anywhere |
+| `HonchoGiant` | "Something huge is coming." Honcho almost twice his size walks slowly to your room: every step a boom that shakes the screen, the lights of every room he enters shattering. In your room he stops and searches it for 6 s, then walks on and sinks | under a bed or a table (in a wardrobe or a locker he tears it open) |
+| `NoiseAmbush` | Noise (Noise 90's kit, its hijacked walk) runs from the oldest room to the newest and back, 3 to 6 times, faster each time, a pause at each end; its static on your screen and in your ears, its scream when it is close | stay hidden until the static is gone for good |
+| `SeekEyes` | Seek's eyes open one after another on the walls of your room and follow you. Looking at them fills a bar (whispers, your heartbeat); full, Seek's hands burst out of the floor around you: 35 damage. After 30 s they close one by one | don't look at them; hidden, they close |
+| `Listener` | A new one: a tall blind thing of red flesh with a glowing ribcage, animated piece by piece (its walk with knees and long arms swinging, its head turning to sounds and twitching), comes in through the door and walks your room, clicking. It hears your steps: heard too much, it roars and charges, faster than you run, and kills. After a minute it leaves | crouch near it; hide when it roars (it sniffs your hiding place and goes) |
+| `GlitchRush` | A black and purple mass of cubes with DOORS' Glitch texture, particles and sound runs through the rooms in jerks (skip, stop, skip), the screen going purple with cubes as it nears; at the end it glitches back and runs once more, then falls apart. Caught: 40 damage and your screen breaks into cubes | hide |
+| `Shadow` | "Don't stop moving." A black copy of you does everything you did, 4 s later (2.5 s by the end). Stand still and it reaches you: your death. 45 s | keep moving; hidden, it loses you and starts again from where you come out |
+| `TurnAround` | Everything blue and foggy, a cold hum. A glowing blue ghost floats at you from one end of your room; "TURN AROUND" and it comes from the other end. 7 times, faster each time. Touched: 40 damage | walk away from it, and turn when it says so |
+| `Psst` | Your room goes dark. Three times a black head with white eyes and a ring of teeth comes out of the dark behind you or above you: "psst" | look at it within 2 s (it shrieks and flees); else it bites, 30 damage |
+| `EntityTrain` | A-60's scream: A-60, A-15, A-35, A-100, A-200 and E-22 (their faces and sounds from `assets/ir/`) one right behind the other, like a train, through every room | hide until the last has gone |
+
+Caught by one that kills: its face in yours (the camera on it, its sound), then DOORS' death
+screen with its name and its tips.
+
 ## Scanners (Object Scanner)
 
 ```lua
@@ -929,11 +970,13 @@ That includes the files made to be copied or filled in (`AchievementConfig`,
 | `Noise` / `Noise90` | Noise (B-90); every "-90" as a Noise, `_G.Type` |
 | `Noise90All` | every Noise 90, a new one every 10 s (fills the Noise Journal) |
 | `InterminableRooms` | every entity of the Interminable Rooms wiki, `_G.Entity` |
+| `HonchoRush` / `HonchoGiant` / `NoiseAmbush` / `SeekEyes` / `Listener` / `GlitchRush` / `Shadow` / `TurnAround` / `Psst` / `EntityTrain` | the ten surprises |
 | `Errorbush` / `Errorbush.rbxm` | 3rr0rbu2h, the broken Ambush; its model |
 | `ObjectScanner` / `ObjectScanner.rbxm` | The scanners (Nokia and Tablet, their Lights); DOORS' scanner's model, out of a saved place |
 | `assets/errorbush/` | 3rr0rbu2h's two faces |
 | `assets/noise/` | Noise's kit, tape and sheets; Noise 90's props kit, grey sheets and faces |
 | `assets/ir/` | the Interminable Rooms entities' pictures, GIF sheets and sounds |
+| `assets/surprise/` | the surprises' sounds (steps, psst, bite, shriek, heartbeat, whispers, roar, clicks, hum, whoosh, rumble) |
 | `tools/` | Prometheus' settings for the obfuscation, the script that runs it, its fix for Luau |
 | `assets/scanner/` | The scanners' own icons without their background (`.png`) and ready to be recoloured by the script (`.icon`) |
 | `UniversalAssets` / `.obf` | the animator for DOORS' things and custom assets, readable and obfuscated |
