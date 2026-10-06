@@ -24,8 +24,13 @@
         Its files are downloaded once into the executor's folder, then read from there: only you see and hear it.
         The jumpscare, the death screen with the wiki's tips. Outside DOORS it comes down a straight line at you.
 
+        Without _G.Entity, a panel: every entity with its name and its picture (its GIF moving), drag it by its
+        title, search, click one and it comes. Its second tab, "Senza danno": they come the same, and cannot
+        hurt you (no damage, no kick, no jumpscare). P (or its - button) folds it and gives DOORS the mouse back;
+        the right mouse button held turns the camera while it is open.
+
         Optional, before the loadstring:
-            _G.InterminableRooms = { Volume = 1, Delay = 2.5, Kick = true }
+            _G.InterminableRooms = { Volume = 1, Delay = 2.5, Kick = true, PanelKey = "P" }
             (Kick = false: the ones that kick you out of the game kill you instead)
 ]]
 
@@ -38,11 +43,12 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local LocalPlayer = Players.LocalPlayer
 
 local CONFIG = {
-	Entity = "A-60",
+	Entity = "", -- empty: the panel
 	Volume = 1,
 	Delay = 2.5, -- seconds between a runner's spawn sound and it setting off
 	Kick = true, -- the ones that kick you out of the game do (false: they kill you)
 	MaxSpeed = 1000, -- studs a second (the fastest are faster than you can see)
+	PanelKey = "P", -- folds and unfolds the panel
 	Folder = "InterminableRooms",
 	AssetsUrl = "https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/claude/sei-qui-con-noi-ye4k62/assets/ir/",
 }
@@ -781,8 +787,8 @@ local function suggestions(wanted)
 	return table.concat(list, ", ", 1, math.min(#list, 12))
 end
 
-local chosen = find(CONFIG.Entity)
-if not chosen then
+local chosen = if CONFIG.Entity ~= "" then find(CONFIG.Entity) else nil
+if CONFIG.Entity ~= "" and not chosen then
 	local near = suggestions(CONFIG.Entity)
 	warn(("[InterminableRooms] no entity is called %q%s"):format(CONFIG.Entity, near ~= "" and (". Maybe: " .. near) or ""))
 	return
@@ -1194,7 +1200,7 @@ end
 -- `amount` of your health; at 0 it is its jumpscare and your death
 function HURT.damage(e, amount)
 	local _, humanoid = P.body()
-	if not humanoid or amount <= 0 then return end
+	if e.harmless or not humanoid or amount <= 0 then return end
 	if humanoid.Health - amount <= 0 then
 		e.struck = true
 		FX.jumpscare(e, function() HURT.kill(e) end)
@@ -1207,7 +1213,7 @@ function HURT.damage(e, amount)
 end
 -- It caught you: whatever its damage is
 function HURT.strike(e)
-	if e.struck or not P.body() then return end
+	if e.harmless or e.struck or not P.body() then return end
 	local now = os.clock()
 	if now < (e.cooldown or 0) then return end
 	local d = e.spec.d
@@ -1246,7 +1252,8 @@ local MODES = {}
 function Entity.new(name, opts)
 	opts = opts or {}
 	local spec = ENTITIES[name]
-	local self = setmetatable({ name = name, spec = spec, alive = true, mult = 1, scale = opts.scale or 1, born = os.clock(), owned = {} }, Entity)
+	local self = setmetatable({ name = name, spec = spec, alive = true, mult = 1, scale = opts.scale or 1, born = os.clock(), owned = {},
+		harmless = opts.harmless == true }, Entity)
 	self.rainbow = spec.c == "rainbow"
 	self.color = rgb(spec.c)
 	self.sounds = {}
@@ -1499,11 +1506,11 @@ end
 function MODES.minions(e)
 	local sm = e.spec.sm
 	if type(sm) == "table" and sm[1] then
-		task.spawn(spawnEntity, pick(sm), { scale = 0.8 })
+		task.spawn(spawnEntity, pick(sm), { scale = 0.8, harmless = e.harmless })
 	elseif type(sm) == "table" and sm.self then
-		for _ = 1, between(sm.count, 3) do task.spawn(spawnEntity, e.name, { scale = 0.45, minion = true, at = e.position }) end
+		for _ = 1, between(sm.count, 3) do task.spawn(spawnEntity, e.name, { scale = 0.45, minion = true, at = e.position, harmless = e.harmless }) end
 	else
-		task.spawn(spawnEntity, e.name, { scale = 0.45, minion = true, at = e.position })
+		task.spawn(spawnEntity, e.name, { scale = 0.45, minion = true, at = e.position, harmless = e.harmless })
 	end
 end
 function MODES.explode(e, radius)
@@ -1572,7 +1579,7 @@ end
 -- A thief: to you, it takes one of your items, and runs; catch it and you have it back
 function MODES.steal(e)
 	local _, _, root = P.body()
-	if not root then return end
+	if not root or e.harmless then return end
 	local t0 = os.clock()
 	while e.alive and os.clock() - t0 < 6 and e:distance() > 4 do
 		local dt = RunService.Heartbeat:Wait()
@@ -1852,7 +1859,7 @@ function MODES.wander(e)
 			if touch and (not has(spec, "flashlight") or P.holdingLight()) then
 				if has(spec, "hiders") then
 					if P.hiding() then HURT.strike(e) end
-				elseif not P.hiding() then
+				elseif not P.hiding() and not e.harmless then
 					e.kickedAt = os.clock() + 0.8
 					HURT.strike(e)
 					if root then
@@ -1890,7 +1897,7 @@ function MODES.chase(e)
 			local to = (root.Position - e.position)
 			local keep = if friend then 5 else 0
 			if to.Magnitude > keep + 0.5 then e:at(e.position + to.Unit * math.min(to.Magnitude - keep, speed * dt)) end
-			if not friend and to.Magnitude < 4.5 then
+			if not friend and not e.harmless and to.Magnitude < 4.5 then
 				if has(spec, "sendback") then -- back to the room before
 					local here = W.latest()
 					local before = here and W.room(here - 1)
@@ -2047,7 +2054,7 @@ function MODES.screen(e)
 		if count >= clicks then
 			if has(spec, "bite") then HURT.strike(e) end
 			if has(spec, "clone") and math.random() < 0.5 then
-				task.spawn(spawnEntity, e.name, {})
+				task.spawn(spawnEntity, e.name, { harmless = e.harmless })
 			end
 			e:remove()
 		end
@@ -2110,7 +2117,7 @@ function MODES.summon(e)
 	if not e:wait(2) then return end
 	FX.once(e.sounds.scream or e.sounds.spawn, SoundService)
 	for _ = 1, between(sm.count, 1) do
-		if #names > 0 then task.spawn(spawnEntity, pick(names), {}) end
+		if #names > 0 then task.spawn(spawnEntity, pick(names), { harmless = e.harmless }) end
 	end
 	e:wait(1)
 end
@@ -2149,12 +2156,16 @@ end
 ---====== SPAWNING ======---
 
 local MAX_LIVE = 14
+local starting = 0 -- (still downloading its files)
 function spawnEntity(name, opts)
 	opts = opts or {}
 	if not ENTITIES[name] or SESSION.live >= MAX_LIVE then return end
+	starting += 1
 	prepare(ENTITIES[name])
+	starting -= 1
 	local e = Entity.new(name, opts)
 	e.minionAt = opts.at
+	if opts.onReady then task.spawn(opts.onReady, e) end
 	local mode = MODES[e.spec.m] or MODES.rush
 	if opts.minion then mode = MODES.wander end
 	local ok, err = pcall(mode, e)
@@ -2162,12 +2173,283 @@ function spawnEntity(name, opts)
 	if e.alive then e:remove() end
 end
 
-local spec = ENTITIES[chosen]
-print(("[InterminableRooms] %s%s: %s"):format(chosen, spec.w and (" (" .. spec.w .. ")") or "", spec.b or spec.m))
-task.spawn(function()
-	spawnEntity(chosen, {})
-	-- everything of this run gone: its loop and its screen too
-	while #live > 0 do task.wait(1) end
+---====== THE PANEL: every entity with its picture; click one and it comes (on "Senza danno", unable to hurt you) ======---
+
+local UIS = game:GetService("UserInputService")
+local PANEL = { isOpen = false, tab = 1 }
+local KINDS = { rush = "runner", wander = "vaga", stand = "ferma", chase = "insegue", hop = "salta", orbit = "ti gira intorno",
+	lurk = "in agguato", ceiling = "dal soffitto", wall = "dal muro", screen = "sullo schermo", summon = "evoca", order = "dà ordini",
+	sign = "cartello" }
+-- What it is, in a few words: "runner · rebound · controlla nascondigli · IF"
+function PANEL.kind(spec)
+	local words = { KINDS[spec.m] or spec.m }
+	if spec.r then table.insert(words, "rebound") end
+	if spec.ck then table.insert(words, "controlla nascondigli") end
+	if spec.br then table.insert(words, "rompe nascondigli") end
+	if spec.d == 0 then table.insert(words, "innocua") end
+	if spec.w then table.insert(words, spec.w) end
+	return table.concat(words, " · ")
+end
+-- Every name, in order: the letters as letters, the numbers as numbers (A-5, A-15, A-60, A-100)
+function PANEL.names()
+	local chunks = {}
+	local list = {}
+	for name in pairs(ENTITIES) do
+		local c = {}
+		for text, digits in name:lower():gmatch("(%D*)(%d*)") do
+			if text ~= "" then table.insert(c, text) end
+			if digits ~= "" then table.insert(c, tonumber(digits)) end
+		end
+		chunks[name] = c
+		table.insert(list, name)
+	end
+	table.sort(list, function(a, b)
+		local x, y = chunks[a], chunks[b]
+		for i = 1, math.max(#x, #y) do
+			local p, q = x[i], y[i]
+			if p == nil then return true end
+			if q == nil then return false end
+			if p ~= q then
+				if type(p) == type(q) then return p < q end
+				return type(p) == "number"
+			end
+		end
+		return a < b
+	end)
+	return list
+end
+
+local PW, PH, ROW = 330, 470, 46
+local LIST_H = PH - 32 - 34 - 34 - 26 - 12
+local C = { dark = Color3.fromRGB(38, 25, 25), brown = Color3.fromRGB(57, 43, 38), edge = Color3.fromRGB(91, 67, 63),
+	cream = Color3.fromRGB(255, 222, 189), red = Color3.fromRGB(212, 71, 71), green = Color3.fromRGB(96, 186, 112) }
+local touchOnly = UIS.TouchEnabled and not UIS.KeyboardEnabled -- a phone: no mouse to free
+
+function PANEL.open()
+	if SESSION.closePanel then pcall(SESSION.closePanel) end -- the one of a run before
+	local conns, rows, shown = {}, {}, {}
+	local names = PANEL.names()
+	local function on(signal, fn) table.insert(conns, signal:Connect(fn)) end
+	local gui = make("ScreenGui", { Name = "InterminableRoomsPanel", ResetOnSpawn = false, DisplayOrder = 100030 }, hud)
+	local panel = make("Frame", { Name = "Panel", Size = UDim2.fromOffset(PW, PH), Position = UDim2.new(0, 30, 0.5, -PH / 2),
+		BackgroundColor3 = C.dark, BackgroundTransparency = 0.05, BorderSizePixel = 0, ClipsDescendants = true }, gui)
+	make("UICorner", { CornerRadius = UDim.new(0, 8) }, panel)
+	make("UIStroke", { Color = C.edge, Thickness = 2 }, panel)
+	local viewport = workspace.CurrentCamera.ViewportSize
+	make("UIScale", { Scale = math.clamp(math.min(viewport.X / (PW + 40), viewport.Y / (PH + 40)), 0.55, 1) }, panel)
+
+	local function text(class, props, parent)
+		local base = { BackgroundTransparency = 1, BorderSizePixel = 0, Font = Enum.Font.Oswald, TextColor3 = C.cream, TextSize = 18 }
+		for k, v in pairs(props) do base[k] = v end
+		return make(class, base, parent)
+	end
+	-- The title: drag it; it frees the mouse to click (Modal)
+	local title = text("TextButton", { Name = "Title", Text = "INTERMINABLE ROOMS", Size = UDim2.fromOffset(PW, 32), BackgroundTransparency = 0,
+		BackgroundColor3 = C.red, TextColor3 = C.dark, TextSize = 20, TextXAlignment = Enum.TextXAlignment.Left, AutoButtonColor = false,
+		Modal = true }, panel)
+	make("UIPadding", { PaddingLeft = UDim.new(0, 10) }, title)
+	local fold = text("TextButton", { Name = "Fold", Text = "-", Size = UDim2.fromOffset(32, 32), Position = UDim2.fromOffset(PW - 66, 0),
+		TextColor3 = C.dark, TextSize = 24, ZIndex = 2 }, panel)
+	local close = text("TextButton", { Name = "Close", Text = "X", Size = UDim2.fromOffset(32, 32), Position = UDim2.fromOffset(PW - 34, 0),
+		TextColor3 = C.dark, TextSize = 20, ZIndex = 2 }, panel)
+	local body = make("Frame", { Name = "Body", Size = UDim2.fromOffset(PW, PH - 32), Position = UDim2.fromOffset(0, 32), BackgroundTransparency = 1 }, panel)
+
+	-- The two tabs
+	local tabs = {}
+	local TABS = { { "Spawn", C.red, "Clicca un'entità: arriva" }, { "Senza danno", C.green, "Arrivano lo stesso, ma non possono farti niente" } }
+	for i, t in ipairs(TABS) do
+		tabs[i] = text("TextButton", { Name = "Tab" .. i, Text = t[1], Size = UDim2.fromOffset(PW / 2 - 12, 28),
+			Position = UDim2.fromOffset(8 + (i - 1) * (PW / 2 - 4), 4), BackgroundTransparency = 0, BackgroundColor3 = C.brown, AutoButtonColor = false }, body)
+		make("UICorner", { CornerRadius = UDim.new(0, 6) }, tabs[i])
+	end
+	local search = text("TextBox", { Name = "Search", Text = "", PlaceholderText = "Cerca tra " .. #names .. " entità...",
+		PlaceholderColor3 = Color3.fromRGB(150, 125, 108), Size = UDim2.fromOffset(PW - 16, 28), Position = UDim2.fromOffset(8, 38),
+		BackgroundTransparency = 0, BackgroundColor3 = C.brown, ClearTextOnFocus = false, TextXAlignment = Enum.TextXAlignment.Left }, body)
+	make("UICorner", { CornerRadius = UDim.new(0, 6) }, search)
+	make("UIPadding", { PaddingLeft = UDim.new(0, 8) }, search)
+	local list = make("ScrollingFrame", { Name = "List", Size = UDim2.fromOffset(PW - 8, LIST_H), Position = UDim2.fromOffset(8, 72),
+		BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 6, ScrollBarImageColor3 = C.edge, CanvasSize = UDim2.fromOffset(0, 0) }, body)
+	local status = text("TextLabel", { Name = "Status", Text = "", Size = UDim2.fromOffset(PW - 16, 24), Position = UDim2.fromOffset(8, PH - 32 - 28),
+		TextSize = 15, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd }, body)
+	local function say(message) status.Text = message end
+
+	local function showTab(i)
+		PANEL.tab = i
+		for j, b in ipairs(tabs) do
+			b.BackgroundColor3 = if j == i then TABS[j][2] else C.brown
+			b.TextColor3 = if j == i then C.dark else C.cream
+		end
+		say(TABS[i][3])
+	end
+	for i, b in ipairs(tabs) do on(b.MouseButton1Click, function() showTab(i) end) end
+
+	-- One row an entity: its picture, its name, what it is
+	for _, name in ipairs(names) do
+		local spec = ENTITIES[name]
+		local row = text("TextButton", { Name = name, Text = "", Size = UDim2.fromOffset(PW - 24, ROW - 4), BackgroundTransparency = 0,
+			BackgroundColor3 = C.brown, AutoButtonColor = true, Visible = false }, list)
+		make("UICorner", { CornerRadius = UDim.new(0, 6) }, row)
+		local color = if type(spec.c) == "table" then rgb(spec.c) else C.cream
+		local thumb = make("ImageLabel", { Name = "Picture", Size = UDim2.fromOffset(38, 38), Position = UDim2.fromOffset(3, 2), BackgroundColor3 = color,
+			BackgroundTransparency = 0.75, BorderSizePixel = 0, ScaleType = Enum.ScaleType.Fit, Image = "" }, row)
+		make("UICorner", { CornerRadius = UDim.new(0, 4) }, thumb)
+		text("TextLabel", { Name = "Name", Text = name, Size = UDim2.fromOffset(PW - 84, 22), Position = UDim2.fromOffset(48, 1), TextSize = 18,
+			TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd }, row)
+		text("TextLabel", { Name = "Kind", Text = PANEL.kind(spec), Size = UDim2.fromOffset(PW - 84, 16), Position = UDim2.fromOffset(48, 23), TextSize = 13,
+			TextColor3 = Color3.fromRGB(200, 170, 150), TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd }, row)
+		local r = { name = name, spec = spec, button = row, thumb = thumb }
+		table.insert(rows, r)
+		on(row.MouseButton1Click, function() PANEL.spawn(name, say) end)
+	end
+
+	-- The list as searched: the rows one under the other
+	local function filter()
+		local q = norm(search.Text)
+		table.clear(shown)
+		for _, r in ipairs(rows) do
+			local match = q == "" or norm(r.name):find(q, 1, true) ~= nil
+			r.button.Visible = match
+			if match then
+				table.insert(shown, r)
+				r.button.Position = UDim2.fromOffset(4, (#shown - 1) * ROW)
+			end
+		end
+		list.CanvasSize = UDim2.fromOffset(0, #shown * ROW)
+		list.CanvasPosition = Vector2.new(0, 0)
+		if q ~= "" then say(#shown .. " entità") end
+	end
+	on(search:GetPropertyChangedSignal("Text"), filter)
+
+	-- The pictures: only of the rows you can see, a few at a time (then they are on disk: next time at once)
+	local loading, LOADERS = 0, 4
+	local function visible()
+		local first = math.max(1, math.floor(list.CanvasPosition.Y / ROW) + 1)
+		local last = math.min(#shown, first + math.ceil(LIST_H / ROW) + 1)
+		return first, last
+	end
+	local function loadPictures()
+		local first, last = visible()
+		for k = first, last do
+			local r = shown[k]
+			if r and not r.asked and r.spec.img and loading < LOADERS then
+				r.asked = true
+				loading += 1
+				task.spawn(function()
+					local img = r.spec.img
+					local id = asset(img[1])
+					loading -= 1
+					if not id or not r.thumb.Parent then return end
+					r.thumb.Image = id
+					if #img == 6 then r.thumb.ImageRectSize = Vector2.new(img[4], img[5]) end
+				end)
+			end
+		end
+	end
+	local nextLoad = 0
+	on(RunService.Heartbeat, function()
+		local now = os.clock()
+		if now >= nextLoad then
+			nextLoad = now + 0.15
+			loadPictures()
+		end
+		local first, last = visible() -- their GIFs, moving
+		for k = first, last do
+			local r = shown[k]
+			local img = r and r.spec.img
+			if img and #img == 6 and r.thumb.Image ~= "" then
+				local frame = math.floor(now * img[6]) % img[2]
+				r.thumb.ImageRectOffset = Vector2.new((frame % img[3]) * img[4], math.floor(frame / img[3]) * img[5])
+			end
+		end
+	end)
+
+	-- The mouse: DOORS keeps it locked in the middle; free while the panel is open (not on a phone)
+	local mouseWas = nil
+	local function free(yes)
+		title.Modal = yes
+		if not mainGame or touchOnly then return end
+		if yes then
+			if mouseWas == nil then mouseWas = mainGame.freemouse end
+			mainGame.freemouse = true
+		elseif mouseWas ~= nil then
+			mainGame.freemouse = mouseWas
+			mouseWas = nil
+		end
+	end
+	local folded = false
+	local function setFolded(yes)
+		folded = yes
+		body.Visible = not yes
+		panel.Size = UDim2.fromOffset(PW, if yes then 32 else PH)
+		fold.Text = if yes then "+" else "-"
+		free(not yes)
+	end
+	on(fold.MouseButton1Click, function() setFolded(not folded) end)
+
+	-- Dragging it by its title (the mouse, or a finger)
+	local dragging = nil
+	on(title.InputBegan, function(input)
+		local t = input.UserInputType
+		if t == Enum.UserInputType.MouseButton1 or t == Enum.UserInputType.Touch then
+			dragging = { from = input.Position, start = panel.Position, touch = if t == Enum.UserInputType.Touch then input else nil }
+		end
+	end)
+	on(UIS.InputChanged, function(input)
+		if not dragging then return end
+		local moved = if dragging.touch then input == dragging.touch else input.UserInputType == Enum.UserInputType.MouseMovement
+		if not moved then return end
+		local delta = input.Position - dragging.from
+		local s = dragging.start
+		panel.Position = UDim2.new(s.X.Scale, s.X.Offset + delta.X, s.Y.Scale, s.Y.Offset + delta.Y)
+	end)
+	on(UIS.InputEnded, function(input)
+		if dragging and (input == dragging.touch or input.UserInputType == Enum.UserInputType.MouseButton1) then dragging = nil end
+		if input.UserInputType == Enum.UserInputType.MouseButton2 and PANEL.isOpen and not folded then free(true) end
+	end)
+	on(UIS.InputBegan, function(input, processed)
+		if input.UserInputType == Enum.UserInputType.MouseButton2 and not folded then free(false) end -- held: DOORS turns the camera
+		if processed then return end
+		if input.KeyCode == Enum.KeyCode[CONFIG.PanelKey] then setFolded(not folded) end
+	end)
+
+	local function shut()
+		if not PANEL.isOpen then return end
+		PANEL.isOpen = false
+		free(false)
+		for _, c in ipairs(conns) do c:Disconnect() end
+		gui:Destroy()
+		if SESSION.closePanel == shut then SESSION.closePanel = nil end
+	end
+	on(close.MouseButton1Click, shut)
+	SESSION.closePanel = shut
+	PANEL.isOpen = true
+	PANEL.gui = gui
+	filter()
+	showTab(1)
+	free(true)
+end
+
+-- A click on an entity: it comes (on the second tab, unable to hurt you)
+function PANEL.spawn(name, say)
+	if SESSION.live >= MAX_LIVE then
+		say(("Già %d entità in giro: aspetta che qualcuna se ne vada"):format(MAX_LIVE))
+		return
+	end
+	local harmless = PANEL.tab == 2
+	local suffix = if harmless then " (senza danno)" else ""
+	say("Arriva " .. name .. suffix .. "...")
+	task.spawn(spawnEntity, name, { harmless = harmless, onReady = function() say(name .. suffix .. " è qui") end })
+end
+
+if chosen then
+	local spec = ENTITIES[chosen]
+	print(("[InterminableRooms] %s%s: %s"):format(chosen, spec.w and (" (" .. spec.w .. ")") or "", spec.b or spec.m))
+	task.spawn(spawnEntity, chosen, {})
+else
+	PANEL.open()
+end
+task.spawn(function() -- everything of this run gone (and its panel shut): its loop and its screen too
+	repeat task.wait(1) until #live == 0 and starting == 0 and not PANEL.isOpen
 	task.wait(2)
 	loop:Disconnect()
 	overlay:Destroy()
