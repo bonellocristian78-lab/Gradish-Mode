@@ -33,6 +33,7 @@ mod rather than playing it.
 | Morph: anybody's avatar on you (`_G.User = "name"`), only you see it | `.../Morph` |
 | New Seek: DOORS' Seek with another body (`assets/seek/NewSeek.rbxm`); `_G.Type = "Glitch"`: made of DOORS' Glitch (its purple, cube texture and particles, pink light), glitched eyes, hands of cubes | `.../NewSeek` |
 | Honcho Seek: DOORS' Seek is Honcho (Seek's animations made for his body), Honcho's sounds (DOORS' chase song kept), the kit's eyes and hands on the walls | `.../HonchoSeek` |
+| Interminable Rooms: any of the 675 entities of its wiki (`_G.Entity = "A-60"`), with its faces, GIFs, sounds and what it does | `.../InterminableRooms` |
 | Scanners: DOORS' radar (Nokia) or the NVCS tablet (`_G.Scanner = { Type = "Tablet" }`) | `.../ObjectScanner` |
 | Universal Custom Assets: animator with Studio controls (Ctrl + U I O) | `.../UniversalAssets` |
 | The same, obfuscated | `.../UniversalAssets.obf` |
@@ -513,6 +514,75 @@ Its model is `Errorbush.rbxm`; its two faces are `assets/errorbush/Errorbush_Emb
 and `Errorbush_Azure.png`, downloaded once into the executor's folder (`Errorbush/`).
 Until it is on `main`, the script takes them from the branch it is made on.
 
+## Interminable Rooms
+
+```lua
+_G.Entity = "A-60"
+loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/InterminableRooms"))()
+```
+
+Every page of the [Interminable Rooms wiki](https://r-interminable-rooms.fandom.com/wiki/Roblox_Interminable_Rooms_Wiki)'s
+Entities category, events, scrapped and removed ones included: 675 entities (some pages hold
+several: A-60's has X-60 and XX-60 too). One script, the name in `_G.Entity`.
+
+Each one comes with what its page has:
+
+- **its picture** on a billboard that faces you, in its light's colour (rainbow ones cycle).
+  105 of them move: their GIF, made a sheet of frames. A-60, X-60, XX-60, A-100, U-60, V-60
+  and a few more switch between their faces, quickly, as in the game.
+- **its sounds**: spawn (heard everywhere), ambience on it (and its far ambience as you
+  get away), jumpscare, despawn, scream, locker breaking, explosions, its lines. 664 have
+  them: the in-game ones, not the "origin" files, the old or unused ones. The ones the
+  wiki has no sound for take their family's (X-246 sounds like A-246) or their kind's.
+- **what it does**, from its Behavior (or, where that says TBA, its Description):
+
+| Kind | How many | What |
+|---|---|---|
+| runners | 315 | from the lobby (the oldest room loaded) to your room; unhidden in its way, you die. Rebounds (A-35 once, X-35 twice, A-221 10 to 20, A-219 100...), faster each time where it says so; idling (A-60 5 s), sinking (X-60), going on past you (A-332), back to the lobby (A-100), fake despawns (E-200, V-35); from ahead (A-200, A-246), a few rooms behind (A-245), your own room backwards (A-5, A-80, E-144, which strays after you when it sees you); in bursts (A-350), laggy (A-400), its name gliding across your screen (V-15), your screen covered (AN-55) |
+| checkers | (runners too) | at your room it goes to the hiding places one by one (`locker`: wardrobes, lockers, closets; `table`: beds, tables, desks): hidden in the one it checks, you die. A-100, A-150, A-315 (only the hidden), E-333, LKR-175, the Generic checkers... |
+| breakers | (runners too) | the hiding places it breaks can no longer be used (A-245, A-244, X-244, TABLE-244); V-100 and V-150 only lock them for a while |
+| wanderers | 210 | around your room: the E-1 family (E-1 only hurts with your light on it), the Boots (kick you away), Chasin Cleats Charles (charges), M-120 and Baby Bully Billy (shoot), Nuclear bomb (explodes), Noah (only the hidden) |
+| standing | 55 | in your room: A-258 screams so loud nothing else can be heard, A-0 kicks you if you are too fast (the anticheat), A-404 and E-0.6 guard the door, V-99 kills on touch, E-50 heals you (Take: 8 health), E-125 punishes hiding, AN-42 grows and explodes |
+| chasers, hoppers, lurkers | 52 | after you until you hide (Horror15, Bobertson); Evil Bike sends you back a room; the Ah thieves take an item (you get it back next run); V-5 hops at you; the lurkers wait in a corner and lunge when you come close |
+| on your screen | 10 | E-0 (one click), XE-0 (5-15), XXE-0 (10-100), MT-0 (it may clone), QT-0 (it bites), Joklanna; Trollface-90: stop moving and do not turn |
+| summoners | 12 | A-300 turns a colour and an entity of that colour comes; X-300, XX-300, E-300, XE-300, V-86 (one of A-200, A-300, E-144), PH-1 (Tiny Timbs Tonys) |
+| the rest | 21 | the Signardos are signs with their note; V-400 circles closer and closer; V-247 drops from the ceiling (its sound is the cue); E-42 crosses your room from a wall; XX-200 greys everything and says HIDE or DON'T HIDE |
+
+And the game's effects: the lights flicker when a runner spawns, the screen shakes near the
+fast ones, the room takes its colour as it gets close. Caught: its jumpscare (its face
+all over the screen, its jumpscare sound), then DOORS' death screen, "You died to A-60."
+with the wiki's tips. Damage is the wiki's: instant death, a number, half your health
+(A-80), 1 left (E-125), or a kick out of the game (U-80, U-120, S-10...; `Kick = false`
+kills instead).
+
+The name as on the wiki (`"A-60"`, `"SCARY-60"`, `"Tiny Timbs Tony"`), any capitals,
+with or without the dash (`"a60"`). Where the same name is on more pages, the game's
+own is the plain one and the others have where they are from: `"X-100 (IF)"`
+(Interminable Fever), `"E-69 (Scrapped)"`, `"V-160 (Upcoming)"`, `"XX-200 (IF)"`. A wrong
+name prints the nearest ones in the console. Run it again for another: they can be about
+together (14 at most). Outside DOORS it comes down a straight line at you.
+
+```lua
+_G.InterminableRooms = { Volume = 1, Delay = 2.5, Kick = true, MaxSpeed = 1000 }
+```
+
+`Delay`: seconds between a runner's spawn sound and it setting off. `MaxSpeed`: studs a
+second (A-221, Trollface and U-400 are faster on the wiki than anything can be seen).
+
+What the wiki only says as "TBA" or "Unknown" (many scrapped and upcoming ones, the
+P Shooters, the L- and lurker- pages) is a guess: its category (Runners, Wanderers,
+Stationary...), else a runner if it kills, a wanderer if not.
+
+The files are in `assets/ir/` (pictures `i_*.png`, GIF sheets `g_*.png`, sounds
+`s_*.mp3`, mono, ambiences up to 45 s, the rest up to 15 s), downloaded the first time
+an entity needs them into the executor's `InterminableRooms` folder.
+
+<details><summary>All 675 names</summary>
+
+A-0, A-100, X-100 (A-100), XX-100 (A-100), SCARY-100, A-120, SCARY-120, SCAMY-120, A-15, X-15, XX-15, SCARY-15 (A-15), A-150, SCARY-150, A-160, A-183, SCARY-183, A-200, SCARY-200, A-220, A-221, A-245, SCARY-245, A-246, A-247, A-258, A-260, A-278, A-29.3, A-300, SCARY-300, A-315, A-332, SCARY-332, A-35, X-35, XX-35, SCARY-35 (A-35), A-350, SCARY-350, A-377, A-404, A-5, A-50, A-60, X-60 (A-60), XX-60 (A-60), SCARY-60, X-60, XX-60, A-80, A-83, AN-19, AN-21, AN-42, AN-55, AN-64, AN-73, AN-99, AN-99 #2, AN-99 #3, AN-99 #4, ATTACK-1, B-11, C-9, B-33, C-15, L-46, R-183, P-831, Z-72, Xoah (Admin), B-60, Colored A-150, Colored A-278, Colored A-332, X-183 (Admin), X-332 (Admin), E-10 (Admin), XXX-35, A-45, A-105, CUTE!-10, ADORABLE!-0.9, Among Us E-1, Among Us DG-1, CUTE!-332, BIRD-332, Ah 100, Ah 221, Ah 246, Among Us B-140, Angry Billy, A-1 (April Fools), Ay eight ee, Ay two hundred and fifty eight, XX-100 (April Fools), A-260 (April Fools), A-400, Weegee A-35, Weegee X-35, Awesome-60, Mike Wazowski A-120, Pac-Man A-183, Awesome-200, Bille bobb, Blueh Bobb, Tabble Bobb, Beast Bendy A-350, Humanoid E-1, Humanoid XE-1, Humanoid XXE-1, Atrocious-258, BE-50, BIG BOOTS BOWEN, BIGGE-1, BLKR-175, BLUE BOOTS BOWEN, BM-1, BMEw-1, BOE, BOMBER-5, Baby Billy, Baby Bully Billy, Baby Jimmy, Baby Timmy, Bifo, Billy-140, Billy, A-0.666, A-M3, Boah, Bob (Original), Bob (April Fools), Bobertson, Bobumtsking, Bohn, Bombastic Boots Brooke, Bubugugup, Bully Billy, Bus, CATALYST-15, CATALYST-35, CHA-1, CHACHA-1, CHAEw-1, CHES-278, Car, Chasin Cleats Charles, Cube, CutE-1, DG-1, DNC-1, DRILL-1, Despawn Wall, Diggin Dockers Dean, Disruptor, Distresso, Dog, Drillin Derbies Daniel, E-0.6, E-0, E-1, E-10, E-111, E-120, E-125, E-140, E-142, SCARE-142, E-144, SCARE-144, E-15, E-175, E-2, E-200, SCARE-200, E-22, SCARE-22, E-246, E-333, E-35, E-42, SCARE-42, E-50, E-60, SCARE-60, E-69, E-80, E-95, EOWL-190, EOWL-95, EOWLET-190, EQU-278, ERM-120, Energetic Billy, Ermm there is an error, Evil Bike, Ew-1, Fish, Front A-200, G-01100111 01101100 01101001 01110100 01100011 01101000, G-3.1415926535996932384626433, Generic Blue Locker Checker Number 30, Generic Locker Checker Number 30, Generic Table Checker Number 30, Horror15, Horse, 3-60, A-1 (IF), A-130, A-219, A-244, A-248, A-59, SDA-15, A-113, A-170, CONSUMPTION-244, TINY-244, BOOM-244, GRAY-244, BLUEXTRA-244, GANDER-244, FIX-244, DUPLICATE-244, Evil Sneakers Bob, Tall Trickers Tyrone, ACIDCONE-1, ACIDCONE-2, PLASMACONE-1, W-3, XW-3, BKF-15, BLOODCONE-1, BLOODCONE-2, BLOODCONE-3, BLOODCONE-4, BLOODCONE-5, BLOODCONE-6, BLOODCONE-7, TEETHCONE, TEETHMINI, BLOODCONE-120, EVIL-244, BLUE-244, BLUECONE-1, BLUECONE-2, BLUECONE-3, BLUECONE-4, BLUEVIL-244, E-100 (IF), E-230 (IF), E-300 (IF), E-thief, EAT-15, LK-1, RVR-15, Ryan (IF), S-1, S-10, S-127, S-130 (IF), S-150 (IF), S-190 (IF), S-200, S-210, S-230 (IF), S-270 (IF), S-40 (IF), S-60, S-90 (IF), TABLE-244, TLAB-15, ULB-15, V-160 (IF), V-319 (IF), V-79, V-86 (IF), X-1, X-100 (IF), X-120 (IF), X-130, X-150 (IF), X-183 (IF), X-219, X-221, X-244, X-246, X-248, X-278, X-300, X-332 (IF), X-350, X-80, XBLUE-244, XE-100, XE-142, XE-144, XE-200, XE-230, XE-300, XE-42, XE-60 (IF), XE-69, XE-95, XM-120 (IF), XS-1, XS-10 (IF), XS-127, XS-130 (IF), XS-150, XS-190, XS-200, XS-210, XS-230, XS-270, XS-40, XS-60, XS-90, XTABLE-244, XTLAB-278, XV-200, XV-27 (IF), XV-35 (IF), XV-50 (IF), XV-60, XV-86, XX-100 (IF), XX-150, XX-200 (IF), XX-244, XX-258, XX-300, XXE-22 (IF), XXE-230, XXE-300, Xoah (IF), lurker-35 (IF), ?-100, JOLLY-1, Jackenstein, John 2, John, Joklanna, KEZU-278, Killer Kyle, LKR-175, Lurker-15, M-120, M-93.1, ME-50, MOQU-278, MT-0, Mario, Mason, MonsterE, Mr Sprinkles, Noah, Nuclear Nikes Nathan, Nuclear bomb, OWL-125, OWL-15, OWL-5, OWL-50, P-1, P-3, P-5, P-8, P-10, P-14, P-17, P-20, PH-1, Peter The Faster, Pickin Pumas Paul, PlEading-1, Prunsel, Purple Billy, Purple Fish, QT-0, REtro-42, REtro-60, RKOL-278, Radioactive Runners Remington, Rainbow-200, Red Scribble, Retro Rockets Robert, Romplians, S-0, S-49, SURVIVE BEAR FROM 2027, Sad Billy, SCARY-15 (Scary Mode), SCARY-35 (Scary Mode), Scary Retro, A-3, GHOST-5, LASER-5, S-40-ATR, S-40-MOU, S-40-OTL, V-150 (Scrapped), WINTER-20, X-3, BOUCBM-1, CHARGER-1, CHKR-1, FT-278, GN-1, SHOVEL-1, SKNY-278, pickaxe-1, stickofdynamite-1, A-264 (Scrapped), DIG-1 (Scrapped), CHARGE-1 (Scrapped), BOMB-1 (Scrapped), BE-245 (Scrapped), MOR-245, OXO-245, ZIBO-245, ATC-1, E-69 (Scrapped), E-146, E-148, BOMR-5 (Scrapped), XV-27 (Scrapped), XV-35 (Scrapped), XV-50 (Scrapped), A-1 (Rebuilt), A-135, A-231, A-264 (Scrapped) #2, Timmy, Blue Timmy, Miserable Timmy, A-1 (Scrapped), ALRT-190, BE-245 (Scrapped) #2, BOMB-1 (Scrapped) #2, BOUC-278, CHARGE-1 (Scrapped) #2, CHK-190, CHS-278, CIL-278, DIG-1 (Scrapped) #2, E-100 (Scrapped), E-125 (Scrapped), IB-278, Jordent, L-135, L-198, L-231, L-25, L-271, L-320, L-389, L-432, L-465, L-500, L-550, L-610, L-80, Le creatures, M-120-B, M-120-C, M-120-D, Pickaxe-1, RBND-190, Remi, Ryan (Scrapped), Stickofdynamite-1, T-120, T-190, T-270, T-330, T-50, TRP-190, V-331, X-100 (Scrapped), X-120 (Scrapped), X-150 (Scrapped), X-183 (Scrapped), XA-1, XM-120 (Scrapped), XS-130 (Scrapped), XXA-1, lurker-100, lurker-120-Minion, lurker-120, lurker-150, lurker-183, lurker-200, lurker-245, lurker-278, lurker-300, lurker-35 (Scrapped), lurker-60, Signardo 0, Signardo 10, Signardo 11, Signardo 12, Signardo 13, Signardo 14, Signardo 15, Signardo 16, Signardo 17, Signardo 18, Signardo 2, Signardo 3, Signardo 4, Signardo 5, Signardo 6, Signardo 7, Signardo 8, Signardo 9, Signardo, Signaretro, Signhia, Signopa, Slendersignardo, Spawn Wall, Stupid Eyeball, Stupid-1, T-0091., TBL-175, TLAB-278, Teleporter Signardo, The Creatures, The Dummies Behind The Lobby, Tiny Timbs Tony, Trollface-90, Trollface, Tropical Fish, Turnips, U-10 (April Fools), U-10 (Original), U-120, U-170, U-200, U-230, U-260, U-300, U-330, U-380, U-40 (April Fools), U-40 (Original), U-400, U-5, U-55, U-60, U-80, ULB-278, UNEVIL EROR, V-110, V-134 (Upcoming), V-160 (Upcoming), V-220, V-247 (Upcoming), V-264 (Upcoming), V-319 (Upcoming), V-383, S-150 (Upcoming), S-190 (Upcoming), S-230 (Upcoming), S-235 (Upcoming), Bob, BOMR-5 (Upcoming), E-230 (Upcoming), E-300 (Upcoming), E-387, GST-5, V-150 (Upcoming), Rob, Hob, LASR-5, S-130 (Upcoming), S-15, S-150 (Upcoming) #2, S-190 (Upcoming) #2, S-230 (Upcoming) #2, S-235 (Upcoming) #2, S-270 (Upcoming), S-40 (Upcoming), S-90 (Upcoming), V-134 (Upcoming) #2, V-160 (Upcoming) #2, V-247 (Upcoming) #2, V-264 (Upcoming) #2, V-500, V-86 (Upcoming), Upside Down Billy, Uselessvariant-258, V-100, V-120, V-15, V-183, V-200, V-256-A, V-256, V-27, SCARV-27, V-345, V-35, SCARV-35, V-400, V-463, V-5, V-50, SCARV-50, SCARV-5, V-60, V-99, VWM-345, Vifo, Vile-5, WigglE-1, X-160, X-200, X-220, X-247, X-258, X-260, X-315, X-5, X-83, XAN-19, XAN-21, XAN-42, XAN-55, XAN-64, XAN-73, XAN-99, XE-0.6, XE-0, XE-1, XE-125, XE-15, XE-2, XE-22, XE-246, XE-333, XE-35, XE-60, XE-80, XEw-1, XS-10, XV-15, XV-27, XV-35, XV-5, XV-50, XV-79, XVifo, XVile-5, XX-200, XXE-0, XXE-1, XXE-2, XXE-22, XXE-333, XXE-35, XXEw-1, XXV-5, XXVifo, XXcary Retro, Xackenstein, Xcary Retro, Xh 100, Xh 221, Xh 246, ZE-1, Zombie Pigman Brute, Zombie Pigman
+
+</details>
+
 ## Scanners (Object Scanner)
 
 ```lua
@@ -832,10 +902,12 @@ That includes the files made to be copied or filled in (`AchievementConfig`,
 | `DoorsAnimations` | DOORS' character animations, recorded in DOORS and played anywhere |
 | `Noise` / `Noise90` | Noise (B-90); every "-90" as a Noise, `_G.Type` |
 | `Noise90All` | every Noise 90, a new one every 10 s (fills the Noise Journal) |
+| `InterminableRooms` | every entity of the Interminable Rooms wiki, `_G.Entity` |
 | `Errorbush` / `Errorbush.rbxm` | 3rr0rbu2h, the broken Ambush; its model |
 | `ObjectScanner` / `ObjectScanner.rbxm` | The scanners (Nokia and Tablet, their Lights); DOORS' scanner's model, out of a saved place |
 | `assets/errorbush/` | 3rr0rbu2h's two faces |
 | `assets/noise/` | Noise's kit, tape and sheets; Noise 90's props kit, grey sheets and faces |
+| `assets/ir/` | the Interminable Rooms entities' pictures, GIF sheets and sounds |
 | `tools/` | Prometheus' settings for the obfuscation, the script that runs it, its fix for Luau |
 | `assets/scanner/` | The scanners' own icons without their background (`.png`) and ready to be recoloured by the script (`.icon`) |
 | `UniversalAssets` / `.obf` | the animator for DOORS' things and custom assets, readable and obfuscated |
