@@ -33,7 +33,7 @@ mod rather than playing it.
 | Morph: anybody's avatar on you (`_G.User = "name"`), only you see it | `.../Morph` |
 | New Seek: DOORS' Seek with another body (`assets/seek/NewSeek.rbxm`); `_G.Type = "Glitch"`: made of DOORS' Glitch (its purple, cube texture and particles, pink light), glitched eyes, hands of cubes | `.../NewSeek` |
 | Honcho Seek: DOORS' Seek is Honcho (Seek's animations made for his body), Honcho's sounds (DOORS' chase song kept), the kit's eyes and hands on the walls | `.../HonchoSeek` |
-| Interminable Rooms: any of the 675 entities of its wiki (`_G.Entity = "A-60"`), with its faces, GIFs, sounds and what it does | `.../InterminableRooms` |
+| Interminable Rooms: the 675 entities of its wiki in a panel (name and GIF, click to spawn; a tab where they cannot hurt you), or one with `_G.Entity = "A-60"`; their faces, GIFs, sounds and what they do | `.../InterminableRooms` |
 | Scanners: DOORS' radar (Nokia) or the NVCS tablet (`_G.Scanner = { Type = "Tablet" }`) | `.../ObjectScanner` |
 | Universal Custom Assets: animator with Studio controls (Ctrl + U I O) | `.../UniversalAssets` |
 | The same, obfuscated | `.../UniversalAssets.obf` |
@@ -517,9 +517,24 @@ Until it is on `main`, the script takes them from the branch it is made on.
 ## Interminable Rooms
 
 ```lua
-_G.Entity = "A-60"
 loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/InterminableRooms"))()
 ```
+
+opens the panel; with `_G.Entity = "A-60"` before it, that one comes at once, no panel.
+
+**The panel**: every entity, one row each: its picture (its GIF moving), its name, what it
+is ("runner · rebound · controlla nascondigli"). Drag it by its red title; search at the
+top; click a row and it comes (14 can be about at once). Two tabs:
+
+- **Spawn**: as in the game, it can kill you.
+- **Senza danno**: it comes and does all it does (it runs, checks, screams, breaks the
+  hiding places), but it cannot hurt you: no damage, no kick, no jumpscare, no theft;
+  what it summons is harmless too.
+
+The pictures are downloaded only for the rows in sight, a few at a time (then they are on
+disk, at once the next time). While it is open DOORS gives you the mouse; hold the right
+button to turn the camera. `-` or **P** folds it to its title and gives DOORS the mouse
+back (P again opens it); `X` shuts it (what is about goes on).
 
 Every page of the [Interminable Rooms wiki](https://r-interminable-rooms.fandom.com/wiki/Roblox_Interminable_Rooms_Wiki)'s
 Entities category, events, scrapped and removed ones included: 675 entities (some pages hold
@@ -563,7 +578,7 @@ name prints the nearest ones in the console. Run it again for another: they can 
 together (14 at most). Outside DOORS it comes down a straight line at you.
 
 ```lua
-_G.InterminableRooms = { Volume = 1, Delay = 2.5, Kick = true, MaxSpeed = 1000 }
+_G.InterminableRooms = { Volume = 1, Delay = 2.5, Kick = true, MaxSpeed = 1000, PanelKey = "P" }
 ```
 
 `Delay`: seconds between a runner's spawn sound and it setting off. `MaxSpeed`: studs a
