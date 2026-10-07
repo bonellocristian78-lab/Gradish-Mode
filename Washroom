@@ -3,35 +3,31 @@
 
             loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/claude/sei-qui-con-noi-ye4k62/Washroom"))()
 
-        Run it in a room of the Hotel-: you are taken to a landing in the Hotel's own style (its wallpaper, its wood,
-        its trim, its lamp: the colours and textures of its rooms) and a staircase goes down from it to the Washroom:
-        a big, gloomy, double-height room of chipped white tiles gone yellow, mould in the corners, a wet, shining floor
-        with water standing on it. In the middle two long rows of metal washing machines back to back; big industrial
-        dryers along the walls; neon tubes hanging from the ceiling, flickering, buzzing; linen carts with stained
-        sheets, heaps of clothes, spilled detergent; big pipes under the ceiling dripping on the floor.
+        Run it in room 0. Beside the door (0001) the floor opens: a railing, a sign, and a staircase going down, in the
+        Hotel's own style (its wallpaper, its wood, its trim, its lamps). You walk down it: no teleport. At the bottom, a
+        door of DOORS' own (a copy of your room's door: its knob, its number, its sounds) opens as you come, onto the
+        Washroom: a big, gloomy, double-height room of chipped white tiles gone yellow, mould in the corners, a wet,
+        shining floor with water standing on it. In the middle two long rows of washing machines back to back (some of
+        them running: drums turning one way and the other, water sloshing, timers counting down); big dryers along the
+        walls, steam puffing from their vents; neon tubes hanging from the ceiling, flickering and buzzing; fans turning;
+        linen carts with stained sheets, heaps of clothes, spilled detergent; pipes under the ceiling dripping.
 
-        Hiding: the open dryers (along the walls and in the middle rows). "Hide": a heavy metal clank and you see
-        only the perforated grille of its door. As with Hide in DOORS, do not stay in too long: after a while it gets to
-        you (DOORS' own Hide effect), and then it throws you out (40 damage).
+        Hiding, as in DOORS: the open dryers (along the walls and in the middle rows). "Hide": DOORS' own wardrobe
+        animation and sounds, the dryer's door shuts behind you, DOORS' own camera lock and hiding vignette, and you see
+        out through the perforated grille of its door. As with Hide, do not stay in too long: after a while DOORS' own
+        Hide effect, then it throws you out (DOORS' force-out animation, 40 damage).
 
-        The way on is the watertight door at the far end, its light red: it is held by the water. Find the drain
-        valve on one of the main pipes (one of three, a different one every time), turn it: the water gurgles down the
-        drains, the light turns green, the door opens (its wheel turning) onto the stairs back up to the Hotel, in front
-        of the door of the room you came from.
+        The way on: DOORS' door at the far end (0001), its light red: the water holds it. Find the drain valve on one of
+        the main pipes (one of three, a different one each time) and turn it: the water gurgles down the drains, the light
+        turns green, the door opens as DOORS' do. Stairs back up, another of DOORS' doors at their top: through it you are
+        back in room 0, in front of its door, and the Washroom closes behind you.
 
-        Rush or Ambush come through once while you are there (and at once if DOORS sends one): first every empty drum
-        starts spinning by itself, the lights flicker; then it races through. Not in a dryer: DOORS' own jumpscare, your
-        death. Ambush comes back, two to four times.
+        Every now and then a dryer starts with a loud metal bang and spins, shaking. In some drums and carts: gold, a
+        flashlight (F), the emergency key (it opens the door without draining). Your steps splash (DOORS' own water
+        footsteps); your character plays DOORS' Interact animation when you use something. No monsters but Hide.
 
-        Dupe: one of the dryers is wrong (water boiling inside, drops on its glass, steam): hide in it and it attacks
-        (40 damage). And a second watertight door, on the left wall, is not a door at all: its light never turns green.
-
-        Every now and then a dryer starts with a loud metal bang. In some drums and carts: gold, a flashlight (F turns it
-        on), the emergency key (it opens the watertight door without draining). Your steps splash: DOORS' own water
-        footsteps on its floor.
-
-        Only you see it and walk in it (the server does not know it is there). The gold is only on your screen.
-        Run it again: a new one (the one before goes). getgenv().__Washroom() takes it away.
+        Only you see it and walk in it (the server does not know it is there); your character's animations are seen by
+        everyone. The gold is only on your screen. Run it again: a new one. getgenv().__Washroom() takes it away.
 ]]
 
 local Players = game:GetService("Players")
@@ -41,6 +37,7 @@ local Lighting = game:GetService("Lighting")
 local SoundService = game:GetService("SoundService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
+local CollectionService = game:GetService("CollectionService")
 local LocalPlayer = Players.LocalPlayer
 
 local REPO = "https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/claude/sei-qui-con-noi-ye4k62/"
@@ -65,7 +62,7 @@ local function flat(v) return v * Vector3.new(1, 0, 1) end
 local hud = if gethui then gethui() else LocalPlayer:WaitForChild("PlayerGui")
 local folder = make("Model", { Name = "Washroom" }, workspace)
 local screen = make("ScreenGui", { Name = "Washroom", IgnoreGuiInset = true, DisplayOrder = 100005, ResetOnSpawn = false }, hud)
-local mainGame = nil -- DOORS' Main_Game: its caption, its camera shake, its crouching
+local mainGame = nil -- DOORS' Main_Game: its caption, its camera shake
 pcall(function() mainGame = require(LocalPlayer.PlayerGui.MainUI.Initiator.Main_Game) end)
 
 local alive = true
@@ -90,6 +87,11 @@ local function wait(seconds)
 	local t0 = os.clock()
 	repeat RunService.Heartbeat:Wait() until not alive or os.clock() - t0 >= seconds
 	return alive
+end
+local function untag(d)
+	pcall(function()
+		for _, tag in ipairs(CollectionService:GetTags(d)) do CollectionService:RemoveTag(d, tag) end
+	end)
 end
 
 ---====== FILES ======---
@@ -117,33 +119,29 @@ local function file(dir, path, name)
 	GENV.__WashroomFiles[here] = id
 	return id
 end
-local function own(name) return file("Washroom", "assets/washroom/", name) end
 local IMG, SND = {}, {}
 do -- all at once (several at a time)
-	local names = { "Tiles.png", "Mold.png", "Grill.png", "Drum.png", "Stains.png", "Droplets.png", "Grate.png", "Buzz.mp3", "Drip.mp3", "Gurgle.mp3",
-		"Bang.mp3", "Clank.mp3", "Spin.mp3", "Valve.mp3", "Hatch.mp3", "Boil.mp3", "Chime.mp3" }
+	local names = { "Tiles.png", "Mold.png", "Grill.png", "Drum.png", "Stains.png", "Grate.png", "Buzz.mp3", "Drip.mp3", "Gurgle.mp3", "Bang.mp3",
+		"Clank.mp3", "Spin.mp3", "Valve.mp3", "Chime.mp3" }
 	local left = #names
 	for _, n in ipairs(names) do
 		task.spawn(function()
-			local id = own(n)
+			local id = file("Washroom", "assets/washroom/", n)
 			if n:find("%.png$") then IMG[n:sub(1, -5)] = id else SND[n:sub(1, -5)] = id end
 			left -= 1
 		end)
 	end
 	local t0 = os.clock()
 	while left > 0 and os.clock() - t0 < 25 do task.wait(0.05) end
-	SND.Bite = file("Surprise", "assets/surprise/", "Bite.mp3")
-	SND.Roar = file("Surprise", "assets/surprise/", "Roar.mp3")
 	SND.Whisper = file("Surprise", "assets/surprise/", "Whisper.mp3")
 end
-local DOORS = { -- DOORS' own sounds
-	waterSteps = { "rbxassetid://9114081952", "rbxassetid://9114081779" }, -- its Water footsteps
+local DOORS = { -- DOORS' own (from the Hotel-'s dump)
+	enter = "rbxassetid://9461439496", exit = "rbxassetid://9451147205", forceOut = "rbxassetid://10096088747", -- a wardrobe's Anim_Enter, _Exit, _ForceOut
+	interact = "rbxassetid://10215020064", -- your character's Interact
+	hideIn = "rbxassetid://7123173076", hideOut = "rbxassetid://7123173156", -- a wardrobe's SoundEnter, SoundExit
+	waterSteps = { "rbxassetid://9114081952", "rbxassetid://9114081779" }, -- today's Water footsteps
 	gold = "rbxassetid://930700226", -- a gold pile's Collect
-	locked = "rbxassetid://169112309", -- a locked door's Error
 	flicker = "rbxassetid://4227579935", -- its lamps
-	rush = "rbxassetid://1638627089", -- Ambience_Rush
-	ambush = "rbxassetid://10116403034", -- Ambience_Ambush
-	glass = "rbxassetid://6737581315",
 }
 
 ---====== YOU ======---
@@ -160,6 +158,30 @@ if not root0 then
 	stop()
 	return
 end
+-- DOORS' animations on your character (LSPLASH's, as the Hotel- is: they play here, and everyone sees them)
+local tracks = {}
+local function animate(id, speed)
+	local _, humanoid = body()
+	local animator = humanoid and humanoid:FindFirstChildOfClass("Animator")
+	if not animator then return nil end
+	local track = tracks[id]
+	if not track then
+		local a = Instance.new("Animation")
+		a.AnimationId = id
+		local ok, t = pcall(function() return animator:LoadAnimation(a) end)
+		if not ok then return nil end
+		track = t
+		tracks[id] = track
+	end
+	pcall(function()
+		track.Priority = Enum.AnimationPriority.Action
+		track:Play(0.1, 1, speed or 1)
+	end)
+	return track
+end
+later(function()
+	for _, t in pairs(tracks) do pcall(function() t:Stop(0.2) end) end
+end)
 
 ---====== EFFECTS ======---
 
@@ -210,8 +232,11 @@ function FX.loop(id, parent, props)
 	end
 	return s
 end
-
----====== WHAT HAPPENS TO YOU ======---
+-- One of the sounds of a copy of DOORS' (its own: Open, Unlock, Error...)
+local function playOwn(model, name)
+	local s = model and model:FindFirstChild(name, true)
+	if s and s:IsA("Sound") then pcall(function() s:Play() end) end
+end
 
 local dead = false
 local function kill(name, hints)
@@ -230,18 +255,6 @@ local function kill(name, hints)
 	end
 	humanoid.Health = 0
 end
--- DOORS' own jumpscare (Rush, Ambush), then your death
-local caught = false
-local function jumpscare(entity, hints)
-	if caught then return end
-	caught = true
-	local shown = firesignal and pcall(function() firesignal(ReplicatedStorage.Bricks.Jumpscare.OnClientEvent, entity) end)
-	if not shown then
-		FX.flash(if entity == "Ambush" then Color3.fromRGB(40, 200, 80) else Color3.new(0, 0, 0), 0.9)
-		FX.shake(10)
-	end
-	task.delay(if shown then 1.6 else 0.3, function() kill(entity, hints) end)
-end
 local function damage(amount, name, hints)
 	local _, humanoid = body()
 	if not humanoid then return end
@@ -254,16 +267,24 @@ local function damage(amount, name, hints)
 	FX.shake(6)
 end
 
----====== WHERE: THE HOTEL ROOM YOU ARE IN, AND FAR BELOW IT ======---
+---====== WHERE: ROOM 0, BESIDE ITS DOOR ======---
 
+local up = Vector3.new(0, 1, 0)
+local probe = RaycastParams.new()
+probe.FilterType = Enum.RaycastFilterType.Exclude
+probe.RespectCanCollide = true
+local function cast(from, direction, also)
+	probe.FilterDescendantsInstances = { folder, LocalPlayer.Character, also or folder }
+	return workspace:Raycast(from, direction, probe)
+end
+local rooms = workspace:FindFirstChild("CurrentRooms")
 local function roomYouAreIn()
-	local rooms = workspace:FindFirstChild("CurrentRooms")
 	if not rooms then return nil end
 	local named = rooms:FindFirstChild(tostring(LocalPlayer:GetAttribute("CurrentRoom") or ""))
 	if named then return named end
 	local best, bestDistance = nil, math.huge
 	for _, room in ipairs(rooms:GetChildren()) do
-		local mark = room:FindFirstChild("RoomEnd") or room:FindFirstChild("RoomExit")
+		local mark = room:FindFirstChild("RoomEnd")
 		if mark and mark:IsA("BasePart") then
 			local d = (mark.Position - root0.Position).Magnitude
 			if d < bestDistance then best, bestDistance = room, d end
@@ -271,25 +292,80 @@ local function roomYouAreIn()
 	end
 	return best
 end
-local hotelRoom = roomYouAreIn()
-local cameFrom = root0.CFrame
--- On the way back: in front of the door of your room, facing it
-local function backInTheHotel()
-	local room = if hotelRoom and hotelRoom.Parent then hotelRoom else nil
-	local finish = room and (room:FindFirstChild("RoomEnd") or room:FindFirstChild("RoomExit"))
-	local start = room and (room:FindFirstChild("RoomStart") or room:FindFirstChild("RoomEntrance"))
-	if finish and start then
-		local inward = flat(start.Position - finish.Position)
-		inward = if inward.Magnitude > 0.1 then inward.Unit else Vector3.new(0, 0, 1)
-		local p = finish.Position + inward * 5 + Vector3.new(0, 3.2, 0)
-		return CFrame.lookAt(p, p - inward)
-	end
-	return cameFrom
+-- Room 0 (else the room you are in): its door's place on its floor, the way out through it
+local hotelRoom = rooms and rooms:FindFirstChild("0")
+if not (hotelRoom and hotelRoom:FindFirstChild("RoomEnd")) then hotelRoom = roomYouAreIn() end
+local roomEnd = hotelRoom and hotelRoom:FindFirstChild("RoomEnd")
+local out, doorFloor, endLift
+if roomEnd then
+	out = flat(roomEnd.CFrame.LookVector)
+	out = if out.Magnitude > 0.1 then out.Unit else Vector3.new(0, 0, -1)
+	local start = hotelRoom:FindFirstChild("RoomStart")
+	if start and (start.Position - roomEnd.Position):Dot(out) > 0 then out = -out end -- (out: away from the room)
+	endLift = roomEnd.Size.Y / 2
+	doorFloor = roomEnd.Position - up * endLift -- (DOORS' RoomEnd is its doorway: its bottom is the floor)
+else -- (outside the Hotel-: a door's place ahead of you)
+	out = flat(workspace.CurrentCamera.CFrame.LookVector)
+	out = if out.Magnitude > 0.1 then out.Unit else Vector3.new(0, 0, -1)
+	local hit = cast(root0.Position + out * 16 + up * 2, Vector3.new(0, -30, 0))
+	doorFloor = if hit then hit.Position else root0.Position + out * 16 - up * 3
+	endLift = 4
 end
-local depth = 160
-pcall(function() depth = math.min(depth, root0.Position.Y - workspace.FallenPartsDestroyHeight - 120) end)
-local O = Vector3.new(root0.Position.X, root0.Position.Y - math.max(depth, 60), root0.Position.Z)
-local F = CFrame.new(O) -- the Washroom's frame: its floor's middle; -Z the far end (the watertight door), +Z the stairs
+local side = out:Cross(up).Unit
+-- In front of the door, inside the room, facing it: where the way back leaves you
+local function backInTheHotel()
+	local p = doorFloor - out * 5 + up * 3.2
+	return CFrame.lookAt(p, p + out)
+end
+
+local DEPTH, W, LEN, H = 40, 44, 84, 26 -- the room: 40 under the Hotel's floor; x -22..22, z -42..42, y 0..26
+local STAIR = { w = 6, z0 = 44, z1 = 104 } -- from z 44 (y 0) up to z 104 (y 40): 40 steps of 1.5
+local HOLE = { z0 = 92, z1 = 104 } -- the opening in the Hotel's floor, over the top of the stairs
+local holeSize = Vector3.new(STAIR.w, 0, HOLE.z1 - HOLE.z0)
+
+-- Where beside the door (one side or the other, nearer or further): where the least is in the way (the room's own walls
+-- and desks count much more than its furniture, which is only taken away) and the room's floor under all of it
+local furniture = hotelRoom and hotelRoom:FindFirstChild("Assets")
+local function holeAt(offset)
+	local c = doorFloor - out * (3 + holeSize.Z / 2) + side * offset
+	return CFrame.lookAt(c, c + out)
+end
+local function overlap(cf, size)
+	local params = OverlapParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	params.FilterDescendantsInstances = { folder, LocalPlayer.Character }
+	local ok, found = pcall(function() return workspace:GetPartBoundsInBox(cf, size, params) end)
+	return if ok and found then found else {}
+end
+local function obstacles(hole)
+	local n, seen = 0, {}
+	for _, p in ipairs(overlap(hole * CFrame.new(0, 3.5, 2.5), Vector3.new(STAIR.w + 1, 6, holeSize.Z + 5))) do
+		if p.CanCollide and p.Transparency < 0.99 then
+			local thing = p:FindFirstAncestorWhichIsA("Model")
+			if furniture and thing and thing:IsDescendantOf(furniture) then
+				if not seen[thing] then n += 1 end
+				seen[thing] = true
+			else
+				n += 10
+			end
+		end
+	end
+	for _, c in ipairs({ { -1, -1 }, { -1, 1 }, { 1, -1 }, { 1, 1 } }) do
+		local at = hole * Vector3.new(c[1] * STAIR.w / 2, 0, c[2] * holeSize.Z / 2)
+		local hit = cast(at + up * 2, Vector3.new(0, -4, 0), furniture)
+		if not hit or math.abs(hit.Position.Y - doorFloor.Y) > 0.6 then n += 100 end
+	end
+	return n
+end
+local holeCF, fewest = nil, math.huge
+for _, offset in ipairs({ 7.5, -7.5, 9.5, -9.5 }) do
+	local hole = holeAt(offset)
+	local n = obstacles(hole)
+	if n < fewest then holeCF, fewest = hole, n end
+end
+-- The Washroom's frame: its floor's middle, 40 below; -Z the way on (the far door), +Z the stairs up to the opening
+local middle = holeCF.Position - up * DEPTH + out * ((HOLE.z0 + HOLE.z1) / 2)
+local F = CFrame.lookAt(middle, middle + out)
 local function L(x, y, z) return F * CFrame.new(x, y, z) end
 
 ---====== BUILDING ======---
@@ -298,7 +374,8 @@ local HOTEL = { -- the Hotel-'s rooms, from its dump: their floor, walls, trim, 
 	floor = Color3.fromRGB(95, 83, 81), wall = Color3.fromRGB(89, 116, 117), strip = Color3.fromRGB(117, 98, 94), ceiling = Color3.fromRGB(107, 90, 86),
 	wallpaper = "rbxassetid://9754267662" }
 local TILE = Color3.fromRGB(214, 208, 186)
-local STEEL = Color3.fromRGB(150, 156, 160)
+local ENAMEL = Color3.fromRGB(222, 222, 214)
+local STEEL = Color3.fromRGB(165, 170, 174)
 local M = Enum.Material
 
 local function box(name, size, cf, color, material, extra, parent)
@@ -320,11 +397,12 @@ local function texture(p, id, faces, studs, extra)
 	end
 end
 local function decal(p, id, face, extra)
-	if not id then return nil end
+	if not id or not p then return nil end
 	local d = make("Decal", { Texture = id, Face = Enum.NormalId[face] }, p)
 	for k, v in pairs(extra or {}) do d[k] = v end
 	return d
 end
+-- A sloped slab from (y0, z0) to (y1, z1), its top through both (what you walk on; the steps are only seen)
 local function ramp(name, width, y0, z0, y1, z1, material)
 	local a, b = L(0, y0, z0).Position, L(0, y1, z1).Position
 	local cf = CFrame.lookAt((a + b) / 2, b) * CFrame.new(0, -0.5, 0)
@@ -340,26 +418,107 @@ local function tileWall(name, size, cf)
 	texture(w, IMG.Tiles, { "Left", "Right", "Front", "Back", "Top", "Bottom" }, 8)
 	return w
 end
+local function clean(model) -- a copy of DOORS': none of its code, remotes, physics, tags
+	pcall(function() model:SetAttribute("LoadModule", nil) end)
+	local all = model:GetDescendants()
+	table.insert(all, model)
+	for _, d in ipairs(all) do
+		untag(d)
+		if d:IsA("LuaSourceContainer") or d:IsA("RemoteEvent") or d:IsA("BindableEvent") or d:IsA("BodyMover") or d:IsA("Constraint")
+			or d:IsA("TouchTransmitter") or d:IsA("ProximityPrompt") or d:IsA("AnimationController") or d:IsA("JointInstance") then
+			d:Destroy()
+		elseif d:IsA("BasePart") then
+			d.Anchored, d.CanTouch, d.CastShadow = true, false, false
+		end
+	end
+	return model
+end
 
-local W, LEN, H = 44, 84, 26 -- the room: x -22..22, z -42..42, y 0..26
-local STAIR = { w = 10, rise = 24, run = 36 } -- from z 42 (y 0) to z 78 (y 24)
+---- The opening in room 0's floor (only for you: its floor there hidden, the rest of it copies of it) ----
+local moved = {} -- the Hotel's parts out of your way: part -> { transparency, collide }
+local function hideLocally(p)
+	if moved[p] then return end
+	moved[p] = { p.LocalTransparencyModifier, p.CanCollide }
+	p.LocalTransparencyModifier, p.CanCollide = 1, false
+	for _, d in ipairs(p:GetChildren()) do
+		if d:IsA("Decal") then
+			moved[d] = { d.LocalTransparencyModifier }
+			d.LocalTransparencyModifier = 1
+		end
+	end
+end
+later(function()
+	for p, was in pairs(moved) do
+		pcall(function()
+			p.LocalTransparencyModifier = was[1]
+			if was[2] ~= nil then p.CanCollide = was[2] end
+		end)
+	end
+end)
+local pieces = {}
+later(function()
+	for _, piece in ipairs(pieces) do piece:Destroy() end
+end)
+local function split(p) -- a floor round the opening: up to four copies of it
+	local lo, hi = Vector3.new(math.huge, 0, math.huge), Vector3.new(-math.huge, 0, -math.huge)
+	for _, c in ipairs({ { -1, -1 }, { -1, 1 }, { 1, -1 }, { 1, 1 } }) do
+		local l = p.CFrame:PointToObjectSpace(holeCF * Vector3.new(c[1] * holeSize.X / 2, 0, c[2] * holeSize.Z / 2))
+		lo = Vector3.new(math.min(lo.X, l.X), 0, math.min(lo.Z, l.Z))
+		hi = Vector3.new(math.max(hi.X, l.X), 0, math.max(hi.Z, l.Z))
+	end
+	local hx, hz = p.Size.X / 2, p.Size.Z / 2
+	local x0, x1, z0, z1 = math.clamp(lo.X, -hx, hx), math.clamp(hi.X, -hx, hx), math.clamp(lo.Z, -hz, hz), math.clamp(hi.Z, -hz, hz)
+	for _, r in ipairs({ { -hx, x0, -hz, hz }, { x1, hx, -hz, hz }, { x0, x1, -hz, z0 }, { x0, x1, z1, hz } }) do
+		if r[2] - r[1] > 0.02 and r[4] - r[3] > 0.02 then
+			local ok, piece = pcall(function() return p:Clone() end)
+			if not (ok and piece) then
+				piece = make("Part", { Color = p.Color, Material = p.Material, Transparency = p.Transparency, Reflectance = p.Reflectance }, nil)
+			end
+			for _, d in ipairs(piece:GetChildren()) do
+				if not (d:IsA("Texture") or d:IsA("Decal")) then d:Destroy() end
+			end
+			untag(piece)
+			piece.Anchored = true
+			piece.Size = Vector3.new(r[2] - r[1], p.Size.Y, r[4] - r[3])
+			piece.CFrame = p.CFrame * CFrame.new((r[1] + r[2]) / 2, 0, (r[3] + r[4]) / 2)
+			piece.Parent = p.Parent -- (beside it, in its room: for DOORS, still its floor)
+			table.insert(pieces, piece)
+		end
+	end
+	hideLocally(p)
+end
+for _, p in ipairs(overlap(holeCF * CFrame.new(0, -1.2, 0), Vector3.new(holeSize.X - 0.05, 2.8, holeSize.Z - 0.05))) do
+	if p:IsA("BasePart") and not p:IsDescendantOf(folder) then
+		local flatPart = p:IsA("Part") and p.Shape == Enum.PartType.Block and math.abs(p.CFrame.UpVector.Y) > 0.99
+		if flatPart and p.Size.X * p.Size.Z > holeSize.X * holeSize.Z * 2 then split(p) else hideLocally(p) end
+	end
+end
+-- The room's furniture on the opening or in front of it (where you step onto the stairs): all of each piece
+if furniture then
+	local APPROACH = 5
+	for _, p in ipairs(overlap(holeCF * CFrame.new(0, 3.6, APPROACH / 2), Vector3.new(STAIR.w + 1, 6.8, holeSize.Z + APPROACH))) do
+		local thing = p:FindFirstAncestorWhichIsA("Model")
+		if thing and thing:IsDescendantOf(furniture) then
+			for _, d in ipairs(thing:GetDescendants()) do
+				if d:IsA("BasePart") then hideLocally(d) end
+			end
+		end
+	end
+end
 
--- The floor: tiles, wet (water footsteps on it: its material is DOORS' Slate, which the Hotel- has nowhere)
+---- The Washroom: floor, walls, ceiling ----
 local floor = box("Floor", Vector3.new(W, 1, LEN), L(0, -0.5, 0), TILE, M.Slate, { Reflectance = 0.18 })
 texture(floor, IMG.Tiles, { "Top" }, 8)
 box("Ceiling", Vector3.new(W, 1, LEN), L(0, H + 0.5, 0), Color3.fromRGB(70, 72, 72), M.Concrete)
 tileWall("WallLeft", Vector3.new(1, H, LEN), L(-W / 2 - 0.5, H / 2, 0))
 tileWall("WallRight", Vector3.new(1, H, LEN), L(W / 2 + 0.5, H / 2, 0))
--- The back wall, its opening onto the stairs (10 wide, 13 high)
-tileWall("WallBack", Vector3.new((W - STAIR.w) / 2, H, 1), L(-(W + STAIR.w) / 4, H / 2, LEN / 2 + 0.5))
-tileWall("WallBack", Vector3.new((W - STAIR.w) / 2, H, 1), L((W + STAIR.w) / 4, H / 2, LEN / 2 + 0.5))
-tileWall("WallBack", Vector3.new(STAIR.w, H - 13, 1), L(0, 13 + (H - 13) / 2, LEN / 2 + 0.5))
--- The far wall, its opening for the watertight door (6 wide, 9 high)
-tileWall("WallFar", Vector3.new((W - 6) / 2, H, 1), L(-(W + 6) / 4, H / 2, -LEN / 2 - 0.5))
-tileWall("WallFar", Vector3.new((W - 6) / 2, H, 1), L((W + 6) / 4, H / 2, -LEN / 2 - 0.5))
-tileWall("WallFar", Vector3.new(6, H - 9, 1), L(0, 9 + (H - 9) / 2, -LEN / 2 - 0.5))
--- Mould in the corners, low on the walls
-for _, c in ipairs({ { -1, -1 }, { -1, 1 }, { 1, -1 }, { 1, 1 } }) do
+local DOORW, DOORH = 6, 8.4 -- the openings DOORS' doors stand in
+for _, z in ipairs({ LEN / 2 + 0.5, -LEN / 2 - 0.5 }) do -- the back wall (the stairs), the far wall (the way on)
+	tileWall("Wall", Vector3.new((W - DOORW) / 2, H, 1), L(-(W + DOORW) / 4, H / 2, z))
+	tileWall("Wall", Vector3.new((W - DOORW) / 2, H, 1), L((W + DOORW) / 4, H / 2, z))
+	tileWall("Wall", Vector3.new(DOORW, H - DOORH, 1), L(0, DOORH + (H - DOORH) / 2, z))
+end
+for _, c in ipairs({ { -1, -1 }, { -1, 1 }, { 1, -1 }, { 1, 1 } }) do -- mould low in the corners
 	for k = 0, 1 do
 		local alongX = k == 0
 		local x = c[1] * (W / 2 - (if alongX then 0.05 else 2.5))
@@ -369,7 +528,6 @@ for _, c in ipairs({ { -1, -1 }, { -1, 1 }, { 1, -1 }, { 1, 1 } }) do
 		decal(patch, IMG.Mold, if alongX then (if c[1] < 0 then "Right" else "Left") else (if c[2] < 0 then "Back" else "Front"))
 	end
 end
--- Standing water, shining, and the drains
 local water = box("Water", Vector3.new(W - 0.2, 0.2, LEN - 0.2), L(0, 0.35, 0), Color3.fromRGB(55, 85, 90), M.SmoothPlastic,
 	{ Transparency = 0.45, Reflectance = 0.35, CanCollide = false, CanQuery = false })
 local drains = {}
@@ -379,48 +537,176 @@ for _, p in ipairs({ { -10, -20 }, { 10, -20 }, { -10, 18 }, { 10, 18 } }) do
 	table.insert(drains, d)
 end
 
----- The stairs up to the landing in the Hotel's style ----
+---- The stairs, in the Hotel's style, from the opening down to the Washroom's door ----
+local lampTemplate = nil
+pcall(function()
+	local fixtures = hotelRoom and hotelRoom:FindFirstChild("Assets") and hotelRoom.Assets:FindFirstChild("Light_Fixtures", true)
+	lampTemplate = fixtures and fixtures:FindFirstChildWhichIsA("Model")
+end)
+-- A lamp of the Hotel's on a wall: `at` on the wall's face, `normal` out of it (its Stand against the wall, as in its rooms)
+local function lamp(at, normal)
+	local target = CFrame.lookAt(at + normal * 0.1, at + normal * 2)
+	if lampTemplate then
+		local ok = pcall(function()
+			local stand = lampTemplate:FindFirstChild("Stand") or lampTemplate.PrimaryPart
+			local l = clean(lampTemplate:Clone())
+			l:PivotTo(target * stand.CFrame:ToObjectSpace(lampTemplate:GetPivot()))
+			l.Parent = folder
+		end)
+		if ok then return end
+	end
+	local shade = box("Lamp", Vector3.new(1.6, 0.5, 1.2), target * CFrame.new(0, 0, -0.6), Color3.fromRGB(255, 220, 160), M.Neon, { CanCollide = false })
+	make("PointLight", { Color = Color3.fromRGB(255, 200, 150), Range = 22, Brightness = 1.3 }, shade)
+end
 do
-	local steps = STAIR.rise
-	for i = 1, steps do -- what you see: steps (what you walk on: a ramp, below)
-		local z = LEN / 2 + (i - 0.5) * (STAIR.run / steps)
-		box("Step", Vector3.new(STAIR.w, i, STAIR.run / steps), L(0, i / 2, z), HOTEL.floor, M.WoodPlanks, { CanCollide = false })
+	local run = (STAIR.z1 - STAIR.z0) / DEPTH
+	for i = 1, DEPTH do
+		box("Step", Vector3.new(STAIR.w, i, run), L(0, i / 2, STAIR.z0 + (i - 0.5) * run), HOTEL.floor, M.WoodPlanks, { CanCollide = false })
+		box("Nosing", Vector3.new(STAIR.w, 0.15, 0.3), L(0, i - 0.07, STAIR.z0 + (i - 1) * run + 0.15), HOTEL.strip, M.Wood, { CanCollide = false })
 	end
-	ramp("Ramp", STAIR.w, 0, LEN / 2, STAIR.rise, LEN / 2 + STAIR.run, M.WoodPlanks)
-	local top = LEN / 2 + STAIR.run
-	hotelWall("StairWall", Vector3.new(1, 38, STAIR.run + 14), L(-STAIR.w / 2 - 0.5, 19, LEN / 2 + (STAIR.run + 14) / 2))
-	hotelWall("StairWall", Vector3.new(1, 38, STAIR.run + 14), L(STAIR.w / 2 + 0.5, 19, LEN / 2 + (STAIR.run + 14) / 2))
-	box("StairCeiling", Vector3.new(STAIR.w + 2, 1, STAIR.run + 14), L(0, 38.5, LEN / 2 + (STAIR.run + 14) / 2), HOTEL.ceiling, M.WoodPlanks)
-	-- The landing: the Hotel's wood floor, its wallpaper, its trim
-	box("Landing", Vector3.new(STAIR.w, 1, 12), L(0, STAIR.rise - 0.5, top + 6), HOTEL.floor, M.WoodPlanks)
-	hotelWall("LandingWall", Vector3.new(STAIR.w + 2, 38, 1), L(0, 19, top + 12.5))
-	for _, x in ipairs({ -STAIR.w / 2 + 0.1, STAIR.w / 2 - 0.1 }) do
-		box("Wall_Strip", Vector3.new(0.25, 1.2, 12), L(x, STAIR.rise + 0.6, top + 6), HOTEL.strip, M.Wood)
+	ramp("Ramp", STAIR.w, 0, STAIR.z0, DEPTH, STAIR.z1, M.WoodPlanks)
+	box("Landing", Vector3.new(STAIR.w, 1, STAIR.z0 - LEN / 2 + 1), L(0, -0.5, (LEN / 2 + STAIR.z0) / 2), HOTEL.floor, M.WoodPlanks)
+	local length = STAIR.z1 - LEN / 2 + 1.5
+	for _, x in ipairs({ -STAIR.w / 2 - 0.5, STAIR.w / 2 + 0.5 }) do
+		hotelWall("StairWall", Vector3.new(1, DEPTH - 0.05, length), L(x, (DEPTH - 0.05) / 2, LEN / 2 + length / 2))
 	end
-	box("Wall_Strip", Vector3.new(STAIR.w, 1.2, 0.25), L(0, STAIR.rise + 0.6, top + 11.9), HOTEL.strip, M.Wood)
-	-- Its lamp: a copy of one of your room's own, else one like them
-	local lamp = nil
-	pcall(function()
-		local fixtures = hotelRoom and hotelRoom:FindFirstChild("Assets") and hotelRoom.Assets:FindFirstChild("Light_Fixtures", true)
-		local one = fixtures and fixtures:FindFirstChildWhichIsA("Model")
-		if one then
-			lamp = one:Clone()
-			lamp:PivotTo(L(0, STAIR.rise + 8, top + 6))
-			lamp.Parent = folder
+	hotelWall("StairWall", Vector3.new(STAIR.w + 2, DEPTH - 0.05, 1), L(0, (DEPTH - 0.05) / 2, STAIR.z1 + 1))
+	box("StairCeiling", Vector3.new(STAIR.w + 2, 0.2, HOLE.z0 - LEN / 2), L(0, DEPTH - 1.2, (HOLE.z0 + LEN / 2) / 2), HOTEL.ceiling, M.WoodPlanks)
+	for i, z in ipairs({ 50, 66, 82 }) do -- (on the side walls, at a lamp's height over the steps)
+		local x = if i % 2 == 1 then -STAIR.w / 2 else STAIR.w / 2
+		lamp(L(x, (z - STAIR.z0) / (STAIR.z1 - STAIR.z0) * DEPTH + 6.5, z).Position, F.RightVector * -math.sign(x))
+	end
+	-- At the opening: a railing round it (open where the stairs start), a sign
+	for _, x in ipairs({ -STAIR.w / 2 - 0.2, STAIR.w / 2 + 0.2 }) do
+		for _, z in ipairs({ HOLE.z0, (HOLE.z0 + HOLE.z1) / 2, HOLE.z1 }) do
+			box("Post", Vector3.new(0.35, 3.4, 0.35), L(x, DEPTH + 1.7, z), HOTEL.strip, M.Wood)
 		end
-	end)
-	if not lamp then
-		local shade = box("Lamp", Vector3.new(2, 0.6, 2), L(0, STAIR.rise + 10, top + 6), Color3.fromRGB(255, 220, 160), M.Neon, { CanCollide = false })
-		make("PointLight", { Color = Color3.fromRGB(255, 200, 150), Range = 24, Brightness = 1.4 }, shade)
+		box("Rail", Vector3.new(0.3, 0.3, HOLE.z1 - HOLE.z0), L(x, DEPTH + 3.4, (HOLE.z0 + HOLE.z1) / 2), HOTEL.strip, M.Wood)
+		box("Rail", Vector3.new(0.2, 0.2, HOLE.z1 - HOLE.z0), L(x, DEPTH + 1.8, (HOLE.z0 + HOLE.z1) / 2), HOTEL.strip, M.Wood, { CanCollide = false })
 	end
-	-- A sign over the stairs
-	local sign = box("Sign", Vector3.new(6, 1.4, 0.2), L(0, STAIR.rise + 9, top - 0.2), Color3.fromRGB(40, 32, 30), M.Wood)
-	local gui = make("SurfaceGui", { Face = Enum.NormalId.Back, LightInfluence = 0.6, PixelsPerStud = 50, SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud }, sign)
+	box("Rail", Vector3.new(STAIR.w + 0.4, 0.3, 0.3), L(0, DEPTH + 3.4, HOLE.z0), HOTEL.strip, M.Wood)
+	box("Rail", Vector3.new(STAIR.w + 0.4, 0.2, 0.2), L(0, DEPTH + 1.8, HOLE.z0), HOTEL.strip, M.Wood, { CanCollide = false })
+	local sign = box("Sign", Vector3.new(3.6, 1.1, 0.15), L(STAIR.w / 2 + 0.2, DEPTH + 4.3, HOLE.z1), Color3.fromRGB(40, 32, 30), M.Wood, { CanCollide = false })
+	local gui = make("SurfaceGui", { Face = Enum.NormalId.Back, LightInfluence = 0.6, PixelsPerStud = 60, SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud }, sign)
 	make("TextLabel", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = "WASHROOM  ↓", Font = Enum.Font.Oswald, TextScaled = true,
 		TextColor3 = Color3.fromRGB(255, 222, 189) }, gui)
 end
 
----- Neon tubes on chains, flickering, buzzing ----
+---- DOORS' doors: copies of your room's own (its leaf, knob, number, light, frame, sounds) ----
+local doorTemplate = hotelRoom and hotelRoom:FindFirstChild("Door")
+local frameTemplate = hotelRoom and hotelRoom:FindFirstChild("Parts") and hotelRoom.Parts:FindFirstChild("End_DoorFrame")
+local doors = {}
+-- A door where a room's end would be: at (x, y, z) of the Washroom, the way through it `dir`
+local function doorAt(x, y, z, dir, number)
+	local base = L(x, y, z).Position
+	local frame = CFrame.lookAt(base + up * endLift, base + up * endLift + dir)
+	local door = { model = nil, parts = {}, locked = false, dir = dir }
+	if doorTemplate and roomEnd then
+		local ok = pcall(function()
+			local copy = doorTemplate:Clone()
+			for _, name in ipairs({ "Lock", "Hidden" }) do
+				local d = copy:FindFirstChild(name)
+				if d then d:Destroy() end
+			end
+			clean(copy)
+			local leaf = copy:FindFirstChild("Door")
+			-- Shut (where the Hotel- keeps it stood shut)
+			local original = leaf:FindFirstChild("OriginalCFrameValue")
+			local group = { leaf }
+			for _, d in ipairs(leaf:GetDescendants()) do
+				if d:IsA("BasePart") then table.insert(group, d) end
+			end
+			local rel = {}
+			for i, p in ipairs(group) do rel[i] = leaf.CFrame:ToObjectSpace(p.CFrame) end
+			if original then
+				for i, p in ipairs(group) do p.CFrame = original.Value * rel[i] end
+			end
+			copy:PivotTo(frame * roomEnd.CFrame:ToObjectSpace(copy:GetPivot())) -- (its pivot is its leaf: the copy's own, now shut)
+			door.model, door.leaf, door.hinge = copy, leaf, copy:FindFirstChild("Hinge")
+			door.closed = leaf.CFrame
+			for i, p in ipairs(group) do door.parts[i] = { p, leaf.CFrame:ToObjectSpace(p.CFrame) } end
+			for _, d in ipairs(copy:GetDescendants()) do
+				if d:IsA("BasePart") then d.CanCollide = d == leaf end
+				if d:IsA("TextLabel") and number then d.Text = number end
+			end
+			door.light = copy:FindFirstChild("Light")
+			copy.Parent = folder
+		end)
+		if not ok then door.model = nil end
+		if frameTemplate then
+			pcall(function()
+				local f = clean(frameTemplate:Clone())
+				f:PivotTo(frame * roomEnd.CFrame:ToObjectSpace(f:GetPivot()))
+				f.Parent = folder
+			end)
+		end
+	end
+	if not door.model then -- (outside the Hotel-: one like them)
+		door.model = make("Model", { Name = "Door" }, folder)
+		door.leaf = box("Door", Vector3.new(5, 7.75, 0.4), frame * CFrame.new(0, 0, 0.5), Color3.fromRGB(129, 111, 100), M.Wood, nil, door.model)
+		door.hinge = box("Hinge", Vector3.new(0.2, 1.4, 0.4), frame * CFrame.new(2.4, 0, 0.5), Color3.fromRGB(120, 120, 130), M.Metal, { CanCollide = false }, door.model)
+		door.closed = door.leaf.CFrame
+		door.parts = { { door.leaf, CFrame.new() } }
+		make("Sound", { Name = "Open", SoundId = "rbxassetid://320946744", Volume = VOLUME }, door.leaf)
+	end
+	-- Open: as DOORS' swing, a quarter turn on its hinge, away from you
+	local h = if door.hinge then door.hinge.Position else door.closed.Position
+	local function at(angle) return CFrame.new(h) * CFrame.Angles(0, angle, 0) * CFrame.new(-h) * door.closed end
+	local turn = -math.pi / 2
+	if (at(turn).Position - door.closed.Position):Dot(dir) < 0 then turn = -turn end
+	function door.pose(angle)
+		local cf = at(angle)
+		for _, e in ipairs(door.parts) do e[1].CFrame = cf * e[2] end
+	end
+	function door.open()
+		if door.opened then return end
+		door.opened = true
+		playOwn(door.model, "Open")
+		door.leaf.CanCollide = false
+		task.spawn(function()
+			local t0 = os.clock()
+			while alive and os.clock() - t0 < 0.6 do
+				local u = (os.clock() - t0) / 0.6
+				door.pose(turn * (1 - (1 - u) ^ 3))
+				RunService.Heartbeat:Wait()
+			end
+			door.pose(turn)
+		end)
+	end
+	function door.color(c)
+		pcall(function()
+			for _, d in ipairs(door.light:GetDescendants()) do
+				if d:IsA("Light") then d.Color, d.Enabled = c, true end
+			end
+			door.light.Color, door.light.Material = c, M.Neon
+		end)
+	end
+	table.insert(doors, door)
+	return door
+end
+doorAt(0, 0, LEN / 2 + 0.5, F.LookVector, "B-01") -- (from the stairs into the Washroom: it opens as you come)
+local exitDoor = doorAt(0, 0, -LEN / 2 - 0.5, F.LookVector, "0001")
+exitDoor.locked = true
+exitDoor.color(Color3.fromRGB(255, 40, 30))
+local exitPrompt = make("ProximityPrompt", { ActionText = "Open", ObjectText = "Door", HoldDuration = 0.3, MaxActivationDistance = 9,
+	RequiresLineOfSight = false, Style = Enum.ProximityPromptStyle.Custom }, exitDoor.leaf)
+-- Beyond it: a passage, stairs back up, another of DOORS' doors at their top
+local TOPZ = -LEN / 2 - 33
+do
+	local z0 = -LEN / 2 - 1
+	box("PassageFloor", Vector3.new(6, 1, 9), L(0, -0.5, z0 - 3.5), TILE, M.Slate)
+	ramp("Ramp", 6, 0, z0 - 8, 10, z0 - 24, M.WoodPlanks)
+	for i = 1, 10 do box("Step", Vector3.new(6, i, 1.6), L(0, i / 2, z0 - 8 - (i - 0.5) * 1.6), HOTEL.floor, M.WoodPlanks, { CanCollide = false }) end
+	box("TopFloor", Vector3.new(6, 1, 13), L(0, 9.5, z0 - 30.5), HOTEL.floor, M.WoodPlanks)
+	for _, x in ipairs({ -3.5, 3.5 }) do hotelWall("PassageWall", Vector3.new(1, 24, 37), L(x, 12, z0 - 18.5)) end
+	box("PassageCeiling", Vector3.new(8, 1, 37), L(0, 24, z0 - 18.5), HOTEL.ceiling, M.WoodPlanks)
+	hotelWall("PassageEnd", Vector3.new(8, 24, 1), L(0, 12, z0 - 37.5))
+	lamp(L(-3, 6.5, z0 - 5).Position, F.RightVector)
+	lamp(L(3, 16.5, z0 - 30).Position, -F.RightVector)
+end
+local topDoor = doorAt(0, 10, TOPZ, F.LookVector, "0001")
+
+---- Neon tubes on chains, flickering and buzzing; fans turning ----
 local tubes = {}
 for i, p in ipairs({ { -9, -26 }, { 9, -26 }, { -9, 0 }, { 9, 0 }, { -9, 26 }, { 9, 26 } }) do
 	local y = 17
@@ -431,10 +717,19 @@ for i, p in ipairs({ { -9, -26 }, { 9, -26 }, { -9, 0 }, { 9, 0 }, { -9, 26 }, {
 	table.insert(tubes, { tube = tube, light = light })
 	if i == 2 or i == 5 then FX.loop(SND.Buzz, tube, { Volume = 0.5 * VOLUME, RollOffMaxDistance = 60, RollOffMinDistance = 8 }) end
 end
-local function tubeOn(t, on)
-	t.tube.Material = if on then M.Neon else M.SmoothPlastic
-	t.tube.Color = if on then Color3.fromRGB(195, 238, 242) else Color3.fromRGB(90, 100, 102)
-	t.light.Enabled = on
+local function tubeOn(t, lit)
+	t.tube.Material = if lit then M.Neon else M.SmoothPlastic
+	t.tube.Color = if lit then Color3.fromRGB(195, 238, 242) else Color3.fromRGB(90, 100, 102)
+	t.light.Enabled = lit
+end
+local fans = {}
+for _, z in ipairs({ -14, 14 }) do
+	local hub = L(0, H - 2.2, z)
+	box("FanRod", Vector3.new(0.2, 1.8, 0.2), hub * CFrame.new(0, 1.1, 0), Color3.fromRGB(50, 50, 50), M.Metal, { CanCollide = false })
+	cylinder("FanHub", 0.5, 0.9, hub * CFrame.Angles(0, 0, math.pi / 2), Color3.fromRGB(60, 60, 60), M.Metal, { CanCollide = false })
+	local blades = {}
+	for k = 1, 4 do blades[k] = box("FanBlade", Vector3.new(4.2, 0.08, 0.9), hub, Color3.fromRGB(110, 100, 90), M.Wood, { CanCollide = false }) end
+	table.insert(fans, { hub = hub, blades = blades, angle = math.random() * 6 })
 end
 
 ---- Pipes under the ceiling, dripping ----
@@ -456,38 +751,84 @@ end
 -- cf: its base's middle, looking out of its door. `big`: a wall dryer. `open`: its door open (a hiding place)
 local machines, hideSpots = {}, {}
 local function machine(cf, big, open)
-	local m = { model = make("Model", { Name = if big then "Dryer" else (if open then "Dryer" else "Washer") }, folder), spin = 0, angle = math.random() * 6, open = open }
+	local m = { model = make("Model", { Name = if big or open then "Dryer" else "Washer" }, folder), spin = 0, angle = math.random() * 6, open = open, big = big,
+		shake = 0, door = 0, cf = cf, parts = {} }
 	local d, h, w = if big then 6 else 5, if big then 8 else 6, if big then 6.4 else 5
 	local r = if big then 2.4 else 1.7 -- its door's radius
 	local doorY = if big then 4.4 else 3
-	box("Body", Vector3.new(w, h, d), cf * CFrame.new(0, h / 2, 0), STEEL, M.Metal, nil, m.model)
-	box("Panel", Vector3.new(w - 0.4, 0.9, 0.2), cf * CFrame.new(0, h - 0.6, -d / 2 - 0.05), Color3.fromRGB(60, 64, 66), M.Metal, nil, m.model)
-	for k = -1, 1 do cylinder("Knob", 0.25, 0.4, cf * CFrame.new(k * 0.8, h - 0.6, -d / 2 - 0.25) * CFrame.Angles(0, math.pi / 2, 0), Color3.fromRGB(30, 30, 30), M.SmoothPlastic, nil, m.model) end
-	m.led = box("Led", Vector3.new(0.18, 0.18, 0.1), cf * CFrame.new(w / 2 - 0.6, h - 0.6, -d / 2 - 0.2), Color3.fromRGB(255, 60, 40), M.Neon, { CanCollide = false }, m.model)
+	local function add(p) table.insert(m.parts, { p, cf:ToObjectSpace(p.CFrame) }) return p end
+	-- Its body (enamel for the washers, steel for the dryers), a plinth, a top, its panel (a dial, a coin slot, a timer, a light), feet
+	local bodyPart = add(box("Body", Vector3.new(w, h - 0.4, d), cf * CFrame.new(0, h / 2 + 0.2, 0), if big then STEEL else ENAMEL,
+		if big then M.Metal else M.SmoothPlastic, nil, m.model))
+	decal(bodyPart, IMG.Stains, "Left", { Transparency = 0.7 })
+	add(box("Plinth", Vector3.new(w - 0.2, 0.4, d - 0.2), cf * CFrame.new(0, 0.2, 0), Color3.fromRGB(45, 46, 48), M.Metal, nil, m.model))
+	add(box("Top", Vector3.new(w + 0.1, 0.2, d + 0.1), cf * CFrame.new(0, h + 0.1, 0), Color3.fromRGB(190, 192, 192), M.Metal, nil, m.model))
+	add(box("Panel", Vector3.new(w - 0.4, 1, 0.2), cf * CFrame.new(0, h - 0.7, -d / 2 - 0.08), Color3.fromRGB(55, 58, 62), M.Metal, nil, m.model))
+	add(cylinder("Dial", 0.25, 0.6, cf * CFrame.new(-w / 2 + 0.9, h - 0.7, -d / 2 - 0.25) * CFrame.Angles(0, math.pi / 2, 0), Color3.fromRGB(200, 200, 205), M.Metal, nil, m.model))
+	add(box("CoinSlot", Vector3.new(0.5, 0.6, 0.1), cf * CFrame.new(w / 2 - 1.6, h - 0.7, -d / 2 - 0.22), Color3.fromRGB(150, 130, 60), M.Metal, nil, m.model))
+	m.led = add(box("Led", Vector3.new(0.18, 0.18, 0.1), cf * CFrame.new(w / 2 - 0.6, h - 0.7, -d / 2 - 0.22), Color3.fromRGB(255, 60, 40), M.Neon, { CanCollide = false }, m.model))
+	local display = add(box("Display", Vector3.new(1.1, 0.45, 0.06), cf * CFrame.new(-0.2, h - 0.7, -d / 2 - 0.2), Color3.fromRGB(10, 20, 12), M.SmoothPlastic, nil, m.model))
+	local gui = make("SurfaceGui", { Face = Enum.NormalId.Front, LightInfluence = 0, PixelsPerStud = 80, SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud }, display)
+	m.timer = make("TextLabel", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = "--:--", Font = Enum.Font.Code, TextScaled = true,
+		TextColor3 = Color3.fromRGB(90, 255, 120) }, gui)
+	for _, fx in ipairs({ -1, 1 }) do
+		for _, fz in ipairs({ -1, 1 }) do
+			add(cylinder("Foot", 0.25, 0.5, cf * CFrame.new(fx * (w / 2 - 0.5), 0.05, fz * (d / 2 - 0.5)) * CFrame.Angles(0, 0, math.pi / 2), Color3.fromRGB(30, 30, 30), M.Metal, nil, m.model))
+		end
+	end
+	if big then -- a dryer's vent on its top, puffing steam
+		local vent = add(cylinder("Vent", 1.2, 0.9, cf * CFrame.new(w / 2 - 1, h + 0.6, d / 2 - 1) * CFrame.Angles(0, 0, math.pi / 2), Color3.fromRGB(150, 150, 150), M.Metal, nil, m.model))
+		m.steam = make("ParticleEmitter", { Texture = "rbxasset://textures/particles/smoke_main.dds", Rate = 0, Lifetime = NumberRange.new(1.5, 2.5),
+			Speed = NumberRange.new(1, 2), Size = NumberSequence.new(0.8, 2.5), Transparency = NumberSequence.new(0.6, 1), Color = ColorSequence.new(Color3.fromRGB(235, 238, 238)),
+			Acceleration = Vector3.new(0, 1.5, 0), SpreadAngle = Vector2.new(15, 15) }, vent)
+	end
 	local face = cf * CFrame.new(0, doorY, -d / 2)
 	m.face = face
-	-- Its rim, its drum (a disc on the front, with its paddles), seen through the door
-	cylinder("Rim", 0.08, r * 2.2, face * CFrame.new(0, 0, -0.04) * CFrame.Angles(0, math.pi / 2, 0), Color3.fromRGB(70, 72, 75), M.Metal, { CanCollide = false }, m.model)
+	-- Its door: a gasket, the drum behind it (a disc, its paddles, water in it while it washes), a chrome ring and the glass on a hinge
+	cylinder("Gasket", 0.1, r * 2.15, face * CFrame.new(0, 0, -0.04) * CFrame.Angles(0, math.pi / 2, 0), Color3.fromRGB(20, 20, 22), M.SmoothPlastic, { CanCollide = false }, m.model)
 	m.drumFrame = face * CFrame.new(0, 0, -0.12) * CFrame.Angles(0, math.pi / 2, 0)
-	m.drum = cylinder("Drum", 0.06, r * 1.9, m.drumFrame, if open then Color3.fromRGB(12, 12, 14) else Color3.fromRGB(170, 172, 175), M.Metal, { CanCollide = false }, m.model)
+	m.drum = cylinder("Drum", 0.06, r * 1.9, m.drumFrame, if open then Color3.fromRGB(12, 12, 14) else Color3.fromRGB(175, 178, 182), M.Metal, { CanCollide = false }, m.model)
 	if not open then texture(m.drum, IMG.Drum, { "Left", "Right" }, 1.2) end
 	m.paddles = {}
 	for k = 1, 3 do
 		m.paddles[k] = box("Paddle", Vector3.new(0.15, 0.7, 0.25), m.drumFrame, Color3.fromRGB(120, 122, 125), M.Metal, { CanCollide = false }, m.model)
 	end
-	-- Its door: the glass (open: swung aside on its hinge, its back plate behind it)
-	local doorCf = face * CFrame.new(0, 0, -0.32)
-	if open then
-		doorCf = face * CFrame.new(-r * 1.05, 0, -0.2) * CFrame.Angles(0, 1.85, 0) * CFrame.new(r * 1.05, 0, -0.12) -- (out, toward you)
-		cylinder("Door", 0.12, r * 2.1, doorCf * CFrame.new(0, 0, 0.12) * CFrame.Angles(0, math.pi / 2, 0), Color3.fromRGB(70, 72, 75), M.Metal, { CanCollide = false }, m.model)
+	if not big and not open then
+		m.water = cylinder("WaterInside", 0.04, r * 1.85, m.drumFrame * CFrame.new(0.05, 0, 0), Color3.fromRGB(80, 150, 190), M.Glass, { Transparency = 1, CanCollide = false }, m.model)
 	end
-	m.glass = cylinder("Glass", 0.12, r * 1.9, doorCf * CFrame.Angles(0, math.pi / 2, 0), Color3.fromRGB(160, 190, 200), M.Glass,
-		{ Transparency = 0.6, CanCollide = false }, m.model)
+	m.hingeAt = face * CFrame.new(-r * 1.08, 0, -0.2)
+	m.ring = cylinder("Ring", 0.25, r * 2.2, m.hingeAt * CFrame.new(r * 1.08, 0, -0.1) * CFrame.Angles(0, math.pi / 2, 0), Color3.fromRGB(205, 208, 212), M.Metal,
+		{ Reflectance = 0.25, CanCollide = false }, m.model)
+	m.glass = cylinder("Glass", 0.12, r * 1.8, m.hingeAt * CFrame.new(r * 1.08, 0, -0.24) * CFrame.Angles(0, math.pi / 2, 0), Color3.fromRGB(160, 190, 200), M.Glass,
+		{ Transparency = 0.55, CanCollide = false }, m.model)
+	if open then -- (a dryer's door: a perforated plate)
+		m.glass.Transparency, m.glass.Color, m.glass.Material = 0.2, Color3.fromRGB(70, 72, 75), M.DiamondPlate
+	end
+	m.doorRel = { m.hingeAt:ToObjectSpace(m.ring.CFrame), m.hingeAt:ToObjectSpace(m.glass.CFrame) }
 	m.spinSound = FX.sound(SND.Spin, m.drum, { Looped = true, Volume = 0, RollOffMaxDistance = 70, RollOffMinDistance = 6 })
-	m.inside = cf * CFrame.new(0, doorY - 0.4, -d / 2 + 1.6) -- where you are when hidden in it
+	m.inside = cf * CFrame.new(0, doorY - 0.6, -d / 2 + 1.7) -- where you are when hidden in it
 	table.insert(machines, m)
 	if open then table.insert(hideSpots, m) end
 	return m
+end
+-- Its door on its hinge: 0 shut, 1 wide open (out, toward you)
+local function poseDoor(m, u)
+	m.door = u
+	local swing = m.hingeAt * CFrame.Angles(0, 1.9 * u, 0)
+	m.ring.CFrame = swing * m.doorRel[1]
+	m.glass.CFrame = swing * m.doorRel[2]
+end
+local function swingDoor(m, to, seconds)
+	local from = m.door
+	task.spawn(function()
+		local t0 = os.clock()
+		while alive and os.clock() - t0 < seconds do
+			local u = (os.clock() - t0) / seconds
+			poseDoor(m, from + (to - from) * (1 - (1 - u) ^ 2))
+			RunService.Heartbeat:Wait()
+		end
+		poseDoor(m, to)
+	end)
 end
 local function poseDrum(m)
 	m.drum.CFrame = m.drumFrame * CFrame.Angles(m.angle, 0, 0)
@@ -495,29 +836,34 @@ local function poseDrum(m)
 		p.CFrame = m.drumFrame * CFrame.Angles(m.angle + k * math.pi * 2 / 3, 0, 0) * CFrame.new(0.1, 1.0, 0)
 	end
 end
--- Two rows back to back in the middle (doors out); two of them open dryers
 local rowOpen = { [3] = true, [8] = true }
 for k = 0, 10 do
 	local z = -28 + k * 5.2
 	machine(L(-2.75, 0, z) * CFrame.Angles(0, math.pi / 2, 0), false, rowOpen[k] and k == 3)
 	machine(L(2.75, 0, z) * CFrame.Angles(0, -math.pi / 2, 0), false, rowOpen[k] and k == 8)
 end
--- Big dryers along the walls, half of them open
 for i, z in ipairs({ -24, -8, 8, 24 }) do
 	machine(L(-W / 2 + 3, 0, z) * CFrame.Angles(0, -math.pi / 2, 0), true, i % 2 == 1)
 	machine(L(W / 2 - 3, 0, z) * CFrame.Angles(0, math.pi / 2, 0), true, i % 2 == 0)
 end
-for _, m in ipairs(machines) do poseDrum(m) end
-
--- Dupe: one of the open dryers is wrong (water boiling inside it, drops on its glass, steam)
-local dupeDryer = pick(hideSpots)
-dupeDryer.dupe = true
-decal(dupeDryer.glass, IMG.Droplets, "Left")
-decal(dupeDryer.glass, IMG.Droplets, "Right")
-FX.loop(SND.Boil, dupeDryer.drum, { Volume = 0.9 * VOLUME, RollOffMaxDistance = 26, RollOffMinDistance = 3 })
-make("ParticleEmitter", { Texture = "rbxasset://textures/particles/smoke_main.dds", Rate = 3, Lifetime = NumberRange.new(1.5, 2.5), Speed = NumberRange.new(0.5, 1.2),
-	Size = NumberSequence.new(1, 2.5), Transparency = NumberSequence.new(0.75, 1), Color = ColorSequence.new(Color3.fromRGB(230, 235, 235)),
-	Acceleration = Vector3.new(0, 1, 0) }, dupeDryer.drum)
+for _, m in ipairs(machines) do
+	poseDrum(m)
+	poseDoor(m, if m.open then 1 else 0)
+end
+-- Some of them running a wash: the drum turning one way and the other, water in it, a timer counting down
+local running = {}
+for _, m in ipairs(machines) do
+	if m.water and math.random() < 0.35 then
+		m.wash = { left = 600 + math.random(0, 1800), dir = 1, flip = 0 }
+		m.water.Transparency = 0.45
+		m.led.Color = Color3.fromRGB(60, 255, 80)
+		if m.spinSound then
+			m.spinSound.Volume, m.spinSound.PlaybackSpeed = 0.18 * VOLUME, 0.6
+			m.spinSound:Play()
+		end
+		table.insert(running, m)
+	end
+end
 
 ---- Linen carts, heaps of clothes, spilled detergent ----
 local carts = {}
@@ -535,12 +881,12 @@ for _, p in ipairs({ { -11, -14 }, { 11, 6 }, { -11, 30 } }) do
 		box("Rail", Vector3.new(3, 0.12, 0.12), cf * CFrame.new(0, y, -2.4), STEEL, M.Metal, nil, cart)
 		box("Rail", Vector3.new(3, 0.12, 0.12), cf * CFrame.new(0, y, 2.4), STEEL, M.Metal, nil, cart)
 	end
-	for k = 1, 4 do -- stained sheets
+	for k = 1, 4 do
 		local sheet = box("Sheet", Vector3.new(2.6 + rnd(0.2), 0.5, 4.4), cf * CFrame.new(rnd(0.2), 0.9 + k * 0.45, rnd(0.2)) * CFrame.Angles(rnd(0.2), rnd(0.3), rnd(0.2)),
 			Color3.fromRGB(225, 222, 210), M.Fabric, nil, cart)
 		decal(sheet, IMG.Stains, "Top")
 	end
-	table.insert(carts, { model = cart, at = cf * CFrame.new(0, 3, 0) })
+	table.insert(carts, { model = cart })
 end
 local COLORS = { Color3.fromRGB(110, 90, 80), Color3.fromRGB(80, 90, 110), Color3.fromRGB(150, 140, 120), Color3.fromRGB(90, 100, 80), Color3.fromRGB(170, 160, 150) }
 for _, p in ipairs({ { -13, -32 }, { 13, -18 }, { -14, 12 }, { 14, 34 }, { -8, 38 } }) do
@@ -562,8 +908,7 @@ local valveSpots = { { 0, -34.5, 0 }, { -W / 2 + 0.9, 0, math.pi / 2 }, { W / 2 
 local valve = nil
 local chosen = math.random(#valveSpots)
 for i, v in ipairs(valveSpots) do
-	local x, z, yaw = v[1], v[2], v[3]
-	local base = L(x, 0, z) * CFrame.Angles(0, yaw, 0)
+	local base = L(v[1], 0, v[2]) * CFrame.Angles(0, v[3], 0)
 	cylinder("MainPipe", 22, 1.3, base * CFrame.new(0, 11.5, 0) * CFrame.Angles(0, 0, math.pi / 2), Color3.fromRGB(105, 98, 86), M.CorrodedMetal)
 	box("Flange", Vector3.new(1.9, 0.8, 1.9), base * CFrame.new(0, 4, 0), Color3.fromRGB(80, 76, 70), M.Metal)
 	if i == chosen then
@@ -572,7 +917,7 @@ for i, v in ipairs(valveSpots) do
 		local center = cylinder("Hub", 0.6, 0.5, hub * CFrame.Angles(0, math.pi / 2, 0), Color3.fromRGB(60, 60, 60), M.Metal, nil, wheel)
 		cylinder("Stem", 1.1, 0.25, hub * CFrame.new(0, 0, -0.65) * CFrame.Angles(0, math.pi / 2, 0), Color3.fromRGB(60, 60, 60), M.Metal, nil, wheel)
 		local parts = {}
-		for k = 0, 9 do -- its rim: ten pieces in a circle; two spokes
+		for k = 0, 9 do
 			local a = k / 10 * math.pi * 2
 			table.insert(parts, { box("Rim", Vector3.new(0.3, 0.7, 0.3), hub, Color3.fromRGB(190, 30, 30), M.Metal, nil, wheel), CFrame.Angles(0, 0, a) * CFrame.new(0, 1.05, 0) })
 		end
@@ -585,82 +930,14 @@ for i, v in ipairs(valveSpots) do
 		end
 		valve.pose()
 		valve.prompt = make("ProximityPrompt", { ActionText = "Turn", ObjectText = "Drain valve", HoldDuration = 1, MaxActivationDistance = 8,
-			RequiresLineOfSight = false }, center)
+			RequiresLineOfSight = false, Style = Enum.ProximityPromptStyle.Custom }, center)
 	else
 		local gauge = cylinder("Gauge", 0.3, 1.1, base * CFrame.new(0, 5.2, 0.8) * CFrame.Angles(0, math.pi / 2, 0), Color3.fromRGB(230, 225, 210), M.SmoothPlastic)
+		gauge.CanCollide = false
 		box("Needle", Vector3.new(0.05, 0.45, 0.05), base * CFrame.new(0, 5.25, 0.97) * CFrame.Angles(0, 0, rnd(1)), Color3.fromRGB(20, 20, 20), M.SmoothPlastic,
 			{ CanCollide = false })
-		gauge.CanCollide = false
 	end
 end
-
----- The watertight doors: the real one (the far wall) and the false one (the left wall) ----
-local function hatchDoor(frame, name)
-	local door = { model = make("Model", { Name = name }, folder), frame = frame, open = 0 }
-	box("Frame", Vector3.new(7.2, 0.6, 1.4), frame * CFrame.new(0, 9.3, 0), Color3.fromRGB(70, 74, 76), M.DiamondPlate, nil, door.model)
-	box("Frame", Vector3.new(0.6, 9.6, 1.4), frame * CFrame.new(-3.3, 4.8, 0), Color3.fromRGB(70, 74, 76), M.DiamondPlate, nil, door.model)
-	box("Frame", Vector3.new(0.6, 9.6, 1.4), frame * CFrame.new(3.3, 4.8, 0), Color3.fromRGB(70, 74, 76), M.DiamondPlate, nil, door.model)
-	-- the leaf (hinged on its left), its porthole, its wheel, its rivets: all of it held as one
-	local hinge = frame * CFrame.new(-3, 4.5, 0)
-	door.hinge = hinge
-	local leaf = {}
-	local function piece(p) table.insert(leaf, { p, hinge:ToObjectSpace(p.CFrame) }) return p end
-	piece(box("Leaf", Vector3.new(6, 9, 0.8), frame * CFrame.new(0, 4.5, 0), Color3.fromRGB(92, 98, 100), M.DiamondPlate, nil, door.model))
-	piece(cylinder("Porthole", 0.9, 1.6, frame * CFrame.new(0, 6.6, -0.1) * CFrame.Angles(0, math.pi / 2, 0), Color3.fromRGB(40, 60, 65), M.Glass,
-		{ Transparency = 0.3 }, door.model))
-	door.wheelCenter = frame * CFrame.new(0, 4, -0.7)
-	door.wheel = {}
-	for k = 0, 7 do
-		local a = k / 8 * math.pi * 2
-		local p = piece(box("Wheel", Vector3.new(0.25, 0.7, 0.25), door.wheelCenter * CFrame.Angles(0, 0, a) * CFrame.new(0, 0.9, 0), Color3.fromRGB(150, 150, 140),
-			M.Metal, { CanCollide = false }, door.model))
-		table.insert(door.wheel, { p, a })
-	end
-	for _, x in ipairs({ -2.6, 2.6 }) do
-		for _, y in ipairs({ 0.6, 2.8, 5, 7.2, 8.5 }) do
-			piece(cylinder("Rivet", 0.3, 0.3, frame * CFrame.new(x, y, -0.45) * CFrame.Angles(0, math.pi / 2, 0), Color3.fromRGB(70, 70, 70), M.Metal,
-				{ CanCollide = false }, door.model))
-		end
-	end
-	door.leaf = leaf
-	door.light = box("Light", Vector3.new(0.8, 0.8, 0.5), frame * CFrame.new(0, 10.3, -0.4), Color3.fromRGB(255, 30, 20), M.Neon, { CanCollide = false }, door.model)
-	door.glow = make("PointLight", { Color = Color3.fromRGB(255, 40, 30), Range = 14, Brightness = 2, Shadows = false }, door.light)
-	door.prompt = make("ProximityPrompt", { ActionText = "Open", ObjectText = "Watertight door", HoldDuration = 0.5, MaxActivationDistance = 9,
-		RequiresLineOfSight = false }, leaf[1][1])
-	function door.pose(wheelAngle)
-		local swing = hinge * CFrame.Angles(0, -door.open * 1.6, 0) -- (away from the room)
-		for _, e in ipairs(door.leaf) do e[1].CFrame = swing * e[2] end
-		for _, w in ipairs(door.wheel) do
-			w[1].CFrame = swing * hinge:ToObjectSpace(door.wheelCenter) * CFrame.Angles(0, 0, w[2] + (wheelAngle or 0)) * CFrame.new(0, 0.9, 0)
-		end
-	end
-	function door.green()
-		door.light.Color = Color3.fromRGB(40, 255, 90)
-		door.glow.Color = Color3.fromRGB(40, 255, 90)
-	end
-	return door
-end
-local exitDoor = hatchDoor(L(0, 0, -LEN / 2 - 0.5) * CFrame.Angles(0, math.pi, 0), "WatertightDoor")
-local fakeDoor = hatchDoor(L(-W / 2 + 0.7, 0, -33) * CFrame.Angles(0, -math.pi / 2, 0), "WatertightDoor")
--- Beyond the real one: a passage and stairs back up, a Hotel door at their top
-do
-	local z0 = -LEN / 2 - 1
-	box("PassageFloor", Vector3.new(6, 1, 8), L(0, -0.5, z0 - 4), TILE, M.Slate)
-	ramp("Ramp", 6, 0, z0 - 8, 10, z0 - 24, M.DiamondPlate)
-	for i = 1, 10 do box("Step", Vector3.new(6, i, 1.6), L(0, i / 2, z0 - 8 - (i - 0.5) * 1.6), Color3.fromRGB(80, 80, 82), M.DiamondPlate, { CanCollide = false }) end
-	box("TopFloor", Vector3.new(6, 1, 6), L(0, 9.5, z0 - 27), HOTEL.floor, M.WoodPlanks)
-	for _, x in ipairs({ -3.5, 3.5 }) do tileWall("PassageWall", Vector3.new(1, 22, 32), L(x, 11, z0 - 15)) end
-	box("PassageCeiling", Vector3.new(8, 1, 32), L(0, 22, z0 - 15), Color3.fromRGB(70, 72, 72), M.Concrete)
-	hotelWall("HotelWall", Vector3.new(8, 22, 1), L(0, 11, z0 - 30.5))
-	local hotelDoor = box("HotelDoor", Vector3.new(4.5, 8, 0.4), L(0, 14, z0 - 29.8), Color3.fromRGB(129, 111, 100), M.Wood)
-	box("Knob", Vector3.new(0.3, 0.3, 0.4), L(1.6, 13.6, z0 - 29.5), Color3.fromRGB(200, 170, 90), M.Metal, { CanCollide = false })
-	make("PointLight", { Color = Color3.fromRGB(255, 210, 160), Range = 14, Brightness = 1 }, hotelDoor)
-	exitDoor.back = L(0, 13, z0 - 27)
-	-- A dark nothing behind the false one
-	box("Darkness", Vector3.new(5.8, 8.8, 0.1), fakeDoor.frame * CFrame.new(0, 4.5, 0.45), Color3.new(0, 0, 0), M.SmoothPlastic, { CanCollide = false })
-end
-exitDoor.pose(0)
-fakeDoor.pose(0)
 
 ---====== YOUR STEPS: SPLASHING (DOORS' own water footsteps, on this floor's material) ======---
 
@@ -689,121 +966,111 @@ do
 	end
 end
 
----====== THE LIGHT OF THE ROOM: cold, cyan and grey (put back when you leave) ======---
+---====== HIDING IN A DRYER: DOORS' own (its animations, sounds, camera lock, vignette) ======---
 
-do
-	local was = { Lighting.Ambient, Lighting.OutdoorAmbient, Lighting.FogColor, Lighting.FogEnd }
-	later(function() Lighting.Ambient, Lighting.OutdoorAmbient, Lighting.FogColor, Lighting.FogEnd = was[1], was[2], was[3], was[4] end)
-	Lighting.Ambient, Lighting.OutdoorAmbient = Color3.fromRGB(58, 72, 76), Color3.fromRGB(58, 72, 76)
-end
-
----====== HIDING IN A DRYER ======---
-
-local hidden = nil -- the dryer you are in
+local hiddenIn = nil -- the dryer you are in
 local grille = make("ImageLabel", { Name = "Grille", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Image = IMG.Grill or "", ScaleType = Enum.ScaleType.Tile,
-	TileSize = UDim2.fromOffset(46, 46), Visible = false, ZIndex = 2 }, screen)
+	TileSize = UDim2.fromOffset(46, 46), ImageTransparency = 1, Visible = false, ZIndex = 2 }, screen)
 local camName = "WashroomHide" .. math.random(1, 1e6)
-local hideMonster = nil
-local hideStart = 0
-local function setVignette(on)
-	pcall(function() LocalPlayer.PlayerGui.MainUI.HideVignette.Visible = on end)
+local hideMonster, hideStart, moving = nil, 0, false
+local function doorsCamera(look) -- DOORS' camera lock (its CamLock), else one like it
+	local ok = firesignal and pcall(function() firesignal(ReplicatedStorage.Bricks.CamLock.OnClientEvent, look) end)
+	if ok then return end
+	local camera = workspace.CurrentCamera
+	RunService:BindToRenderStep(camName, Enum.RenderPriority.Last.Value, function()
+		local m = hiddenIn
+		if not m then return end
+		local eye = m.inside.Position + Vector3.new(0, 1.2 + math.sin(os.clock() * 1.4) * 0.04, 0)
+		camera.CFrame = CFrame.lookAt(eye, eye + look + Vector3.new(0, -0.1, 0))
+	end)
 end
-local function hiddenParts(on)
-	local character = LocalPlayer.Character
-	for _, d in ipairs(character and character:GetDescendants() or {}) do
-		if d:IsA("BasePart") or d:IsA("Decal") then d.LocalTransparencyModifier = if on then 1 else 0 end
+local function tweenRoot(root, to, seconds)
+	local from = root.CFrame
+	local t0 = os.clock()
+	while alive and os.clock() - t0 < seconds do
+		local u = (os.clock() - t0) / seconds
+		root.CFrame = from:Lerp(to, u * u * (3 - 2 * u))
+		RunService.Heartbeat:Wait()
 	end
+	root.CFrame = to
 end
-local function getOut(hurt)
-	local m = hidden
-	if not m then return end
-	hidden = nil
-	RunService:UnbindFromRenderStep(camName)
-	grille.Visible = false
-	setVignette(false)
+local function hide(m)
+	local character, _, root = body()
+	if not root or hiddenIn or moving then return end
+	moving, hiddenIn, hideStart = true, m, os.clock()
+	m.prompt.Enabled = false
+	FX.once(DOORS.hideIn, m.drum, { Volume = VOLUME })
+	FX.once(SND.Clank, m.drum, { Volume = 1.2 * VOLUME })
+	animate(DOORS.enter)
+	root.Anchored = true
+	local front = m.face * CFrame.new(0, 0, -2.5)
+	local y = root.Position.Y
+	tweenRoot(root, CFrame.lookAt(Vector3.new(front.X, y, front.Z), Vector3.new(m.inside.X, y, m.inside.Z)), 0.25)
+	tweenRoot(root, CFrame.lookAt(m.inside.Position, m.inside.Position + m.face.LookVector), 0.55)
+	swingDoor(m, 0, 0.35) -- (it shuts behind you)
+	character:SetAttribute("Hiding", true)
+	doorsCamera(m.face.LookVector)
+	grille.Visible = true
+	TweenService:Create(grille, TweenInfo.new(0.4), { ImageTransparency = 0.05 }):Play()
+	m.prompt.ActionText = "Get out"
+	m.prompt.Enabled = true
+	moving = false
+end
+local function getOut(forced)
+	local m = hiddenIn
+	local character, _, root = body()
+	if not m or moving then return end
+	moving = true
+	m.prompt.Enabled = false
 	if hideMonster then hideMonster.camlock = nil end -- (DOORS' Hide effect ends with it)
-	hiddenParts(false)
-	local _, _, root = body()
+	hideMonster = nil
+	RunService:UnbindFromRenderStep(camName)
+	grille.Visible, grille.ImageTransparency = false, 1
+	if character then character:SetAttribute("Hiding", false) end -- (DOORS lets the camera go itself)
+	animate(if forced then DOORS.forceOut else DOORS.exit)
+	FX.once(DOORS.hideOut, m.drum, { Volume = VOLUME })
+	swingDoor(m, 1, 0.3)
 	if root then
+		local front = m.face * CFrame.new(0, 0, -3)
+		local p = Vector3.new(front.X, F.Y + 3.2, front.Z)
+		tweenRoot(root, CFrame.lookAt(p, p + flat(m.face.LookVector)), if forced then 0.35 else 0.6)
 		root.Anchored = false
-		local out = m.face * CFrame.new(0, 0, -3)
-		root.CFrame = CFrame.lookAt(Vector3.new(out.X, F.Y + 3.2, out.Z), Vector3.new(out.X, F.Y + 3.2, out.Z) + out.LookVector * Vector3.new(1, 0, 1))
+		if forced then root.AssemblyLinearVelocity = flat(m.face.LookVector) * 30 + up * 12 end
 	end
-	FX.once(SND.Clank, m.drum, { Volume = 0.8 * VOLUME, PlaybackSpeed = 1.1 })
+	hiddenIn = nil
 	m.prompt.ActionText = "Hide"
-	if hurt then
+	m.prompt.Enabled = true
+	moving = false
+	if forced then
 		FX.caption("Get out.")
 		damage(40, "Hide", { "You died to Hide.", "Don't stay hidden for too long." })
 	end
 end
--- Dupe: the wrong dryer, the false door
-local function dupeAttack(at, where)
-	FX.once(SND.Bang, at, { Volume = 2 * VOLUME })
-	FX.once(SND.Bite, SoundService, { Volume = 1.6 * VOLUME })
-	FX.once(SND.Roar, at, { Volume = 1.5 * VOLUME, PlaybackSpeed = 1.3 })
-	FX.flash(Color3.fromRGB(120, 0, 0), 0.8)
-	FX.shake(12)
-	local eyes = {}
-	for k = -1, 1, 2 do
-		eyes[k] = box("DupeEye", Vector3.new(0.3, 0.3, 0.1), at.CFrame * CFrame.new(k * 0.5, 0.4, -0.3), Color3.fromRGB(255, 240, 220), M.Neon, { CanCollide = false })
-	end
-	task.delay(1.2, function()
-		for _, e in pairs(eyes) do e:Destroy() end
-	end)
-	FX.caption(where)
-	damage(40, "Dupe", { "You died to Dupe.", "Listen before you hide: water boiling inside means it is not a dryer.", "A door whose light never turns green is not a door." })
-end
-local function hide(m)
-	local _, _, root = body()
-	if not root or hidden then return end
-	if m.dupe then
-		dupeAttack(m.drum, "That one was not a dryer...")
-		return
-	end
-	hidden, hideStart = m, os.clock()
-	FX.once(SND.Clank, m.drum, { Volume = 1.6 * VOLUME })
-	FX.shake(3)
-	root.Anchored = true
-	root.CFrame = m.inside
-	hiddenParts(true)
-	grille.Visible = true
-	setVignette(true)
-	m.prompt.ActionText = "Get out"
-	local camera = workspace.CurrentCamera
-	local look = m.face.LookVector
-	RunService:BindToRenderStep(camName, Enum.RenderPriority.Last.Value, function()
-		local t = os.clock()
-		local eye = m.inside.Position + Vector3.new(0, 0.6 + math.sin(t * 1.4) * 0.04, 0)
-		camera.CFrame = CFrame.lookAt(eye, eye + look + Vector3.new(math.sin(t * 0.5) * 0.08, -0.1, 0))
-	end)
-end
 for _, m in ipairs(hideSpots) do
-	m.prompt = make("ProximityPrompt", { ActionText = "Hide", ObjectText = "Dryer", HoldDuration = 0, MaxActivationDistance = 7, RequiresLineOfSight = false }, m.drum)
+	m.prompt = make("ProximityPrompt", { ActionText = "Hide", ObjectText = "Dryer", HoldDuration = 0, MaxActivationDistance = 7, RequiresLineOfSight = false,
+		Style = Enum.ProximityPromptStyle.Custom }, m.drum)
 	on(m.prompt.Triggered, function()
-		if hidden == m then getOut(false) else hide(m) end
+		if hiddenIn == m then task.spawn(getOut, false) else task.spawn(hide, m) end
 	end)
 end
 -- Hide's rule: not too long. At 16 s it gets to you (DOORS' own effect), at 23 s it throws you out
 on(RunService.Heartbeat, function()
-	if not hidden then return end
+	if not hiddenIn or moving then return end
 	local inside = os.clock() - hideStart
 	if inside > 16 and not hideMonster then
 		hideMonster = setmetatable({ camlock = true, dead = false }, { __index = mainGame or {} })
+		local mine = hideMonster
 		task.spawn(function()
 			local ok = pcall(function()
-				require(LocalPlayer.PlayerGui.MainUI.Initiator.Main_Game.RemoteListener.Modules.HideMonster)(hideMonster, 7)
+				require(LocalPlayer.PlayerGui.MainUI.Initiator.Main_Game.RemoteListener.Modules.HideMonster)(mine, 7)
 			end)
 			if not ok then FX.once(SND.Whisper, SoundService, { Volume = 1.4 * VOLUME }) end
 		end)
 	end
-	if inside > 23 then
-		hideMonster = nil
-		getOut(true)
-	end
-	if not hidden then hideMonster = nil end
+	if inside > 23 then task.spawn(getOut, true) end
 end)
 
----====== THE LOOT: gold, the flashlight, the emergency key ======---
+---====== THE LOOT: gold, the flashlight, the emergency key (a washer's door opens, or a cart is searched) ======---
 
 local hasKey = false
 local function addGold(amount)
@@ -819,9 +1086,7 @@ local function giveFlashlight()
 	local light = box("Flashlight", Vector3.new(0.2, 0.2, 0.2), workspace.CurrentCamera.CFrame, Color3.new(0, 0, 0), M.SmoothPlastic,
 		{ Transparency = 1, CanCollide = false, CanQuery = false })
 	local spot = make("SpotLight", { Range = 45, Angle = 50, Brightness = 2.2, Color = Color3.fromRGB(255, 240, 210), Enabled = true, Shadows = true }, light)
-	on(RunService.RenderStepped, function()
-		light.CFrame = workspace.CurrentCamera.CFrame
-	end)
+	on(RunService.RenderStepped, function() light.CFrame = workspace.CurrentCamera.CFrame end)
 	on(UserInputService.InputBegan, function(input, processed)
 		if not processed and input.KeyCode == Enum.KeyCode.F then
 			spot.Enabled = not spot.Enabled
@@ -830,28 +1095,26 @@ local function giveFlashlight()
 	end)
 	FX.caption("Flashlight (F)")
 end
-local loot = {} -- what each searchable place holds
 do
 	local places = {}
 	for _, m in ipairs(machines) do
-		if not m.open then table.insert(places, { part = m.glass, name = m.model.Name }) end
+		if not m.open and not m.wash then table.insert(places, { part = m.glass, name = m.model.Name, machine = m }) end
 	end
 	for _, c in ipairs(carts) do table.insert(places, { part = c.model:FindFirstChild("Bottom"), name = "Linen cart" }) end
-	-- 8 of them can be searched: the key in one, the flashlight in one, gold in some, nothing in the rest
 	local chosenPlaces = {}
-	while #chosenPlaces < math.min(8, #places) do
-		local p = table.remove(places, math.random(#places))
-		table.insert(chosenPlaces, p)
-	end
+	while #chosenPlaces < math.min(8, #places) do table.insert(chosenPlaces, table.remove(places, math.random(#places))) end
 	for i, p in ipairs(chosenPlaces) do
 		p.holds = if i == 1 then "key" elseif i == 2 then "flashlight" elseif i <= 6 then "gold" else nil
-		local prompt = make("ProximityPrompt", { ActionText = "Search", ObjectText = p.name, HoldDuration = 0.4, MaxActivationDistance = 7, RequiresLineOfSight = false }, p.part)
+		local prompt = make("ProximityPrompt", { ActionText = "Search", ObjectText = p.name, HoldDuration = 0.4, MaxActivationDistance = 7, RequiresLineOfSight = false,
+			Style = Enum.ProximityPromptStyle.Custom }, p.part)
 		on(prompt.Triggered, function()
 			prompt:Destroy()
+			animate(DOORS.interact)
+			if p.machine then swingDoor(p.machine, 0.85, 0.5) end -- (its door opens)
 			if p.holds == "key" then
 				hasKey = true
 				FX.once(SND.Chime, SoundService, { Volume = 0.8 * VOLUME })
-				FX.caption("Emergency key: it opens the watertight door")
+				FX.caption("Emergency key: it opens the door")
 			elseif p.holds == "flashlight" then
 				giveFlashlight()
 			elseif p.holds == "gold" then
@@ -860,33 +1123,28 @@ do
 				FX.caption("Nothing.")
 			end
 		end)
-		table.insert(loot, p)
 	end
 end
 
 ---====== THE VALVE: the water drains, the door lets go ======---
 
 local drained = false
-local function openExit()
-	if exitDoor.opening then return end
-	exitDoor.opening = true
-	exitDoor.prompt.Enabled = false
-	FX.once(SND.Hatch, exitDoor.leaf[1][1], { Volume = 1.8 * VOLUME, RollOffMinDistance = 15 })
-	task.spawn(function()
-		local t0 = os.clock()
-		while alive and os.clock() - t0 < 3 do
-			local t = os.clock() - t0
-			exitDoor.open = math.clamp((t - 1) / 1.8, 0, 1) ^ 0.7
-			exitDoor.pose(math.min(t, 1.2) * 5)
-			RunService.Heartbeat:Wait()
-		end
-	end)
+local function unlock(how)
+	if not exitDoor.locked then return end
+	exitDoor.locked = false
+	exitDoor.color(Color3.fromRGB(40, 255, 90))
+	playOwn(exitDoor.model, "Unlock")
+	FX.once(SND.Chime, exitDoor.leaf, { Volume = 1.5 * VOLUME, RollOffMinDistance = 30 })
+	FX.caption(how)
+	exitPrompt.Enabled = false
+	exitDoor.open()
 end
 if valve then
 	on(valve.prompt.Triggered, function()
 		if valve.turned then return end
 		valve.turned = true
 		valve.prompt.Enabled = false
+		animate(DOORS.interact)
 		FX.once(SND.Valve, valve.center, { Volume = 1.6 * VOLUME, RollOffMinDistance = 12 })
 		task.spawn(function()
 			local t0 = os.clock()
@@ -896,213 +1154,159 @@ if valve then
 				RunService.Heartbeat:Wait()
 			end
 			if not alive then return end
-			-- The water goes down the drains, gurgling
 			for _, d in ipairs(drains) do FX.once(SND.Gurgle, d, { Volume = 1.6 * VOLUME, RollOffMinDistance = 15 }) end
 			TweenService:Create(water, TweenInfo.new(5.5, Enum.EasingStyle.Quad, Enum.EasingDirection.In), { Transparency = 1, Size = Vector3.new(W - 0.2, 0.05, LEN - 0.2),
 				CFrame = water.CFrame - Vector3.new(0, 0.3, 0) }):Play()
 			wait(5.5)
 			drained = true
-			exitDoor.green()
-			FX.once(SND.Chime, exitDoor.light, { Volume = 1.5 * VOLUME, RollOffMinDistance = 30 })
-			FX.caption("The door is open.")
-			exitDoor.prompt.ActionText = "Open"
+			unlock("The door is open.")
 		end)
 	end)
 end
-on(exitDoor.prompt.Triggered, function()
+on(exitPrompt.Triggered, function()
+	animate(DOORS.interact)
 	if drained then
-		openExit()
+		unlock("The door is open.")
 	elseif hasKey then
-		FX.caption("Emergency override")
-		exitDoor.green()
-		openExit()
+		unlock("Emergency key")
 	else
-		FX.once(DOORS.locked, exitDoor.leaf[1][1], { Volume = VOLUME })
-		FX.caption("It is sealed: the water holds it. Find the drain valve.")
+		playOwn(exitDoor.model, "Error")
+		FX.caption("It won't open: the water holds it. Find the drain valve.")
 	end
 end)
-on(fakeDoor.prompt.Triggered, function()
-	fakeDoor.prompt.Enabled = false
-	fakeDoor.open = 0.15
-	fakeDoor.pose(0.6)
-	dupeAttack(fakeDoor.light, "That was not a door...")
-	task.delay(0.8, function()
-		fakeDoor.open = 0
-		fakeDoor.pose(0)
-		fakeDoor.light.Color = Color3.fromRGB(30, 10, 10)
-		fakeDoor.glow.Enabled = false
-	end)
-end)
 
----====== RUSH, AMBUSH ======---
+---====== THE ROOM ALIVE ======---
 
-local entityComing = false
-local function spinAll(on)
-	for _, m in ipairs(machines) do
-		if not m.open then
-			m.spin = if on then 22 + math.random() * 10 else 0
-			if m.spinSound then
-				if on then m.spinSound.Volume = 0.55 * VOLUME m.spinSound:Play() else m.spinSound:Stop() end
-			end
-		end
-	end
+local bangAt, dripAt, flickerAt, puffAt, tickAt = os.clock() + 8 + math.random() * 8, os.clock() + 2, os.clock() + 3, os.clock() + 2, os.clock() + 1
+local inside, was = false, nil
+local function inWashroom(p)
+	local l = F:PointToObjectSpace(p)
+	return math.abs(l.X) < W / 2 + 1 and l.Z > TOPZ - 6 and l.Z < STAIR.z1 and l.Y > -5 and l.Y < DEPTH - 1
 end
-local function entityBody(kind)
-	local body = nil
-	pcall(function()
-		local template = ReplicatedStorage.JumpscareModels:FindFirstChild("RushNew")
-		if template then body = template:Clone() end
-	end)
-	if not body then -- (one like it: a black, smoking face)
-		body = make("Part", { Name = "Rush", Size = Vector3.new(4, 4, 4), Transparency = 1 }, nil)
-		local a = make("Attachment", {}, body)
-		make("ParticleEmitter", { Texture = "rbxasset://textures/particles/smoke_main.dds", Rate = 60, Lifetime = NumberRange.new(0.5, 1), Speed = NumberRange.new(1, 4),
-			Size = NumberSequence.new(4, 7), Color = ColorSequence.new(Color3.new(0, 0, 0)), SpreadAngle = Vector2.new(180, 180) }, a)
-		make("PointLight", { Range = 30, Brightness = 2, Color = Color3.fromRGB(200, 200, 255) }, a)
-	end
-	for _, d in ipairs(body:GetDescendants()) do
-		if d:IsA("BodyMover") or d:IsA("LuaSourceContainer") then d:Destroy() end
-		if kind == "Ambush" and (d:IsA("ParticleEmitter") or d:IsA("Light")) then d.Color = if d:IsA("Light") then Color3.fromRGB(80, 255, 120) else ColorSequence.new(Color3.fromRGB(80, 255, 120)) end
-	end
-	body.Anchored, body.CanCollide, body.CanQuery, body.CanTouch = true, false, false, false
-	body.Parent = folder
-	return body
-end
-local function comes(kind)
-	if entityComing or not alive then return end
-	entityComing = true
-	local hints = if kind == "Ambush" then { "You died to Ambush.", "It comes back: stay in the dryer until the drums stop.", "Hide when the drums start spinning by themselves." }
-		else { "You died to Rush.", "When the drums start spinning by themselves, hide in a dryer." }
-	-- First: every empty drum spinning by itself, the lights flickering
-	spinAll(true)
-	FX.once(if kind == "Ambush" then DOORS.ambush else DOORS.rush, SoundService, { Volume = 1.2 * VOLUME })
-	local t0 = os.clock()
-	while alive and os.clock() - t0 < 4 do
-		for _, t in ipairs(tubes) do tubeOn(t, math.random() < 0.55) end
-		FX.shake(1.5)
-		task.wait(0.08)
-	end
-	if not alive then return end
-	-- Then it: from the stairs to the far end; Ambush again and again
-	local thing = entityBody(kind)
-	for _, s in ipairs(thing:GetDescendants()) do
-		if s:IsA("Sound") and (s.Name == "PlaySound" or s.Name == "Footsteps") then
-			s.Looped = true
-			s:Play()
-		end
-	end
-	local path = { L(0, 28, LEN / 2 + STAIR.run + 6).Position, L(0, 5, LEN / 2 + 2).Position, L(0, 5, -LEN / 2 + 2).Position }
-	local passes = if kind == "Ambush" then math.random(2, 4) else 1
-	for pass = 1, passes do
-		local way = if pass % 2 == 1 then path else { path[3], path[2], path[1] }
-		local pos, i = way[1], 2
-		while alive and i <= #way do
-			local dt = RunService.Heartbeat:Wait()
-			local step = 95 * dt
-			while step > 0 and i <= #way do
-				local to = way[i] - pos
-				if to.Magnitude <= step then
-					pos, step, i = way[i], step - to.Magnitude, i + 1
-				else
-					pos, step = pos + to.Unit * step, 0
-				end
-			end
-			thing.CFrame = CFrame.new(pos)
-			local _, _, me = body()
-			if me then
-				local d = (me.Position - pos).Magnitude
-				if d < 70 then FX.shake(6 * (1 - d / 70)) end
-				-- In the Washroom and not in a dryer: as it passes you, you die
-				if not hidden and not dead and math.abs((F:PointToObjectSpace(me.Position)).Z - F:PointToObjectSpace(pos).Z) < 6 and d < 40 then
-					jumpscare(kind, hints)
-				end
-			end
-		end
-		if pass < passes then wait(1 + math.random() * 1.5) end
-	end
-	thing:Destroy()
-	spinAll(false)
-	for _, t in ipairs(tubes) do tubeOn(t, true) end
-end
--- Once while you are here: a while after you come down (at once if DOORS sends one of its own)
-task.delay(25 + math.random() * 25, function() comes(if math.random() < 0.65 then "Rush" else "Ambush") end)
-on(workspace.ChildAdded, function(child)
-	if child.Name == "RushMoving" then task.spawn(comes, "Rush") elseif child.Name == "AmbushMoving" then task.spawn(comes, "Ambush") end
-end)
-
----====== THE ROOM ALIVE: drums turning, bangs, drips, flickering tubes ======---
-
-local bangAt, dripAt, flickerAt = os.clock() + 8 + math.random() * 8, os.clock() + 2, os.clock() + 3
 on(RunService.Heartbeat, function(dt)
 	local now = os.clock()
 	for _, m in ipairs(machines) do
 		if m.spin > 0 then
 			m.angle += m.spin * dt
 			poseDrum(m)
+			m.shake = math.min(m.spin / 30, 1) * 0.06
+		elseif m.wash then -- a wash: slow turns one way and the other
+			m.wash.flip -= dt
+			if m.wash.flip <= 0 then m.wash.dir, m.wash.flip = -m.wash.dir, 2 + math.random() * 2 end
+			m.angle += m.wash.dir * 2.2 * dt
+			poseDrum(m)
+			m.water.CFrame = m.drumFrame * CFrame.new(0.05, -0.15 + math.sin(now * 3) * 0.05, 0) * CFrame.Angles(math.sin(now * 2) * 0.15, 0, 0)
+			m.shake = 0.01
+		else
+			m.shake = 0
+		end
+		if m.shake > 0 then -- the whole machine shaking on its feet
+			local jolt = CFrame.new(rnd(m.shake), rnd(m.shake * 0.5), rnd(m.shake))
+			for _, e in ipairs(m.parts) do e[1].CFrame = m.cf * jolt * e[2] end
 		end
 	end
-	-- A dryer starting with a bang, like something arriving
-	if now >= bangAt and not entityComing then
+	for _, f in ipairs(fans) do
+		f.angle += dt * 4
+		for k, b in ipairs(f.blades) do b.CFrame = f.hub * CFrame.Angles(0, f.angle + k * math.pi / 2, 0) * CFrame.new(2.2, 0, 0) * CFrame.Angles(0.15, 0, 0) end
+	end
+	if now >= tickAt then -- the timers counting down; a finished wash stops
+		tickAt = now + 1
+		for _, m in ipairs(running) do
+			if m.wash then
+				m.wash.left -= 1
+				m.timer.Text = ("%d:%02d"):format(math.floor(m.wash.left / 60), m.wash.left % 60)
+				if m.wash.left <= 0 then
+					m.wash = nil
+					m.timer.Text = "END"
+					m.led.Color = Color3.fromRGB(255, 200, 40)
+					if m.spinSound then m.spinSound:Stop() end
+					m.water.Transparency = 1
+				end
+			end
+		end
+	end
+	if now >= bangAt then -- a dryer starting with a bang, spinning hard a while
 		bangAt = now + 10 + math.random() * 12
 		local m = pick(machines)
-		if not m.open then
+		if not m.open and not m.wash then
 			FX.once(SND.Bang, m.drum, { Volume = 2.2 * VOLUME, RollOffMinDistance = 20, RollOffMaxDistance = 200 })
 			FX.shake(2.5)
-			m.spin = 16
-			if m.spinSound then m.spinSound.Volume = 0.5 * VOLUME m.spinSound:Play() end
+			m.spin = 22
+			if m.spinSound then
+				m.spinSound.Volume, m.spinSound.PlaybackSpeed = 0.5 * VOLUME, 1
+				m.spinSound:Play()
+			end
 			m.led.Color = Color3.fromRGB(60, 255, 80)
+			if m.steam then m.steam.Rate = 6 end
 			task.delay(3 + math.random() * 2, function()
-				if not entityComing then
-					m.spin = 0
-					if m.spinSound then m.spinSound:Stop() end
-				end
+				m.spin = 0
+				if m.spinSound then m.spinSound:Stop() end
 				m.led.Color = Color3.fromRGB(255, 60, 40)
+				if m.steam then m.steam.Rate = 0 end
+				for _, e in ipairs(m.parts) do e[1].CFrame = m.cf * e[2] end
 			end)
 		end
 	end
+	if now >= puffAt then -- the dryers' vents puffing
+		puffAt = now + 1.5 + math.random() * 3
+		local m = pick(machines)
+		if m.steam then pcall(function() m.steam:Emit(4) end) end
+	end
 	if now >= dripAt then
 		dripAt = now + 1 + math.random() * 2.5
-		local d = pick(drips)
-		FX.once(SND.Drip, d, { Volume = 0.7 * VOLUME, RollOffMaxDistance = 50, PlaybackSpeed = 0.85 + math.random() * 0.3 })
+		FX.once(SND.Drip, pick(drips), { Volume = 0.7 * VOLUME, RollOffMaxDistance = 50, PlaybackSpeed = 0.85 + math.random() * 0.3 })
 	end
-	if now >= flickerAt and not entityComing then
+	if now >= flickerAt then
 		flickerAt = now + 1.5 + math.random() * 4
 		local t = pick(tubes)
 		tubeOn(t, false)
 		FX.once(DOORS.flicker, t.tube, { Volume = 0.4 * VOLUME, RollOffMaxDistance = 40 })
 		task.delay(0.06 + math.random() * 0.25, function() tubeOn(t, true) end)
 	end
-	-- Through the door and up the stairs: back in the Hotel, in front of the door of your room
 	local _, _, me = body()
-	if me and exitDoor.open > 0.5 and (me.Position - exitDoor.back.Position).Magnitude < 5 then
-		me.CFrame = backInTheHotel()
-		FX.caption("Back in the Hotel")
-		stop()
+	if me then
+		-- DOORS' doors open as you come (unless locked)
+		for _, d in ipairs(doors) do
+			if not d.opened and not d.locked and flat(me.Position - d.leaf.Position).Magnitude < 7 and math.abs(me.Position.Y - d.leaf.Position.Y) < 6 then d.open() end
+		end
+		-- The Washroom's cold light while you are down there
+		local nowInside = inWashroom(me.Position)
+		if nowInside ~= inside then
+			inside = nowInside
+			if inside then
+				was = { Lighting.Ambient, Lighting.OutdoorAmbient }
+				Lighting.Ambient, Lighting.OutdoorAmbient = Color3.fromRGB(58, 72, 76), Color3.fromRGB(58, 72, 76)
+			elseif was then
+				Lighting.Ambient, Lighting.OutdoorAmbient = was[1], was[2]
+				was = nil
+			end
+		end
+		-- Through the door at the top of the way back: in room 0, in front of its door; the Washroom closes
+		if topDoor.opened and F:PointToObjectSpace(me.Position).Z < TOPZ - 0.5 then
+			me.CFrame = backInTheHotel()
+			FX.caption("Back in the Hotel")
+			stop()
+		end
 	end
 end)
+later(function()
+	if was then Lighting.Ambient, Lighting.OutdoorAmbient = was[1], was[2] end
+end)
 
--- Dead, or gone from the run: it all goes
+-- Dead, or taken away while you are down there: out of it first (else you would fall), all as it was
 on(humanoid0.Died, function() task.delay(4, stop) end)
 later(function()
-	local _, _, root = body()
-	if root and (root.Position - O).Magnitude < 160 and not dead then
-		root.Anchored = false
-		root.CFrame = backInTheHotel()
-	end
-	if hidden then
-		local m = hidden
-		hidden = nil
+	local character, _, root = body()
+	if hiddenIn then
 		RunService:UnbindFromRenderStep(camName)
-		hiddenParts(false)
-		local _, _, root = body()
-		if root then root.Anchored = false end
-		m.prompt.ActionText = "Hide"
+		if character then character:SetAttribute("Hiding", false) end
+		hiddenIn = nil
 	end
-	setVignette(false)
+	if root then
+		root.Anchored = false
+		if inWashroom(root.Position) and not dead then root.CFrame = backInTheHotel() end
+	end
 end)
 
----====== DOWN THE STAIRS ======---
-
-local landing = L(0, STAIR.rise + 3.2, LEN / 2 + STAIR.run + 7)
-root0.CFrame = CFrame.lookAt(landing.Position, landing.Position + Vector3.new(0, 0, -1))
-FX.caption("The Washroom")
+FX.caption("Beside the door, the floor has opened...")
+FX.once(DOORS.flicker, SoundService, { Volume = 0.6 * VOLUME })
