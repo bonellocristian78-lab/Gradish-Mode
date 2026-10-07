@@ -44,7 +44,7 @@ mod rather than playing it.
 | Surprise: a blue ghost like Halt, "TURN AROUND" | `.../TurnAround` |
 | Surprise: dark room, "psst" behind you: look at it (like Screech) | `.../Psst` |
 | Surprise: A-60, A-15, A-35, A-100, A-200 and E-22 one behind the other | `.../EntityTrain` |
-| Hotel-: the Washroom, a custom room down a staircase from your room (dryers to hide in, a drain valve, a watertight door, Rush/Ambush, Dupe) | `.../Washroom` |
+| Hotel-: the Washroom, a custom room down a staircase that opens beside door 0001 (DOORS' doors, hiding in dryers with DOORS' animations and camera lock, a drain valve) | `.../Washroom` |
 | Hotel-: today's DOORS walk, crouch and sounds (doors, hits, footsteps) | `.../ModernHotel` |
 | Scanners: DOORS' radar (Nokia) or the NVCS tablet (`_G.Scanner = { Type = "Tablet" }`) | `.../ObjectScanner` |
 | Universal Custom Assets: animator with Studio controls (Ctrl + U I O) | `.../UniversalAssets` |
@@ -663,38 +663,52 @@ For DOORS' **Hotel-** (place 110258689672367: today's DOORS calls it `BeforePlus
 loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/claude/sei-qui-con-noi-ye4k62/Washroom"))()
 ```
 
-Run it in a room: you are on a landing in the Hotel's own style (its wallpaper `9754267662`, its
-wood floor, wall trim and ceiling colours from the dump, a copy of your room's lamp), and a
-staircase goes down to the Washroom, 160 studs below:
+Run it in room 0 (the lobby). Beside its door (0001), between the door and the pillar, the floor
+opens: a railing round it, a `WASHROOM ↓` sign, and a staircase going down. You walk down it (no
+teleport). The opening is only on your screen: the lobby's floor there is hidden for you and copies
+of it are put round the opening (in room 0, as its own floor); the furniture on it or in front of it
+(a chair, a plant) is taken away, whole, for you only. Where exactly: on the side of the door with
+the least in the way (the room's walls and desks count much more than its furniture), measured
+on the room as it is. Elsewhere it uses the room you are in.
 
-- a big double-height room of chipped, yellowed white tiles, mould in the corners, a wet shining
-  floor with water standing on it; two long rows of metal washers back to back in the middle, big
-  dryers along the walls; neon tubes on chains flickering and buzzing; linen carts with stained
-  sheets, heaps of clothes, spilled detergent; pipes under the ceiling dripping into puddles.
-- **Hiding**: the six open dryers (along the walls and in the middle rows), `Hide` on their mouth:
-  a heavy metal clank, then you see only the perforated grille of the door (and DOORS' hiding
-  vignette). As with Hide: after 16 s DOORS' own Hide effect, at 23 s it throws you out (40 damage).
-- **The way on**: the watertight door at the far end, light red, sealed by the water. The drain
-  valve is on one of the three main pipes (a different one each time; the others have a gauge).
-  Turn it: its wheel turns, the water gurgles down the four drains, the light turns green, the door
-  opens (its wheel spinning) onto stairs back up: at the top you are back in the Hotel, in front of
-  the door of the room you came from, and the Washroom is gone.
-- **Rush / Ambush**: once while you are down there (25 to 50 s after you arrive, or at once if DOORS
-  sends one): first every empty drum spins by itself and the tubes flicker, then it races from the
-  stairs to the far end (the Hotel-'s own `RushNew`, green for Ambush; Ambush comes back 2 to 4
-  times). Not in a dryer: DOORS' own jumpscare, then death.
-- **Dupe**: one dryer is wrong (water boiling inside, drops on its glass, steam): hiding in it is an
-  attack (40 damage). The second watertight door on the left wall is not a door: its light never
-  turns green, and opening it is an attack too.
-- Every 10 to 22 s a random dryer starts with a loud metal bang and spins a while.
-- **Loot**: 8 drums and carts can be searched: gold, a flashlight (`F`), the emergency key (it
-  opens the watertight door without draining it), or nothing.
+- **The stairs**: in the Hotel's own style (its wallpaper `9754267662`, its wood floor, wall trim and
+  ceiling colours from the dump), with the room's own lamps on their walls (copies of its
+  `LightStand`, their stand against the wall as in its rooms).
+- **DOORS' doors**: at the bottom, at the far end and at the top of the way back, copies of room 0's
+  own door (its leaf, knob, number plate, light, frame, and its own `Open`, `Unlock` and `Error`
+  sounds), shut as the Hotel- keeps them (`OriginalCFrameValue`), with none of its scripts,
+  remotes, constraints or tags. They open as you come, a quarter turn on their hinge, away from you,
+  as DOORS' do.
+- **The Washroom**: a big double-height room of chipped, yellowed white tiles, mould in the
+  corners, a wet shining floor with water standing on it; two long rows of washers back to back in
+  the middle (some running a wash: the drum turning one way and the other, water sloshing, the
+  timer counting down), big steel dryers along the walls puffing steam from their vents; neon
+  tubes on chains flickering and buzzing; fans turning; linen carts with stained sheets, heaps of
+  clothes, spilled detergent; pipes under the ceiling dripping into puddles.
+- **Hiding, with DOORS' own systems**: the six open dryers. `Hide`: DOORS' wardrobe animation and
+  sound (`Anim_Enter` 9461439496, `SoundEnter`), a metal clank, the dryer's door shuts behind you,
+  you are `Hiding` as DOORS knows it, DOORS' own camera lock (`Bricks.CamLock`) and hiding
+  vignette, and you see out through the perforated grille of its door. Out: DOORS' `Anim_Exit` and
+  `SoundExit`. As with Hide: after 16 s DOORS' own Hide effect, at 23 s it throws you out (DOORS'
+  `Anim_ForceOut`, 40 damage).
+- **The way on**: DOORS' door at the far end, its light red: the water holds it (its own `Error`
+  sound). The drain valve is on one of the three main pipes (a different one each time; the others
+  have a gauge). Turn it (DOORS' `Interact` animation): its wheel turns two times, the water
+  gurgles down the four drains, the light turns green, its own `Unlock`, and it opens. Beyond it,
+  stairs back up and another of DOORS' doors: through it you are back in room 0, in front of its
+  door, and the Washroom (and the opening) is gone.
+- Every 10 to 22 s a dryer starts with a loud metal bang and spins, shaking, its vent steaming.
+- **Loot**: 8 washers and carts can be searched (DOORS' `Interact`; the washer's door swings open):
+  gold, a flashlight (`F`), the emergency key (it opens the far door without draining), or nothing.
 - **Your steps splash**: the floor is Slate (a material the Hotel- uses nowhere) and while you are
   there the Hotel-'s `FootstepsClient.Slate` plays today's DOORS water footsteps.
+- **No monsters**: no Rush, no Ambush, no Dupe; only Hide's rule.
 
-Only you see it and walk in it: the server does not know it exists, and the gold is only on your
-screen. Run it again for a new one; `getgenv().__Washroom()` takes it away (if you are down there,
-you are put back in the Hotel first). Its textures and sounds are in `assets/washroom/`, made for it.
+It is client-side (a script you run cannot make the server build a room): only you see it and walk
+in it, and the gold is only on your screen; your character's animations (hiding, interacting) are
+seen by everyone, as they are DOORS' own. Run it again for a new one; `getgenv().__Washroom()` takes
+it away (if you are down there, you are put back in room 0 first). Its textures and sounds are in
+`assets/washroom/`, made for it.
 
 ### Today's walk and sounds
 
@@ -1047,7 +1061,7 @@ That includes the files made to be copied or filled in (`AchievementConfig`,
 | `assets/errorbush/` | 3rr0rbu2h's two faces |
 | `assets/noise/` | Noise's kit, tape and sheets; Noise 90's props kit, grey sheets and faces |
 | `assets/ir/` | the Interminable Rooms entities' pictures, GIF sheets and sounds |
-| `assets/washroom/` | the Washroom's textures (tiles, mould, grille, drum, stains, drops, grate) and sounds (neon buzz, drip, gurgle, bang, clank, spin, valve, hatch, boil, chime) |
+| `assets/washroom/` | the Washroom's textures (tiles, mould, grille, drum, stains, grate) and sounds (neon buzz, drip, gurgle, bang, clank, spin, valve, chime) |
 | `assets/surprise/` | the surprises' sounds (steps, psst, bite, shriek, heartbeat, whispers, roar, clicks, hum, whoosh, rumble) |
 | `tools/` | Prometheus' settings for the obfuscation, the script that runs it, its fix for Luau |
 | `assets/scanner/` | The scanners' own icons without their background (`.png`) and ready to be recoloured by the script (`.icon`) |
