@@ -16,11 +16,14 @@
         Footsteps    today's on concrete (seven), foil (four), brick; and today's for water, pavement and ground,
                      which the Hotel- had none of.
 
-        Both places are LSPLASH's, so today's animations play in the Hotel- as they are (no recording needed).
+        Both places are LSPLASH's, so today's animations should play in the Hotel- as they are. If one cannot be
+        loaded there, the Hotel-'s own is left as it is (you never lose your walk). After a few seconds it writes in
+        the console (F9) what it found and what it changed.
         Only for you. getgenv().__ModernHotel() puts it all back as it was.
 ]]
 
 local Players = game:GetService("Players")
+local StarterGui = game:GetService("StarterGui")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local SoundService = game:GetService("SoundService")
@@ -56,13 +59,15 @@ local function idOf(text) return type(text) == "string" and text:match("%d+") or
 
 ---====== SOUNDS ======---
 
-local swapped = {} -- sound -> its old id
+local swapped, swaps = {}, 0 -- sound -> its old id; how many
+
 local function swap(d)
 	if not d:IsA("Sound") then return end
 	local old = idOf(d.SoundId)
 	local new = old and SOUNDS[old]
 	if new then
 		swapped[d] = d.SoundId
+		swaps += 1
 		d.SoundId = "rbxassetid://" .. new
 	end
 end
@@ -76,10 +81,12 @@ table.insert(undo, function()
 	for s, id in pairs(swapped) do pcall(function() s.SoundId = id end) end
 end)
 
+local stepsFound = {}
 -- Footsteps: the Hotel-'s, by the floor's material (FootstepsClient is the copy its Footsteps script plays from)
 for _, name in ipairs({ "FootstepsClient", "Footsteps" }) do
 	local steps = ReplicatedStorage:FindFirstChild(name)
 	if steps then
+		table.insert(stepsFound, name)
 		for material, list in pairs(STEPS) do
 			local f = steps:FindFirstChild(material)
 			local kept = {}
@@ -117,7 +124,7 @@ local function watch(character)
 	local animator = humanoid and humanoid:WaitForChild("Animator", 10)
 	local root = character:WaitForChild("HumanoidRootPart", 10)
 	if not (animator and root) or per[character] then return end
-	local state = { pairs = {}, loaded = {}, moving = false }
+	local state = { pairs = {}, loaded = {}, found = {}, moving = false, animator = animator }
 	per[character] = state
 	local function take(track)
 		local old = idOf(track.Animation and track.Animation.AnimationId)
@@ -130,6 +137,7 @@ local function watch(character)
 			fresh = animator:LoadAnimation(a)
 			state.loaded[old] = fresh
 		end
+		state.found[old] = true
 		state.pairs[track] = { new = fresh, weight = math.max(track.WeightTarget, 0.01), forward = old == FORWARD }
 	end
 	for _, t in ipairs(animator:GetPlayingAnimationTracks()) do take(t) end
@@ -164,8 +172,11 @@ RunService:BindToRenderStep(name, Enum.RenderPriority.Last.Value, function()
 			for old, p in pairs(state.pairs) do
 				local w = old.WeightTarget
 				if w > 0.0005 then p.weight = w end -- (the Movement set it this frame; else it is as it was)
-				if old.IsPlaying then
-					if not p.new.IsPlaying then p.new:Play(0.2, p.weight, pace) end
+				if old.IsPlaying and p.new.Length > 0 then -- (only once today's is loaded: until then, and if never, the old one as it is)
+					if not p.new.IsPlaying then
+						p.new.Priority = old.Priority
+						p.new:Play(0.2, p.weight, pace)
+					end
 					p.new:AdjustWeight(p.weight, 0.1)
 					p.new:AdjustSpeed(pace)
 					if p.forward and moving and not state.moving and p.new.Length > 0 then -- (a step starts on one foot or the other)
@@ -197,4 +208,37 @@ GENV.__ModernHotel = function()
 	for i = #undo, 1, -1 do pcall(undo[i]) end
 	GENV.__ModernHotel = nil
 end
-print("[ModernHotel] today's walk, crouch and sounds in the Hotel-")
+-- What it found and what it changed: in the console (F9), and in short on the screen
+task.delay(6, function()
+	local lines = { ("[ModernHotel] place %s"):format(tostring(game.PlaceId)) }
+	local state = LocalPlayer.Character and per[LocalPlayer.Character]
+	local summary = {}
+	if not state then
+		table.insert(lines, "  your character: no Animator found")
+		table.insert(summary, "no animator")
+	else
+		for old, new in pairs(ANIMATIONS) do
+			local label = if old == FORWARD then "walk" else "crouch"
+			local track = state.loaded[old]
+			if not state.found[old] then
+				table.insert(lines, ("  %s: the Hotel-'s %s is not playing on you (not yet played, or another id)"):format(label, old))
+			elseif track and track.Length > 0 then
+				table.insert(lines, ("  %s: today's %s, loaded (%.2f s long)"):format(label, new, track.Length))
+				table.insert(summary, label .. " ok")
+			else
+				table.insert(lines, ("  %s: today's %s could NOT be loaded here: the Hotel-'s kept"):format(label, new))
+				table.insert(summary, label .. " not loadable")
+			end
+		end
+		local ids = {}
+		for _, t in ipairs(state.animator:GetPlayingAnimationTracks()) do
+			table.insert(ids, (idOf(t.Animation and t.Animation.AnimationId) or "?") .. "@" .. string.format("%.2f", t.WeightTarget))
+		end
+		table.insert(lines, "  playing on you now: " .. table.concat(ids, ", "))
+	end
+	table.insert(lines, ("  sounds changed: %d"):format(swaps))
+	table.insert(lines, "  footsteps folders: " .. (if #stepsFound > 0 then table.concat(stepsFound, ", ") else "none found"))
+	print(table.concat(lines, "\n"))
+	table.insert(summary, ("%d sounds"):format(swaps))
+	pcall(function() StarterGui:SetCore("SendNotification", { Title = "ModernHotel", Text = table.concat(summary, ", "), Duration = 8 }) end)
+end)
