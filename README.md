@@ -714,8 +714,10 @@ What is different between the two dumps:
 
 The Hotel-'s Movement still decides when and how much you walk or crouch; its old animations are
 kept at no weight and today's take their weight every frame, at today's speed (your speed / 15),
-starting a step on one foot or the other. Both places are LSPLASH's, so today's animations play as
-they are. Everyone's walk on your screen; every sound with an old id, now and later (each new
+starting a step on one foot or the other, at the old one's priority. Both places are LSPLASH's, so
+today's animations should play as they are; if one cannot be loaded there, the Hotel-'s own is left
+untouched (you never lose your walk). After 6 s the console (F9) says what it found: whether each
+was loaded, what is playing on you, how many sounds it changed. Everyone's walk on your screen; every sound with an old id, now and later (each new
 room's door). `getgenv().__ModernHotel()` puts it all back.
 
 ## Scanners (Object Scanner)
