@@ -44,6 +44,8 @@ mod rather than playing it.
 | Surprise: a blue ghost like Halt, "TURN AROUND" | `.../TurnAround` |
 | Surprise: dark room, "psst" behind you: look at it (like Screech) | `.../Psst` |
 | Surprise: A-60, A-15, A-35, A-100, A-200 and E-22 one behind the other | `.../EntityTrain` |
+| Hotel-: the Washroom, a custom room down a staircase from your room (dryers to hide in, a drain valve, a watertight door, Rush/Ambush, Dupe) | `.../Washroom` |
+| Hotel-: today's DOORS walk, crouch and sounds (doors, hits, footsteps) | `.../ModernHotel` |
 | Scanners: DOORS' radar (Nokia) or the NVCS tablet (`_G.Scanner = { Type = "Tablet" }`) | `.../ObjectScanner` |
 | Universal Custom Assets: animator with Studio controls (Ctrl + U I O) | `.../UniversalAssets` |
 | The same, obfuscated | `.../UniversalAssets.obf` |
@@ -650,6 +652,72 @@ loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab
 Caught by one that kills: its face in yours (the camera on it, its sound), then DOORS' death
 screen with its name and its tips.
 
+## Hotel-: the Washroom and today's walk and sounds
+
+For DOORS' **Hotel-** (place 110258689672367: today's DOORS calls it `BeforePlus` in its
+`GetPlaceId`), from a dump of it compared with one of today's DOORS.
+
+### The Washroom
+
+```lua
+loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/claude/sei-qui-con-noi-ye4k62/Washroom"))()
+```
+
+Run it in a room: you are on a landing in the Hotel's own style (its wallpaper `9754267662`, its
+wood floor, wall trim and ceiling colours from the dump, a copy of your room's lamp), and a
+staircase goes down to the Washroom, 160 studs below:
+
+- a big double-height room of chipped, yellowed white tiles, mould in the corners, a wet shining
+  floor with water standing on it; two long rows of metal washers back to back in the middle, big
+  dryers along the walls; neon tubes on chains flickering and buzzing; linen carts with stained
+  sheets, heaps of clothes, spilled detergent; pipes under the ceiling dripping into puddles.
+- **Hiding**: the six open dryers (along the walls and in the middle rows), `Hide` on their mouth:
+  a heavy metal clank, then you see only the perforated grille of the door (and DOORS' hiding
+  vignette). As with Hide: after 16 s DOORS' own Hide effect, at 23 s it throws you out (40 damage).
+- **The way on**: the watertight door at the far end, light red, sealed by the water. The drain
+  valve is on one of the three main pipes (a different one each time; the others have a gauge).
+  Turn it: its wheel turns, the water gurgles down the four drains, the light turns green, the door
+  opens (its wheel spinning) onto stairs back up: at the top you are back in the Hotel, in front of
+  the door of the room you came from, and the Washroom is gone.
+- **Rush / Ambush**: once while you are down there (25 to 50 s after you arrive, or at once if DOORS
+  sends one): first every empty drum spins by itself and the tubes flicker, then it races from the
+  stairs to the far end (the Hotel-'s own `RushNew`, green for Ambush; Ambush comes back 2 to 4
+  times). Not in a dryer: DOORS' own jumpscare, then death.
+- **Dupe**: one dryer is wrong (water boiling inside, drops on its glass, steam): hiding in it is an
+  attack (40 damage). The second watertight door on the left wall is not a door: its light never
+  turns green, and opening it is an attack too.
+- Every 10 to 22 s a random dryer starts with a loud metal bang and spins a while.
+- **Loot**: 8 drums and carts can be searched: gold, a flashlight (`F`), the emergency key (it
+  opens the watertight door without draining it), or nothing.
+- **Your steps splash**: the floor is Slate (a material the Hotel- uses nowhere) and while you are
+  there the Hotel-'s `FootstepsClient.Slate` plays today's DOORS water footsteps.
+
+Only you see it and walk in it: the server does not know it exists, and the gold is only on your
+screen. Run it again for a new one; `getgenv().__Washroom()` takes it away (if you are down there,
+you are put back in the Hotel first). Its textures and sounds are in `assets/washroom/`, made for it.
+
+### Today's walk and sounds
+
+```lua
+loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/claude/sei-qui-con-noi-ye4k62/ModernHotel"))()
+```
+
+What is different between the two dumps:
+
+| | Hotel- | today |
+|---|---|---|
+| walk (Forward) | 6502883750 | 17186586680 |
+| crouch | 7715913939 | 105452559334645 |
+| a door opening | 320946744 | 11447013731 |
+| the hit when hurt / its ringing | 3802437361 / 1517024660 | 133527017562793 / 88790528744979 |
+| footsteps | concrete (1), foil, brick | concrete (7), foil (4), brick; water, pavement, ground |
+
+The Hotel-'s Movement still decides when and how much you walk or crouch; its old animations are
+kept at no weight and today's take their weight every frame, at today's speed (your speed / 15),
+starting a step on one foot or the other. Both places are LSPLASH's, so today's animations play as
+they are. Everyone's walk on your screen; every sound with an old id, now and later (each new
+room's door). `getgenv().__ModernHotel()` puts it all back.
+
 ## Scanners (Object Scanner)
 
 ```lua
@@ -971,11 +1039,13 @@ That includes the files made to be copied or filled in (`AchievementConfig`,
 | `Noise90All` | every Noise 90, a new one every 10 s (fills the Noise Journal) |
 | `InterminableRooms` | every entity of the Interminable Rooms wiki, `_G.Entity` |
 | `HonchoRush` / `HonchoGiant` / `NoiseAmbush` / `SeekEyes` / `Listener` / `GlitchRush` / `Shadow` / `TurnAround` / `Psst` / `EntityTrain` | the ten surprises |
+| `Washroom` / `ModernHotel` | the Hotel-'s custom room; today's walk and sounds in the Hotel- |
 | `Errorbush` / `Errorbush.rbxm` | 3rr0rbu2h, the broken Ambush; its model |
 | `ObjectScanner` / `ObjectScanner.rbxm` | The scanners (Nokia and Tablet, their Lights); DOORS' scanner's model, out of a saved place |
 | `assets/errorbush/` | 3rr0rbu2h's two faces |
 | `assets/noise/` | Noise's kit, tape and sheets; Noise 90's props kit, grey sheets and faces |
 | `assets/ir/` | the Interminable Rooms entities' pictures, GIF sheets and sounds |
+| `assets/washroom/` | the Washroom's textures (tiles, mould, grille, drum, stains, drops, grate) and sounds (neon buzz, drip, gurgle, bang, clank, spin, valve, hatch, boil, chime) |
 | `assets/surprise/` | the surprises' sounds (steps, psst, bite, shriek, heartbeat, whispers, roar, clicks, hum, whoosh, rumble) |
 | `tools/` | Prometheus' settings for the obfuscation, the script that runs it, its fix for Luau |
 | `assets/scanner/` | The scanners' own icons without their background (`.png`) and ready to be recoloured by the script (`.icon`) |

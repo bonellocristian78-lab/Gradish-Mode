@@ -1,0 +1,200 @@
+--[[
+        MODERN HOTEL -- in the Hotel- (DOORS before Hotel+): today's DOORS walk, crouch and sounds
+
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/claude/sei-qui-con-noi-ye4k62/ModernHotel"))()
+
+        What changed between the two, from their dumps (the Hotel-'s, today's DOORS'):
+
+        Animations   your walk (Forward: 6502883750 -> 17186586680) and your crouch (Crouch: 7715913939 ->
+                     105452559334645) are today's. The Hotel-'s own Movement still decides when and how much (it plays its
+                     old ones; they are kept at no weight and today's take their weight, every frame, after it); their
+                     speed is today's (your speed / 15), and as today a step starts on one of the two feet. Idle is the
+                     same in both. Everyone's (the other players' too, on your screen).
+        Sounds       the doors opening (320946744 -> 11447013731), the hit when you are hurt (3802437361 ->
+                     133527017562793) and its ringing (1517024660 -> 88790528744979): every sound with the old id, now
+                     and whenever one comes (every new room's door).
+        Footsteps    today's on concrete (seven), foil (four), brick; and today's for water, pavement and ground,
+                     which the Hotel- had none of.
+
+        Both places are LSPLASH's, so today's animations play in the Hotel- as they are (no recording needed).
+        Only for you. getgenv().__ModernHotel() puts it all back as it was.
+]]
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local SoundService = game:GetService("SoundService")
+local LocalPlayer = Players.LocalPlayer
+
+local ANIMATIONS = { -- the Hotel-'s -> today's
+	["6502883750"] = "17186586680", -- Forward
+	["7715913939"] = "105452559334645", -- Crouch
+}
+local FORWARD = "6502883750"
+local SOUNDS = {
+	["320946744"] = "11447013731", -- a door opening
+	["3802437361"] = "133527017562793", -- the hit when you are hurt
+	["1517024660"] = "88790528744979", -- its ringing
+}
+local STEPS = { -- today's footsteps: { id, volume, speed }
+	Concrete = { { "72870483271076", 0.3, 1 }, { "85370195073906", 0.3, 1 }, { "135303666979630", 0.3, 1 }, { "75950074578908", 0.3, 1 },
+		{ "122600577414468", 0.3, 1 }, { "80494550445089", 0.3, 1 }, { "135484232575434", 0.3, 1 } },
+	Foil = { { "124895285191598", 0.12, 1 }, { "121811405068717", 0.12, 1 }, { "112387942523295", 0.12, 1 }, { "102525836938223", 0.12, 1 } },
+	Brick = { { "5761648082", 0.3, 1 } },
+	Water = { { "9114081952", 0.5, 1.1 }, { "9114081779", 0.5, 1 } },
+	Pavement = { { "5761648082", 0.3, 1 }, { "5761648082", 0.3, 0.9 } },
+	Ground = { { "10007092720", 0.3, 0.8 }, { "10007093288", 0.3, 0.8 }, { "10007093191", 0.3, 0.8 }, { "10007093097", 0.3, 0.8 },
+		{ "10007093015", 0.3, 0.8 }, { "10007092942", 0.3, 0.8 }, { "10007092875", 0.3, 0.8 } },
+}
+
+local GENV = if getgenv then getgenv() else _G
+if GENV.__ModernHotel then pcall(GENV.__ModernHotel) end
+
+local connections, undo = {}, {}
+local function on(signal, fn) table.insert(connections, signal:Connect(fn)) end
+local function idOf(text) return type(text) == "string" and text:match("%d+") or nil end
+
+---====== SOUNDS ======---
+
+local swapped = {} -- sound -> its old id
+local function swap(d)
+	if not d:IsA("Sound") then return end
+	local old = idOf(d.SoundId)
+	local new = old and SOUNDS[old]
+	if new then
+		swapped[d] = d.SoundId
+		d.SoundId = "rbxassetid://" .. new
+	end
+end
+for _, root in ipairs({ workspace, ReplicatedStorage, LocalPlayer:FindFirstChildOfClass("PlayerGui"), SoundService }) do
+	if root then
+		for _, d in ipairs(root:GetDescendants()) do swap(d) end
+		on(root.DescendantAdded, swap)
+	end
+end
+table.insert(undo, function()
+	for s, id in pairs(swapped) do pcall(function() s.SoundId = id end) end
+end)
+
+-- Footsteps: the Hotel-'s, by the floor's material (FootstepsClient is the copy its Footsteps script plays from)
+for _, name in ipairs({ "FootstepsClient", "Footsteps" }) do
+	local steps = ReplicatedStorage:FindFirstChild(name)
+	if steps then
+		for material, list in pairs(STEPS) do
+			local f = steps:FindFirstChild(material)
+			local kept = {}
+			if f then
+				for _, s in ipairs(f:GetChildren()) do
+					table.insert(kept, s)
+					s.Parent = nil
+				end
+			else
+				f = Instance.new("Folder")
+				f.Name = material
+				f.Parent = steps
+			end
+			for _, e in ipairs(list) do
+				local s = Instance.new("Sound")
+				s.Name, s.SoundId, s.Volume, s.PlaybackSpeed = "Sound", "rbxassetid://" .. e[1], e[2], e[3]
+				s.Parent = f
+			end
+			table.insert(undo, function()
+				f:ClearAllChildren()
+				if #kept == 0 then f:Destroy() else for _, s in ipairs(kept) do s.Parent = f end end
+			end)
+		end
+	end
+end
+
+---====== ANIMATIONS ======---
+
+-- For one character: each old track it plays gets today's beside it; every frame (after the Hotel-'s Movement, which
+-- sets the old one's weight) today's takes that weight, the old one none
+local per = {} -- character -> its state
+local function watch(character)
+	if per[character] then return end
+	local humanoid = character:WaitForChild("Humanoid", 10)
+	local animator = humanoid and humanoid:WaitForChild("Animator", 10)
+	local root = character:WaitForChild("HumanoidRootPart", 10)
+	if not (animator and root) or per[character] then return end
+	local state = { pairs = {}, loaded = {}, moving = false }
+	per[character] = state
+	local function take(track)
+		local old = idOf(track.Animation and track.Animation.AnimationId)
+		local new = old and ANIMATIONS[old]
+		if not new or state.pairs[track] then return end
+		local fresh = state.loaded[old]
+		if not fresh then
+			local a = Instance.new("Animation")
+			a.AnimationId = "rbxassetid://" .. new
+			fresh = animator:LoadAnimation(a)
+			state.loaded[old] = fresh
+		end
+		state.pairs[track] = { new = fresh, weight = math.max(track.WeightTarget, 0.01), forward = old == FORWARD }
+	end
+	for _, t in ipairs(animator:GetPlayingAnimationTracks()) do take(t) end
+	state.played = animator.AnimationPlayed:Connect(take)
+	state.humanoid, state.root = humanoid, root
+end
+local function forget(character)
+	local state = per[character]
+	if not state then return end
+	per[character] = nil
+	state.played:Disconnect()
+	for old, p in pairs(state.pairs) do
+		pcall(function()
+			p.new:Stop(0.2)
+			old:AdjustWeight(p.weight, 0.2)
+		end)
+	end
+end
+local name = "ModernHotel" .. math.random(1, 1e6)
+RunService:BindToRenderStep(name, Enum.RenderPriority.Last.Value, function()
+	for character, state in pairs(per) do
+		if not character.Parent then
+			forget(character)
+		else
+			-- How fast it goes (today's DOORS: each part of the velocity capped at what its keys ask for)
+			local limit = state.humanoid.MoveDirection.Magnitude * state.humanoid.WalkSpeed
+			local v = state.root.AssemblyLinearVelocity
+			local speed = if limit > 0 then Vector3.new(math.clamp(v.X, -limit, limit), 0, math.clamp(v.Z, -limit, limit)).Magnitude
+				else (v * Vector3.new(1, 0, 1)).Magnitude
+			local moving = speed > 0.5
+			local pace = math.clamp(speed, 0.02, 30) / 15
+			for old, p in pairs(state.pairs) do
+				local w = old.WeightTarget
+				if w > 0.0005 then p.weight = w end -- (the Movement set it this frame; else it is as it was)
+				if old.IsPlaying then
+					if not p.new.IsPlaying then p.new:Play(0.2, p.weight, pace) end
+					p.new:AdjustWeight(p.weight, 0.1)
+					p.new:AdjustSpeed(pace)
+					if p.forward and moving and not state.moving and p.new.Length > 0 then -- (a step starts on one foot or the other)
+						p.new.TimePosition = if math.random(1, 2) == 1 then 0.15 else 0.55
+					end
+					old:AdjustWeight(0.0001, 0)
+				elseif p.new.IsPlaying then
+					p.new:Stop(0.2)
+				end
+			end
+			state.moving = moving
+		end
+	end
+end)
+local function player(p)
+	if p.Character then task.spawn(watch, p.Character) end
+	on(p.CharacterAdded, function(c) task.spawn(watch, c) end)
+	on(p.CharacterRemoving, forget)
+end
+for _, p in ipairs(Players:GetPlayers()) do player(p) end
+on(Players.PlayerAdded, player)
+
+GENV.__ModernHotel = function()
+	for _, c in ipairs(connections) do c:Disconnect() end
+	RunService:UnbindFromRenderStep(name)
+	local all = {}
+	for c in pairs(per) do table.insert(all, c) end
+	for _, c in ipairs(all) do forget(c) end
+	for i = #undo, 1, -1 do pcall(undo[i]) end
+	GENV.__ModernHotel = nil
+end
+print("[ModernHotel] today's walk, crouch and sounds in the Hotel-")
