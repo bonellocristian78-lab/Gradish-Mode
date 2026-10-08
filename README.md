@@ -829,11 +829,14 @@ loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab
 
 Its game's own sounds and images are used where they load. The ones its creator uploaded may be private
 to its game: for those, stand-ins made for this (`assets/monochrome/`: its presence, its scream, a lamp's
-click, the radar's ping, the film grain) play instead. Without `game:GetObjects` it is made of its own
-bones (black limbs on them), and still walks, hunts and kills the same way. Its Noise tape plays on the
-TV's own `VideoFrame` when the executor can feed it the video (`TapeVideo.webm`), else picture by picture
-from its sheets (`Tape_01.jpg`...`Tape_24.jpg`, 15 a second) with its sound (`Tape.mp3`); Noise's
-Emerge for VER is `assets/monochrome/Emerge.lua`. `getgenv().__Monochrome()` takes it away; only you see it.
+click, the radar's ping, the film grain, its eyes) play instead. VER is black, made for its game's white
+rooms: in DOORS' dark ones a pale edge goes round it, so it is seen. If its mesh will not load here (or
+without `game:GetObjects`) it is made of its own bones (black limbs on them, our eyes if its own will not
+load), and still comes out of the TV, walks, hunts and kills the same way, its face seen when it kills.
+The console (F9) says what loaded: `[Monochrome] ... | its mesh: ok | its eyes: ok | ... tape: 24/24 sheets`.
+Its Noise tape plays picture by picture from its sheets (`Tape_01.jpg`...`Tape_24.jpg`, 15 a second) with
+its sound (`Tape.mp3`); Noise's Emerge for VER is `assets/monochrome/Emerge.lua`.
+`getgenv().__Monochrome()` takes it away; only you see it.
 
 ## Scanners (Object Scanner)
 
@@ -1165,7 +1168,7 @@ That includes the files made to be copied or filled in (`AchievementConfig`,
 | `assets/ir/` | the Interminable Rooms entities' pictures, GIF sheets and sounds |
 | `assets/washroom/` | the Washroom's textures (tiles, mould, grille, drum, stains, grate) and sounds (neon buzz, drip, gurgle, bang, clank, spin, valve, chime) |
 | `assets/surprise/` | the surprises' sounds (steps, psst, bite, shriek, heartbeat, whispers, roar, clicks, hum, whoosh, rumble) |
-| `assets/monochrome/` | VER's stand-ins, where its game's own files do not load (its presence, its scream, a lamp's click, the radar's ping) and the film grain; its Noise variant's tape (video, sheets, sound) and Noise's Emerge made VER's |
+| `assets/monochrome/` | VER's stand-ins, where its game's own files do not load (its presence, its scream, a lamp's click, the radar's ping, its eyes) and the film grain; its Noise variant's tape (sheets, sound) and Noise's Emerge made VER's |
 | `tools/` | Prometheus' settings for the obfuscation, the script that runs it, its fix for Luau |
 | `assets/scanner/` | The scanners' own icons without their background (`.png`) and ready to be recoloured by the script (`.icon`) |
 | `UniversalAssets` / `.obf` | the animator for DOORS' things and custom assets, readable and obfuscated |

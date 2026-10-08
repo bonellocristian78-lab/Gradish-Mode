@@ -111,11 +111,12 @@ end
 
 local REPO = "https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/claude/sei-qui-con-noi-ye4k62/"
 local LOCAL = {} -- name -> a content ID of ours
-local kit = nil -- { ver = VER, tv = the TV (Noise variant), emerge = its Emerge (Noise variant) }
+local kit = {} -- { ver = VER, tv = the TV (Noise variant), emerge = its Emerge (Noise variant) }
+local LOADED = { mesh = nil, eyes = nil } -- (its creator's mesh and eyes, here: true, false, or not known)
 -- Its tape (MONOCHROME's video): 350 pictures at 15 a second, 15 to a sheet (3 by 5, 320 by 192 each); its sound 25 s long
 local TAPE = { frames = 350, fps = 15, sheets = 24, columns = 3, rows = 5, width = 320, height = 192, length = 25.08 }
 do
-	local MAGIC = { mp3 = { "ID3", "\255\251", "\255\243", "\255\242" }, png = { "\137PNG" }, jpg = { "\255\216" }, webm = { "\26\69\223\163" }, rbxm = { "<roblox!" }, lua = { "-- VER's" } }
+	local MAGIC = { mp3 = { "ID3", "\255\251", "\255\243", "\255\242" }, png = { "\137PNG" }, jpg = { "\255\216" }, rbxm = { "<roblox!" }, lua = { "-- VER's" } }
 	local function valid(name, data)
 		if type(data) ~= "string" or #data < 16 then return false end
 		for _, start in ipairs(MAGIC[name:match("%.(%w+)$")] or {}) do
@@ -135,10 +136,9 @@ do
 		local ok, there = pcall(isfile, here)
 		return if ok and there then here else nil
 	end
-	local names = { "Drone.mp3", "Scream.mp3", "Click.mp3", "Ping.mp3", "Grain1.png", "Grain2.png", "Grain3.png", "Grain4.png" }
+	local names = { "Drone.mp3", "Scream.mp3", "Click.mp3", "Ping.mp3", "Grain1.png", "Grain2.png", "Grain3.png", "Grain4.png", "Eyes.png" }
 	if VARIANT == "Noise" then
 		table.insert(names, "Tape.mp3")
-		table.insert(names, "TapeVideo.webm")
 		for i = 1, TAPE.sheets do table.insert(names, ("Tape_%02d.jpg"):format(i)) end
 	end
 	local k = {}
@@ -178,7 +178,23 @@ do
 	end
 	local t0 = os.clock()
 	while left > 0 and os.clock() - t0 < 30 do task.wait(0.05) end
-	if k.ver then kit = k end
+	kit = k
+	-- Its creator's mesh and eyes: do they load here? (outside its game they may not; then it is made of its bones, with
+	-- eyes of ours: never an invisible VER)
+	local function loads(content, holder)
+		local ok, status = pcall(function()
+			ContentProvider:PreloadAsync({ holder or content })
+			return ContentProvider:GetAssetFetchStatus(content)
+		end)
+		if not ok then return nil end
+		return status ~= Enum.AssetFetchStatus.Failure and status ~= Enum.AssetFetchStatus.TimedOut
+	end
+	local body = kit.ver and kit.ver:FindFirstChild("LowPolyHuman")
+	if body then
+		LOADED.mesh = loads(body.MeshId, body)
+		if LOADED.mesh == false then kit.ver = nil end
+	end
+	LOADED.eyes = loads("rbxassetid://92865588300030")
 end
 
 ---====== ITS GAME'S SOUNDS (their volume, speed and reach as its game has them) ======---
@@ -630,7 +646,7 @@ end
 local Lamps = { list = {}, byModel = {}, seen = {}, state = "on", clock = 0, ends = 0, scanned = -10 }
 do
 	local rng = Random.new()
-	local DIM = if VARIANT == "White" then 2.4 else 0.3 -- (a lamp cut down: this much of its light left; White's: flared)
+	local DIM = if VARIANT == "White" then 2.4 else 0.5 -- (a lamp cut down: this much of its light left; White's: flared)
 	local WHITE = Color3.new(1, 1, 1)
 	local function set(lamp, lit)
 		if lamp.on == lit then return end
@@ -793,7 +809,7 @@ do
 	end)
 end
 
----====== VER: its model (its kit), else one made here of its own bones ======---
+---====== VER: its model (its kit), else (no kit, or its creator's mesh will not load here) one made of its own bones ======---
 
 -- DOORS' Glitch (ReplicatedStorage.Entities.Glitch; its MainUI's GlitchEffect): for VER's Glitch variant
 local GLITCH = { body = Color3.fromRGB(58, 52, 103), texture = "rbxassetid://10216168173", cube = "rbxassetid://10216044269", light = Color3.fromRGB(255, 56, 186),
@@ -848,8 +864,11 @@ do
 		for _, b in ipairs(BONES) do
 			if b[2] and b[2] ~= "Root" then
 				local width = if b[1]:find("Toe") or b[1]:find("Hand") then 0.3 elseif b[1] == "Head" then 0.9 else 0.42
-				table.insert(VER.limbs, { from = b[2], to = b[1], part = make("Part", { Name = "Limb", Size = Vector3.new(width, 1, width), Color = Color3.new(0, 0, 0),
-					Material = Enum.Material.Neon, Anchored = true, CanCollide = false, CanQuery = false, CanTouch = false }, model) })
+				local limb = make("Part", { Name = "Limb", Size = Vector3.new(width, 1, width), Color = Color3.new(0, 0, 0),
+					Material = Enum.Material.Neon, Anchored = true, CanCollide = false, CanQuery = false, CanTouch = false }, model)
+				limb:SetAttribute("From", b[2])
+				limb:SetAttribute("To", b[1])
+				table.insert(VER.limbs, limb)
 			end
 		end
 		local skull = make("Part", { Name = "Skull", Size = Vector3.new(1.1, 1.3, 1), Color = Color3.new(0, 0, 0), Material = Enum.Material.Neon, Anchored = true,
@@ -868,6 +887,25 @@ do
 	end
 	model.Name = "VER"
 	VER.model = model
+	-- (ours: each limb along its bone, its skull on its head -- this model's, or a copy's, posed by gait `g`'s bones)
+	function VER.poseLimbs(m, g)
+		local world = { Root = m:FindFirstChild("RootPart").CFrame * g.rootBone.CFrame * g.rootBone.Transform }
+		local function at(name)
+			if world[name] then return world[name] end
+			local bone = g.bones[name]
+			world[name] = at(bone.Parent.Name) * bone.CFrame * bone.Transform
+			return world[name]
+		end
+		for _, part in ipairs(m:GetChildren()) do
+			if part.Name == "Limb" then
+				local a, b = at(part:GetAttribute("From")).Position, at(part:GetAttribute("To")).Position
+				part.Size = Vector3.new(part.Size.X, math.max((b - a).Magnitude, 0.05), part.Size.Z)
+				part.CFrame = CFrame.lookAt((a + b) / 2, b) * CFrame.Angles(-math.pi / 2, 0, 0)
+			elseif part.Name == "Skull" then
+				part.CFrame = at("Head") * CFrame.new(0, 0.55, 0)
+			end
+		end
+	end
 	VER.root = model:FindFirstChild("RootPart")
 	VER.eyes = model:FindFirstChild("Eyes")
 	model:SetAttribute("Awake", false)
@@ -875,6 +913,12 @@ do
 	-- texture, its cubes coming off it, its pink light)
 	local pair = VER.eyes and VER.eyes:FindFirstChild("Pair", true)
 	VER.pair = pair
+	if pair and LOADED.eyes == false and LOCAL.Eyes then pair.Image = LOCAL.Eyes end -- (its eyes will not load here: ours)
+	-- Its game's rooms are white: a black VER stands out. DOORS' are dark: a pale edge round it, or it is lost in them
+	if VARIANT ~= "White" then
+		make("Highlight", { Name = "Edge", FillTransparency = 1, OutlineColor = Color3.fromRGB(226, 226, 232), OutlineTransparency = 0.3,
+			DepthMode = Enum.HighlightDepthMode.Occluded }, model)
+	end
 	if VARIANT == "White" or VARIANT == "Glitch" then
 		VER.body = {}
 		for _, d in ipairs(model:GetDescendants()) do
@@ -922,7 +966,12 @@ do
 		end
 		local anchor = VER.eyes and VER.eyes:FindFirstChild("EyesAnchor")
 		VER.eyesOffset = if anchor then anchor.CFrame:Inverse() else CFrame.new(0, 0.5, -0.45)
-		if not VER.fromKit and VER.eyes then VER.eyes.Anchored = true end
+		if VER.eyes then -- (held on its posed head each frame: its game's constraint holds them to its head at rest, unposed, here)
+			VER.eyes.Anchored = true
+			for _, rig in ipairs(VER.eyes:GetChildren()) do
+				if rig:IsA("Constraint") then rig.Enabled = false end
+			end
+		end
 	end
 	-- Where its head is, its eyes, its horns (as they would be: its posed bones)
 	function VER.head() return gait:posedCFrame(Gait.HEAD_CHAIN) end
@@ -937,24 +986,6 @@ do
 		if angle <= most then return b end
 		local axis = a:Cross(b)
 		return CFrame.fromAxisAngle(if axis.Magnitude > 1e-5 then axis.Unit else up, most):VectorToWorldSpace(a)
-	end
-	-- Its own model of bones (not its kit's): each limb along its bone, its skull, eyes and horns on its head
-	local function poseLimbs()
-		local world = { Root = root.CFrame * gait.rootBone.CFrame * gait.rootBone.Transform }
-		local function at(name)
-			if world[name] then return world[name] end
-			local bone = gait.bones[name]
-			world[name] = at(bone.Parent.Name) * bone.CFrame * bone.Transform
-			return world[name]
-		end
-		for _, limb in ipairs(VER.limbs) do
-			local a, b = at(limb.from).Position, at(limb.to).Position
-			local len = math.max((b - a).Magnitude, 0.05)
-			limb.part.Size = Vector3.new(limb.part.Size.X, len, limb.part.Size.Z)
-			limb.part.CFrame = CFrame.lookAt((a + b) / 2, b) * CFrame.Angles(-math.pi / 2, 0, 0)
-		end
-		local head = at("Head")
-		VER.skull.CFrame = head * CFrame.new(0, 0.55, 0)
 	end
 	local smooth, d1, d2, d3 = nil, nil, nil, nil
 	local speed, acc, interval, turnRate = 0, 0, 0, 0
@@ -1020,7 +1051,7 @@ do
 				c.part.CFrame = head * c.offset
 			end
 		end
-		if VER.limbs then poseLimbs() end
+		if VER.limbs then VER.poseLimbs(model, gait) end
 		if VER.eyes and VER.eyes.Anchored then VER.eyes.CFrame = head * VER.eyesOffset end
 		for _, e in ipairs(gait:DrainEvents()) do SFXP.event(e) end
 		acc = 0
@@ -1269,7 +1300,11 @@ do
 				Ambient = Color3.new(1, 1, 1), LightColor = Color3.new(1, 1, 1), LightDirection = Vector3.new(0, -0.3, -1) }, g)
 			local copy = VER.model:Clone()
 			for _, d in ipairs(copy:GetDescendants()) do
-				if d:IsA("BasePart") then d.Anchored = true end
+				if d:IsA("BasePart") then
+					d.Anchored = true
+					-- (black on black would leave only its eyes: a dark grey, lit, so its shape is seen round them)
+					if VARIANT ~= "White" and VARIANT ~= "Glitch" and d.Transparency < 0.99 then d.Material, d.Color = Enum.Material.SmoothPlastic, Color3.fromRGB(40, 40, 46) end
+				end
 			end
 			copy.Parent = view
 			local cam = make("Camera", { FieldOfView = 70 }, view)
@@ -1294,11 +1329,7 @@ do
 				local p = copy:FindFirstChild(name)
 				if p then p.CFrame = posed * offset end
 			end
-			if VER.limbs then -- (ours: its limbs where its bones are)
-				for _, d in ipairs(copy:GetChildren()) do
-					if d.Name == "Limb" or d.Name == "Skull" then d:Destroy() end
-				end
-			end
+			if VER.limbs then VER.poseLimbs(copy, g2) end -- (ours: its limbs where its bones are, in its grab)
 			local at = eyes.CFrame
 			eye = at.Position + Vector3.new(0, 0.14, 0)
 			local look = flat(at.LookVector)
@@ -1311,9 +1342,28 @@ do
 	end
 	Scare.build = build
 	later(function() if gui then gui:Destroy() end end)
+	-- (if its face cannot be made: its eyes alone, rushing at you out of the black, filling the screen)
+	local function flat2D()
+		local g = make("ScreenGui", { Name = "MonsterKillScareView", IgnoreGuiInset = true, DisplayOrder = 100006, ResetOnSpawn = false }, screen.Parent)
+		local black = make("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(10, 10, 12), BorderSizePixel = 0 }, g)
+		local eyes = make("ImageLabel", { Name = "Eyes", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.45), BackgroundTransparency = 1,
+			Image = if VER.pair then VER.pair.Image else (LOCAL.Eyes or "rbxassetid://92865588300030"), ImageColor3 = if VER.pair then VER.pair.ImageColor3 else Color3.new(1, 1, 1),
+			ScaleType = Enum.ScaleType.Fit }, black)
+		local t0 = os.clock()
+		local c = RunService.RenderStepped:Connect(function()
+			local t = os.clock() - t0
+			local k = if t < 0.12 then 0.15 + 0.85 * (1 - (1 - t / 0.12) ^ 3) else 1
+			eyes.Size = UDim2.fromScale(1.1 * k, 0.55 * k)
+			eyes.Position = UDim2.new(0.5, math.noise(t * 6, 1.3) * 8, 0.45, math.noise(t * 6, 7.7) * 8)
+		end)
+		return function()
+			c:Disconnect()
+			g:Destroy()
+		end
+	end
 	-- The shot: it rushes at you (5 to 1.4 studs in 0.12 s), and stays, breathing on you. Returns its end
 	function Scare.face()
-		if not build() then return function() end end
+		if not build() then return flat2D() end
 		local t0 = os.clock()
 		local function frame()
 			local t = os.clock() - t0
@@ -1986,7 +2036,7 @@ end
 
 local TV = {}
 if VARIANT == "Noise" then
-	local tv, main, glass, gui, picture, video = nil, nil, nil, nil, nil, nil
+	local tv, main, glass, gui, picture = nil, nil, nil, nil, nil
 	local lights, fields = {}, {}
 	-- The kit's TV (its feet off: it hangs), else a dark box with a screen and the arm
 	local function build()
@@ -2001,7 +2051,7 @@ if VARIANT == "Noise" then
 			tv = make("Model", {}, nil)
 			main = make("Part", { Name = "TVMain", Size = Vector3.new(3.4, 2.6, 2), Color = Color3.fromRGB(51, 51, 56) }, tv)
 			local screenPart = make("Part", { Name = "TVScreen", Size = Vector3.new(2.88, 2, 0.28), Color = Color3.fromRGB(20, 20, 22), CFrame = CFrame.new(0, 0.1, -0.88) }, main)
-			make("VideoFrame", { Name = "VideoFrame", Size = UDim2.fromScale(1, 1), Visible = false }, make("SurfaceGui", { Name = "VideoGui", Face = Enum.NormalId.Front }, screenPart))
+			make("SurfaceGui", { Name = "VideoGui", Face = Enum.NormalId.Front }, screenPart)
 			make("PointLight", { Name = "PointLight", Range = 30 }, make("Attachment", { Name = "Attachment" }, screenPart))
 			local arm = make("Model", { Name = "ArchivesCeilingMonitor" }, tv)
 			local tilt = CFrame.Angles(math.rad(15), 0, 0)
@@ -2049,12 +2099,13 @@ if VARIANT == "Noise" then
 		hang()
 		tv.Parent = folder
 	end
-	-- Its screen: the kit's picture (on), our picture over it, its lights; static on it
+	-- Its screen: the kit's (on; its own video off: it is another), our picture on it, its lights; static on it
 	local function dress()
 		gui = glass:FindFirstChildWhichIsA("SurfaceGui") or make("SurfaceGui", { Name = "VideoGui", Face = Enum.NormalId.Front }, glass)
 		gui.Enabled, gui.LightInfluence = true, 0
-		video = gui:FindFirstChildWhichIsA("VideoFrame")
-		if video and LOCAL.TapeVideo then pcall(function() video.Video = LOCAL.TapeVideo end) end -- (it loads while you come)
+		for _, video in ipairs(gui:GetChildren()) do
+			if video:IsA("VideoFrame") then video:Destroy() end
+		end
 		picture = make("ImageLabel", { Name = "Tape", Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(0, 0, 0), BorderSizePixel = 0, ZIndex = 2 }, gui)
 		for _, light in ipairs(glass:GetDescendants()) do
 			if light:IsA("Light") then
@@ -2088,21 +2139,10 @@ if VARIANT == "Noise" then
 		picture.ImageRectOffset = Vector2.new((inSheet % TAPE.columns) * TAPE.width, math.floor(inSheet / TAPE.columns) * TAPE.height)
 		picture.ImageColor3 = Color3.new(1, 1, 1)
 	end
-	-- Its tape, start to end: on the kit's VideoFrame if this executor can feed it the video, else picture by picture with its sound
+	-- Its tape, start to end: picture by picture out of its sheets, with its sound
 	local function play()
-		local playingVideo = false
-		if video and LOCAL.TapeVideo then
-			pcall(function()
-				if video.IsLoaded then
-					video.Looped, video.Volume, video.Visible = false, 1.2, true
-					picture.Visible = false
-					video:Play()
-					playingVideo = true
-				end
-			end)
-		end
 		local audio = nil
-		if not playingVideo and LOCAL.Tape then
+		if LOCAL.Tape then
 			audio = make("Sound", { Name = "Tape", SoundId = LOCAL.Tape, Volume = 1.3, RollOffMinDistance = 14, RollOffMaxDistance = 140 }, glass)
 			audio:Play()
 		end
@@ -2110,9 +2150,7 @@ if VARIANT == "Noise" then
 		local t0 = os.clock()
 		while alive and os.clock() - t0 < TAPE.length do
 			local frame = math.floor((os.clock() - t0) * TAPE.fps)
-			if playingVideo then
-				glow(0.45)
-			elseif not sheets then
+			if not sheets then
 				static(0.8)
 			elseif frame < TAPE.frames then
 				sheetFrame(frame)
@@ -2123,10 +2161,8 @@ if VARIANT == "Noise" then
 			end
 			RunService.Heartbeat:Wait()
 		end
-		pcall(function() video:Stop() end)
-		if video then video.Visible = false end
 		if audio then audio:Destroy() end
-		picture.Visible, picture.Image = true, ""
+		picture.Image = ""
 	end
 	-- The screen bursts: static, a flash, its glass broken; the lamps round it go down
 	local function burst()
@@ -2247,6 +2283,15 @@ end
 ---====== IT COMES ======---
 
 do
+	-- What loaded here, in the console (F9): what to look at if something of it is not seen
+	local sheets = 0
+	for i = 1, TAPE.sheets do
+		if LOCAL[("Tape_%02d"):format(i)] then sheets += 1 end
+	end
+	local function said(v) return if v == nil then "?" elseif v then "ok" else "NOT LOADED (ours instead)" end
+	print(("[Monochrome] %s | VER: %s | its mesh: %s | its eyes: %s%s"):format(VARIANT, if VER.fromKit then "its kit" else "made of its bones",
+		said(LOADED.mesh), said(LOADED.eyes), if VARIANT ~= "Noise" then "" else (" | TV: %s | Emerge: %s | tape: %d/%d sheets, sound %s"):format(
+		if kit.tv then "its kit" else "ours", if kit.emerge then "ok" else "NOT LOADED", sheets, TAPE.sheets, if LOCAL.Tape then "ok" else "NOT LOADED")))
 	local spot = nextDoor(24)
 	if not spot then
 		stop()
