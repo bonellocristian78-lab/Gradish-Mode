@@ -46,7 +46,7 @@ mod rather than playing it.
 | Surprise: A-60, A-15, A-35, A-100, A-200 and E-22 one behind the other | `.../EntityTrain` |
 | Hotel-: the Washroom, down a staircase beside door 0001: a laundry, the key of B-02, a big attic past it, the key of B-03 (DOORS' models, doors, locks, drawers, items, Guiding Light, hiding; no entities) | `.../Washroom` |
 | Hotel-: today's DOORS walk, crouch and sounds (doors, hits, footsteps) | `.../ModernHotel` |
-| MONOCHROME: VER at the next door (its own walk, sounds, lights, kill, radar), with its creator's permission | `.../Monochrome` |
+| MONOCHROME: VER at the next door (its own walk, sounds, lights, kill, radar), with its creator's permission; `_G.VER` = `"White"`, `"Glitch"`, `"Noise"` (out of a TV) | `.../Monochrome` |
 | Scanners: DOORS' radar (Nokia) or the NVCS tablet (`_G.Scanner = { Type = "Tablet" }`) | `.../ObjectScanner` |
 | Universal Custom Assets: animator with Studio controls (Ctrl + U I O) | `.../UniversalAssets` |
 | The same, obfuscated | `.../UniversalAssets.obf` |
@@ -775,17 +775,17 @@ room's door). `getgenv().__ModernHotel()` puts it all back.
 ## MONOCHROME: VER
 
 VER, the monster of **MONOCHROME** (Pt 2, place 134208374070897), in DOORS, with its creator's
-permission. Taken from a saved copy of its place: the model of VER and its game's radar are in
-`Monochrome.rbxm` (VER as its place has it: its skinned mesh and its 22 bones, its eyes, its two
-horns; nothing else of the game).
+permission. Taken from a saved copy of its place: the model of VER is in `Monochrome.rbxm` (VER as
+its place has it: its skinned mesh and its 22 bones, its eyes, its two horns; nothing else of the
+game).
 
 ```lua
 loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/claude/sei-qui-con-noi-ye4k62/Monochrome"))()
 ```
 
 - **It comes out at the next door**: in the doorway of the room's exit, on your side, facing you (the
-  next one along if that door is under 24 studs from you). The lamps around it cut out, its joints
-  crack, it twitches awake. It cannot kill you in its first 6 seconds, even standing next to it.
+  next one along if that door is under 24 studs from you). The lamps around it go down (dim, not out:
+  you still see the room), its joints crack, it twitches awake. It cannot kill you in its first 6 seconds, even standing next to it.
 - **Its walk is its own**: its game has no animation assets for it. Its `MonsterGait` moves its bones
   itself (legs on IK, the step, the bob and lean, its arms, its head turning to you, breathing when it
   stands, walk blending into run, its bait pose, its grab, its strobe twitch), and so does this script
@@ -794,7 +794,8 @@ loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab
   anyway (Roblox plays only the place owner's), these play anywhere.
 - **What it does** (its game's AI ran on its server, which a saved place does not have; this follows
   its game and its briefing): it hears you move (crouch, or stand still); it sees you, less in the dark
-  unless you hold a light; it walks, and runs when it sees you, or, from far, it freezes, silent, a
+  unless you hold a light; it walks slowly (5 to 6.5 studs a second), and runs when it sees you (a
+  little slower than you: 1.5 under your speed, 10 to 13.5), or, from far, it freezes, silent, a
   bait, then bursts at you. Hide in a wardrobe if it spotted you and hope it throws it off: it comes to
   your wardrobe and stands there; it may find you, or just scare you. It cuts the lights now and then.
   Lose it and it searches, patrols, gives up and goes; get two rooms ahead of it and it comes back out
@@ -805,14 +806,34 @@ loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab
 - **Its kill**: its grab (crouched over you, the cracks, the strobe), its face filling your screen
   (its game's `MonsterKillCut`: every other sound silenced, its scream, the snap, black), DOORS'
   death screen: "You died to VER...", and its hints. Its phantom scares when it throws it off.
-- **The radar** of its game, in DOORS' hotbar (or R): it rises in front of you, its dial sweeps, a blip
-  and a ping when VER is within 70 studs.
+- **The radar**, in DOORS' hotbar (hold it) or on R: a real radar on your screen, bottom right. Its
+  dial points the way you look (ahead is up), with rings at 25, 50 and 75 studs; its sweep goes round,
+  and where it passes VER a blip lights up and fades, with a ping (higher the nearer) and its distance
+  ("ABOVE"/"BELOW" on another floor); past 75 studs a mark on the rim shows which way it is.
+
+Three more of it: set `_G.VER` before the loadstring.
+
+```lua
+_G.VER = "Noise" -- or "White", "Glitch"
+loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/claude/sei-qui-con-noi-ye4k62/Monochrome"))()
+```
+
+| `_G.VER` | What changes |
+|---|---|
+| (none) | VER as its game has it |
+| `"White"` | white, black-eyed, a white glow on it; its blackouts are whiteouts (the lamps flare white); its grade greyer; its face on a white screen when it kills you |
+| `"Glitch"` | made of DOORS' Glitch: its purple, its cube texture, its cubes coming off it, its pink light; its colours flicker; it skips a few studs ahead now and then (Glitch's sound); near you (16 studs), its cubes all over your screen; its face on Glitch's purple |
+| `"Noise"` | it comes out of a TV, as Noise does: Noise's TV (out of Noise's kit, `MonochromeTV.rbxm`) hangs above the next door from the ceiling on its arm, static on its screen. **Hold its prompt** ("Play"): MONOCHROME's tape plays on it (its pictures and its sound, 25 s), the screen bursts, the lamps go down, and VER crawls out of the screen with **Noise's own Emerge** (from its kit, put on VER's bones: its body lying in the screen, crawling out, dropping to the floor, getting up), then wakes and walks with **its own walk** |
+
+
 
 Its game's own sounds and images are used where they load. The ones its creator uploaded may be private
 to its game: for those, stand-ins made for this (`assets/monochrome/`: its presence, its scream, a lamp's
 click, the radar's ping, the film grain) play instead. Without `game:GetObjects` it is made of its own
-bones (black limbs on them), and still walks, hunts and kills the same way. `getgenv().__Monochrome()`
-takes it away; only you see it.
+bones (black limbs on them), and still walks, hunts and kills the same way. Its Noise tape plays on the
+TV's own `VideoFrame` when the executor can feed it the video (`TapeVideo.webm`), else picture by picture
+from its sheets (`Tape_01.jpg`...`Tape_24.jpg`, 15 a second) with its sound (`Tape.mp3`); Noise's
+Emerge for VER is `assets/monochrome/Emerge.lua`. `getgenv().__Monochrome()` takes it away; only you see it.
 
 ## Scanners (Object Scanner)
 
@@ -1138,13 +1159,13 @@ That includes the files made to be copied or filled in (`AchievementConfig`,
 | `Washroom` / `ModernHotel` | the Hotel-'s custom room; today's walk and sounds in the Hotel- |
 | `Errorbush` / `Errorbush.rbxm` | 3rr0rbu2h, the broken Ambush; its model |
 | `ObjectScanner` / `ObjectScanner.rbxm` | The scanners (Nokia and Tablet, their Lights); DOORS' scanner's model, out of a saved place |
-| `Monochrome` / `Monochrome.rbxm` | VER, the monster of MONOCHROME; its model and its game's radar, out of a saved copy of its place |
+| `Monochrome` / `Monochrome.rbxm` / `MonochromeTV.rbxm` | VER, the monster of MONOCHROME; its model, out of a saved copy of its place; Noise's TV on its arm (out of Noise's kit), for its Noise variant |
 | `assets/errorbush/` | 3rr0rbu2h's two faces |
 | `assets/noise/` | Noise's kit, tape and sheets; Noise 90's props kit, grey sheets and faces |
 | `assets/ir/` | the Interminable Rooms entities' pictures, GIF sheets and sounds |
 | `assets/washroom/` | the Washroom's textures (tiles, mould, grille, drum, stains, grate) and sounds (neon buzz, drip, gurgle, bang, clank, spin, valve, chime) |
 | `assets/surprise/` | the surprises' sounds (steps, psst, bite, shriek, heartbeat, whispers, roar, clicks, hum, whoosh, rumble) |
-| `assets/monochrome/` | VER's stand-ins, where its game's own files do not load (its presence, its scream, a lamp's click, the radar's ping) and the film grain |
+| `assets/monochrome/` | VER's stand-ins, where its game's own files do not load (its presence, its scream, a lamp's click, the radar's ping) and the film grain; its Noise variant's tape (video, sheets, sound) and Noise's Emerge made VER's |
 | `tools/` | Prometheus' settings for the obfuscation, the script that runs it, its fix for Luau |
 | `assets/scanner/` | The scanners' own icons without their background (`.png`) and ready to be recoloured by the script (`.icon`) |
 | `UniversalAssets` / `.obf` | the animator for DOORS' things and custom assets, readable and obfuscated |

@@ -18,8 +18,15 @@
           - the camera shaking as it comes near (its own noise shake), the film grain, the game's grade
           - its kill: the grab (its pose, the cracks, the strobe), its face filling your screen, every other sound gone,
             its scream, the snap, black; and its phantom scares
-          - the lights: its blackouts (the lamps cut out one by one, clicking, and come back) and their flicker
-          - the radar of its game, in DOORS' hotbar (and on R): its dial sweeps, a blip and a ping when VER is near
+          - the lights: its blackouts (the lamps go down one by one, clicking, and come back: dim, the room still seen)
+            and their flicker
+          - a radar, in DOORS' hotbar (and on R): its dial on your screen, its sweep, a blip, a ping and its distance
+
+        Three more of it, before the loadstring (else VER as its game has it):
+            _G.VER = "White"    -- white, black-eyed; its blackouts are whiteouts; its face on white
+            _G.VER = "Glitch"   -- made of DOORS' Glitch: its purple, its cubes; it skips ahead; near you, its cubes on your screen
+            _G.VER = "Noise"    -- a TV above the next door (Noise's): hold its prompt, MONOCHROME's tape plays on it, the
+                                   screen bursts and VER crawls out of it as Noise does (Noise's Emerge); then it walks as VER
 
         Only you see it (the server does not know it is there). getgenv().__Monochrome() takes it away.
 ]]
@@ -84,13 +91,31 @@ local function smoothstep(x)
 	return x * x * (3 - 2 * x)
 end
 
----====== FILES: VER's kit (out of its place), and its stand-ins (for any of its game's own files that will not load here) ======---
+---====== WHICH VER: _G.VER = "White" (white, black-eyed), "Glitch" (made of DOORS' Glitch), "Noise" (out of a TV, as Noise); else
+---====== VER as its game has it ======---
+
+local VARIANT = "Monochrome"
+do
+	local want = tostring(_G.VER or GENV.VER or ""):lower()
+	if want:find("whit") or want:find("bianc") then
+		VARIANT = "White"
+	elseif want:find("glitch") then
+		VARIANT = "Glitch"
+	elseif want:find("noise") or want:find("tv") then
+		VARIANT = "Noise"
+	end
+end
+
+---====== FILES: VER's kit (out of its place), its stand-ins (for any of its game's own files that will not load here); for its
+---====== Noise variant the TV (out of Noise's kit), its tape and Noise's Emerge made VER's ======---
 
 local REPO = "https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/claude/sei-qui-con-noi-ye4k62/"
 local LOCAL = {} -- name -> a content ID of ours
-local kit = nil -- { ver = VER, radar = its radar }
+local kit = nil -- { ver = VER, tv = the TV (Noise variant), emerge = its Emerge (Noise variant) }
+-- Its tape (MONOCHROME's video): 350 pictures at 15 a second, 15 to a sheet (3 by 5, 320 by 192 each); its sound 25 s long
+local TAPE = { frames = 350, fps = 15, sheets = 24, columns = 3, rows = 5, width = 320, height = 192, length = 25.08 }
 do
-	local MAGIC = { mp3 = { "ID3", "\255\251", "\255\243", "\255\242" }, png = { "\137PNG" }, rbxm = { "<roblox!" } }
+	local MAGIC = { mp3 = { "ID3", "\255\251", "\255\243", "\255\242" }, png = { "\137PNG" }, jpg = { "\255\216" }, webm = { "\26\69\223\163" }, rbxm = { "<roblox!" }, lua = { "-- VER's" } }
 	local function valid(name, data)
 		if type(data) ~= "string" or #data < 16 then return false end
 		for _, start in ipairs(MAGIC[name:match("%.(%w+)$")] or {}) do
@@ -111,31 +136,49 @@ do
 		return if ok and there then here else nil
 	end
 	local names = { "Drone.mp3", "Scream.mp3", "Click.mp3", "Ping.mp3", "Grain1.png", "Grain2.png", "Grain3.png", "Grain4.png" }
-	local left = #names + 1
-	task.spawn(function() -- (the kit: VER and its radar, as two models)
+	if VARIANT == "Noise" then
+		table.insert(names, "Tape.mp3")
+		table.insert(names, "TapeVideo.webm")
+		for i = 1, TAPE.sheets do table.insert(names, ("Tape_%02d.jpg"):format(i)) end
+	end
+	local k = {}
+	local jobs = { function() -- (the kit: VER)
 		local path = file("", "Monochrome.rbxm")
 		pcall(function()
-			local got = game:GetObjects(getcustomasset(path))
-			local k = {}
-			for _, m in ipairs(got) do
-				if m.Name == "VER" then k.ver = m elseif m.Name == "radar" then k.radar = m end
+			for _, m in ipairs(game:GetObjects(getcustomasset(path))) do
+				if m.Name == "VER" then k.ver = m end
 			end
-			if k.ver then kit = k end
 		end)
-		left -= 1
-	end)
+	end }
+	if VARIANT == "Noise" then
+		table.insert(jobs, function() -- (the TV, on its feet, out of Noise's kit)
+			local path = file("", "MonochromeTV.rbxm")
+			pcall(function() k.tv = game:GetObjects(getcustomasset(path))[1] end)
+		end)
+		table.insert(jobs, function() -- (Noise's Emerge, made VER's)
+			local path = file("assets/monochrome/", "Emerge.lua")
+			pcall(function() k.emerge = loadstring(readfile(path))() end)
+		end)
+	end
 	for _, name in ipairs(names) do
-		task.spawn(function()
+		table.insert(jobs, function()
 			local path = file("assets/monochrome/", name)
 			if path then
 				local ok, id = pcall(getcustomasset, path)
 				if ok and type(id) == "string" then LOCAL[name:match("^(.-)%.")] = id end
 			end
+		end)
+	end
+	local left = #jobs
+	for _, job in ipairs(jobs) do
+		task.spawn(function()
+			job()
 			left -= 1
 		end)
 	end
 	local t0 = os.clock()
-	while left > 0 and os.clock() - t0 < 25 do task.wait(0.05) end
+	while left > 0 and os.clock() - t0 < 30 do task.wait(0.05) end
+	if k.ver then kit = k end
 end
 
 ---====== ITS GAME'S SOUNDS (their volume, speed and reach as its game has them) ======---
@@ -581,20 +624,25 @@ end
 
 ---====== THE LIGHTS: ITS (it has full control over them): its blackouts, their flicker as it passes ======---
 
--- As its game's MapLightFlicker: a blackout cuts the lamps out one by one, each flickering and clicking, then they stay out;
--- they come back the same way; near it they burst into flickers. DOORS' lamps: each model with lights in a room
+-- As its game's MapLightFlicker: a blackout cuts the lamps down one by one, each flickering and clicking, then they stay low
+-- (dim, not out: the room is still seen); they come back the same way; near it they burst into flickers. White VER's is a
+-- whiteout: its lamps flare white instead. DOORS' lamps: each model with lights in a room
 local Lamps = { list = {}, byModel = {}, seen = {}, state = "on", clock = 0, ends = 0, scanned = -10 }
 do
 	local rng = Random.new()
+	local DIM = if VARIANT == "White" then 2.4 else 0.3 -- (a lamp cut down: this much of its light left; White's: flared)
+	local WHITE = Color3.new(1, 1, 1)
 	local function set(lamp, lit)
 		if lamp.on == lit then return end
 		lamp.on = lit
-		for i, l in ipairs(lamp.lights) do pcall(function() l.Enabled = lit and lamp.was[i] end) end
-		for _, n in ipairs(lamp.neon) do
+		for i, l in ipairs(lamp.lights) do
 			pcall(function()
-				n[1].Material = if lit then n[2] else Enum.Material.SmoothPlastic
-				n[1].Color = if lit then n[3] else n[3]:Lerp(Color3.new(0, 0, 0), 0.75)
+				l.Brightness = if lit then lamp.was[i] else lamp.was[i] * DIM
+				if VARIANT == "White" then l.Color = if lit then lamp.tint[i] else WHITE end
 			end)
+		end
+		for _, n in ipairs(lamp.neon) do
+			pcall(function() n[1].Color = if lit then n[3] elseif VARIANT == "White" then n[3]:Lerp(WHITE, 0.85) else n[3]:Lerp(Color3.new(0, 0, 0), 0.55) end)
 		end
 	end
 	Lamps.set = set
@@ -623,7 +671,7 @@ do
 					local lamp = model and Lamps.byModel[model]
 					if model and not lamp then
 						local holder = d:FindFirstAncestorWhichIsA("BasePart")
-						lamp = { model = model, lights = {}, was = {}, neon = {}, on = true, part = holder or room.PrimaryPart, nextEvent = rng:NextNumber(1, 6),
+						lamp = { model = model, lights = {}, was = {}, tint = {}, neon = {}, on = true, part = holder or room.PrimaryPart, nextEvent = rng:NextNumber(1, 6),
 							bursting = false, burstEnd = 0, nextToggle = 0, eventAt = 0, eventEnd = 0 }
 						lamp.pos = if holder then holder.Position else model:GetPivot().Position
 						for _, p in ipairs(model:GetDescendants()) do
@@ -636,7 +684,12 @@ do
 					end
 					if lamp and not table.find(lamp.lights, d) then
 						table.insert(lamp.lights, d)
-						table.insert(lamp.was, d.Enabled)
+						table.insert(lamp.was, d.Brightness)
+						table.insert(lamp.tint, d.Color)
+						if not lamp.on then
+							d.Brightness *= DIM
+							if VARIANT == "White" then d.Color = WHITE end
+						end
 					end
 				end
 			end
@@ -742,7 +795,14 @@ end
 
 ---====== VER: its model (its kit), else one made here of its own bones ======---
 
-local VER = { at = Vector3.new(), look = Vector3.new(0, 0, -1), speed = 0, state = "idle", strobe = 0, grabAt = nil, alive = true }
+-- DOORS' Glitch (ReplicatedStorage.Entities.Glitch; its MainUI's GlitchEffect): for VER's Glitch variant
+local GLITCH = { body = Color3.fromRGB(58, 52, 103), texture = "rbxassetid://10216168173", cube = "rbxassetid://10216044269", light = Color3.fromRGB(255, 56, 186),
+	cyan = Color3.fromRGB(0, 255, 213), sound = "rbxassetid://10237953274" }
+GLITCH.flicker = { GLITCH.cyan, GLITCH.light, Color3.new(1, 1, 1), Color3.new(1, 0, 0) }
+GLITCH.cubes = ColorSequence.new({ ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)), ColorSequenceKeypoint.new(0.354, Color3.new(1, 1, 1)),
+	ColorSequenceKeypoint.new(0.361, Color3.new(1, 0, 0)), ColorSequenceKeypoint.new(0.516, GLITCH.cyan), ColorSequenceKeypoint.new(0.524, Color3.new(1, 1, 1)),
+	ColorSequenceKeypoint.new(1, Color3.new(1, 1, 1)) })
+local VER = { at = Vector3.new(), look = Vector3.new(0, 0, -1), speed = 0, state = "idle", strobe = 0, grabAt = nil, alive = true, override = nil, blend = nil }
 do
 	local model = kit and kit.ver
 	if model then
@@ -811,6 +871,33 @@ do
 	VER.root = model:FindFirstChild("RootPart")
 	VER.eyes = model:FindFirstChild("Eyes")
 	model:SetAttribute("Awake", false)
+	-- Its looks, as its variant: White glows white, its eyes black; Glitch is made of DOORS' Glitch (its purple, its cube
+	-- texture, its cubes coming off it, its pink light)
+	local pair = VER.eyes and VER.eyes:FindFirstChild("Pair", true)
+	VER.pair = pair
+	if VARIANT == "White" or VARIANT == "Glitch" then
+		VER.body = {}
+		for _, d in ipairs(model:GetDescendants()) do
+			if d:IsA("BasePart") and d.Transparency < 0.99 then
+				table.insert(VER.body, d)
+				d.Material = Enum.Material.Neon
+				d.Color = if VARIANT == "White" then Color3.fromRGB(245, 245, 245) else GLITCH.body
+				if VARIANT == "Glitch" then
+					for _, side in ipairs({ Enum.NormalId.Right, Enum.NormalId.Back, Enum.NormalId.Left, Enum.NormalId.Front }) do
+						make("Texture", { Name = "GlitchTexture", Texture = GLITCH.texture, Color3 = Color3.new(0, 0, 0), StudsPerTileU = 3, StudsPerTileV = 3, Face = side }, d)
+					end
+				end
+			end
+		end
+		if pair then pair.ImageColor3 = if VARIANT == "White" then Color3.new(0, 0, 0) else GLITCH.light end
+		make("PointLight", { Name = "VariantLight", Color = if VARIANT == "White" then Color3.new(1, 1, 1) else GLITCH.light, Range = 14,
+			Brightness = if VARIANT == "White" then 0.9 else 1.4 }, VER.root)
+		if VARIANT == "Glitch" then
+			VER.cubes = make("ParticleEmitter", { Name = "GlitchCubes", Texture = GLITCH.cube, Color = GLITCH.cubes, Rate = 8, Lifetime = NumberRange.new(0.2, 0.3),
+				Size = NumberSequence.new(1.2), Speed = NumberRange.new(0), Rotation = NumberRange.new(0, 180), LightInfluence = 0, Brightness = 1.17 },
+				model:FindFirstChild("LowPolyHuman") or VER.skull or VER.root)
+		end
+	end
 end
 
 ---====== ITS ANIMATOR: its game's MonsterAnimator (it follows where it is going, turns, steps its gait; its horns on its head) ======---
@@ -883,8 +970,9 @@ do
 	function VER.animate(dt)
 		if not (gait and model.Parent and root.Parent) then return end
 		local target, look = VER.at, VER.look
-		if not smooth or (target - smooth).Magnitude > 12 then
+		if not smooth or VER.snap or (target - smooth).Magnitude > 12 then
 			smooth, d1, d2, d3 = target, look, look, look
+			VER.snap = nil
 		else
 			smooth = smooth:Lerp(target, 1 - math.exp(-26 * dt))
 			d1 = approachDir(d1, look, 1 - math.exp(-12 * dt))
@@ -909,7 +997,20 @@ do
 		root.CFrame = CFrame.lookAt(smooth, smooth + d3, up)
 		local yaw = math.atan2(lookNow:Cross(d3).Y, math.clamp(lookNow:Dot(d3), -1, 1)) / step
 		turnRate += (math.clamp(yaw, -5, 5) - turnRate) * (1 - math.exp(-step * 3.5))
-		gait:Step(acc, VER.prey and VER.prey(), speed, turnRate)
+		if VER.override then -- (a pose not of its gait: out of the TV, Noise's Emerge)
+			VER.override(gait.bones)
+		else
+			gait:Step(acc, VER.prey and VER.prey(), speed, turnRate)
+			local blend = VER.blend
+			if blend then -- (from that pose into its walk)
+				local u = smoothstep((os.clock() - blend.at) / blend.time)
+				for name, cf in pairs(blend.from) do
+					local bone = gait.bones[name]
+					if bone then bone.Transform = cf:Lerp(bone.Transform, u) end
+				end
+				if u >= 1 then VER.blend = nil end
+			end
+		end
 		local head = gait:posedCFrame(Gait.HEAD_CHAIN)
 		local rootAt = root.CFrame
 		for _, c in ipairs(VER.cones) do
@@ -1079,10 +1180,13 @@ do
 		grain.TileSize = UDim2.fromOffset(1024, 1024)
 	end
 	local show, last = 0, 0
-	-- And its game's grade (its HorrorGrade): darker, colder, less colour, more contrast
+	-- And its game's grade (its HorrorGrade): colder, less colour, more contrast (a little lighter here)
 	local grade = make("ColorCorrectionEffect", { Name = "MonochromeGrade", Brightness = 0, Contrast = 0, Saturation = 0, TintColor = Color3.new(1, 1, 1) }, Lighting)
 	later(function() grade:Destroy() end)
 	local graded = 0
+	-- (White's: paler, greyer; Glitch's: a little purple)
+	local GRADE = if VARIANT == "White" then { 0.06, 0.1, -0.7, Color3.fromRGB(236, 236, 240) }
+		elseif VARIANT == "Glitch" then { 0.02, 0.08, -0.15, Color3.fromRGB(222, 206, 236) } else { 0.03, 0.06, -0.28, Color3.fromRGB(206, 216, 232) }
 	function Feel.step(dt)
 		show = approach(show, if Feel.on then 1 else 0, 2, dt)
 		if show < 0.01 then
@@ -1096,8 +1200,8 @@ do
 			grain.ImageTransparency = 1 - (0.075 + 0.065 * (0.5 + 0.5 * math.noise(t * 0.27, 0.5))) * show
 		end
 		graded = approach(graded, if Feel.on then 1 else 0, 1.2, dt)
-		grade.Brightness, grade.Contrast, grade.Saturation = -0.004 * graded, 0.11 * graded, -0.28 * graded
-		grade.TintColor = Color3.new(1, 1, 1):Lerp(Color3.fromRGB(206, 216, 232), graded)
+		grade.Brightness, grade.Contrast, grade.Saturation = GRADE[1] * graded, GRADE[2] * graded, GRADE[3] * graded -- (its game's, a little lighter)
+		grade.TintColor = Color3.new(1, 1, 1):Lerp(GRADE[4], graded)
 	end
 end
 
@@ -1160,7 +1264,8 @@ do
 			end
 			if VER.eyes and not VER.eyes.Anchored then offsets.Eyes = VER.eyesOffset end -- (its eyes as its head holds them)
 			local g = make("ScreenGui", { Name = "MonsterKillScareView", IgnoreGuiInset = true, DisplayOrder = 100006, ResetOnSpawn = false, Enabled = false }, screen.Parent)
-			local view = make("ViewportFrame", { Name = "Scare", Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(10, 10, 12), BorderSizePixel = 0,
+			local back = if VARIANT == "White" then Color3.fromRGB(236, 236, 236) elseif VARIANT == "Glitch" then Color3.fromRGB(20, 14, 38) else Color3.fromRGB(10, 10, 12)
+			local view = make("ViewportFrame", { Name = "Scare", Size = UDim2.fromScale(1, 1), BackgroundColor3 = back, BorderSizePixel = 0,
 				Ambient = Color3.new(1, 1, 1), LightColor = Color3.new(1, 1, 1), LightDirection = Vector3.new(0, -0.3, -1) }, g)
 			local copy = VER.model:Clone()
 			for _, d in ipairs(copy:GetDescendants()) do
@@ -1175,7 +1280,7 @@ do
 			local image = if pair then pair.Image else "rbxassetid://92865588300030"
 			if face then face:Destroy() end
 			eyes.Transparency = 1
-			make("Decal", { Name = "EyeDecal", Texture = image, Face = Enum.NormalId.Front }, eyes)
+			make("Decal", { Name = "EyeDecal", Texture = image, Face = Enum.NormalId.Front, Color3 = if pair then pair.ImageColor3 else Color3.new(1, 1, 1) }, eyes)
 			local g2 = Gait.new(copy)
 			g2:SetState("grab")
 			g2:SetGrab(0)
@@ -1265,43 +1370,31 @@ do
 	end
 end
 
----====== THE RADAR (its game's): DOORS' hotbar has it, and R; its dial sweeps, a blip and a ping when VER is near ======---
+---====== THE RADAR: its game's dial (rings, ticks, the sweep and its tail, the blip), a real radar on your screen ======---
 
+-- In DOORS' hotbar (hold it) or on R: the dial, heading up (ahead of you is up), 75 studs across its rings (25, 50, 75).
+-- The sweep goes round (120 degrees a second, as its game's); where it passes VER a blip lights up and fades, with a ping
+-- (higher, nearer) and its distance; past 75 studs a mark on the rim shows which way it is.
 local Radar = { open = false }
 do
-	local model = kit and kit.radar
-	local WHITE = Color3.fromRGB(233, 231, 224)
+	local WHITE, GLASS = Color3.fromRGB(233, 231, 224), Color3.fromRGB(12, 13, 14)
+	local RANGE, SIZE = 75, 368 -- (studs to the rim; the dial's pixels, as its game draws it)
 	local ping = sound("ping", { Name = "RadarPing", Volume = 0.55 }, SoundService)
-	local camera = workspace.CurrentCamera
-	local height = math.tan(math.rad(camera.FieldOfView) / 2) * 0.372 -- (how big it is: as its game holds it, at 0.6 in front of you)
-	local unit, main, glass, dialAt
-	pcall(function()
-		if not model then -- (no kit: one like it)
-			model = make("Model", { Name = "radar" }, nil)
-			make("Part", { Name = "Cube", Size = Vector3.new(0.5591, 2.1921, 2.00001), Color = Color3.fromRGB(46, 48, 44), Material = Enum.Material.Metal }, model)
-		end
-		unit = model
-		unit.Name = "RadarUnit"
-		for _, d in ipairs(unit:GetDescendants()) do
-			if d:IsA("BasePart") then d.Anchored, d.CanCollide, d.CanQuery, d.CanTouch, d.CastShadow = true, false, false, false, false end
-		end
-		for _, d in ipairs(unit:GetDescendants()) do
-			if d:IsA("BasePart") and (not main or d.Size.Y > main.Size.Y) then main = d end
-		end
-		local scale = height / main.Size.Y
-		pcall(function() unit:ScaleTo(scale) end)
-		if math.abs(main.Size.Y - height) > 1e-3 then main.Size *= scale end -- (where models cannot be scaled)
-		local size = main.Size
-		local w, h = size.Z * 0.85, size.Y * 0.771
-		glass = make("Part", { Name = "Glass", Anchored = true, CanCollide = false, CanQuery = false, CanTouch = false, CastShadow = false, Transparency = 1,
-			Size = Vector3.new(w, h, 0.05) }, unit)
-		dialAt = CFrame.fromMatrix(Vector3.new(-size.X * 0.5 + size.X * 0.1016 + 0.025, size.Y * -0.04334, 0), Vector3.new(0, 0, -1), up)
-		Radar.pixels = 460 / math.min(w, h)
-	end)
-	local dial = make("SurfaceGui", { Name = "Dial", Enabled = false, Face = Enum.NormalId.Front, SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud,
-		PixelsPerStud = Radar.pixels or 400, LightInfluence = 0, ZIndexBehavior = Enum.ZIndexBehavior.Sibling }, glass)
-	local face = make("Frame", { Name = "Face", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(368, 368),
-		BackgroundTransparency = 1 }, dial)
+	local gui = make("ScreenGui", { Name = "MonochromeRadar", IgnoreGuiInset = true, DisplayOrder = 9150, ResetOnSpawn = false, Enabled = false }, screen.Parent)
+	later(function() gui:Destroy() end)
+	-- The device: a dark case round its glass, bottom right
+	local case = make("Frame", { Name = "Case", AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -24, 1, 40), Size = UDim2.fromOffset(SIZE + 36, SIZE + 70),
+		BackgroundColor3 = Color3.fromRGB(30, 31, 30), BorderSizePixel = 0 }, gui)
+	make("UICorner", { CornerRadius = UDim.new(0, 22) }, case)
+	make("UIStroke", { Thickness = 3, Color = Color3.fromRGB(70, 72, 70) }, case)
+	make("UIScale", { Scale = 0.62 }, case)
+	local label = make("TextLabel", { Name = "Readout", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, SIZE + 26), Size = UDim2.fromOffset(SIZE, 30),
+		BackgroundTransparency = 1, Font = Enum.Font.Code, TextSize = 26, TextColor3 = WHITE, Text = "VER  --" }, case)
+	local glass = make("Frame", { Name = "Glass", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 18), Size = UDim2.fromOffset(SIZE, SIZE),
+		BackgroundColor3 = GLASS, BorderSizePixel = 0, ClipsDescendants = false }, case)
+	make("UICorner", { CornerRadius = UDim.new(0.5, 0) }, glass)
+	local face = make("Frame", { Name = "Face", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(SIZE, SIZE),
+		BackgroundTransparency = 1 }, glass)
 	local function ring(scale, thickness, transparency)
 		local f = make("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(scale, scale), BackgroundTransparency = 1 }, face)
 		make("UICorner", { CornerRadius = UDim.new(0.5, 0) }, f)
@@ -1314,13 +1407,17 @@ do
 	ring(1, 2, 0.02)
 	ring(0.66, 1, 0.55)
 	ring(0.34, 1, 0.55)
-	bar(1, 368, 0, 0, 0, 0.72)
-	bar(368, 1, 0, 0, 0, 0.72)
+	bar(1, SIZE, 0, 0, 0, 0.72)
+	bar(SIZE, 1, 0, 0, 0, 0.72)
 	for i = 1, 11 do
 		local a = math.rad(i * 30)
 		bar(2, 20, math.sin(a) * 165.6, -math.cos(a) * 165.6, i * 30, 0.45)
 	end
 	bar(2, 184, 0, -92, 0, 0.25)
+	for k, studs in ipairs({ 25, 50, 75 }) do -- (its rings' distances)
+		make("TextLabel", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0.5, 4, 0.5, -SIZE / 2 * (k / 3) + 10), Size = UDim2.fromOffset(40, 16),
+			BackgroundTransparency = 1, Font = Enum.Font.Code, TextSize = 14, TextColor3 = WHITE, TextTransparency = 0.45, Text = tostring(studs), TextXAlignment = Enum.TextXAlignment.Left }, face)
+	end
 	local sweep = make("Frame", { Name = "Sweep", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(1, 1),
 		BackgroundTransparency = 1 }, face)
 	bar(3, 184, 0, -92, 0, 0, sweep)
@@ -1333,113 +1430,81 @@ do
 	end
 	local hub = bar(7, 7, 0, 0, 0, 0)
 	make("UICorner", { CornerRadius = UDim.new(0.5, 0) }, hub)
-	local contact = bar(13, 13, 0, 0, 0, 1)
+	local contact = bar(15, 15, 0, 0, 0, 1)
 	contact.Name = "Contact"
 	make("UICorner", { CornerRadius = UDim.new(0.5, 0) }, contact)
-	local raise, angle, swayX, swayY, clock = 0, 0, 0, 0, 0
-	local lastLook = camera.CFrame.LookVector
-	local blipAt, blipX, blipY, blipHigh = -math.huge, 0, 0, false
-	local function hide()
-		dial.Enabled = false
-		if unit then unit.Parent = nil end
-		if ping.IsPlaying then ping:Stop() end
+	local rim = bar(10, 16, 0, 0, 0, 1) -- (the mark on its rim: farther than 75)
+	rim.Name = "Rim"
+	Radar.gui, Radar.contact, Radar.rim, Radar.readout = gui, contact, rim, label
+	local angle, blipAt, blipX, blipY, blipHigh = 0, -math.huge, 0, 0, false
+	local shown = 0
+	local function setOpen(open)
+		Radar.open = open
+		if open then gui.Enabled = true end
 	end
-	local function close()
-		Radar.open = false
-		raise, swayX, swayY, blipAt = 0, 0, 0, -math.huge
-		hide()
-	end
-	-- In DOORS' hotbar: holding it raises it
+	-- In DOORS' hotbar: holding it shows it
 	local tool = make("Tool", { Name = "Radar", TextureId = "rbxassetid://96656899828988", RequiresHandle = true, CanBeDropped = false,
 		ToolTip = "Radar: VER, when it is near" }, nil)
 	make("Folder", { Name = "Animations" }, tool) -- (DOORS' inventory loads an item's animations from it)
 	make("Part", { Name = "Handle", Size = Vector3.new(0.2, 0.2, 0.2), Transparency = 1, CanCollide = false, Massless = true }, tool)
 	tool.Parent = LocalPlayer:FindFirstChildOfClass("Backpack")
 	later(function() tool:Destroy() end)
-	on(tool.Equipped, function()
-		Radar.open = true
-		lastLook = workspace.CurrentCamera.CFrame.LookVector
-	end)
-	on(tool.Unequipped, close)
-	-- R: in your hand or back
+	on(tool.Equipped, function() setOpen(true) end)
+	on(tool.Unequipped, function() setOpen(false) end)
+	-- R: on and off (in your hand or not)
 	pcall(function()
 		ContextActionService:BindAction("MonochromeRadar", function(_, state)
 			if state ~= Enum.UserInputState.Begin then return Enum.ContextActionResult.Pass end
-			local _, humanoid = body()
-			if humanoid then
-				if tool.Parent == LocalPlayer.Character then humanoid:UnequipTools() else humanoid:EquipTool(tool) end
-			end
+			setOpen(not Radar.open)
 			return Enum.ContextActionResult.Pass
 		end, false, Enum.KeyCode.R, Enum.KeyCode.ButtonL1)
 	end)
-	later(function()
-		pcall(function() ContextActionService:UnbindAction("MonochromeRadar") end)
-		if unit then unit:Destroy() end
-	end)
-	local NAME = "MonochromeRadar"
-	RunService:BindToRenderStep(NAME, Enum.RenderPriority.Last.Value + 12, function(dt)
+	later(function() pcall(function() ContextActionService:UnbindAction("MonochromeRadar") end) end)
+	on(RunService.RenderStepped, function(dt)
 		dt = math.clamp(dt, 0.001, 0.25)
-		local cam = workspace.CurrentCamera
-		if not (Radar.open and unit and cam and body()) then
-			if Radar.open then close() end
+		shown = math.clamp(shown + (if Radar.open then dt else -dt) / 0.3, 0, 1)
+		case.Position = UDim2.new(1, -24, 1, 40 + (1 - smoothstep(shown)) * (SIZE + 120))
+		if shown <= 0 then
+			gui.Enabled = false
 			return
 		end
-		raise = math.min(1, raise + dt / 0.34)
-		-- It sways with your look, drifts a little
-		local look = cam.CFrame.LookVector
-		local turnX = ((math.atan2(look.X, look.Z) - math.atan2(lastLook.X, lastLook.Z) + math.pi) % (2 * math.pi) - math.pi) / dt
-		local turnY = (math.asin(math.clamp(look.Y, -1, 1)) - math.asin(math.clamp(lastLook.Y, -1, 1))) / dt
-		lastLook = look
-		local follow = 1 - math.exp(-dt * 6)
-		swayX += (math.clamp(turnX * 0.03, -0.085, 0.085) - swayX) * follow
-		swayY += (math.clamp(-turnY * 0.03, -0.085, 0.085) - swayY) * follow
-		clock += dt
-		local driftX, driftY = math.noise(clock * 0.21, 1.7) * 0.01, math.noise(clock * 0.21, 8.3) * 0.01
-		local fov = math.rad(cam.FieldOfView)
-		local frameH = height / 0.6
-		local depth = frameH / math.max(math.tan(fov * 0.5), 0.001)
-		local frameW = frameH * (cam.ViewportSize.X / math.max(cam.ViewportSize.Y, 1))
-		local shown = smoothstep(raise)
-		local anchorY = if not UserInputService.TouchEnabled or UserInputService.KeyboardEnabled then 0.755 else 0.68
-		local at = Vector3.new(-0.5 * frameW + swayX + driftX, (1 - anchorY * 2) * frameH + swayY + driftY - height * 2 * (1 - shown), -depth)
-		local held = CFrame.lookAt(at, Vector3.new(0, 0, 0), up) * CFrame.Angles(0, -math.pi / 2, 0)
-		local tiltX = math.clamp(-(swayX / 0.085) * 5.2, -7, 7) + math.noise(clock * 0.21, 4.1) * 0.9
-		local tiltY = math.clamp(swayY / 0.085 * 5.2, -7, 7) + math.noise(clock * 0.21, 6.9) * 0.9
-		local hold = CFrame.fromAxisAngle(up, math.rad(13 + tiltX)) * CFrame.fromAxisAngle(Vector3.new(0, 0, 1), math.rad(-6 + tiltY)) * CFrame.fromAxisAngle(Vector3.new(1, 0, 0), math.rad(5))
-		pcall(function()
-			local placed = cam.CFrame * held * hold
-			unit:PivotTo(placed * main.CFrame:ToObjectSpace(unit:GetPivot()))
-			glass.CFrame = main.CFrame * dialAt
-		end)
-		if unit.Parent ~= cam then unit.Parent = cam end
-		dial.Enabled = true
-		-- Its sweep (120 degrees a second); VER within 70 studs: a blip where the sweep passes it, a ping (higher, nearer)
+		gui.Enabled = true
+		local cam = workspace.CurrentCamera
+		local _, _, me = body()
+		if not (cam and me) then return end
 		local before = angle
 		angle = (angle + dt * 120) % 360
 		sweep.Rotation = angle
-		local _, _, me = body()
-		local from = if me then me.Position else cam.CFrame.Position
-		if VER.model.Parent and VER.root then
-			local offset = VER.root.Position - from
+		local look = flat(cam.CFrame.LookVector)
+		look = if look.Magnitude > 0.001 then look.Unit else Vector3.new(0, 0, -1)
+		local here = VER.model.Parent and VER.root
+		rim.BackgroundTransparency = 1
+		if here then
+			local offset = VER.root.Position - me.Position
 			local planar = flat(offset)
-			local facing = flat(look)
-			if planar.Magnitude <= 70 and facing.Magnitude > 0.001 then
-				facing = facing.Unit
-				local ahead, right = planar:Dot(facing), planar:Dot(facing:Cross(up))
-				local bearing = math.deg(math.atan2(right, ahead)) % 360
-				local passed = if before <= angle then before < bearing and bearing <= angle else bearing > before or bearing <= angle
+			local ahead, right = planar:Dot(look), planar:Dot(look:Cross(up))
+			local bearing = math.deg(math.atan2(right, ahead)) % 360
+			local passed = if before <= angle then before < bearing and bearing <= angle else bearing > before or bearing <= angle
+			if planar.Magnitude <= RANGE then
 				if passed then
-					local x, y = right / 70, ahead / 70
-					local r = math.sqrt(x * x + y * y)
-					if r > 0.9429347826086957 then x, y = x * 0.9429347826086957 / r, y * 0.9429347826086957 / r end
-					blipX, blipY, blipHigh, blipAt = x * 184, -y * 184, math.abs(offset.Y) > 10, os.clock()
+					local x, y = right / RANGE, ahead / RANGE
+					blipX, blipY, blipHigh, blipAt = x * SIZE / 2, -y * SIZE / 2, math.abs(offset.Y) > 10, os.clock()
+					label.Text = ("VER  %d studs%s"):format(math.floor(planar.Magnitude + 0.5), if blipHigh then (if offset.Y > 0 then "  ABOVE" else "  BELOW") else "")
 					pcall(function()
-						ping.PlaybackSpeed = 1.75 ^ (1 - math.clamp(planar.Magnitude / 70, 0, 1)) * 0.8
+						ping.PlaybackSpeed = 1.75 ^ (1 - math.clamp(planar.Magnitude / RANGE, 0, 1)) * 0.8
 						ping.TimePosition = 0
 						ping:Play()
 					end)
 				end
+			else
+				local r = math.rad(bearing)
+				rim.Position = UDim2.new(0.5, math.sin(r) * (SIZE / 2 - 6), 0.5, -math.cos(r) * (SIZE / 2 - 6))
+				rim.Rotation = bearing
+				rim.BackgroundTransparency = 0.35
+				if passed then label.Text = ("VER  %d studs  (out of range)"):format(math.floor(planar.Magnitude + 0.5)) end
 			end
+		elseif os.clock() - blipAt > 3 then
+			label.Text = "VER  --"
 		end
 		local fade = 1 - math.clamp((os.clock() - blipAt) / 3, 0, 1)
 		fade *= fade
@@ -1450,7 +1515,6 @@ do
 			contact.Position = UDim2.new(0.5, blipX, 0.5, blipY)
 		end
 	end)
-	later(function() RunService:UnbindFromRenderStep(NAME) end)
 end
 
 ---====== WHERE IT GOES: DOORS' rooms (its paths through them, else the rooms' own nodes, as DOORS' entities go) ======---
@@ -1574,6 +1638,8 @@ end
 
 ---====== ITS MIND (its game's server is not saved; this is it as its game and its briefing tell it) ======---
 
+-- How fast it goes (studs a second): it walks slowly (its gait's own walk is 6.6); it runs a little slower than you
+local SPEED = { hunt = 6, search = 5.5, patrol = 5, check = 6.5, leave = 6, chaseBelow = 1.5, chaseMin = 10, chaseMax = 13.5 }
 local Brain = { mode = "wake", since = os.clock(), born = os.clock(), lastSeen = -100, known = nil, baited = -100, relocations = 0, contact = os.clock() }
 local function toward(p) -- (its way to a point, flat; as it was, if it is on it)
 	local d = flat(p - VER.at)
@@ -1687,7 +1753,6 @@ do
 			hidingSince = nil
 		end
 		m = Brain.mode
-		local walk = 9
 		if m == "wake" then
 			VER.state, VER.speed = "idle", 0
 			VER.look = toward(me.Position)
@@ -1697,7 +1762,7 @@ do
 				setMode("hunt")
 			end
 		elseif m == "hunt" then
-			VER.state, VER.speed = "walk", walk
+			VER.state, VER.speed = "walk", SPEED.hunt
 			if sees then return spot(d) end
 			if hears then Brain.known = me.Position + Vector3.new(rng:NextNumber(-4, 4), 0, rng:NextNumber(-4, 4)) end
 			Nav.go(Brain.known or me.Position, 3)
@@ -1709,12 +1774,12 @@ do
 		elseif m == "chase" then
 			VER.state = "run"
 			local _, humanoid = body()
-			VER.speed = math.clamp((humanoid and humanoid.WalkSpeed or 15) + 2.5, 15, 19)
+			VER.speed = math.clamp((humanoid and humanoid.WalkSpeed or 15) - SPEED.chaseBelow, SPEED.chaseMin, SPEED.chaseMax)
 			local target = if sees then me.Position else Brain.known
 			if sees and d < 30 and W.clear(VER.at + up * 2.5, me.Position) then Nav.direct(me.Position) else Nav.go(target, 0.4) end
 			if now - Brain.lastSeen > 5 then setMode("search") end
 		elseif m == "search" then
-			VER.state, VER.speed = "walk", 8
+			VER.state, VER.speed = "walk", SPEED.search
 			if sees then
 				Brain.baited = now -- (no bait now: it knows you are here)
 				return spot(0)
@@ -1723,7 +1788,7 @@ do
 			if not Nav.points or Nav.index > #Nav.points then Nav.go(wander(Brain.known or VER.at, 22), 99) end
 			if now - Brain.since > 11 then setMode("patrol") end
 		elseif m == "patrol" then
-			VER.state, VER.speed = "walk", 7
+			VER.state, VER.speed = "walk", SPEED.patrol
 			if sees then return spot(d) end
 			if hears then
 				Brain.known = me.Position
@@ -1736,7 +1801,7 @@ do
 			local at = if closet then closet:GetPivot().Position else Brain.known or me.Position
 			local front = W.floor(at - toward(at) * 3.6 + up * 2)
 			if not Brain.arrived then
-				VER.state, VER.speed = "walk", walk + 2
+				VER.state, VER.speed = "walk", SPEED.check
 				Nav.go(front, 1)
 				if (flat(VER.at - front)).Magnitude < 2 then
 					Brain.arrived = now
@@ -1759,7 +1824,7 @@ do
 				setMode("chase")
 			end
 		elseif m == "leave" then -- (it gives up: away from you, into the dark, gone)
-			VER.state, VER.speed = "walk", 9
+			VER.state, VER.speed = "walk", SPEED.leave
 			if not Brain.away then Brain.away = farthest(me.Position) or VER.at end
 			Nav.go(Brain.away, 99)
 			local outOfSight = not sees and d > 40
@@ -1779,6 +1844,12 @@ do
 			local mine, its = W.roomOf(me.Position), W.roomOf(VER.at)
 			if (mine and its and mine >= its + 2) or d > 150 then Brain.relocate() end
 		end
+		-- Now and then it cuts the lights down where you are (short)
+		if now >= (Brain.nextDim or now + 1) and m ~= "leave" and m ~= "wake" then
+			Lamps.blackout(me.Position, rng:NextNumber(4, 7))
+			Brain.nextDim = now + rng:NextNumber(60, 95)
+		end
+		Brain.nextDim = Brain.nextDim or now + rng:NextNumber(45, 70)
 		-- It hunts long enough, then it goes
 		if now - Brain.born > 300 and m ~= "leave" and m ~= "grab" and m ~= "chase" then setMode("leave") end
 	end
@@ -1848,11 +1919,329 @@ function Brain.relocate()
 	Brain.relocations += 1
 	SFXP.play("StrobeStaticShort", 0.05, 0.8)
 	VER.place(spot.at, spot.look)
-	Lamps.blackout(spot.at, 7)
+	Lamps.blackout(spot.at, 4)
 	Brain.wakeFor = 1.8
 	Brain.twitch(1.6)
 	Brain.set("wake")
 	Brain.contact = os.clock()
+end
+
+---====== ITS GLITCH VARIANT: as DOORS' Glitch -- it skips ahead along its way (its sound, a twitch), its colours flicker,
+---====== its cubes come off it; near you (16 studs), its cubes on your screen ======---
+
+local Glitch = {}
+if VARIANT == "Glitch" then
+	local rng = Random.new()
+	local nextSkip, nextFlick, nextCubes = os.clock() + 2, 0, 0
+	local skip = make("Sound", { Name = "Glitch", SoundId = GLITCH.sound, Volume = 0.6, RollOffMinDistance = 8, RollOffMaxDistance = 90 }, VER.root)
+	local overlay = make("ScreenGui", { Name = "MonochromeGlitch", IgnoreGuiInset = true, DisplayOrder = 9140, ResetOnSpawn = false }, screen.Parent)
+	later(function() overlay:Destroy() end)
+	local cubes = {}
+	for i = 1, 12 do
+		cubes[i] = make("ImageLabel", { Name = "Cube", BackgroundTransparency = 1, Image = GLITCH.cube, Visible = false, AnchorPoint = Vector2.new(0.5, 0.5) }, overlay)
+	end
+	function Glitch.step(distance)
+		local now = os.clock()
+		if now >= nextFlick then -- (a part, its eyes: one of Glitch's colours for an instant)
+			nextFlick = now + rng:NextNumber(0.05, 0.18)
+			for _, p in ipairs(VER.body or {}) do
+				p.Color = if rng:NextNumber() < 0.12 then GLITCH.flicker[rng:NextInteger(1, #GLITCH.flicker)] else GLITCH.body
+			end
+			if VER.pair then VER.pair.ImageColor3 = if rng:NextNumber() < 0.2 then GLITCH.cyan else GLITCH.light end
+		end
+		local target = Nav.points and Nav.points[Nav.index]
+		if now >= nextSkip and VER.speed > 0 and target then -- (a skip: a few studs on along its way, at once)
+			nextSkip = now + rng:NextNumber(1.2, 3.5)
+			local d = flat(target - VER.at)
+			local hop = math.min(d.Magnitude, if Brain.mode == "chase" then rng:NextNumber(1.5, 2.5) else rng:NextNumber(2, 4.5))
+			if hop > 0.5 then
+				VER.at += d.Unit * hop
+				VER.snap = true
+			end
+			skip.PlaybackSpeed = rng:NextNumber(0.9, 1.2)
+			skip:Play()
+			VER.strobe = 1
+			task.delay(0.12, function() VER.strobe = 0 end)
+		end
+		if now >= nextCubes then -- (near: its cubes over your screen, more the nearer)
+			nextCubes = now + 0.06
+			local k = if distance then math.clamp((16 - distance) / 12, 0, 1) else 0
+			local shown = math.floor(k * #cubes + 0.5)
+			for i, cube in ipairs(cubes) do
+				cube.Visible = i <= shown
+				if cube.Visible then
+					local size = rng:NextInteger(40, 140)
+					cube.Size = UDim2.fromOffset(size, size)
+					cube.Position = UDim2.fromScale(rng:NextNumber(), rng:NextNumber())
+					cube.ImageColor3 = GLITCH.flicker[rng:NextInteger(1, #GLITCH.flicker)]
+				end
+			end
+		end
+	end
+end
+
+---====== ITS NOISE VARIANT: a TV above the next door, hanging from the ceiling on its arm (Noise's, out of its kit), static
+---====== on its screen. Hold its prompt: MONOCHROME's tape plays on it; then the screen bursts and VER comes out of it as
+---====== Noise does (Noise's Emerge, made VER's), drops to the floor, wakes, and walks as VER ======---
+
+local TV = {}
+if VARIANT == "Noise" then
+	local tv, main, glass, gui, picture, video = nil, nil, nil, nil, nil, nil
+	local lights, fields = {}, {}
+	-- The kit's TV (its feet off: it hangs), else a dark box with a screen and the arm
+	local function build()
+		tv = kit and kit.tv
+		main = tv and tv:FindFirstChild("TVMain")
+		if main and main:FindFirstChild("TVScreen") then
+			local feet = main:FindFirstChild("TVFeet")
+			if feet then feet:Destroy() end
+			tv:SetAttribute("LoadModule", nil)
+			tv:SetAttribute("_LoadModuleRan", nil)
+		else
+			tv = make("Model", {}, nil)
+			main = make("Part", { Name = "TVMain", Size = Vector3.new(3.4, 2.6, 2), Color = Color3.fromRGB(51, 51, 56) }, tv)
+			local screenPart = make("Part", { Name = "TVScreen", Size = Vector3.new(2.88, 2, 0.28), Color = Color3.fromRGB(20, 20, 22), CFrame = CFrame.new(0, 0.1, -0.88) }, main)
+			make("VideoFrame", { Name = "VideoFrame", Size = UDim2.fromScale(1, 1), Visible = false }, make("SurfaceGui", { Name = "VideoGui", Face = Enum.NormalId.Front }, screenPart))
+			make("PointLight", { Name = "PointLight", Range = 30 }, make("Attachment", { Name = "Attachment" }, screenPart))
+			local arm = make("Model", { Name = "ArchivesCeilingMonitor" }, tv)
+			local tilt = CFrame.Angles(math.rad(15), 0, 0)
+			make("Part", { Name = "Bar", Size = Vector3.new(0.45, 2.2, 0.52), CFrame = CFrame.new(-0.09, 0.61, 2.4) * tilt, Color = Color3.fromRGB(70, 72, 83) }, arm)
+			make("Part", { Name = "Base", Size = Vector3.new(1.47, 0.59, 1.19), CFrame = CFrame.new(-0.09, 1.53, 2.64) * tilt, Color = Color3.fromRGB(35, 37, 54) }, arm)
+		end
+		tv.Name, tv.PrimaryPart = "MonochromeTV", main
+		for _, d in ipairs(tv:GetDescendants()) do
+			if d:IsA("BasePart") then d.Anchored, d.CanCollide, d.CanQuery, d.CanTouch = true, false, false, false end
+		end
+		pcall(function() tv:ScaleTo(1.2) end) -- (as VER is to Noise)
+		glass = main:FindFirstChild("TVScreen")
+	end
+	-- Its arm reaches the ceiling: the bar stretches under a high one; under a low one the TV comes down
+	local function hang()
+		local arm = tv:FindFirstChild("ArchivesCeilingMonitor")
+		local base, bar = arm and arm:FindFirstChild("Base"), arm and arm:FindFirstChild("Bar")
+		if not (base and bar) then return end
+		local cf, size = base.CFrame, base.Size
+		local top = cf.Y + 0.5 * (math.abs(cf.RightVector.Y) * size.X + math.abs(cf.UpVector.Y) * size.Y + math.abs(cf.LookVector.Y) * size.Z)
+		local ceiling = W.cast(cf.Position, Vector3.new(0, 40, 0))
+		if not ceiling then return end
+		local gap = ceiling.Position.Y - top
+		if gap < 0 then
+			tv:PivotTo(tv:GetPivot() + Vector3.new(0, gap, 0))
+			return
+		end
+		local low = bar.CFrame:PointToWorldSpace(Vector3.new(0, -bar.Size.Y / 2, 0))
+		local high = bar.CFrame:PointToWorldSpace(Vector3.new(0, bar.Size.Y / 2, 0)) + Vector3.new(0, gap, 0)
+		base.CFrame = cf + Vector3.new(0, gap, 0)
+		local along = (high - low).Unit
+		local right = bar.CFrame.RightVector
+		right = (right - along * right:Dot(along)).Unit
+		bar.Size = Vector3.new(bar.Size.X, (high - low).Magnitude, bar.Size.Z)
+		bar.CFrame = CFrame.fromMatrix((high + low) / 2, right, along)
+	end
+	-- Above the next door, facing into the room (its arm clear of the wall); with no door, above the way ahead of you
+	local function place(spot)
+		local room = spot.room and W.room(spot.room)
+		local exit = room and select(2, W.ends(room))
+		local box, size = tv:GetBoundingBox()
+		local back = main.CFrame:PointToObjectSpace(box.Position).Z + size.Z / 2
+		local at = if exit then exit.Position + up * (exit.Size.Y / 2 + 1.9) + spot.look * (back + 1.1) else spot.at + up * 9.5
+		tv:PivotTo(CFrame.lookAt(at, at + spot.look))
+		hang()
+		tv.Parent = folder
+	end
+	-- Its screen: the kit's picture (on), our picture over it, its lights; static on it
+	local function dress()
+		gui = glass:FindFirstChildWhichIsA("SurfaceGui") or make("SurfaceGui", { Name = "VideoGui", Face = Enum.NormalId.Front }, glass)
+		gui.Enabled, gui.LightInfluence = true, 0
+		video = gui:FindFirstChildWhichIsA("VideoFrame")
+		if video and LOCAL.TapeVideo then pcall(function() video.Video = LOCAL.TapeVideo end) end -- (it loads while you come)
+		picture = make("ImageLabel", { Name = "Tape", Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(0, 0, 0), BorderSizePixel = 0, ZIndex = 2 }, gui)
+		for _, light in ipairs(glass:GetDescendants()) do
+			if light:IsA("Light") then
+				light.Enabled, light.Color, light.Brightness = true, Color3.fromRGB(220, 224, 232), 0.35
+				table.insert(lights, light)
+			end
+		end
+		for i = 1, 4 do
+			if LOCAL["Grain" .. i] then table.insert(fields, LOCAL["Grain" .. i]) end
+		end
+		if #fields == 0 then fields = { "rbxassetid://125361618996572" } end -- (its game's static)
+		local ids = {}
+		for i = 1, TAPE.sheets do table.insert(ids, LOCAL[("Tape_%02d"):format(i)]) end
+		task.spawn(function() pcall(function() ContentProvider:PreloadAsync(ids) end) end) -- (its tape ready before it plays)
+	end
+	local function glow(k)
+		for _, light in ipairs(lights) do light.Brightness = k end
+	end
+	local function static(k) -- (a field of static, `k` bright)
+		picture.Image = fields[math.random(1, #fields)]
+		picture.ImageRectSize = Vector2.new(160, 96)
+		picture.ImageRectOffset = Vector2.new(math.random(0, 90), math.random(0, 150))
+		picture.ImageColor3 = Color3.new(k, k, k)
+		glow(0.2 + 0.15 * k * math.random())
+	end
+	local function sheetFrame(index) -- (a picture of the tape, out of its sheets)
+		local per = TAPE.columns * TAPE.rows
+		local inSheet = index % per
+		picture.Image = LOCAL[("Tape_%02d"):format(math.floor(index / per) + 1)] or ""
+		picture.ImageRectSize = Vector2.new(TAPE.width, TAPE.height)
+		picture.ImageRectOffset = Vector2.new((inSheet % TAPE.columns) * TAPE.width, math.floor(inSheet / TAPE.columns) * TAPE.height)
+		picture.ImageColor3 = Color3.new(1, 1, 1)
+	end
+	-- Its tape, start to end: on the kit's VideoFrame if this executor can feed it the video, else picture by picture with its sound
+	local function play()
+		local playingVideo = false
+		if video and LOCAL.TapeVideo then
+			pcall(function()
+				if video.IsLoaded then
+					video.Looped, video.Volume, video.Visible = false, 1.2, true
+					picture.Visible = false
+					video:Play()
+					playingVideo = true
+				end
+			end)
+		end
+		local audio = nil
+		if not playingVideo and LOCAL.Tape then
+			audio = make("Sound", { Name = "Tape", SoundId = LOCAL.Tape, Volume = 1.3, RollOffMinDistance = 14, RollOffMaxDistance = 140 }, glass)
+			audio:Play()
+		end
+		local sheets = LOCAL.Tape_01 ~= nil
+		local t0 = os.clock()
+		while alive and os.clock() - t0 < TAPE.length do
+			local frame = math.floor((os.clock() - t0) * TAPE.fps)
+			if playingVideo then
+				glow(0.45)
+			elseif not sheets then
+				static(0.8)
+			elseif frame < TAPE.frames then
+				sheetFrame(frame)
+				glow(0.45 + 0.05 * math.random())
+			else -- (its last seconds: black, its sound still on)
+				picture.Image = ""
+				glow(0.05)
+			end
+			RunService.Heartbeat:Wait()
+		end
+		pcall(function() video:Stop() end)
+		if video then video.Visible = false end
+		if audio then audio:Destroy() end
+		picture.Visible, picture.Image = true, ""
+	end
+	-- The screen bursts: static, a flash, its glass broken; the lamps round it go down
+	local function burst()
+		glow(0)
+		wait(0.6)
+		make("Sound", { Name = "Burst", SoundId = SFX.StrobeStatic[1], Volume = 1, RollOffMinDistance = 10, RollOffMaxDistance = 120 }, glass):Play()
+		local t0 = os.clock()
+		while alive and os.clock() - t0 < 0.55 do
+			static(1)
+			glow(1.5 + math.random() * 2)
+			RunService.Heartbeat:Wait()
+		end
+		Lamps.blackout(glass.Position, 6)
+		Feel.on = true
+		gui.Enabled = false
+		glow(0)
+		glass.Color = Color3.fromRGB(10, 10, 12)
+		local broken = main:FindFirstChild("BrokenScreen")
+		if broken then
+			broken.Transparency = 0
+			for _, decal in ipairs(broken:GetDescendants()) do
+				if decal:IsA("Decal") then decal.Transparency = 0 end
+			end
+		end
+	end
+	-- Out of the screen: Noise's Emerge on VER's bones (its body lying in the screen, crawling out, dropping to the floor in
+	-- front, getting up); its root as high as the screen asks, coming down as its body falls (as Noise90's); then into its walk
+	local function emerge(spot)
+		local look = spot.look
+		local ahead = flat(glass.Position) + look * 4.8 -- (Noise's root is 4 studs before its screen; VER is 1.2 Noise)
+		local floorY = W.floor(Vector3.new(ahead.X, spot.at.Y + 2, ahead.Z)).Y
+		ahead = Vector3.new(ahead.X, floorY, ahead.Z)
+		local E = kit and kit.emerge
+		local bones = {}
+		for _, d in ipairs(VER.model:GetDescendants()) do
+			if d:IsA("Bone") then bones[d.Name] = d end
+		end
+		local rootBone = VER.root:FindFirstChildWhichIsA("Bone")
+		local poses, pelvis = {}, {}
+		if type(E) == "table" and type(E.frames) == "table" and rootBone and bones.Hips then
+			for i, f in ipairs(E.frames) do
+				local pose = {}
+				for b, name in ipairs(E.bones) do
+					local k = 4 + (b - 1) * 4
+					pose[name] = CFrame.new(if b == 1 then f[1] else 0, if b == 1 then f[2] else 0, if b == 1 then f[3] else 0, f[k + 1], f[k + 2], f[k + 3], f[k])
+				end
+				poses[i] = pose
+				pelvis[i] = (rootBone.CFrame * bones.Hips.CFrame * pose.Hips).Position.Y
+			end
+		end
+		local top, low = pelvis[1] or 7.5, pelvis[1] or 7.5
+		for _, y in ipairs(pelvis) do low = math.min(low, y) end
+		local startY = math.max(glass.Position.Y - top, floorY)
+		VER.place(ahead + up * (startY - floorY), look)
+		SFXP.play("Detonate", 0.05, 0.8)
+		Brain.twitch(5)
+		if #poses > 1 then
+			for _, bone in pairs(bones) do bone.Transform = CFrame.identity end
+			local speed, t0, fallen = 1.4, os.clock(), 0 -- (as fast as Noise90's: 8.5 s of it in 6)
+			VER.override = function(b)
+				local x = math.clamp((os.clock() - t0) * speed * E.fps, 0, #poses - 1)
+				local i = math.floor(x)
+				local u, j = x - i, math.min(i + 2, #poses)
+				for name, cf in pairs(poses[i + 1]) do
+					if b[name] then b[name].Transform = cf:Lerp(poses[j][name], u) end
+				end
+				local y = pelvis[i + 1] + (pelvis[j] - pelvis[i + 1]) * u
+				fallen = if top > low then math.max(fallen, math.clamp((top - y) / (top - low), 0, 1)) else 1
+				VER.at = ahead + up * ((startY - floorY) * (1 - fallen))
+			end
+			wait((#poses - 1) / E.fps / speed)
+			local from = {}
+			for name, bone in pairs(bones) do from[name] = bone.Transform end
+			VER.override = nil
+			VER.blend = { from = from, at = os.clock(), time = 0.45 }
+		else -- (without it: it drops out of the screen)
+			local t0 = os.clock()
+			while alive and os.clock() - t0 < 0.45 do
+				local u = (os.clock() - t0) / 0.45
+				VER.at = ahead + up * ((startY - floorY) * (1 - u * u))
+				RunService.Heartbeat:Wait()
+			end
+			wait(0.6)
+		end
+		VER.at = ahead
+		SFXP.play("Footstep1", 0.05, 1)
+	end
+	function TV.run(spot)
+		build()
+		place(spot)
+		dress()
+		local hiss = make("Sound", { Name = "Hiss", SoundId = SFX.StrobeStatic[1], Looped = true, Volume = 0.07, RollOffMinDistance = 4, RollOffMaxDistance = 40 }, glass)
+		hiss:Play()
+		local prompt = make("ProximityPrompt", { Name = "MonochromeTV", ActionText = "Play", ObjectText = "TV", HoldDuration = 1.5, MaxActivationDistance = 14,
+			RequiresLineOfSight = false }, main)
+		local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+		if playerGui and playerGui:FindFirstChild("MainUI") then prompt.Style = Enum.ProximityPromptStyle.Custom end -- (DOORS draws its own)
+		local pressed = false
+		on(prompt.Triggered, function() pressed = true end)
+		while alive and not pressed do
+			static(0.55)
+			task.wait(1 / 15)
+		end
+		if not alive then return end
+		prompt:Destroy()
+		hiss:Destroy()
+		play()
+		if not alive then return end
+		burst()
+		if not alive then return end
+		emerge(spot)
+		if not alive then return end
+		Brain.born, Brain.contact, Brain.wakeFor = os.clock(), os.clock(), 1
+		Brain.set("wake")
+	end
 end
 
 ---====== IT COMES ======---
@@ -1863,11 +2252,16 @@ do
 		stop()
 		return
 	end
-	VER.place(spot.at, spot.look)
-	Feel.on = true
-	Lamps.blackout(spot.at, 9)
-	Brain.wakeFor = 3.4
-	Brain.twitch(3)
+	if VARIANT == "Noise" then -- (out of its TV, once you play it)
+		Brain.mode = "tv"
+		task.spawn(TV.run, spot)
+	else
+		VER.place(spot.at, spot.look)
+		Feel.on = true
+		Lamps.blackout(spot.at, 5)
+		Brain.wakeFor = 3.4
+		Brain.twitch(3)
+	end
 	task.spawn(Scare.build) -- (its face ready before it is needed)
 	local thought = 0
 	on(RunService.Heartbeat, function(dt)
@@ -1879,8 +2273,9 @@ do
 		if me then
 			Feel.distance = (me.Position - VER.at).Magnitude * (if Brain.sees then 1 else 1.25)
 			SFXP.presence(dt, Feel.distance)
+			if Glitch.step and Brain.mode ~= "grab" then Glitch.step(Feel.distance) end
 			thought += dt
-			if thought >= 0.1 and Brain.mode ~= "grab" and Brain.mode ~= "gone" then
+			if thought >= 0.1 and Brain.mode ~= "grab" and Brain.mode ~= "gone" and Brain.mode ~= "tv" then
 				thought = 0
 				Brain.think(me)
 			end
