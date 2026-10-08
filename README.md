@@ -44,7 +44,7 @@ mod rather than playing it.
 | Surprise: a blue ghost like Halt, "TURN AROUND" | `.../TurnAround` |
 | Surprise: dark room, "psst" behind you: look at it (like Screech) | `.../Psst` |
 | Surprise: A-60, A-15, A-35, A-100, A-200 and E-22 one behind the other | `.../EntityTrain` |
-| Hotel-: the Washroom, down a staircase beside door 0001: a laundry, the key of B-02, the attic past it (DOORS' models, doors, Guiding Light, hiding); Rooms: Low Detailed's entities | `.../Washroom` |
+| Hotel-: the Washroom, down a staircase beside door 0001: a laundry, the key of B-02, a big attic past it, the key of B-03 (DOORS' models, doors, locks, drawers, items, Guiding Light, hiding; no entities) | `.../Washroom` |
 | Hotel-: today's DOORS walk, crouch and sounds (doors, hits, footsteps) | `.../ModernHotel` |
 | Scanners: DOORS' radar (Nokia) or the NVCS tablet (`_G.Scanner = { Type = "Tablet" }`) | `.../ObjectScanner` |
 | Universal Custom Assets: animator with Studio controls (Ctrl + U I O) | `.../UniversalAssets` |
@@ -676,9 +676,12 @@ on the room as it is. Elsewhere it uses the room you are in.
   `LightStand`, their stand against the wall as in its rooms).
 - **DOORS' doors**: B-01 at the bottom of the stairs, B-02 at the far end of the laundry, B-03 at the
   far end of the attic, 0001 at the top of the way back: copies of room 0's own door (its leaf, knob,
-  number plate, light, frame, its own `Open`, `Unlock`, `Error` sounds), shut as the Hotel- keeps them
-  (`OriginalCFrameValue`), with none of its scripts, remotes, constraints or tags. They open as you
-  come, a quarter turn on their hinge, away from you, as DOORS' do.
+  number plate, light, frame, its own `Open`, `Unlock`, `Error`, `Fall` sounds), shut as the Hotel-
+  keeps them (`OriginalCFrameValue`), with none of its scripts, remotes or tags, but with its own
+  mechanism: the leaf on its hinge (DOORS' `HingeConstraint` servo, its `BodyGyro`), the knob on its
+  own servo. They open as you come: the servo swings the leaf away from you and the knob turns, as in
+  DOORS (where nothing moves them, they swing the same way on their own). Each doorway is DOORS'
+  (its frame on both sides, the wall 1 thick, the opening exactly as wide and tall as the frame).
 - **The laundry** (past B-01): tiles below, the Hotel's wallpaper and trim above; the Hotel's pillars
   with DOORS' lamps on them, its beams with their carved brackets (room 0's `Rafter`); four of
   DOORS' windows high on the walls (room 0's: curtain, night sky, the rain on the glass and its sound,
@@ -689,58 +692,60 @@ on the room as it is. Elsewhere it uses the room you are in.
   `FurnitureTemplate`: shelves, the sideboard (folded linen and the typewriter on it), two dressers, a
   bookcase, the wall clock over B-02 (it shows the real time); room 0's luggage carts and paintings;
   folding tables, baskets, detergent, a wet floor sign, a sink.
-- **The key of B-02**: B-02 has DOORS' own lock on it (its light red; `It's locked.` and its `Error`
-  if you try). The drain valve is on one of three pipes (a different one each time). Turn it: the
-  water gurgles down the drains, and in the big drain something shines: a brass key (its bow, its
-  bit, a tag with "B-02"). Take it: it is in your hand, before your eyes, and its slot is on your
-  screen (the Hotel-'s key icon). At B-02 it goes into the lock and turns, the lock opens and falls as
-  DOORS' locks fall, the light turns green and the door opens.
-- **The attic** (past B-02, up a few steps), after the reference photo: worn floorboards (loose ones,
-  broken ones, two holes), dark wood wainscot and old boards, beams and a ridge, posts, three of
-  DOORS' chandeliers, a table with its chairs, DOORS' sideboard with a painting over it (its globe and
-  candles on it), its dresser, bookcase and grandfather clock (the pendulum swinging, ticking), its
-  regal chair and couch, two of DOORS' wardrobes, barrels stacked, crates, furniture under sheets,
-  cobwebs, dust in the air, two of DOORS' windows. Through B-03 and up the stairs, the last door
-  (0001) puts you back in room 0, in front of its door, and it all closes behind you.
+- **The key of B-02**: B-02 has DOORS' own lock on it (its light red). DOORS' prompt on the lock
+  (`Interact`, `Lock`, held a second): without its key `It's locked.` and the door's own `Error`. The
+  drain valve is on one of three pipes (a different one each time). Turn it: the water gurgles down
+  the drains, and in the big drain something shines: a brass key (its bow, its bit, a tag with
+  "B-02"). Take it: it is an item in your inventory, in DOORS' hotbar (the Hotel-'s key icon), and you
+  hold it as DOORS' items are held. At B-02 (in your hand or not) it goes from your hand into the
+  lock's hole and turns, the lock opens (its own `Unlock`: its shackle swings up on its hinge, as the
+  Hotel-'s fallen locks have it) and falls as DOORS' locks fall (body, hole and metal welded, the
+  shackle on its `HingeConstraint`, let go), its `Fall` as it lands; the light turns green, the door
+  opens, and the key is gone from your inventory.
+- **The attic** (past B-02, up a few steps), after the reference photo, now big (56 by 84, 16 high):
+  worn floorboards (loose ones, broken ones, two holes), dark wood wainscot and old boards, beams and
+  a ridge, posts, four of DOORS' chandeliers, five of DOORS' windows, DOORS' fireplace burning (its
+  armchair before it, the trim and beams stopping at its chimney). DOORS' furniture with drawers:
+  three dressers (the `FurnitureTemplate`'s and room 0's) and three of room 0's tables with three
+  drawers (a typewriter, desk lamps, a globe and the front desk's bell on them); four of DOORS' chests
+  (`ReplicatedStorage.Chest_1`), five crates (straw in them), the sideboard with a painting over it
+  (its globe and candles), a long table of old books, a bookcase by each door, DOORS' tall shelves,
+  the lobby's key board, the grandfather clock (the pendulum swinging, ticking), DOORS' regal chair
+  and couch, three of DOORS' wardrobes, a table with its chairs, luggage piled up and on a cart,
+  barrels stacked, furniture under sheets, cobwebs, dust in the air.
+- **The key of B-03**: B-03 is locked too. Its key is somewhere in the attic: in one of its drawers,
+  crates or chests (a different one each time).
+- **The way back**: through B-03 and up the stairs, the last door (0001) puts you back in room 0, in
+  front of its door, and it all closes behind you (your items from down there too).
 - **DOORS' own systems**: its location titles (`The Washroom`, `The Attic`, with a jingle), captions
-  and tips; its prompts; its lamps flickering as DOORS flickers them (`flickerLights`); its
-  lightning. **The Guiding Light** when you are stuck: its blue light and sparkles and its tip in
-  blue (on the valve after 35 s; on the key; on B-02, DOORS' own `HelpLight`, once you have the key;
-  on B-03).
+  and tips; its prompts and their wording (`Open`/`Close` `Drawer`, `Collect` `Gold ( n )`,
+  `Interact` `Lock`, `Inspect` `Painting`); its lamps flickering as DOORS flickers them
+  (`flickerLights`); its lightning. **The Guiding Light** when you are stuck: its blue light and
+  sparkles and its tip in blue (on the valve after 35 s; on the key; on B-02, DOORS' own `HelpLight`,
+  once you have its key; on B-03's key after 45 s in the attic; on B-03; on the way out).
 - **Hiding**: in the open dryers (DOORS' wardrobe animation and sound, a metal clank, the door shuts
   behind you, you see out through its grille), in DOORS' wardrobes (their own doors open and shut on
   DOORS' `Anim_EnterModel` and `Anim_ExitModel`, their own `SoundEnter` and `SoundExit`), under the
   tables (crouched). Always `Hiding` as DOORS knows it, DOORS' camera lock (`Bricks.CamLock`) and
-  vignette. Hide's rule: after 16 s DOORS' own Hide effect, at 23 s it throws you out (40 damage).
-- **Things to find**: DOORS' dressers (each drawer slides out with its own sound), four washers, the
-  carts, the crates: gold, a flashlight (`F`), or nothing.
+  vignette. Stay as long as you like.
+- **Things to find**: DOORS' drawers, each on its own rail (its `PrismaticConstraint` servo slides
+  it out and in, as in DOORS; its own `Open` and `Close` sounds; what is in it lies on its floor and
+  goes with it), four washers, the carts, the crates (their lid swings up), DOORS' chests (their lid
+  and band swing up on their hinge): gold, the flashlight, B-03's key, or nothing. The flashlight is
+  an item in DOORS' hotbar too (the Hotel-'s flashlight icon): it shines while you hold it (click:
+  off, on).
+- **DOORS' desk bell and paintings**: the front desk's bell rings with its own animation and sound
+  (ring it too much and it says so, its `InteractSoundOverdone`); DOORS' paintings show their title
+  when you inspect them.
+- **No entities**: nothing comes for you down there and nothing hurts you.
 - **Your steps splash**: while you are there the Hotel-'s `FootstepsClient.Slate` plays DOORS' water
   footsteps (the floor is Slate).
 
-#### The entities (Rooms: Low Detailed's)
-
-Fan-made, after the entities of the Rooms: Low Detailed wiki, each with what it does there. None
-of them rebounds. One at a time, while you are in the laundry or the attic: the first 45 to 65 s
-after you come, then every 40 to 75 s. The ones that come at you are slow and loud.
-
-| Entity | What it does | How to live |
-|---|---|---|
-| **A-45** | a bang and the lamps flicker; then it rushes through the room (yellow), slow and loud, the room shaking harder the nearer it is | hide (a dryer, a wardrobe, under a table) |
-| **A-25** | it comes from behind you (green), with the wind and a slight shake | hide at once: it goes after 3 s |
-| **CB-1** | it teleports nearer and nearer (zapping), and hurts you while it is near | hide until it fades away |
-| **A-105** | it knocks three times, comes in, and checks the hiding places one by one (rattling the dryers and wardrobes) | under a table; out in the open it sees you |
-| **Big Man** | he lands in the middle: "I'm hungry...". He breathes in: you are pulled to him, and he eats the dryers and wardrobes near him (and you, if you are in one) | under a table (they are back when he has gone) |
-| **Nerd Man** (attic) | he wanders up to you and grabs you: three sums (click, or keys 1-3) | answer right (a wrong answer -15, too slow -30) |
-| **Glee** | the helpful one: loud and funny, it pops up by you and honks before A-45, A-25, CB-1 and Big Man | - |
-
-`getgenv().__WashroomEntity("A-45")` (or any of them) brings one now, where you are down there.
-Their sounds are in `assets/ldr/`, made for them.
-
 It is client-side (a script you run cannot make the server build a room): only you see it and walk
-in it, and the gold is only on your screen; your character's animations (hiding, interacting) are
-seen by everyone, as they are DOORS' own. Run it again for a new one; `getgenv().__Washroom()` takes
-it away (if you are down there, you are put back in room 0 first). Its textures and sounds are in
-`assets/washroom/`, made for it.
+in it, and the gold and the items are only yours; your character's animations (hiding, interacting)
+are seen by everyone, as they are DOORS' own. Run it again for a new one; `getgenv().__Washroom()`
+takes it away (if you are down there, you are put back in room 0 first). Its textures and sounds are
+in `assets/washroom/`, made for it.
 
 ### Today's walk and sounds
 
@@ -1094,7 +1099,6 @@ That includes the files made to be copied or filled in (`AchievementConfig`,
 | `assets/noise/` | Noise's kit, tape and sheets; Noise 90's props kit, grey sheets and faces |
 | `assets/ir/` | the Interminable Rooms entities' pictures, GIF sheets and sounds |
 | `assets/washroom/` | the Washroom's textures (tiles, mould, grille, drum, stains, grate) and sounds (neon buzz, drip, gurgle, bang, clank, spin, valve, chime) |
-| `assets/ldr/` | the sounds of the Washroom's Rooms: Low Detailed entities (A-45, wind, hum, rattle, hungry, suck, gulp, burp, hmm, right, wrong, zap, honk, thud) |
 | `assets/surprise/` | the surprises' sounds (steps, psst, bite, shriek, heartbeat, whispers, roar, clicks, hum, whoosh, rumble) |
 | `tools/` | Prometheus' settings for the obfuscation, the script that runs it, its fix for Luau |
 | `assets/scanner/` | The scanners' own icons without their background (`.png`) and ready to be recoloured by the script (`.icon`) |
