@@ -834,6 +834,9 @@ rooms: in DOORS' dark ones a pale edge goes round it, so it is seen. If its mesh
 without `game:GetObjects`) it is made of its own bones (black limbs on them, our eyes if its own will not
 load), and still comes out of the TV, walks, hunts and kills the same way, its face seen when it kills.
 The console (F9) says what loaded: `[Monochrome] ... | its mesh: ok | its eyes: ok | ... tape: 24/24 sheets`.
+Its creator's mesh may be loadable only in its own game: then only a copy of VER put on Roblox for
+everyone (its model saved to Roblox and distributed on the Creator Store, by its creator) brings the
+real VER into DOORS: `_G.VERModel = <its id>` before the loadstring loads it from there.
 Its Noise tape plays picture by picture from its sheets (`Tape_01.jpg`...`Tape_24.jpg`, 15 a second) with
 its sound (`Tape.mp3`); Noise's Emerge for VER is `assets/monochrome/Emerge.lua`.
 `getgenv().__Monochrome()` takes it away; only you see it.

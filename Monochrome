@@ -28,6 +28,9 @@
             _G.VER = "Noise"    -- a TV above the next door (Noise's): hold its prompt, MONOCHROME's tape plays on it, the
                                    screen bursts and VER crawls out of it as Noise does (Noise's Emerge); then it walks as VER
 
+        Its body, horns and eyes are its creator's: if Roblox will not load them here, it is made of its bones (the console, F9,
+        says so). With its model put on Roblox for all by its creator: _G.VERModel = its id, and it is VER itself again.
+
         Only you see it (the server does not know it is there). getgenv().__Monochrome() takes it away.
 ]]
 
@@ -142,11 +145,14 @@ do
 		for i = 1, TAPE.sheets do table.insert(names, ("Tape_%02d.jpg"):format(i)) end
 	end
 	local k = {}
+	-- (VER's model as a public asset, if its creator puts it on Roblox for all: _G.VERModel = its id. Else ours, out of its place)
+	local public = tostring(_G.VERModel or GENV.VERModel or ""):match("%d+")
 	local jobs = { function() -- (the kit: VER)
-		local path = file("", "Monochrome.rbxm")
 		pcall(function()
-			for _, m in ipairs(game:GetObjects(getcustomasset(path))) do
-				if m.Name == "VER" then k.ver = m end
+			local list = if public then game:GetObjects("rbxassetid://" .. public) else game:GetObjects(getcustomasset(file("", "Monochrome.rbxm")))
+			for _, m in ipairs(list) do
+				local found = if m.Name == "VER" then m else m:FindFirstChild("VER", true)
+				if found and found:IsA("Model") then k.ver = found end
 			end
 		end)
 	end }
@@ -2289,7 +2295,7 @@ do
 		if LOCAL[("Tape_%02d"):format(i)] then sheets += 1 end
 	end
 	local function said(v) return if v == nil then "?" elseif v then "ok" else "NOT LOADED (ours instead)" end
-	print(("[Monochrome] %s | VER: %s | its mesh: %s | its eyes: %s%s"):format(VARIANT, if VER.fromKit then "its kit" else "made of its bones",
+	print(("[Monochrome] %s | VER: %s | its mesh: %s | its eyes: %s%s"):format(VARIANT, if not VER.fromKit then "made of its bones" elseif _G.VERModel or GENV.VERModel then "its public model" else "its kit",
 		said(LOADED.mesh), said(LOADED.eyes), if VARIANT ~= "Noise" then "" else (" | TV: %s | Emerge: %s | tape: %d/%d sheets, sound %s"):format(
 		if kit.tv then "its kit" else "ours", if kit.emerge then "ok" else "NOT LOADED", sheets, TAPE.sheets, if LOCAL.Tape then "ok" else "NOT LOADED")))
 	local spot = nextDoor(24)
