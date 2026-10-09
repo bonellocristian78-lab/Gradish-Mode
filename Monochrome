@@ -28,8 +28,9 @@
             _G.VER = "Noise"    -- a TV above the next door (Noise's): hold its prompt, MONOCHROME's tape plays on it, the
                                    screen bursts and VER crawls out of it as Noise does (Noise's Emerge); then it walks as VER
 
-        Its body, horns and eyes are its creator's: if Roblox will not load them here, it is made of its bones (the console, F9,
-        says so). With its model put on Roblox for all by its creator: _G.VERModel = its id, and it is VER itself again.
+        Its body, horns and eyes are its creator's: if Roblox will not load them here, it takes its own shape out of its saved
+        place (its body and horns as its game's physics hold them, VERBody.lua), on its bones, moving as they move (the console,
+        F9, says which). With its model put on Roblox for all by its creator: _G.VERModel = its id, and its mesh itself.
 
         Only you see it (the server does not know it is there). getgenv().__Monochrome() takes it away.
 ]]
@@ -156,6 +157,10 @@ do
 			end
 		end)
 	end }
+	table.insert(jobs, function() -- (its own shape, out of its saved place: for where its creator's mesh will not load)
+		local path = file("assets/monochrome/", "VERBody.lua")
+		pcall(function() k.body = loadstring(readfile(path))() end)
+	end)
 	if VARIANT == "Noise" then
 		table.insert(jobs, function() -- (the TV, on its feet, out of Noise's kit)
 			local path = file("", "MonochromeTV.rbxm")
@@ -866,27 +871,41 @@ do
 		for _, b in ipairs(BONES) do
 			made[b[1]] = make("Bone", { Name = b[1], CFrame = CFrame.new(table.unpack(b, 3, 14)) }, if b[2] then made[b[2]] else root)
 		end
-		VER.limbs = {}
-		for _, b in ipairs(BONES) do
-			if b[2] and b[2] ~= "Root" then
-				local width = if b[1]:find("Toe") or b[1]:find("Hand") then 0.3 elseif b[1] == "Head" then 0.9 else 0.42
-				local limb = make("Part", { Name = "Limb", Size = Vector3.new(width, 1, width), Color = Color3.new(0, 0, 0),
-					Material = Enum.Material.Neon, Anchored = true, CanCollide = false, CanQuery = false, CanTouch = false }, model)
-				limb:SetAttribute("From", b[2])
-				limb:SetAttribute("To", b[1])
-				table.insert(VER.limbs, limb)
+		local shape = kit.body
+		if type(shape) == "table" and type(shape.bones) == "table" and type(shape.wedges) == "table" and #shape.wedges > 0 then
+			-- Its own shape (its body and horns as its game's physics hold them, out of its saved place): each triangle two black
+			-- wedges, each on its bone, posed with it
+			VER.hull = {}
+			for _, w in ipairs(shape.wedges) do
+				local rest = CFrame.new(w[4], w[5], w[6], w[7], w[8], w[9], w[10])
+				local part = make("WedgePart", { Name = "Hull", Size = Vector3.new(0.03, w[2], w[3]), Color = Color3.new(0, 0, 0), Material = Enum.Material.Neon,
+					Anchored = true, CanCollide = false, CanQuery = false, CanTouch = false, CastShadow = false }, model)
+				part:SetAttribute("Bone", shape.bones[w[1]])
+				part:SetAttribute("Rest", rest)
+				table.insert(VER.hull, { part = part, bone = shape.bones[w[1]], rest = rest })
 			end
+		else
+			VER.limbs = {}
+			for _, b in ipairs(BONES) do
+				if b[2] and b[2] ~= "Root" then
+					local width = if b[1]:find("Toe") or b[1]:find("Hand") then 0.3 elseif b[1] == "Head" then 0.9 else 0.42
+					local limb = make("Part", { Name = "Limb", Size = Vector3.new(width, 1, width), Color = Color3.new(0, 0, 0),
+						Material = Enum.Material.Neon, Anchored = true, CanCollide = false, CanQuery = false, CanTouch = false }, model)
+					limb:SetAttribute("From", b[2])
+					limb:SetAttribute("To", b[1])
+					table.insert(VER.limbs, limb)
+				end
+			end
+			VER.skull = make("Part", { Name = "Skull", Size = Vector3.new(1.1, 1.3, 1), Color = Color3.new(0, 0, 0), Material = Enum.Material.Neon, Anchored = true,
+				CanCollide = false, CanQuery = false, CanTouch = false }, model)
 		end
-		local skull = make("Part", { Name = "Skull", Size = Vector3.new(1.1, 1.3, 1), Color = Color3.new(0, 0, 0), Material = Enum.Material.Neon, Anchored = true,
-			CanCollide = false, CanQuery = false, CanTouch = false }, model)
-		VER.skull = skull
 		local eyes = make("Part", { Name = "Eyes", Size = Vector3.new(1.544, 0.784, 0.024), Transparency = 1, Anchored = true, CanCollide = false, CanQuery = false,
 			CanTouch = false }, model)
 		make("ImageLabel", { Name = "Pair", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Image = "rbxassetid://92865588300030" },
 			make("SurfaceGui", { Name = "Face", Face = Enum.NormalId.Front, LightInfluence = 0, SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud,
 				PixelsPerStud = 431 }, eyes))
 		make("Attachment", { Name = "EyesAnchor", CFrame = CFrame.new(-0.00022, -0.5192, 0.45395, 1, 0, 0, 0, 0.999972, -0.007424, 0, 0.007424, 0.999972) }, eyes)
-		for _, s in ipairs({ -1, 1 }) do
+		for _, s in ipairs(if VER.hull then {} else { -1, 1 }) do -- (its horns: in its shape, else two wedges)
 			make("WedgePart", { Name = if s < 0 then "Cone" else "Cone.001", Size = Vector3.new(0.3, 1.6, 0.5), Color = Color3.new(0, 0, 0), Material = Enum.Material.Neon,
 				Anchored = true, CanCollide = false, CanQuery = false, CanTouch = false }, model)
 		end
@@ -912,6 +931,29 @@ do
 			end
 		end
 	end
+	-- (its shape: each wedge where its bone is now; `list` its own, else read off a copy's wedges)
+	function VER.poseHull(m, g, list)
+		local world = { Root = m:FindFirstChild("RootPart").CFrame * g.rootBone.CFrame * g.rootBone.Transform }
+		local function at(name)
+			if world[name] then return world[name] end
+			local bone = g.bones[name]
+			world[name] = at(bone.Parent.Name) * bone.CFrame * bone.Transform
+			return world[name]
+		end
+		if not list then
+			list = {}
+			for _, part in ipairs(m:GetChildren()) do
+				if part.Name == "Hull" then table.insert(list, { part = part, bone = part:GetAttribute("Bone"), rest = part:GetAttribute("Rest") }) end
+			end
+		end
+		local parts, frames = table.create(#list), table.create(#list)
+		for i, h in ipairs(list) do
+			parts[i], frames[i] = h.part, at(h.bone) * h.rest
+		end
+		if not pcall(function() workspace:BulkMoveTo(parts, frames, Enum.BulkMoveMode.FireCFrameChanged) end) then
+			for i, part in ipairs(parts) do part.CFrame = frames[i] end
+		end
+	end
 	VER.root = model:FindFirstChild("RootPart")
 	VER.eyes = model:FindFirstChild("Eyes")
 	model:SetAttribute("Awake", false)
@@ -932,7 +974,7 @@ do
 				table.insert(VER.body, d)
 				d.Material = Enum.Material.Neon
 				d.Color = if VARIANT == "White" then Color3.fromRGB(245, 245, 245) else GLITCH.body
-				if VARIANT == "Glitch" then
+				if VARIANT == "Glitch" and not VER.hull then
 					for _, side in ipairs({ Enum.NormalId.Right, Enum.NormalId.Back, Enum.NormalId.Left, Enum.NormalId.Front }) do
 						make("Texture", { Name = "GlitchTexture", Texture = GLITCH.texture, Color3 = Color3.new(0, 0, 0), StudsPerTileU = 3, StudsPerTileV = 3, Face = side }, d)
 					end
@@ -1058,6 +1100,7 @@ do
 			end
 		end
 		if VER.limbs then VER.poseLimbs(model, gait) end
+		if VER.hull then VER.poseHull(model, gait, VER.hull) end
 		if VER.eyes and VER.eyes.Anchored then VER.eyes.CFrame = head * VER.eyesOffset end
 		for _, e in ipairs(gait:DrainEvents()) do SFXP.event(e) end
 		acc = 0
@@ -1336,6 +1379,7 @@ do
 				if p then p.CFrame = posed * offset end
 			end
 			if VER.limbs then VER.poseLimbs(copy, g2) end -- (ours: its limbs where its bones are, in its grab)
+			if VER.hull then VER.poseHull(copy, g2) end -- (its shape, in its grab)
 			local at = eyes.CFrame
 			eye = at.Position + Vector3.new(0, 0.14, 0)
 			local look = flat(at.LookVector)
@@ -1989,6 +2033,7 @@ local Glitch = {}
 if VARIANT == "Glitch" then
 	local rng = Random.new()
 	local nextSkip, nextFlick, nextCubes = os.clock() + 2, 0, 0
+	local flashed = {}
 	local skip = make("Sound", { Name = "Glitch", SoundId = GLITCH.sound, Volume = 0.6, RollOffMinDistance = 8, RollOffMaxDistance = 90 }, VER.root)
 	local overlay = make("ScreenGui", { Name = "MonochromeGlitch", IgnoreGuiInset = true, DisplayOrder = 9140, ResetOnSpawn = false }, screen.Parent)
 	later(function() overlay:Destroy() end)
@@ -1998,10 +2043,14 @@ if VARIANT == "Glitch" then
 	end
 	function Glitch.step(distance)
 		local now = os.clock()
-		if now >= nextFlick then -- (a part, its eyes: one of Glitch's colours for an instant)
+		if now >= nextFlick and VER.body and #VER.body > 0 then -- (some of its parts, its eyes: one of Glitch's colours for an instant)
 			nextFlick = now + rng:NextNumber(0.05, 0.18)
-			for _, p in ipairs(VER.body or {}) do
-				p.Color = if rng:NextNumber() < 0.12 then GLITCH.flicker[rng:NextInteger(1, #GLITCH.flicker)] else GLITCH.body
+			for _, p in ipairs(flashed) do p.Color = GLITCH.body end
+			table.clear(flashed)
+			for _ = 1, math.max(1, math.floor(#VER.body * 0.12)) do
+				local p = VER.body[rng:NextInteger(1, #VER.body)]
+				p.Color = GLITCH.flicker[rng:NextInteger(1, #GLITCH.flicker)]
+				table.insert(flashed, p)
 			end
 			if VER.pair then VER.pair.ImageColor3 = if rng:NextNumber() < 0.2 then GLITCH.cyan else GLITCH.light end
 		end
@@ -2295,7 +2344,7 @@ do
 		if LOCAL[("Tape_%02d"):format(i)] then sheets += 1 end
 	end
 	local function said(v) return if v == nil then "?" elseif v then "ok" else "NOT LOADED (ours instead)" end
-	print(("[Monochrome] %s | VER: %s | its mesh: %s | its eyes: %s%s"):format(VARIANT, if not VER.fromKit then "made of its bones" elseif _G.VERModel or GENV.VERModel then "its public model" else "its kit",
+	print(("[Monochrome] %s | VER: %s | its mesh: %s | its eyes: %s%s"):format(VARIANT, if VER.hull then "its own shape (from its place)" elseif not VER.fromKit then "made of its bones" elseif _G.VERModel or GENV.VERModel then "its public model" else "its kit",
 		said(LOADED.mesh), said(LOADED.eyes), if VARIANT ~= "Noise" then "" else (" | TV: %s | Emerge: %s | tape: %d/%d sheets, sound %s"):format(
 		if kit.tv then "its kit" else "ours", if kit.emerge then "ok" else "NOT LOADED", sheets, TAPE.sheets, if LOCAL.Tape then "ok" else "NOT LOADED")))
 	local spot = nextDoor(24)
