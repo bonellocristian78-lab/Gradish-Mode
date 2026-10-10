@@ -13,7 +13,8 @@
         gold and 10000 gold).
         The unlucky one: the wardrobes gone for good (for you, every room from now on), and two more of its bad luck (the lights broken, gold lost, Rush, Ambush, Eyes, Screech, the Glitch, the lights flickering, Creak
         with Noise's static moving all over it). Its bad luck never kills you: it puts you in God Mode for good (the
-        lucky one, drunk after, keeps it).
+        lucky one, drunk after, keeps it), and if anything hurts you the panel heals you, if anything kills you the
+        panel revives you.
         Drunk, it says nothing: what it did, you see.
 ]]
 
@@ -58,10 +59,11 @@ local function command(name, data)
 	runCommand:FireServer(name, data or {})
 end
 local ME = { [LocalPlayer.Name] = LocalPlayer.Name } -- (its player list, you alone in it)
--- Its "Apply Changes": your stats, all of them at once, as its Stats panel sends them
+-- Its "Apply Changes": your stats, all of them at once, as its Stats panel sends them (its sliders: whole numbers, in their range)
+local function slider(v, low, high) return math.clamp(math.round(v), low, high) end
 local function stats(s)
-	command("Apply Changes", { Players = ME, ["Max Health"] = s.max, Health = s.health, ["Star Shield"] = s.shield or 0, ["Speed Boost"] = s.speed or 0,
-		["God Mode"] = s.god == true, ["Allow Jumping"] = s.jump == true, ["Allow Sliding"] = s.slide == true })
+	command("Apply Changes", { Players = ME, ["Max Health"] = slider(s.max, 10, 1000), Health = slider(s.health, 10, 1000), ["Star Shield"] = slider(s.shield or 0, 0, 100),
+		["Speed Boost"] = slider(s.speed or 0, 0, 100), ["God Mode"] = s.god == true, ["Allow Jumping"] = s.jump == true, ["Allow Sliding"] = s.slide == true })
 end
 local function gold(amount)
 	command("Give Gold", { Players = ME, ["Gold Amount"] = amount, ["Add To Current Gold"] = true })
@@ -393,12 +395,33 @@ local function lucky()
 	stats(s)
 	flash(Color3.fromRGB(150, 255, 160))
 end
+-- Never killed, even where its God Mode would not hold: hurt, the panel heals you; dead, it revives you (every life of yours, until you leave)
+local function neverDie()
+	if GENV.__BottleGuard then return end
+	local function guard(character)
+		local h = character:WaitForChild("Humanoid", 10)
+		if not h then return end
+		local healing = false
+		h.HealthChanged:Connect(function(health)
+			if healing or health <= 0 or health >= h.MaxHealth then return end
+			healing = true
+			command("HealPlayer", { Players = ME })
+			task.delay(0.5, function() healing = false end)
+		end)
+		h.Died:Connect(function()
+			task.delay(1, command, "RevivePlayer", { Players = ME })
+		end)
+	end
+	if LocalPlayer.Character then task.spawn(guard, LocalPlayer.Character) end
+	GENV.__BottleGuard = LocalPlayer.CharacterAdded:Connect(guard)
+end
 local function unlucky()
 	local humanoid = humanoidOf()
-	noWardrobes()
-	-- (its bad luck never kills you: God Mode for good, your health as it is)
+	-- (its bad luck never kills you: God Mode for good, your health as it is, and its guard)
 	GENV.__BottleSafe = true
-	stats({ max = if humanoid then humanoid.MaxHealth else 100, health = if humanoid then math.max(humanoid.Health, 1) else 100, shield = 0, speed = 0, god = true })
+	stats({ max = if humanoid then humanoid.MaxHealth else 100, health = if humanoid then humanoid.Health else 100, shield = 0, speed = 0, god = true })
+	neverDie()
+	noWardrobes()
 	for _, curse in ipairs(pick(CURSE, 2)) do curse() end
 	flash(Color3.fromRGB(255, 120, 120))
 end
