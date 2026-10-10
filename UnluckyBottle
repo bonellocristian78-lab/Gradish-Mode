@@ -1,0 +1,350 @@
+--[[
+        LUCKY BOTTLE / UNLUCKY BOTTLE -- two copies of DOORS' Starlight Bottle: a lucky one (green) and an unlucky one (red)
+
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/claude/sei-qui-con-noi-ye4k62/LuckyBottle"))()
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/claude/sei-qui-con-noi-ye4k62/UnluckyBottle"))()
+
+        Each gives you its bottle, in DOORS' hotbar, held as the Starlight Bottle is (its grip, its animations, its sound).
+        Click to drink it. They work only with DOORS' Admin Panel (the ADMIN PANEL pass, in your own run): their luck is
+        its commands. Without it they do not even appear.
+
+        The lucky one: your health full, a star shield, a little speed, and two more of its luck (gold, an item, God Mode
+        for a while, the entities gone, the room lit, jumping and sliding, the dead revived, the next room).
+        The unlucky one: the wardrobes gone for good (for you, every room from now on), you at 1 health, and two more of
+        its bad luck (the lights broken, gold lost, Rush, Ambush, Eyes, Screech, the Glitch, the lights flickering).
+]]
+
+local KIND = "Unlucky" -- ("Lucky" or "Unlucky": each loadstring is this script with its own)
+
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local Lighting = game:GetService("Lighting")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ContentProvider = game:GetService("ContentProvider")
+local LocalPlayer = Players.LocalPlayer
+local GENV = if getgenv then getgenv() else _G
+local LUCKY = KIND == "Lucky"
+local TITLE = if LUCKY then "Bottiglia Fortunata" else "Bottiglia Sfortunata"
+
+local function make(class, props, parent)
+	local i = Instance.new(class)
+	for k, v in pairs(props) do i[k] = v end
+	i.Parent = parent
+	return i
+end
+local function flat(v) return v * Vector3.new(1, 0, 1) end
+-- DOORS' own caption (else the console)
+local function caption(text)
+	print("[" .. TITLE .. "] " .. text)
+	pcall(function() require(LocalPlayer.PlayerGui.MainUI.Initiator.Main_Game).caption(text, true) end)
+end
+
+---====== ITS LUCK IS THE ADMIN PANEL'S: without it, nothing ======---
+
+local remotes = ReplicatedStorage:FindFirstChild("RemotesFolder")
+local runCommand = remotes and remotes:FindFirstChild("AdminPanelRunCommand")
+local playerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+local isAdmin = (tonumber(LocalPlayer:GetAttribute("ServerAdmin")) or 0) >= 1 or (playerGui ~= nil and playerGui:FindFirstChild("DoorsAdmin") ~= nil)
+if not (runCommand and isAdmin) then
+	caption("Serve l'Admin Panel di DOORS (il pass ADMIN PANEL, nella tua run): senza, la " .. TITLE .. " non funziona.")
+	return
+end
+-- One of the Admin Panel's commands, as its own buttons send them (its name, its fields)
+local function command(name, data)
+	runCommand:FireServer(name, data or {})
+end
+local ME = { [LocalPlayer.Name] = LocalPlayer.Name } -- (its player list, you alone in it)
+-- Its "Apply Changes": your stats, all of them at once, as its Stats panel sends them
+local function stats(s)
+	command("Apply Changes", { Players = ME, ["Max Health"] = s.max, Health = s.health, ["Star Shield"] = s.shield or 0, ["Speed Boost"] = s.speed or 0,
+		["God Mode"] = s.god == true, ["Allow Jumping"] = s.jump == true, ["Allow Sliding"] = s.slide == true })
+end
+local function gold(amount)
+	command("Give Gold", { Players = ME, ["Gold Amount"] = amount, ["Add To Current Gold"] = true })
+end
+local function humanoidOf()
+	local character = LocalPlayer.Character
+	return character and character:FindFirstChildOfClass("Humanoid")
+end
+
+---====== ITS FILES: the bottles (your model), their icons ======---
+
+local REPO = "https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/claude/sei-qui-con-noi-ye4k62/"
+local function file(path, name, magic) -- (fetched once, kept in the executor's folder Bottles)
+	local here = "Bottles/" .. name
+	pcall(function()
+		if not isfolder("Bottles") then makefolder("Bottles") end
+		if isfile(here) and readfile(here):sub(1, #magic) == magic then return end
+		local data = game:HttpGet(REPO .. path .. name)
+		if type(data) == "string" and data:sub(1, #magic) == magic then writefile(here, data) end
+	end)
+	local ok, there = pcall(isfile, here)
+	return if ok and there then here else nil
+end
+local function asset(path)
+	if not path then return nil end
+	local ok, id = pcall(getcustomasset, path)
+	return if ok and type(id) == "string" then id else nil
+end
+
+---====== THE BOTTLE: your model (its glass, its liquid, its cork or cap, its sign, its sparkles), the Starlight Bottle's size ======---
+
+local GLASS_HEIGHT = 1.64 -- (the Starlight Bottle's)
+-- A capsule of parts as big as a union bottle (its long side its X): for where its union will not load here
+local function capsule(size, cf, color, material, transparency, parent)
+	local d = math.min(size.Y, size.Z)
+	local props = { Color = color, Material = material, Transparency = transparency, Anchored = true, CanCollide = false, CanQuery = false, CanTouch = false }
+	local body = make("Part", { Name = "Glass", Shape = Enum.PartType.Cylinder, Size = Vector3.new(math.max(size.X - d, 0.05), d, d), CFrame = cf }, parent)
+	for k, v in pairs(props) do body[k] = v end
+	for _, s in ipairs({ -1, 1 }) do
+		local cap = make("Part", { Name = "GlassEnd", Shape = Enum.PartType.Ball, Size = Vector3.new(d, d, d), CFrame = cf * CFrame.new(s * (size.X - d) / 2, 0, 0) }, parent)
+		for k, v in pairs(props) do cap[k] = v end
+	end
+	return body
+end
+-- No model at all: one made here (its glass, its liquid, its cork or cap, its light, its sparkles)
+local function madeBottle()
+	local model = make("Model", { Name = TITLE }, nil)
+	local up = CFrame.new(0, 1.775, 0) * CFrame.Angles(0, 0, math.pi / 2)
+	local glass = capsule(Vector3.new(3.55, 1.605, 1.605), up, if LUCKY then Color3.fromRGB(9, 137, 207) else Color3.fromRGB(255, 0, 0), Enum.Material.Plastic, 0.4, model)
+	capsule(Vector3.new(3.2, 1.361, 1.361), up, if LUCKY then Color3.fromRGB(0, 255, 0) else Color3.fromRGB(255, 0, 0), Enum.Material.Neon, 0.4, model)
+	make("Part", { Name = "Part", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.4, 0.72, 0.65), CFrame = CFrame.new(0, 3.577, 0) * CFrame.Angles(0, 0, math.pi / 2),
+		Color = if LUCKY then Color3.fromRGB(124, 92, 70) else Color3.fromRGB(255, 0, 0), Material = Enum.Material.Wood,
+		Anchored = true, CanCollide = false }, model)
+	local glow = make("Part", { Name = "Particles", Size = Vector3.new(2, 1.5, 2), CFrame = CFrame.new(0, 1.775, 0), Transparency = 1, Anchored = true, CanCollide = false }, model)
+	make("PointLight", { Color = if LUCKY then Color3.fromRGB(120, 255, 140) else Color3.fromRGB(255, 60, 60), Range = 20, Brightness = 1 }, glow)
+	make("ParticleEmitter", { Texture = "rbxassetid://2581223252", Color = ColorSequence.new(if LUCKY then Color3.fromRGB(150, 255, 160) else Color3.fromRGB(255, 80, 80)),
+		LightEmission = 1, Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.5), NumberSequenceKeypoint.new(1, 0) }), Lifetime = NumberRange.new(0.8, 1.6),
+		Rate = 10, Speed = NumberRange.new(0.5, 1.5), SpreadAngle = Vector2.new(180, 180) }, glow)
+	return model, glass, 3.55
+end
+local function bottle()
+	local path = file("", "Bottles.rbxm", "<roblox!")
+	local model = nil
+	pcall(function()
+		for _, m in ipairs(game:GetObjects(getcustomasset(path))) do
+			if m.Name:find(if LUCKY then "Fortuna" else "Mischi") then model = m end
+		end
+	end)
+	if not model then return madeBottle() end
+	-- Its unions and its sign's mesh: do they load here? (if not: a capsule as big, our triangle)
+	local unions, sign = {}, nil
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("UnionOperation") then table.insert(unions, d) end
+		if d:IsA("MeshPart") then sign = d end
+	end
+	local failed = {}
+	local check = table.clone(unions)
+	if sign then table.insert(check, sign) end
+	pcall(function()
+		ContentProvider:PreloadAsync(check, function(content, status)
+			if status == Enum.AssetFetchStatus.Failure or status == Enum.AssetFetchStatus.TimedOut then failed[content] = true end
+		end)
+	end)
+	local signFailed, unionFailed = false, false
+	for content in pairs(failed) do
+		if sign and content == sign.MeshId then signFailed = true else unionFailed = true end
+	end
+	table.sort(unions, function(a, b) return a.Size.Y > b.Size.Y end) -- (its glass first, its liquid inside it)
+	local glass = unions[1]
+	local length = glass and glass.Size.X
+	if unionFailed then
+		for i, u in ipairs(unions) do
+			local part = capsule(u.Size, u.CFrame, u.Color, u.Material, u.Transparency, model)
+			if i == 1 then glass = part end
+			u:Destroy()
+		end
+	end
+	if sign and signFailed then -- (its triangle: ours, on both sides)
+		local plate = make("Part", { Name = "Sign", Size = Vector3.new(0.9, 0.9, 0.02), CFrame = sign.CFrame, Transparency = 1, Anchored = true, CanCollide = false }, model)
+		for _, face in ipairs({ Enum.NormalId.Front, Enum.NormalId.Back }) do
+			make("Decal", { Face = face, Texture = asset(file("assets/bottles/", "LuckySigil.png", "\137PNG")) or "", Color3 = Color3.fromRGB(220, 255, 225) }, plate)
+		end
+		for _, e in ipairs(sign:GetChildren()) do e.Parent = plate end
+		sign:Destroy()
+	end
+	if not glass then
+		model:Destroy()
+		return madeBottle()
+	end
+	return model, glass, length
+end
+
+---====== THE TOOL: in DOORS' hotbar, held on its own Motor6D as DOORS holds its items (the Starlight Bottle's grip) ======---
+
+local GRIP = CFrame.new(-0.36909, -0.22275, -0.03088, 0, 0, -1, 0, 1, 0, 1, 0, 0) -- (the Starlight Bottle's ToolGripAttach)
+local ANIMS = { idle = "rbxassetid://10479585177", open = "rbxassetid://10482563149" } -- (its own: holding it, drinking it)
+local model, glass, length = bottle()
+-- Its front: where its sign is (its triangle, its spiral), on the side the Starlight Bottle's star is on
+local signPart = nil
+for _, d in ipairs(model:GetDescendants()) do
+	if d:IsA("BasePart") and (d.Name == "Core" or d.Name == "Sign" or d.Name == "Mischievous Light") then signPart = d end
+end
+local front = if signPart then flat(signPart.Position - glass.Position) else Vector3.zero
+front = if front.Magnitude > 0.01 then front.Unit else Vector3.new(0, 0, 1)
+model.PrimaryPart = glass
+pcall(function() model:ScaleTo(GLASS_HEIGHT / math.max(length or glass.Size.X, 0.1)) end)
+local tool = make("Tool", { Name = if LUCKY then "LuckyBottle" else "UnluckyBottle", RequiresHandle = false, CanBeDropped = false, ToolTip = TITLE,
+	TextureId = asset(file("assets/bottles/", if LUCKY then "LuckyBottle.png" else "UnluckyBottle.png", "\137PNG")) or "rbxassetid://102680264111345" }, nil)
+tool:SetAttribute("NameSingular", TITLE)
+tool:SetAttribute("NamePlural", TITLE)
+tool:SetAttribute("ToolOffset", Vector3.new(0, 0.1, 0))
+tool:SetAttribute("_ServerAnimated", true) -- (its animations are played here, not by DOORS' inventory)
+tool:SetAttribute("CannotDrop", true)
+pcall(function() tool:AddTag("Tool") end)
+local handle = make("Part", { Name = "Handle", Size = Vector3.new(1.0498, 1.64049, 0.61572), Transparency = 1, CanCollide = false, CanQuery = false, CanTouch = false,
+	Massless = true, CFrame = CFrame.lookAt(glass.Position, glass.Position + front) }, tool) -- (its -Z to its sign, as the Starlight Bottle's to its star)
+for _, p in ipairs(model:GetDescendants()) do
+	if p:IsA("BasePart") then
+		p.Anchored, p.CanCollide, p.CanQuery, p.CanTouch, p.Massless = false, false, false, false, true
+		make("Weld", { Name = "BottleWeld", Part0 = handle, Part1 = p, C0 = handle.CFrame:ToObjectSpace(p.CFrame) }, p)
+	end
+end
+model.Parent = tool
+local animations = make("Folder", { Name = "Animations" }, tool)
+for name, id in pairs(ANIMS) do make("Animation", { Name = name, AnimationId = id }, animations) end
+local drinkSound = make("Sound", { Name = "sound_drink", SoundId = "rbxassetid://16746825852", Volume = 0.5 }, handle)
+
+local held = { tracks = {} }
+local function letGo()
+	if held.joint then held.joint:Destroy() end
+	for _, t in pairs(held.tracks) do pcall(function() t:Stop(0.15) end) end
+	held = { tracks = {} }
+end
+tool.Equipped:Connect(function()
+	local character = tool.Parent
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	local hand = character and (character:FindFirstChild("RightHand") or character:FindFirstChild("Right Arm"))
+	if not (humanoid and hand) then return end
+	letGo()
+	local grip = hand:FindFirstChild("RightGripAttachment")
+	held.joint = make("Motor6D", { Name = "Handle", Part0 = hand, Part1 = handle, C1 = GRIP,
+		C0 = CFrame.new(grip and grip.Position or Vector3.new(-0.04432, -0.05005, -0.04755)) * CFrame.new(0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -1, 0) }, hand)
+	local animator = humanoid:FindFirstChildOfClass("Animator") or humanoid
+	for _, anim in ipairs(animations:GetChildren()) do
+		pcall(function() held.tracks[anim.Name] = animator:LoadAnimation(anim) end)
+	end
+	if held.tracks.idle then held.tracks.idle:Play(0.2) end
+end)
+tool.Unequipped:Connect(letGo)
+tool.AncestryChanged:Connect(function()
+	if not tool.Parent then letGo() end
+end)
+
+---====== DRINKING IT ======---
+
+-- A flash of its colour over your sight
+local function flash(color)
+	local tint = make("ColorCorrectionEffect", { Name = "BottleFlash", TintColor = color, Brightness = 0.12 }, Lighting)
+	local tween = TweenService:Create(tint, TweenInfo.new(1.2), { TintColor = Color3.new(1, 1, 1), Brightness = 0 })
+	tween:Play()
+	task.delay(1.3, function() tint:Destroy() end)
+end
+-- `n` of `list`, none twice
+local function pick(list, n)
+	local pool, out = table.clone(list), {}
+	for _ = 1, math.min(n, #pool) do table.insert(out, table.remove(pool, math.random(1, #pool))) end
+	return out
+end
+
+local GOOD_ITEMS = { { "Crucifix", "un Crocifisso" }, { "SkeletonKey", "la Skeleton Key" }, { "Lockpick", "dei grimaldelli" }, { "Vitamins", "delle vitamine" },
+	{ "Lantern", "una lanterna" }, { "Flashlight", "una torcia" }, { "StarJug", "una Starlight Jug" }, { "BandagePack", "delle bende" }, { "Shakelight", "una Shakelight" } }
+local LUCK = {
+	{ say = "+150 oro", run = function() gold(150) end },
+	{ item = true },
+	{ say = "invincibile per 20 secondi", stat = function(s) s.god = true end, after = 20 },
+	{ say = "le entità spariscono", run = function() command("DELETE ALL") end },
+	{ say = "la stanza si illumina", run = function() command("LightRoom", { ["Light Color"] = Color3.fromRGB(206, 173, 144) }) end },
+	{ say = "puoi saltare e scivolare", stat = function(s) s.jump, s.slide = true, true end },
+	{ say = "i morti tornano in vita", run = function() command("ReviveDeadPlayers") end },
+	{ say = "passi alla stanza dopo", run = function() command("SkipRoom") end },
+}
+local CURSE = {
+	{ say = "le luci si rompono", run = function() command("Break Lights", { ["Lights Affected"] = 100, ["Affect All Rooms"] = true }) end },
+	{ say = "-100 oro", run = function() gold(-100) end },
+	{ say = "arriva Rush", run = function() command("Rush") end },
+	{ say = "arriva Ambush", run = function() command("Ambush") end },
+	{ say = "arriva Eyes", run = function() command("Eyes") end },
+	{ say = "Screech ti trova", run = function() command("ScreechPlayer", { Players = ME }) end },
+	{ say = "il Glitch ti prende", run = function() command("GlitchPlayer", { Players = ME }) end },
+	{ say = "le luci tremano", run = function() command("Flicker Lights", { ["Flicker Duration"] = 10, ["Lights Affected"] = 100, ["Affect All Rooms"] = true }) end },
+}
+
+-- The wardrobes gone for good: every one in the rooms now, every one in a room yet to come (for you; until you leave)
+local function noWardrobes()
+	if GENV.__BottleNoWardrobes then return end
+	local function isWardrobe(d)
+		return d:IsA("Model") and (d.Name:find("Wardrobe") ~= nil or d.Name:find("Locker") ~= nil)
+	end
+	local rooms = workspace:FindFirstChild("CurrentRooms")
+	if not rooms then return end
+	for _, d in ipairs(rooms:GetDescendants()) do
+		if isWardrobe(d) then d:Destroy() end
+	end
+	GENV.__BottleNoWardrobes = rooms.DescendantAdded:Connect(function(d)
+		if isWardrobe(d) then task.defer(function() if d.Parent then d:Destroy() end end) end
+	end)
+end
+
+local function lucky()
+	local humanoid = humanoidOf()
+	local max = if humanoid then humanoid.MaxHealth else 100
+	local s = { max = max, health = max, shield = 100, speed = 15 }
+	local said = { "vita piena, scudo di stelle e più velocità" }
+	local chosen = pick(LUCK, 2)
+	for _, luck in ipairs(chosen) do
+		if luck.item then
+			local item = GOOD_ITEMS[math.random(1, #GOOD_ITEMS)]
+			luck = { say = item[2], run = function() command("Give Items", { Players = ME, Items = { [item[1]] = item[1] } }) end }
+		end
+		table.insert(said, luck.say)
+		if luck.stat then luck.stat(s) end
+		if luck.run then luck.run() end
+		if luck.after then -- (God Mode for a while, then off again: the rest as it is)
+			task.delay(luck.after, function()
+				local h = humanoidOf()
+				s.god, s.health, s.shield = false, if h then math.max(h.Health, 1) else max, 0
+				stats(s)
+			end)
+		end
+	end
+	stats(s)
+	flash(Color3.fromRGB(150, 255, 160))
+	caption("Fortuna! " .. table.concat(said, ", ") .. ".")
+end
+local function unlucky()
+	local humanoid = humanoidOf()
+	noWardrobes()
+	stats({ max = if humanoid then humanoid.MaxHealth else 100, health = 1, shield = 0, speed = 0 })
+	local said = { "niente più armadi", "1 di vita" }
+	for _, curse in ipairs(pick(CURSE, 2)) do
+		table.insert(said, curse.say)
+		curse.run()
+	end
+	flash(Color3.fromRGB(255, 120, 120))
+	caption("Sfortuna... " .. table.concat(said, ", ") .. ".")
+end
+
+local busy = false
+local function drink()
+	local track = held.tracks.open
+	if track then track:Play(0.1) end
+	task.delay(0.45, function() if drinkSound.Parent then drinkSound:Play() end end)
+	local length = if track and track.Length > 0 then track.Length else 1.6
+	task.wait(math.clamp(length, 0.8, 3))
+	if LUCKY then lucky() else unlucky() end
+	for _, e in ipairs(model:GetDescendants()) do -- (empty: a last burst of it, and it is gone)
+		if e:IsA("ParticleEmitter") then pcall(function() e:Emit(20) end) end
+	end
+	task.wait(0.2)
+	letGo()
+	tool:Destroy()
+end
+tool.Activated:Connect(function()
+	if busy or not held.joint then return end
+	busy = true
+	task.spawn(drink)
+end)
+
+tool.Parent = LocalPlayer:FindFirstChildOfClass("Backpack")
+caption("Hai una " .. TITLE .. ": tienila in mano e clicca per berla.")

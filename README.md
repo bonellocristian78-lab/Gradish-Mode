@@ -48,6 +48,8 @@ mod rather than playing it.
 | Hotel-: today's DOORS walk, crouch and sounds (doors, hits, footsteps) | `.../ModernHotel` |
 | MONOCHROME: VER at the next door (its own walk, sounds, lights, kill, radar), with its creator's permission; `_G.VER` = `"White"`, `"Glitch"`, `"Noise"` (out of a TV) | `.../Monochrome` |
 | Scanners: DOORS' radar (Nokia) or the NVCS tablet (`_G.Scanner = { Type = "Tablet" }`) | `.../ObjectScanner` |
+| Lucky Bottle: a Starlight Bottle that brings luck through DOORS' Admin Panel (needs it) | `.../LuckyBottle` |
+| Unlucky Bottle: a Starlight Bottle that brings bad luck (no more wardrobes, 1 health...; needs the Admin Panel) | `.../UnluckyBottle` |
 | Universal Custom Assets: animator with Studio controls (Ctrl + U I O) | `.../UniversalAssets` |
 | The same, obfuscated | `.../UniversalAssets.obf` |
 
@@ -845,6 +847,32 @@ Its Noise tape plays picture by picture from its sheets (`Tape_01.jpg`...`Tape_2
 its sound (`Tape.mp3`); Noise's Emerge for VER is `assets/monochrome/Emerge.lua`.
 `getgenv().__Monochrome()` takes it away; only you see it.
 
+## Lucky Bottle and Unlucky Bottle
+
+Two copies of DOORS' Starlight Bottle made of your two bottles (`Bottles.rbxm`): the green one (its cork, its
+triangle, its sparkles) and the red one (its cap, the Mischievous Light's spiral). Each its own loadstring:
+
+```lua
+loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/claude/sei-qui-con-noi-ye4k62/LuckyBottle"))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/claude/sei-qui-con-noi-ye4k62/UnluckyBottle"))()
+```
+
+**They need DOORS' Admin Panel** (the ADMIN PANEL pass, in your own hosted run): their luck is its commands,
+sent as its own buttons send them. Without it there is no bottle, and DOORS' caption says why.
+
+- **In your hand** as the Starlight Bottle: in DOORS' hotbar (its own icon), the Starlight Bottle's size and grip,
+  its holding animation; click to drink it (its drinking animation, its sound). Drunk, it is gone.
+- **The lucky one**: your health full, a star shield, a little speed (the panel's Apply Changes), and two of: +150
+  gold, an item (a Crucifix, the Skeleton Key, lockpicks, vitamins, a lantern, a flashlight, a Starlight Jug,
+  bandages, a Shakelight), God Mode for 20 s, the entities gone, the room lit, jumping and sliding, the dead revived,
+  the next room.
+- **The unlucky one**: the wardrobes gone for good (for you: every one in the rooms, and in every room to come; the
+  lockers too), you at 1 health, and two of: the lights broken, -100 gold, Rush, Ambush, Eyes, Screech on you, the
+  Glitch on you, the lights flickering.
+
+If the bottle's unions or the green one's triangle will not load in DOORS, a capsule of the same size and colours
+and a triangle of ours take their place; without `game:GetObjects` the bottle is made here.
+
 ## Scanners (Object Scanner)
 
 ```lua
@@ -1169,12 +1197,14 @@ That includes the files made to be copied or filled in (`AchievementConfig`,
 | `Washroom` / `ModernHotel` | the Hotel-'s custom room; today's walk and sounds in the Hotel- |
 | `Errorbush` / `Errorbush.rbxm` | 3rr0rbu2h, the broken Ambush; its model |
 | `ObjectScanner` / `ObjectScanner.rbxm` | The scanners (Nokia and Tablet, their Lights); DOORS' scanner's model, out of a saved place |
+| `LuckyBottle` / `UnluckyBottle` / `Bottles.rbxm` | The two bottles (Starlight Bottle copies: luck through DOORS' Admin Panel, bad luck); your model of them |
 | `Monochrome` / `Monochrome.rbxm` / `MonochromeTV.rbxm` | VER, the monster of MONOCHROME; its model, out of a saved copy of its place; Noise's TV on its arm (out of Noise's kit), for its Noise variant |
 | `assets/errorbush/` | 3rr0rbu2h's two faces |
 | `assets/noise/` | Noise's kit, tape and sheets; Noise 90's props kit, grey sheets and faces |
 | `assets/ir/` | the Interminable Rooms entities' pictures, GIF sheets and sounds |
 | `assets/washroom/` | the Washroom's textures (tiles, mould, grille, drum, stains, grate) and sounds (neon buzz, drip, gurgle, bang, clank, spin, valve, chime) |
 | `assets/surprise/` | the surprises' sounds (steps, psst, bite, shriek, heartbeat, whispers, roar, clicks, hum, whoosh, rumble) |
+| `assets/bottles/` | The bottles' hotbar icons and the green one's triangle |
 | `assets/monochrome/` | VER's stand-ins, where its game's own files do not load (its presence, its scream, a lamp's click, the radar's ping, its eyes) and the film grain; its own shape (`VERBody.lua`); its Noise variant's tape (sheets, sound) and Noise's Emerge made VER's |
 | `tools/` | Prometheus' settings for the obfuscation, the script that runs it, its fix for Luau |
 | `assets/scanner/` | The scanners' own icons without their background (`.png`) and ready to be recoloured by the script (`.icon`) |
