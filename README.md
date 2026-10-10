@@ -876,6 +876,9 @@ sent as its own buttons send them. Without it there is no bottle, and DOORS' cap
   screen.
 - **It never kills you**: the unlucky one puts you in the panel's God Mode for good (your health as it is), so its
   bad luck takes no health from you; the lucky one, drunk after it, keeps it (its own 20 s of God Mode ends in it).
+  And where God Mode would not hold, its guard: hurt, the panel heals you (HEAL); dead, it revives you (REVIVE), in
+  every life of yours until you leave. Their stats go as the panel's sliders send them: whole numbers in their range
+  (Health 10 to 1000).
 
 If the bottle's unions or the green one's triangle will not load in DOORS, a capsule of the same size and colours
 and a triangle of ours take their place; without `game:GetObjects` the bottle is made here.
