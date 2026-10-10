@@ -9,9 +9,12 @@
         its commands. Without it they do not even appear.
 
         The lucky one: your health full, a star shield, a little speed, and two more of its luck (gold, an item, God Mode
-        for a while, the entities gone, the room lit, jumping and sliding, the dead revived, the next room).
+        for a while, the entities gone, the room lit, jumping and sliding, the dead revived, the next room, the room all
+        gold and 10000 gold).
         The unlucky one: the wardrobes gone for good (for you, every room from now on), you at 1 health, and two more of
-        its bad luck (the lights broken, gold lost, Rush, Ambush, Eyes, Screech, the Glitch, the lights flickering).
+        its bad luck (the lights broken, gold lost, Rush, Ambush, Eyes, Screech, the Glitch, the lights flickering, Creak
+        with Noise's static moving all over it).
+        Drunk, it says nothing: what it did, you see.
 ]]
 
 local KIND = "Lucky" -- ("Lucky" or "Unlucky": each loadstring is this script with its own)
@@ -21,6 +24,7 @@ local TweenService = game:GetService("TweenService")
 local Lighting = game:GetService("Lighting")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ContentProvider = game:GetService("ContentProvider")
+local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 local GENV = if getgenv then getgenv() else _G
 local LUCKY = KIND == "Lucky"
@@ -247,27 +251,108 @@ local function pick(list, n)
 	return out
 end
 
-local GOOD_ITEMS = { { "Crucifix", "un Crocifisso" }, { "SkeletonKey", "la Skeleton Key" }, { "Lockpick", "dei grimaldelli" }, { "Vitamins", "delle vitamine" },
-	{ "Lantern", "una lanterna" }, { "Flashlight", "una torcia" }, { "StarJug", "una Starlight Jug" }, { "BandagePack", "delle bende" }, { "Shakelight", "una Shakelight" } }
+-- The room you are in, all gold (its parts gold and shining, its textures and lights gold: here, for you), and 10000 gold
+local GOLD = Color3.fromRGB(255, 194, 40)
+local function goldRoom()
+	local rooms = workspace:FindFirstChild("CurrentRooms")
+	local latest = ReplicatedStorage:FindFirstChild("GameData") and ReplicatedStorage.GameData:FindFirstChild("LatestRoom")
+	local room = rooms and rooms:FindFirstChild(tostring(LocalPlayer:GetAttribute("CurrentRoom") or (latest and latest.Value)))
+	for _, d in ipairs(if room then room:GetDescendants() else {}) do
+		if d:IsA("BasePart") and d.Transparency < 1 then
+			d.Color, d.Material, d.Reflectance = GOLD, Enum.Material.Foil, 0.25
+			if d:IsA("MeshPart") then pcall(function() d.TextureID = "" end) end
+			if d:IsA("UnionOperation") then d.UsePartColor = true end
+		elseif d:IsA("SurfaceAppearance") then -- (it would keep its own look over the gold)
+			d:Destroy()
+		elseif d:IsA("Decal") then -- (its textures too)
+			d.Color3 = GOLD
+		elseif d:IsA("Light") then
+			d.Color = Color3.fromRGB(255, 214, 120)
+		end
+	end
+	task.spawn(function() -- (its slider goes to 1000: ten times)
+		for _ = 1, 10 do
+			gold(1000)
+			task.wait(0.2)
+		end
+	end)
+end
+-- Creak, from the Admin Panel; as soon as it is here, Noise's look on it: its Neon, its colour, its static moving every frame
+local NOISE = Color3.fromRGB(55, 11, 150)
+local function noiseCreak()
+	local textures, skinned = {}, {}
+	local function skin(d)
+		if d:IsA("BasePart") then -- (its static as seen as its part: none on its hitbox)
+			d.Material, d.Color, d.CastShadow = Enum.Material.Neon, NOISE, false
+			if d:IsA("MeshPart") then pcall(function() d.TextureID = "" end) end
+			if d:IsA("UnionOperation") then d.UsePartColor = true end
+			for _, face in ipairs(Enum.NormalId:GetEnumItems()) do
+				table.insert(textures, make("Texture", { Name = "StaticTexture", Texture = "rbxassetid://89646687673712", Face = face, Color3 = Color3.new(0, 0, 0),
+					StudsPerTileU = 2, StudsPerTileV = 2 }, d))
+			end
+		elseif d:IsA("SurfaceAppearance") then
+			d:Destroy()
+		end
+	end
+	local function isCreak(d)
+		if not ((d:IsA("Model") or d:IsA("BasePart")) and d.Name:lower():find("creak")) then return false end
+		for _, c in ipairs(skinned) do
+			if d:IsDescendantOf(c) then return false end
+		end
+		return true
+	end
+	local function found(creak)
+		table.insert(skinned, creak)
+		skin(creak)
+		for _, d in ipairs(creak:GetDescendants()) do skin(d) end
+		creak.DescendantAdded:Connect(skin)
+		make("Highlight", { Name = "NoiseOutline", FillTransparency = 1, OutlineColor = Color3.new(0, 0, 0), DepthMode = Enum.HighlightDepthMode.Occluded }, creak)
+	end
+	local watching = true -- (for 20 s after it is sent)
+	local watch = workspace.DescendantAdded:Connect(function(d)
+		if isCreak(d) then found(d) end
+	end)
+	command("Creak")
+	task.delay(20, function()
+		watching = false
+		watch:Disconnect()
+	end)
+	local moving
+	moving = RunService.RenderStepped:Connect(function()
+		local alive = false
+		for _, c in ipairs(skinned) do
+			if c.Parent then alive = true end
+		end
+		if not (alive or watching) then moving:Disconnect() return end
+		for _, t in ipairs(textures) do
+			t.OffsetStudsU, t.OffsetStudsV = math.random() * 4 - 2, math.random() * 4 - 2
+			if t.Parent then t.Transparency = t.Parent.Transparency end
+		end
+	end)
+end
+
+local GOOD_ITEMS = { "Crucifix", "SkeletonKey", "Lockpick", "Vitamins", "Lantern", "Flashlight", "StarJug", "BandagePack", "Shakelight" }
 local LUCK = {
-	{ say = "+150 oro", run = function() gold(150) end },
+	{ run = function() gold(150) end },
 	{ item = true },
-	{ say = "invincibile per 20 secondi", stat = function(s) s.god = true end, after = 20 },
-	{ say = "le entità spariscono", run = function() command("DELETE ALL") end },
-	{ say = "la stanza si illumina", run = function() command("LightRoom", { ["Light Color"] = Color3.fromRGB(206, 173, 144) }) end },
-	{ say = "puoi saltare e scivolare", stat = function(s) s.jump, s.slide = true, true end },
-	{ say = "i morti tornano in vita", run = function() command("ReviveDeadPlayers") end },
-	{ say = "passi alla stanza dopo", run = function() command("SkipRoom") end },
+	{ stat = function(s) s.god = true end, after = 20 }, -- (God Mode for 20 s)
+	{ run = function() command("DELETE ALL") end },
+	{ run = function() command("LightRoom", { ["Light Color"] = Color3.fromRGB(206, 173, 144) }) end },
+	{ stat = function(s) s.jump, s.slide = true, true end },
+	{ run = function() command("ReviveDeadPlayers") end },
+	{ run = function() command("SkipRoom") end },
+	{ run = goldRoom },
 }
 local CURSE = {
-	{ say = "le luci si rompono", run = function() command("Break Lights", { ["Lights Affected"] = 100, ["Affect All Rooms"] = true }) end },
-	{ say = "-100 oro", run = function() gold(-100) end },
-	{ say = "arriva Rush", run = function() command("Rush") end },
-	{ say = "arriva Ambush", run = function() command("Ambush") end },
-	{ say = "arriva Eyes", run = function() command("Eyes") end },
-	{ say = "Screech ti trova", run = function() command("ScreechPlayer", { Players = ME }) end },
-	{ say = "il Glitch ti prende", run = function() command("GlitchPlayer", { Players = ME }) end },
-	{ say = "le luci tremano", run = function() command("Flicker Lights", { ["Flicker Duration"] = 10, ["Lights Affected"] = 100, ["Affect All Rooms"] = true }) end },
+	function() command("Break Lights", { ["Lights Affected"] = 100, ["Affect All Rooms"] = true }) end,
+	function() gold(-100) end,
+	function() command("Rush") end,
+	function() command("Ambush") end,
+	function() command("Eyes") end,
+	function() command("ScreechPlayer", { Players = ME }) end,
+	function() command("GlitchPlayer", { Players = ME }) end,
+	function() command("Flicker Lights", { ["Flicker Duration"] = 10, ["Lights Affected"] = 100, ["Affect All Rooms"] = true }) end,
+	noiseCreak,
 }
 
 -- The wardrobes gone for good: every one in the rooms now, every one in a room yet to come (for you; until you leave)
@@ -290,14 +375,11 @@ local function lucky()
 	local humanoid = humanoidOf()
 	local max = if humanoid then humanoid.MaxHealth else 100
 	local s = { max = max, health = max, shield = 100, speed = 15 }
-	local said = { "vita piena, scudo di stelle e più velocità" }
-	local chosen = pick(LUCK, 2)
-	for _, luck in ipairs(chosen) do
+	for _, luck in ipairs(pick(LUCK, 2)) do
 		if luck.item then
 			local item = GOOD_ITEMS[math.random(1, #GOOD_ITEMS)]
-			luck = { say = item[2], run = function() command("Give Items", { Players = ME, Items = { [item[1]] = item[1] } }) end }
+			luck = { run = function() command("Give Items", { Players = ME, Items = { [item] = item } }) end }
 		end
-		table.insert(said, luck.say)
 		if luck.stat then luck.stat(s) end
 		if luck.run then luck.run() end
 		if luck.after then -- (God Mode for a while, then off again: the rest as it is)
@@ -310,19 +392,13 @@ local function lucky()
 	end
 	stats(s)
 	flash(Color3.fromRGB(150, 255, 160))
-	caption("Fortuna! " .. table.concat(said, ", ") .. ".")
 end
 local function unlucky()
 	local humanoid = humanoidOf()
 	noWardrobes()
 	stats({ max = if humanoid then humanoid.MaxHealth else 100, health = 1, shield = 0, speed = 0 })
-	local said = { "niente più armadi", "1 di vita" }
-	for _, curse in ipairs(pick(CURSE, 2)) do
-		table.insert(said, curse.say)
-		curse.run()
-	end
+	for _, curse in ipairs(pick(CURSE, 2)) do curse() end
 	flash(Color3.fromRGB(255, 120, 120))
-	caption("Sfortuna... " .. table.concat(said, ", ") .. ".")
 end
 
 local busy = false
