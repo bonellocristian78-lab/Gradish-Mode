@@ -869,11 +869,13 @@ sent as its own buttons send them. Without it there is no bottle, and DOORS' cap
   the next room, **the room all gold** (the room you are in: its parts gold and shining, Foil, its textures and lights
   gold; on your screen) **and 10000 gold** (the panel's Give Gold, 1000 at a time: its slider stops at 1000).
 - **The unlucky one**: the wardrobes gone for good (for you: every one in the rooms, and in every room to come; the
-  lockers too), you at 1 health, and two of: the lights broken, -100 gold, Rush, Ambush, Eyes, Screech on you, the
+  lockers too), and two of: the lights broken, -100 gold, Rush, Ambush, Eyes, Screech on you, the
   Glitch on you, the lights flickering, **Creak** (from the panel, as its icon sends it) **with Noise's look**: as
   soon as it is here (any model or part named Creak, for 20 s), its parts turn to Noise's Neon and colour with
   DOORS' own static texture of Noise on every face, moving every frame as Noise's does, and Noise's outline; on your
   screen.
+- **It never kills you**: the unlucky one puts you in the panel's God Mode for good (your health as it is), so its
+  bad luck takes no health from you; the lucky one, drunk after it, keeps it (its own 20 s of God Mode ends in it).
 
 If the bottle's unions or the green one's triangle will not load in DOORS, a capsule of the same size and colours
 and a triangle of ours take their place; without `game:GetObjects` the bottle is made here.
