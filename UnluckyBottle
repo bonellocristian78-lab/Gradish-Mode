@@ -11,9 +11,9 @@
         The lucky one: your health full, a star shield, a little speed, and two more of its luck (gold, an item, God Mode
         for a while, the entities gone, the room lit, jumping and sliding, the dead revived, the next room, the room all
         gold and 10000 gold).
-        The unlucky one: the wardrobes gone for good (for you, every room from now on), you at 1 health, and two more of
-        its bad luck (the lights broken, gold lost, Rush, Ambush, Eyes, Screech, the Glitch, the lights flickering, Creak
-        with Noise's static moving all over it).
+        The unlucky one: the wardrobes gone for good (for you, every room from now on), and two more of its bad luck (the lights broken, gold lost, Rush, Ambush, Eyes, Screech, the Glitch, the lights flickering, Creak
+        with Noise's static moving all over it). Its bad luck never kills you: it puts you in God Mode for good (the
+        lucky one, drunk after, keeps it).
         Drunk, it says nothing: what it did, you see.
 ]]
 
@@ -374,7 +374,7 @@ end
 local function lucky()
 	local humanoid = humanoidOf()
 	local max = if humanoid then humanoid.MaxHealth else 100
-	local s = { max = max, health = max, shield = 100, speed = 15 }
+	local s = { max = max, health = max, shield = 100, speed = 15, god = GENV.__BottleSafe == true }
 	for _, luck in ipairs(pick(LUCK, 2)) do
 		if luck.item then
 			local item = GOOD_ITEMS[math.random(1, #GOOD_ITEMS)]
@@ -385,7 +385,7 @@ local function lucky()
 		if luck.after then -- (God Mode for a while, then off again: the rest as it is)
 			task.delay(luck.after, function()
 				local h = humanoidOf()
-				s.god, s.health, s.shield = false, if h then math.max(h.Health, 1) else max, 0
+				s.god, s.health, s.shield = GENV.__BottleSafe == true, if h then math.max(h.Health, 1) else max, 0
 				stats(s)
 			end)
 		end
@@ -396,7 +396,9 @@ end
 local function unlucky()
 	local humanoid = humanoidOf()
 	noWardrobes()
-	stats({ max = if humanoid then humanoid.MaxHealth else 100, health = 1, shield = 0, speed = 0 })
+	-- (its bad luck never kills you: God Mode for good, your health as it is)
+	GENV.__BottleSafe = true
+	stats({ max = if humanoid then humanoid.MaxHealth else 100, health = if humanoid then math.max(humanoid.Health, 1) else 100, shield = 0, speed = 0, god = true })
 	for _, curse in ipairs(pick(CURSE, 2)) do curse() end
 	flash(Color3.fromRGB(255, 120, 120))
 end
