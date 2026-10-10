@@ -861,14 +861,19 @@ loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab
 sent as its own buttons send them. Without it there is no bottle, and DOORS' caption says why.
 
 - **In your hand** as the Starlight Bottle: in DOORS' hotbar (its own icon), the Starlight Bottle's size and grip,
-  its holding animation; click to drink it (its drinking animation, its sound). Drunk, it is gone.
+  its holding animation; click to drink it (its drinking animation, its sound). Drunk, it is gone, and it says
+  nothing: what it did, you see.
 - **The lucky one**: your health full, a star shield, a little speed (the panel's Apply Changes), and two of: +150
   gold, an item (a Crucifix, the Skeleton Key, lockpicks, vitamins, a lantern, a flashlight, a Starlight Jug,
   bandages, a Shakelight), God Mode for 20 s, the entities gone, the room lit, jumping and sliding, the dead revived,
-  the next room.
+  the next room, **the room all gold** (the room you are in: its parts gold and shining, Foil, its textures and lights
+  gold; on your screen) **and 10000 gold** (the panel's Give Gold, 1000 at a time: its slider stops at 1000).
 - **The unlucky one**: the wardrobes gone for good (for you: every one in the rooms, and in every room to come; the
   lockers too), you at 1 health, and two of: the lights broken, -100 gold, Rush, Ambush, Eyes, Screech on you, the
-  Glitch on you, the lights flickering.
+  Glitch on you, the lights flickering, **Creak** (from the panel, as its icon sends it) **with Noise's look**: as
+  soon as it is here (any model or part named Creak, for 20 s), its parts turn to Noise's Neon and colour with
+  DOORS' own static texture of Noise on every face, moving every frame as Noise's does, and Noise's outline; on your
+  screen.
 
 If the bottle's unions or the green one's triangle will not load in DOORS, a capsule of the same size and colours
 and a triangle of ours take their place; without `game:GetObjects` the bottle is made here.
