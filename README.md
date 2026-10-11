@@ -904,7 +904,9 @@ loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab
   DOORS'), with the kit's own animations: out of the floor (`rise wit no camera`, all through DOORS' rise, even when
   DOORS starts its run before it moves), its run (`run new`, as fast as Seek goes), and the crucifix (`cruxstart`,
   `cruxloop`, `cruxend`) only once it has run and is held still. What it does and plays is on its model, as the
-  attributes `State` and `Animation` (`workspace.HalloweenMode.SeekHalloween`). Its fire purple, never the orange
+  attributes `State` and `Animation` (`workspace.HalloweenMode.SeekHalloween`). Its feet on the floor under DOORS'
+  Seek: what is seen and solid there (never an invisible part, which would lift it off the floor); DOORS' own Seek
+  unseen, its outline (a Highlight) too. Its fire purple, never the orange
   flame: on while it runs, lit with its FireIgnite. Its eyes the kit's own, an orange glow on its head; its hand and
   its hook purple with purple embers. The eyes on the walls (`SeekEye`) DOORS' own, their light orange, their veins
   and goo purple; the hands out of the walls (`Seek_Arm`) purple with glowing orange claws and purple embers. The
