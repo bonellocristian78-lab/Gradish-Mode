@@ -1,0 +1,1115 @@
+--[[
+        HALLOWEEN MODE -- DOORS' hotel dressed for Halloween, with your kit
+
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/claude/sei-qui-con-noi-ye4k62/HalloweenMode"))()
+
+        Everything from your kit (assets/halloween/HalloweenKit.rbxm):
+
+        The hotel: every room, as it comes, is decorated: pumpkins on its floor (lit and unlit, their carved faces toward
+        the room, never in front of a door), candles, candelabras and candy on its furniture, cobwebs in the corners under
+        its ceiling, bats hanging from it, the triangle flags along its walls, a spider on one, now and then the candy
+        cauldron. Fog on every floor (the kit's own). Its lights pumpkin orange, some purple; a Halloween grade on your sight.
+
+        Seek: the kit's Halloween Seek in its place, with its own animations (out of the floor, its run, the crucifix); its
+        fire purple, never the orange flame; its eyes Halloween eyes (orange, a cat's slit, purple veins); its hand and its
+        hook purple with purple embers. The eyes on the walls and the hands out of them the same; the fire of its chase
+        purple too. If the kit's Seek will not load here, DOORS' own Seek is dressed so instead.
+
+        Figure: all of it as it is, its head the kit's jack o' lantern.
+
+        Music: an ambience in the background, a waltz on a music box over an autumn night (made for this, loops).
+
+        Only you see and hear it. getgenv().__HalloweenMode() takes it all off.
+]]
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Lighting = game:GetService("Lighting")
+local SoundService = game:GetService("SoundService")
+local CollectionService = game:GetService("CollectionService")
+local ContentProvider = game:GetService("ContentProvider")
+local LocalPlayer = Players.LocalPlayer
+local GENV = if getgenv then getgenv() else _G
+if GENV.__HalloweenMode then pcall(GENV.__HalloweenMode) end
+
+local REPO = "https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/claude/sei-qui-con-noi-ye4k62/"
+local FOLDER = "HalloweenMode"
+local ORANGE = Color3.fromRGB(255, 140, 40)
+local ORANGE_LIGHT = Color3.fromRGB(255, 150, 70)
+local PURPLE = Color3.fromRGB(150, 60, 255)
+local PURPLE_LIGHT = Color3.fromRGB(175, 100, 255)
+local DARK_PURPLE = Color3.fromRGB(48, 12, 66)
+local MAX_RATE = 20
+local ID = CFrame.new()
+local SEEKS = { SeekMovingNewClone = true, SeekMoving = true } -- DOORS' Seek, now and before
+
+-- Everything of this run: its connections, what it changed of DOORS' (put back at the end), what it made
+local H = { connections = {}, changed = setmetatable({}, { __mode = "k" }), made = {}, rooms = {}, seeks = {}, heads = {}, tones = {},
+	ready = false, alive = true }
+
+local function make(class, props, parent)
+	local i = Instance.new(class)
+	for k, v in pairs(props) do i[k] = v end
+	i.Parent = parent
+	return i
+end
+local function connect(signal, f)
+	local c = signal:Connect(f)
+	table.insert(H.connections, c)
+	return c
+end
+-- One of DOORS' own changed, only for you: what it was is kept, and put back when Halloween ends
+local function set(inst, prop, value)
+	local old = H.changed[inst]
+	if not old then
+		old = {}
+		H.changed[inst] = old
+	end
+	if old[prop] == nil then
+		local ok, was = pcall(function() return inst[prop] end)
+		if not ok then return end
+		old[prop] = { was }
+	end
+	pcall(function() inst[prop] = value end)
+end
+local function made(i)
+	table.insert(H.made, i)
+	return i
+end
+
+H.folder = make("Folder", { Name = "HalloweenMode" }, workspace)
+
+---====== ITS FILES: your kit, the music, Seek's eye (fetched once, kept in the executor's folder HalloweenMode) ======---
+
+local function file(name, magic)
+	local here = FOLDER .. "/" .. name
+	pcall(function()
+		if not isfolder(FOLDER) then makefolder(FOLDER) end
+		if isfile(here) and readfile(here):sub(1, #magic) == magic then return end
+		local data = game:HttpGet(REPO .. "assets/halloween/" .. name)
+		if type(data) == "string" and data:sub(1, #magic) == magic then writefile(here, data) end
+	end)
+	local ok, there = pcall(isfile, here)
+	return if ok and there then here else nil
+end
+local function asset(path)
+	if not path then return nil end
+	local ok, id = pcall(getcustomasset, path)
+	return if ok and type(id) == "string" then id else nil
+end
+local EYE = asset(file("Eye.png", "\137PNG"))
+
+local kit = nil
+pcall(function() kit = game:GetObjects(getcustomasset(file("HalloweenKit.rbxm", "<roblox!")))[1] end)
+local KIT = {} -- its models by name (some names more than one: the candles)
+if kit then
+	local pack = kit:FindFirstChild("Halloween_Pack") -- (a pack of other things, with scripts: not used)
+	if pack then pack:Destroy() end
+	for _, d in ipairs(kit:GetDescendants()) do
+		if d:IsA("LuaSourceContainer") then d:Destroy() end
+	end
+	for _, m in ipairs(kit:GetChildren()) do
+		KIT[m.Name] = KIT[m.Name] or {}
+		table.insert(KIT[m.Name], m)
+	end
+else
+	warn("[HalloweenMode] its kit could not be loaded: the lights, the fog, the music and Seek's look without it")
+end
+local function one(name)
+	local list = KIT[name]
+	return if list then list[math.random(#list)] else nil
+end
+
+---====== COLOURS ======---
+
+local function purple(c) -- the same light, purple
+	local _, s, v = c:ToHSV()
+	return Color3.fromHSV(0.78, math.max(s, 0.6), math.max(v, 0.4))
+end
+local function purpleSequence(seq)
+	local points = {}
+	for _, k in ipairs(seq.Keypoints) do table.insert(points, ColorSequenceKeypoint.new(k.Time, purple(k.Value))) end
+	return ColorSequence.new(points)
+end
+local FIRE_WORDS = { "fire", "flame", "ember", "burn", "blaze" }
+local function fiery(i)
+	for _, n in ipairs({ i.Name:lower(), (i.Parent and i.Parent.Name or ""):lower() }) do
+		for _, w in ipairs(FIRE_WORDS) do
+			if n:find(w) then return true end
+		end
+	end
+	return false
+end
+
+-- A Halloween grade on your sight, and the music
+H.grade = make("ColorCorrectionEffect", { Name = "HalloweenGrade", TintColor = Color3.fromRGB(255, 236, 222), Saturation = 0.12, Contrast = 0.06 },
+	Lighting)
+H.music = make("Sound", { Name = "HalloweenAmbience", SoundId = asset(file("Ambience.mp3", "ID3")) or "", Looped = true, Volume = 0.5 }, SoundService)
+H.music:Play()
+
+---====== DOES IT LOAD HERE? (a mesh, a union, a texture of someone else's will not: then not that one) ======---
+
+local OK = {}
+local function visuals(model) -- its meshes and unions (what makes it seen); the fog: its particles
+	local list = {}
+	local all = model:GetDescendants()
+	table.insert(all, model)
+	for _, d in ipairs(all) do
+		if d:IsA("MeshPart") or d:IsA("UnionOperation") or (model.Name == "Fog" and d:IsA("ParticleEmitter")) then table.insert(list, d) end
+	end
+	return list
+end
+local function loads(list)
+	local failed = false
+	pcall(function()
+		ContentProvider:PreloadAsync(list, function(_, status)
+			if status == Enum.AssetFetchStatus.Failure or status == Enum.AssetFetchStatus.TimedOut then failed = true end
+		end)
+	end)
+	return not failed
+end
+
+---====== THE HOTEL: its lights, its fires, its fog, its decorations ======---
+
+-- Part of an entity (Figure, Seek, its eyes, its hands...): not the room's
+local function entity(d)
+	local a = d.Parent
+	while a and a ~= workspace do
+		if a:IsA("Model") and (a:FindFirstChildOfClass("Humanoid") or a:FindFirstChildOfClass("AnimationController")
+			or CollectionService:HasTag(a, "SeekEye") or SEEKS[a.Name] or a.Name:find("Figure")) then
+			return true
+		end
+		if a.Parent and a.Parent.Name == "CurrentRooms" then return false end
+		a = a.Parent
+	end
+	return false
+end
+-- DOORS' lights: pumpkin orange, one fixture in three purple (its bulb with it); its fires (Seek's chase): purple
+local function touch(d)
+	if not H.alive or d:IsDescendantOf(H.folder) or not (d:IsA("ParticleEmitter") or d:IsA("Fire") or d:IsA("Light")) or entity(d) then return end
+	if d:IsA("ParticleEmitter") and fiery(d) then
+		set(d, "Color", purpleSequence(d.Color))
+	elseif d:IsA("Fire") then
+		set(d, "Color", PURPLE)
+		set(d, "SecondaryColor", Color3.fromRGB(90, 0, 160))
+	elseif d:IsA("Light") then
+		if fiery(d) then
+			set(d, "Color", PURPLE)
+			return
+		end
+		local holder = if d.Parent and d.Parent:IsA("Attachment") then d.Parent.Parent else d.Parent
+		local key = holder or d
+		H.tones[key] = H.tones[key] or (if math.random() < 0.33 then PURPLE_LIGHT else ORANGE_LIGHT)
+		set(d, "Color", H.tones[key])
+		if holder and holder:IsA("BasePart") and holder.Material == Enum.Material.Neon then set(holder, "Color", H.tones[key]) end
+	end
+end
+
+local probe = RaycastParams.new()
+probe.FilterType = Enum.RaycastFilterType.Exclude
+local function skipList()
+	local skip = { H.folder }
+	for _, p in ipairs(Players:GetPlayers()) do
+		if p.Character then table.insert(skip, p.Character) end
+	end
+	return skip
+end
+-- A ray through what is not seen or not solid
+local function ray(from, dir)
+	local skip = skipList()
+	for _ = 1, 5 do
+		probe.FilterDescendantsInstances = skip
+		local hit = workspace:Raycast(from, dir, probe)
+		if not hit or (hit.Instance.Transparency < 0.9 and hit.Instance.CanCollide) then return hit end
+		table.insert(skip, hit.Instance)
+	end
+	return nil
+end
+local overlap = OverlapParams.new()
+overlap.FilterType = Enum.RaycastFilterType.Exclude
+local function free(center, size) -- nothing seen there
+	overlap.FilterDescendantsInstances = skipList()
+	local ok, parts = pcall(function() return workspace:GetPartBoundsInBox(CFrame.new(center), size, overlap) end)
+	if not ok then return true end
+	for _, p in ipairs(parts) do
+		if p.Transparency < 0.9 then return false end
+	end
+	return true
+end
+local function commonest(list)
+	local count, best, most = {}, nil, 0
+	for _, y in ipairs(list) do
+		local k = math.floor(y * 2 + 0.5) / 2
+		count[k] = (count[k] or 0) + 1
+		if count[k] > most or (count[k] == most and k < best) then best, most = k, count[k] end
+	end
+	return best
+end
+
+-- The room: its frame (as its bounding box), its floor and its ceiling (the commonest heights under and over it), its doors
+local function measure(room)
+	local ok, cf, size = pcall(function() return room:GetBoundingBox() end)
+	if not ok or not cf then return nil end
+	cf = CFrame.new(cf.Position) * CFrame.fromAxisAngle(Vector3.new(0, 1, 0), math.atan2(-cf.LookVector.X, -cf.LookVector.Z))
+	local doors = {}
+	for _, name in ipairs({ "RoomEntrance", "RoomExit" }) do
+		local door = room:FindFirstChild(name)
+		if door and door:IsA("BasePart") then table.insert(doors, door.Position) end
+	end
+	local startY = if doors[1] then doors[1].Y else cf.Position.Y - size.Y / 2 + 4
+	local floors, ceilings = {}, {}
+	for i = -1, 1 do
+		for j = -1, 1 do
+			local p = cf:PointToWorldSpace(Vector3.new(i * size.X * 0.25, 0, j * size.Z * 0.25))
+			local from = Vector3.new(p.X, startY, p.Z)
+			local down = ray(from, Vector3.new(0, -12, 0))
+			if down then table.insert(floors, down.Position.Y) end
+			local up = ray(from, Vector3.new(0, 40, 0))
+			if up then table.insert(ceilings, up.Position.Y) end
+		end
+	end
+	local floor = commonest(floors)
+	if not floor then return nil end
+	local ceiling = commonest(ceilings)
+	if ceiling and (ceiling - floor < 7 or ceiling - floor > 60) then ceiling = nil end
+	return { cf = cf, size = size, floor = floor, ceiling = ceiling, doors = doors, area = size.X * size.Z }
+end
+
+local CORNERS = {}
+for _, x in ipairs({ -0.5, 0.5 }) do
+	for _, y in ipairs({ -0.5, 0.5 }) do
+		for _, z in ipairs({ -0.5, 0.5 }) do table.insert(CORNERS, Vector3.new(x, y, z)) end
+	end
+end
+-- Its lowest point's middle and its size, as it stands in the kit
+local function footprint(model)
+	local lo, hi = Vector3.new(math.huge, math.huge, math.huge), Vector3.new(-math.huge, -math.huge, -math.huge)
+	local all = model:GetDescendants()
+	table.insert(all, model)
+	for _, p in ipairs(all) do
+		if p:IsA("BasePart") and p.Transparency < 1 then
+			for _, c in ipairs(CORNERS) do
+				local w = p.CFrame:PointToWorldSpace(p.Size * c)
+				lo = Vector3.new(math.min(lo.X, w.X), math.min(lo.Y, w.Y), math.min(lo.Z, w.Z))
+				hi = Vector3.new(math.max(hi.X, w.X), math.max(hi.Y, w.Y), math.max(hi.Z, w.Z))
+			end
+		end
+	end
+	if lo.X == math.huge then return model:GetPivot().Position, Vector3.new(1, 1, 1) end
+	return Vector3.new((lo.X + hi.X) / 2, lo.Y, (lo.Z + hi.Z) / 2), hi - lo
+end
+local function yawOf(v) return math.atan2(v.X, v.Z) end
+-- Its bottom's middle on `at`, turned by `yaw` about the up axis
+local function put(model, at, yaw)
+	local base = footprint(model)
+	model:PivotTo(CFrame.new(at) * CFrame.Angles(0, yaw, 0) * CFrame.new(-base) * model:GetPivot())
+end
+-- A decoration of the kit: anchored, nothing in it collides, is touched or casts a shadow, fewer particles, fewer lights
+local function prepare(model)
+	local all = model:GetDescendants()
+	table.insert(all, model)
+	local lights = 0
+	for _, d in ipairs(all) do
+		for _, tag in ipairs(CollectionService:GetTags(d)) do CollectionService:RemoveTag(d, tag) end
+		if d:IsA("BasePart") then
+			d.Anchored, d.CanCollide, d.CanTouch, d.CanQuery, d.CastShadow = true, false, false, false, false
+		elseif d:IsA("Light") then
+			lights += 1
+			if d.Name == "SmallLight" or lights > 2 then d:Destroy() else d.Shadows = false end
+		elseif d:IsA("ParticleEmitter") then
+			d.Rate = math.min(d.Rate, MAX_RATE)
+		elseif d:IsA("Sound") or d:IsA("Animation") or d:IsA("Humanoid") or d:IsA("AnimationController") then
+			d:Destroy()
+		end
+	end
+	return model
+end
+local function decoration(name, parent, template)
+	template = template or one(name)
+	if not (template and OK[template]) then return nil end
+	local copy = prepare(template:Clone())
+	copy.Parent = parent
+	return copy
+end
+
+local function nearDoor(info, p)
+	for _, d in ipairs(info.doors) do
+		if (Vector3.new(d.X, p.Y, d.Z) - p).Magnitude < 7 then return true end
+	end
+	return false
+end
+local function randomSpot(info, inset)
+	local s = info.size
+	return info.cf:PointToWorldSpace(Vector3.new((math.random() - 0.5) * math.max(s.X - inset * 2, 1), 0, (math.random() - 0.5) * math.max(s.Z - inset * 2, 1)))
+end
+local HORIZONTAL = { Vector3.new(1, 0, 0), Vector3.new(-1, 0, 0), Vector3.new(0, 0, 1), Vector3.new(0, 0, -1) }
+
+-- On its floor: pumpkins (their carved faces toward the room), now and then the candy cauldron
+local function floorDecorations(info, parent)
+	local wanted = math.clamp(math.floor(info.area / 150), 1, 4)
+	local pot = one("_CandyCauldron")
+	local placed, cauldron = 0, info.area > 600 and math.random() < 0.5 and pot ~= nil and OK[pot] == true
+	local center = info.cf.Position
+	for _ = 1, 50 do
+		if placed >= wanted and not cauldron then break end
+		local name
+		if cauldron then
+			name = "_CandyCauldron"
+		else
+			local big = info.area > 300 and math.random() < 0.35
+			local kind = ({ "On", "On", "Off", "Normal" })[math.random(4)]
+			name = (if big then "Large" else "Small") .. "_Pumpkin_" .. kind
+		end
+		local template = one(name)
+		if template and OK[template] then
+			local spot = randomSpot(info, 2.5)
+			local _, size = footprint(template)
+			local hit = ray(Vector3.new(spot.X, info.floor + 3, spot.Z), Vector3.new(0, -5, 0))
+			local onFloor = hit and math.abs(hit.Position.Y - info.floor) < 0.6
+			local nearWall = false
+			for _, dir in ipairs(HORIZONTAL) do
+				if ray(Vector3.new(spot.X, info.floor + 1.5, spot.Z), info.cf:VectorToWorldSpace(dir) * (size.X / 2 + 3)) then nearWall = true end
+			end
+			local at = Vector3.new(spot.X, info.floor, spot.Z)
+			local across = math.sqrt(size.X ^ 2 + size.Z ^ 2) -- (free all round: it may be turned any way)
+			if onFloor and (nearWall or cauldron) and not nearDoor(info, at)
+				and free(at + Vector3.new(0, size.Y / 2 + 0.15, 0), Vector3.new(across, size.Y, across)) then
+				local copy = decoration(name, parent, template)
+				if copy then
+					local face, base = copy:FindFirstChild("Part"), copy:FindFirstChild("PumpkinBase")
+					local toCenter = Vector3.new(center.X - at.X, 0, center.Z - at.Z)
+					local yaw = math.random() * math.pi * 2
+					if face and base and toCenter.Magnitude > 0.1 then
+						local f = Vector3.new(face.Position.X - base.Position.X, 0, face.Position.Z - base.Position.Z)
+						if f.Magnitude > 0.05 then yaw = yawOf(toCenter) - yawOf(f) end
+					end
+					put(copy, at, yaw)
+					if cauldron then cauldron = false else placed += 1 end
+				end
+			end
+		end
+	end
+end
+
+-- On its furniture: a candle or a candelabra, candy around it
+local CANDY = { "CandyParadox", "Gummibar2", "Gummibar4", "Dot1", "Dot2", "Dot3", "Dot4", "CandyGuiding", "ChocolateBar", "Lollipop2",
+	"Wrapper1", "Wrapper2", "Wrapper3", "Wrapper4", "CandyPremium", "AppleCandy", "AppleCaramel", "Horrible", "CandyMischevious",
+	"CandyCurious", "EyeCandy", "Licorice1", "Licorice2", "Mint3", "Mint5", "CandyNuvurndary", "CookieChocolate", "ThatOneCandy" }
+local function topDecorations(info, parent)
+	local wanted = math.clamp(math.floor(info.area / 200), 1, 3)
+	local placed = 0
+	local tops = {} -- (every top of its furniture, looked for all over it: a grid of at most 300 rays)
+	local step = math.max(1.5, math.sqrt(info.area / 300))
+	for x = -info.size.X / 2 + 1, info.size.X / 2 - 1, step do
+		for z = -info.size.Z / 2 + 1, info.size.Z / 2 - 1, step do
+			local spot = info.cf:PointToWorldSpace(Vector3.new(x, 0, z))
+			local hit = ray(Vector3.new(spot.X, info.floor + 6.5, spot.Z), Vector3.new(0, -6.3, 0))
+			local height = hit and hit.Position.Y - info.floor
+			if hit and height > 1.8 and height < 5 and hit.Normal.Y > 0.9 then table.insert(tops, hit) end
+		end
+	end
+	for _ = 1, math.min(#tops, 50) do
+		if placed >= wanted or #tops == 0 then break end
+		local hit = table.remove(tops, math.random(#tops))
+		local name = ({ "Candle_Tall", "Candle_Medium", "Candle_Medium", "Candelabra" })[math.random(4)]
+		local template = one(name)
+		if template and OK[template] then
+			local _, size = footprint(template)
+			local at = hit.Position
+			local across = math.sqrt(size.X ^ 2 + size.Z ^ 2)
+			local held = true -- (its whole base on the top: none of it over the edge)
+			for _, c in ipairs({ Vector3.new(1, 0, 1), Vector3.new(-1, 0, 1), Vector3.new(1, 0, -1), Vector3.new(-1, 0, -1) }) do
+				local under = ray(at + c * (across / 2) + Vector3.new(0, 0.5, 0), Vector3.new(0, -1, 0))
+				if not under or math.abs(under.Position.Y - at.Y) > 0.1 then held = false end
+			end
+			if held and free(at + Vector3.new(0, size.Y / 2 + 0.1, 0), Vector3.new(across, size.Y, across)) then
+				local copy = decoration(name, parent, template)
+				if copy then
+					put(copy, at, math.random() * math.pi * 2)
+					placed += 1
+					for k = 1, math.random(0, 3) do -- candy around it, on the same top
+						local a = math.random() * math.pi * 2
+						local p = at + Vector3.new(math.cos(a), 0, math.sin(a)) * (0.7 + 0.25 * k)
+						local under = ray(p + Vector3.new(0, 1, 0), Vector3.new(0, -1.5, 0))
+						local candy = CANDY[math.random(#CANDY)]
+						if under and math.abs(under.Position.Y - at.Y) < 0.15 and free(p + Vector3.new(0, 0.45, 0), Vector3.new(0.6, 0.7, 0.6)) then
+							local c = decoration(candy, parent)
+							if c then put(c, under.Position, math.random() * math.pi * 2) end
+						end
+					end
+				end
+			end
+		end
+	end
+end
+
+-- Under its ceiling: cobwebs in its corners, bats hanging, flags along two walls, a spider on one
+local function ceilingDecorations(info, parent)
+	if not info.ceiling then return end
+	local top = info.ceiling
+	local center = Vector3.new(info.cf.Position.X, top - 1.2, info.cf.Position.Z)
+	local webs = 0
+	for _, dx in ipairs({ -1, 1 }) do
+		for _, dz in ipairs({ -1, 1 }) do
+			local dir = info.cf:VectorToWorldSpace(Vector3.new(dx * info.size.X, 0, dz * info.size.Z))
+			local hit = ray(center, dir)
+			if hit and math.abs(hit.Normal.Y) < 0.3 and webs < 4 then
+				-- along the wall it met, to the corner
+				local n = Vector3.new(hit.Normal.X, 0, hit.Normal.Z).Unit
+				local along = (dir - n * dir:Dot(n)) * Vector3.new(1, 0, 1)
+				local corner, n2 = hit.Position, nil
+				if along.Magnitude > 0.01 then
+					local side = ray(hit.Position + n * 0.3 - along.Unit * 2, along.Unit * 42)
+					if side and math.abs(side.Normal.Y) < 0.3 then
+						corner, n2 = side.Position - n * 0.3, Vector3.new(side.Normal.X, 0, side.Normal.Z).Unit
+					end
+				end
+				local web = if n2 then decoration("Web_Corner", parent) else nil
+				if web then
+					local into = (n + n2).Unit
+					local _, size = footprint(web)
+					local at = Vector3.new(corner.X, top - size.Y - 0.05, corner.Z) + into * (size.Z / 2 * 0.95)
+					put(web, at, yawOf(into) - math.pi / 2)
+					webs += 1
+				end
+			end
+		end
+	end
+	for _ = 1, (if info.area > 300 then 2 else 1) do
+		local spot = randomSpot(info, 3)
+		local up = ray(Vector3.new(spot.X, info.floor + 3, spot.Z), Vector3.new(0, 40, 0))
+		local bat = if up and math.abs(up.Position.Y - top) < 1 then decoration("HangingHalloweenDecor", parent) else nil
+		if bat then
+			local _, size = footprint(bat)
+			local room = top - info.floor - 6.5 -- (over your head)
+			if room < 1.5 then
+				bat:Destroy()
+			else
+				if size.Y > room then pcall(function() bat:ScaleTo(room / size.Y) end) end
+				local _, scaled = footprint(bat)
+				put(bat, Vector3.new(up.Position.X, top - scaled.Y, up.Position.Z), math.random() * math.pi * 2)
+			end
+		end
+	end
+	local walls = 0
+	for _, dir in ipairs(HORIZONTAL) do
+		if walls >= 2 then break end
+		local hit = ray(center, info.cf:VectorToWorldSpace(dir) * 60)
+		if hit and math.abs(hit.Normal.Y) < 0.3 then
+			local n = Vector3.new(hit.Normal.X, 0, hit.Normal.Z).Unit
+			local along = Vector3.new(-n.Z, 0, n.X)
+			local placedHere = 0
+			for k = -1, 1 do
+				local flags = decoration("HalloweenTriangleFlags", parent)
+				if flags then
+					local _, size = footprint(flags)
+					local at = hit.Position + n * 0.12 + along * (k * size.Z)
+					local back = ray(at + n * 0.5, -n * 1)
+					if back then
+						put(flags, Vector3.new(at.X, top - size.Y - 0.25, at.Z), yawOf(n) - math.pi / 2)
+						placedHere += 1
+					else
+						flags:Destroy()
+					end
+				end
+			end
+			if placedHere > 0 then walls += 1 end
+		end
+	end
+	if math.random() < 0.5 then
+		local dir = HORIZONTAL[math.random(4)]
+		local y = info.floor + 5 + math.random() * math.max(top - info.floor - 6.5, 0)
+		local hit = ray(Vector3.new(info.cf.Position.X, y, info.cf.Position.Z), info.cf:VectorToWorldSpace(dir) * 60)
+		local spider = if hit and math.abs(hit.Normal.Y) < 0.3 then decoration("Spider", parent) else nil
+		if spider then
+			local n = Vector3.new(hit.Normal.X, 0, hit.Normal.Z).Unit
+			put(spider, hit.Position + n * 0.2 - Vector3.new(0, 0.6, 0), yawOf(n) - math.pi / 2)
+		end
+	end
+end
+
+-- Fog on its floor: the kit's (its ThickFog and ThinFog), as wide as the room
+local FOG_TEXTURE = asset(file("Fog.png", "\137PNG"))
+local function fog(info, parent)
+	local template = one("Fog")
+	local part
+	if template and OK[template] then
+		part = template:Clone()
+	else
+		part = make("Part", { Name = "Fog", Transparency = 1 }, nil)
+		make("ParticleEmitter", { Name = "ThickFog", Texture = FOG_TEXTURE or "", Color = ColorSequence.new(Color3.fromRGB(214, 193, 179)),
+			Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.3, 0.6),
+				NumberSequenceKeypoint.new(0.7, 0.6), NumberSequenceKeypoint.new(1, 1) }),
+			Size = NumberSequence.new(2.5), Lifetime = NumberRange.new(5, 10), Speed = NumberRange.new(0.1), Rate = 100,
+			RotSpeed = NumberRange.new(-1, 1), LightInfluence = 0.5, LockedToPart = true, EmissionDirection = Enum.NormalId.Top }, part)
+	end
+	part.Anchored, part.CanCollide, part.CanTouch, part.CanQuery, part.CastShadow = true, false, false, false, false
+	part.Size = Vector3.new(math.max(info.size.X - 1, 2), 1, math.max(info.size.Z - 1, 2))
+	part.CFrame = info.cf.Rotation + Vector3.new(info.cf.Position.X, info.floor + 0.5, info.cf.Position.Z)
+	for _, e in ipairs(part:GetChildren()) do
+		if e:IsA("ParticleEmitter") then e.Rate = math.clamp(100 * info.area / 2524, 10, 100) end
+	end
+	part.Parent = parent
+end
+
+local function decorate(room, entry)
+	while H.alive and not H.ready do task.wait(0.25) end
+	if not (H.alive and H.rooms[room] == entry and room.Parent) then return end
+	local info = measure(room)
+	if not info then return end
+	entry.info = info
+	pcall(fog, info, entry.folder)
+	pcall(floorDecorations, info, entry.folder)
+	pcall(topDecorations, info, entry.folder)
+	pcall(ceilingDecorations, info, entry.folder)
+end
+local function dressRoom(room)
+	if H.rooms[room] or not room:IsA("Model") then return end
+	local entry = { folder = make("Folder", { Name = room.Name }, H.folder) }
+	H.rooms[room] = entry
+	for _, d in ipairs(room:GetDescendants()) do touch(d) end
+	entry.watch = connect(room.DescendantAdded, function(d) task.defer(touch, d) end)
+	task.spawn(decorate, room, entry)
+end
+local function undressRoom(room)
+	local entry = H.rooms[room]
+	if not entry then return end
+	H.rooms[room] = nil
+	entry.watch:Disconnect()
+	entry.folder:Destroy()
+end
+
+---====== SEEK ======---
+
+local function posesOf(frame)
+	local T = {}
+	for _, d in ipairs(frame:GetDescendants()) do
+		if d:IsA("Pose") and d.Weight > 0 then T[d.Name] = d.CFrame end
+	end
+	return T
+end
+local function poseAt(list, time) -- (all its keyframes are linear)
+	local a, b = list[1], nil
+	for i = 2, #list do
+		if list[i].t <= time then a = list[i] else b = list[i] break end
+	end
+	if not b or time <= a.t then return a.cf end
+	return a.cf:Lerp(b.cf, (time - a.t) / (b.t - a.t))
+end
+local function seekFire(model) -- its fire, purple; its lights, purple
+	local fires = {}
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("ParticleEmitter") and fiery(d) then
+			d.Color = purpleSequence(d.Color)
+			d.Rate = math.min(d.Rate, MAX_RATE)
+			table.insert(fires, d)
+		elseif d:IsA("Light") then
+			d.Color = PURPLE
+			d.Shadows = false
+		end
+	end
+	return fires
+end
+local function embers(part, from)
+	local e = if from then from:Clone() else make("ParticleEmitter", { Texture = "rbxassetid://2286297003", Speed = NumberRange.new(1, 3),
+		Lifetime = NumberRange.new(1, 2), Size = NumberSequence.new(0.08), LightEmission = 1, Acceleration = Vector3.new(0, 2, 0),
+		SpreadAngle = Vector2.new(30, 30) }, nil)
+	e.Name, e.Enabled, e.Rate = "HalloweenEmbers", true, 12
+	e.Color = ColorSequence.new(PURPLE, Color3.fromRGB(255, 120, 40))
+	e.Parent = part
+	return e
+end
+
+-- The kit's Seek, ready to wear: its parts (by their place in it), its joints, its animations, its floor
+local SEEK = nil
+local function prepareSeek(template)
+	local saves = template:FindFirstChild("AnimSaves")
+	local model = template:Clone()
+	local s = { model = model, anims = {}, joints = {}, rest = {} }
+	local root = model:FindFirstChild("Root")
+	if not root then return nil end
+	if saves then
+		local wanted = { emerge = "rise wit no camera", run = "run new", cruxstart = "cruxstart", cruxloop = "cruxloop", cruxend = "cruxend" }
+		for key, name in pairs(wanted) do
+			local kfs = saves:FindFirstChild(name) or (key == "run" and saves:FindFirstChild("run")) or nil
+			if kfs and kfs:IsA("KeyframeSequence") then
+				local anim = { joints = {}, length = 0, looped = key == "run" or key == "cruxloop" }
+				local frames = kfs:GetKeyframes()
+				table.sort(frames, function(a, b) return a.Time < b.Time end)
+				for _, frame in ipairs(frames) do
+					anim.length = math.max(anim.length, frame.Time)
+					for name2, cf in pairs(posesOf(frame)) do
+						anim.joints[name2] = anim.joints[name2] or {}
+						table.insert(anim.joints[name2], { t = frame.Time, cf = cf })
+					end
+				end
+				s.anims[key] = anim
+			end
+		end
+	end
+	local saved = model:FindFirstChild("AnimSaves")
+	if saved then saved:Destroy() end
+	-- Its joints (Part0 to Part1), parents first from its Root; every other part rigid on the Root
+	local edges = {}
+	for _, d in ipairs(model:GetDescendants()) do
+		if (d:IsA("Motor6D") or d:IsA("Weld") or d:IsA("ManualWeld")) and d.Part0 and d.Part1 then
+			edges[d.Part0] = edges[d.Part0] or {}
+			table.insert(edges[d.Part0], { part = d.Part1, c0 = d.C0, c1inv = d.C1:Inverse(), pose = if d:IsA("Motor6D") then d.Part1.Name else nil })
+		end
+	end
+	local queue, seen = { root }, { [root] = true }
+	while #queue > 0 do
+		local p = table.remove(queue, 1)
+		for _, e in ipairs(edges[p] or {}) do
+			if not seen[e.part] then
+				seen[e.part] = true
+				e.parent = p
+				table.insert(s.joints, e)
+				table.insert(queue, e.part)
+			end
+		end
+	end
+	local all = model:GetDescendants()
+	for _, d in ipairs(all) do
+		if d:IsA("BasePart") and not seen[d] then s.rest[d] = root.CFrame:Inverse() * d.CFrame end
+	end
+	-- Clean: nothing collides, nothing of DOORS' runs it, its sounds but its fire's
+	for _, d in ipairs(all) do
+		for _, tag in ipairs(CollectionService:GetTags(d)) do CollectionService:RemoveTag(d, tag) end
+		if d:IsA("BasePart") then
+			d.Anchored, d.CanCollide, d.CanTouch, d.CanQuery, d.CastShadow, d.Massless = true, false, false, false, false, true
+		elseif d:IsA("Humanoid") or d:IsA("Animation") or d:IsA("AnimationController") or d:IsA("JointInstance") then
+			d:Destroy()
+		elseif d:IsA("Sound") and d.Name ~= "FireIgnite" then
+			d:Destroy()
+		elseif d:IsA("Decal") and d.Parent and d.Parent.Name == "Eye" and EYE then
+			d.Texture = EYE -- (its Halloween eyes)
+		end
+	end
+	s.fires = seekFire(model)
+	local ember = nil
+	for _, f in ipairs(s.fires) do
+		if f.Name == "Embers" then ember = f end
+	end
+	for _, name in ipairs({ "hand", "Hook" }) do -- its hand and its hook: purple, purple embers
+		local p = model:FindFirstChild(name)
+		if p then
+			p.Color = DARK_PURPLE
+			embers(p, ember)
+		end
+	end
+	local head = model:FindFirstChild("Head")
+	if head then make("PointLight", { Name = "EyeGlow", Color = ORANGE, Range = 8, Brightness = 1.5, Shadows = false }, head) end
+	-- Its floor: the lowest point of its feet in its run
+	local low = math.huge
+	local run = s.anims.run
+	for _, frame in ipairs(run and run.joints.LeftFoot or { { t = 0 } }) do
+		local T = {}
+		if run then
+			for name, list in pairs(run.joints) do T[name] = poseAt(list, frame.t) end
+		end
+		local w = { [root] = ID }
+		for _, j in ipairs(s.joints) do
+			w[j.part] = w[j.parent] * j.c0 * (j.pose and T[j.pose] or ID) * j.c1inv
+		end
+		for _, name in ipairs({ "LeftFoot", "RightFoot" }) do
+			local foot = model:FindFirstChild(name)
+			if foot and w[foot] then
+				for _, c in ipairs(CORNERS) do low = math.min(low, w[foot]:PointToWorldSpace(foot.Size * c).Y) end
+			end
+		end
+	end
+	s.floor = if low < math.huge then low else -4.5
+	s.index = {} -- (where each part is in it, now that it is clean: its clones have them in the same order)
+	for i, d in ipairs(model:GetDescendants()) do
+		if d:IsA("BasePart") then s.index[d] = i end
+	end
+	return s
+end
+
+local function rootOf(model) -- its rig's Root (the one in SeekRig first), or its PrimaryPart
+	local any = nil
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("BasePart") and d.Name == "Root" then
+			if d.Parent and d.Parent.Name == "SeekRig" then return d end
+			any = any or d
+		end
+	end
+	return any or model.PrimaryPart or model:FindFirstChildWhichIsA("BasePart", true)
+end
+-- DOORS' own, out of sight (only for you); switched back off if the server switches it on
+local function hide(entry, d)
+	if d:IsA("BasePart") or d:IsA("Decal") then
+		set(d, "LocalTransparencyModifier", 1)
+	elseif d:IsA("ParticleEmitter") or d:IsA("Light") or d:IsA("Beam") or d:IsA("Trail") or d:IsA("Fire") or d:IsA("Smoke") then
+		set(d, "Enabled", false)
+		table.insert(entry.watch, d:GetPropertyChangedSignal("Enabled"):Connect(function() if d.Enabled and H.alive then d.Enabled = false end end))
+	end
+end
+local function floorUnder(entry, at)
+	local character = LocalPlayer.Character
+	local me = character and character:FindFirstChild("HumanoidRootPart")
+	local from = if me and math.abs(me.Position.Y - at.Y) < 20 then me.Position.Y + 3 else at.Y + 2
+	local hit = nil
+	pcall(function()
+		probe.FilterDescendantsInstances = { H.folder, entry.original, character }
+		hit = workspace:Raycast(Vector3.new(at.X, from, at.Z), Vector3.new(0, -30, 0), probe)
+	end)
+	if hit then entry.floor = hit.Position.Y end
+	return entry.floor or (at.Y - 5.8)
+end
+
+-- If the kit's Seek will not load here: DOORS' own Seek dressed for Halloween
+local function themeSeek(original)
+	local ember = nil
+	for _, d in ipairs(original:GetDescendants()) do
+		if d:IsA("ParticleEmitter") then
+			set(d, "Color", purpleSequence(d.Color))
+		elseif d:IsA("Light") then
+			set(d, "Color", PURPLE)
+		elseif d:IsA("Decal") and d.Parent and d.Parent.Name == "Eye" and EYE then
+			set(d, "Texture", EYE)
+		elseif d:IsA("BasePart") and d.Name:find("Hand") then
+			set(d, "Color", DARK_PURPLE)
+			made(embers(d, nil))
+		end
+	end
+	local torso = original:FindFirstChild("UpperTorso", true) or original:FindFirstChild("Torso", true) or rootOf(original)
+	local template = SEEK and SEEK.model or (KIT.SeekHalloween and KIT.SeekHalloween[1])
+	if torso and template then
+		for _, f in ipairs(template:GetDescendants()) do
+			if f:IsA("ParticleEmitter") and fiery(f) then
+				local copy = f:Clone()
+				copy.Color, copy.Enabled = purpleSequence(f.Color), true
+				copy.Rate = math.min(copy.Rate, MAX_RATE)
+				copy.Parent = torso
+				made(copy)
+			end
+		end
+	end
+	if not torso or not template then
+		made(make("Fire", { Name = "HalloweenFire", Color = PURPLE, SecondaryColor = Color3.fromRGB(90, 0, 160), Size = 6, Heat = 6 },
+			torso or rootOf(original)))
+	end
+end
+
+local function dressSeek(original)
+	if H.seeks[original] or not original:IsDescendantOf(workspace) or original:IsDescendantOf(H.folder) then return end
+	while H.alive and not H.ready do task.wait(0.25) end
+	if not H.alive or H.seeks[original] or not original:IsDescendantOf(workspace) then return end
+	local follow = rootOf(original)
+	if not (SEEK and follow) then
+		H.seeks[original] = { themed = true }
+		themeSeek(original)
+		return
+	end
+	local copy = SEEK.model:Clone()
+	local all = copy:GetDescendants()
+	local entry = { original = original, copy = copy, follow = follow, watch = {}, state = "emerge", time = 0, born = os.clock(),
+		running = 0, seen = {}, parts = {}, fires = {} }
+	for template, i in pairs(SEEK.index) do entry.parts[template] = all[i] end
+	entry.root = copy:FindFirstChild("Root")
+	for _, d in ipairs(all) do
+		if d:IsA("ParticleEmitter") and fiery(d) and d.Name ~= "HalloweenEmbers" then
+			d.Enabled = false
+			table.insert(entry.fires, d)
+		elseif d:IsA("Light") and d.Name ~= "EyeGlow" then
+			d.Enabled = false
+			table.insert(entry.fires, d)
+		end
+	end
+	entry.ignite = copy:FindFirstChild("FireIgnite", true)
+	-- What DOORS plays on it: the animations of its first seconds are its rise and its run; one after those, with it
+	-- standing still, is the crucifix
+	local animator = original:FindFirstChildWhichIsA("Animator", true)
+	if animator then
+		table.insert(entry.watch, animator.AnimationPlayed:Connect(function(track)
+			local id = track.Animation and track.Animation.AnimationId or ""
+			if os.clock() - entry.born < 4 then
+				entry.seen[id] = true
+			elseif not entry.seen[id] and entry.state ~= "crux" and entry.state ~= "cruxend" and (entry.pace or 0) < 3 then
+				entry.state, entry.time = "crux", 0
+				table.insert(entry.watch, track.Stopped:Connect(function()
+					if entry.state == "crux" then entry.state, entry.time = "cruxend", 0 end
+				end))
+			end
+		end))
+	end
+	copy.Parent = H.folder
+	for _, d in ipairs(original:GetDescendants()) do hide(entry, d) end
+	table.insert(entry.watch, original.DescendantAdded:Connect(function(d) hide(entry, d) end))
+	H.seeks[original] = entry
+end
+local function burn(entry, on)
+	if entry.burning == on then return end
+	entry.burning = on
+	for _, f in ipairs(entry.fires) do f.Enabled = on end
+	if on and entry.ignite then entry.ignite:Play() end
+end
+local function stepSeek(entry, dt)
+	if not entry.leaving then
+		-- Where: DOORS' Seek's place, on the floor under it, turned the way it goes
+		local at = entry.follow.Position
+		local flat = (at - (entry.last or at)) * Vector3.new(1, 0, 1)
+		entry.pace = flat.Magnitude / math.max(dt, 1e-3)
+		entry.last = at
+		local look = if entry.pace > 2 then flat.Unit else entry.follow.CFrame.LookVector * Vector3.new(1, 0, 1)
+		if look.Magnitude > 1e-3 then entry.look = (entry.look or look.Unit):Lerp(look.Unit, math.min(dt * 10, 1)) end
+		local pos = Vector3.new(at.X, floorUnder(entry, at) - SEEK.floor, at.Z)
+		entry.root.CFrame = CFrame.lookAt(pos, pos + (entry.look or Vector3.new(0, 0, -1)))
+	end
+	-- Which: out of the floor (until it really runs), its run (as fast as it goes), the crucifix
+	entry.running = if (entry.pace or 0) > 8 and (entry.pace or 0) < 200 then entry.running + dt else 0
+	if entry.state == "emerge" and (entry.running > 0.25 or not SEEK.anims.emerge or entry.time >= SEEK.anims.emerge.length) then
+		entry.state, entry.time = "run", 0
+	end
+	local anim, speed = nil, 1
+	if entry.state == "emerge" then
+		anim = SEEK.anims.emerge
+	elseif entry.state == "run" then
+		anim = SEEK.anims.run
+		speed = math.clamp((entry.pace or 0) / 20, 0.35, 1.6)
+	elseif entry.state == "crux" then
+		anim = if SEEK.anims.cruxstart and entry.time < SEEK.anims.cruxstart.length then SEEK.anims.cruxstart else SEEK.anims.cruxloop
+	elseif entry.state == "cruxend" then
+		anim = SEEK.anims.cruxend
+	end
+	burn(entry, entry.state ~= "emerge")
+	entry.time += dt * speed
+	local T = {}
+	if anim then
+		local t = entry.time
+		if anim == SEEK.anims.cruxloop and SEEK.anims.cruxstart then t -= SEEK.anims.cruxstart.length end
+		t = if anim.looped and anim.length > 0 then t % anim.length else math.min(t, anim.length)
+		for name, list in pairs(anim.joints) do T[name] = poseAt(list, t) end
+	end
+	local rootCF = entry.root.CFrame
+	local w = { [SEEK.model.Root] = ID }
+	for _, j in ipairs(SEEK.joints) do
+		local cf = w[j.parent] * j.c0 * (j.pose and T[j.pose] or ID) * j.c1inv
+		w[j.part] = cf
+		local mine = entry.parts[j.part]
+		if mine then mine.CFrame = rootCF * cf end
+	end
+	for template, rel in pairs(SEEK.rest) do
+		local mine = entry.parts[template]
+		if mine and mine ~= entry.root then mine.CFrame = rootCF * rel end
+	end
+end
+local function undressSeek(original, gone)
+	local entry = H.seeks[original]
+	if not entry then return end
+	H.seeks[original] = nil
+	if entry.themed then return end
+	for _, c in ipairs(entry.watch) do c:Disconnect() end
+	if gone and entry.state == "crux" and SEEK.anims.cruxend then -- taken by the crucifix: it goes down before it goes
+		entry.state, entry.time, entry.leaving = "cruxend", 0, true
+		H.seeks[{}] = entry
+		task.delay(SEEK.anims.cruxend.length + 0.2, function() entry.copy:Destroy() end)
+		return
+	end
+	entry.copy:Destroy()
+end
+
+-- The eyes on the walls: Halloween eyes, their light orange, their veins and their goo purple
+local function themeEye(model)
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("Decal") and d.Parent and d.Parent.Name == "Eye" and EYE then
+			set(d, "Texture", EYE)
+		elseif d:IsA("Decal") and d.Parent and d.Parent.Name == "Veins" then
+			set(d, "Color3", Color3.fromRGB(170, 70, 255))
+		elseif d:IsA("Light") then
+			set(d, "Color", ORANGE)
+		elseif d:IsA("ParticleEmitter") then
+			set(d, "Color", purpleSequence(d.Color))
+		end
+	end
+end
+-- The hands out of the walls: purple, their fingertips glowing orange claws, purple embers on the palm
+local function themeHand(model)
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("BasePart") and d.Transparency < 1 then
+			if d.Name:find("_Top") then
+				set(d, "Color", ORANGE)
+				set(d, "Material", Enum.Material.Neon)
+			else
+				set(d, "Color", DARK_PURPLE)
+			end
+			if d:IsA("MeshPart") then set(d, "TextureID", "") end
+			if d.Name == "Palm" then made(embers(d, nil)) end
+		elseif d:IsA("SurfaceAppearance") then
+			set(d, "Parent", nil) -- (it would keep its own look over the colour)
+		elseif d:IsA("Light") then
+			set(d, "Color", ORANGE)
+		elseif d:IsA("ParticleEmitter") then
+			set(d, "Color", purpleSequence(d.Color))
+		end
+	end
+end
+
+---====== FIGURE: its head, a jack o' lantern ======---
+
+local JACK = nil -- { model, head } : the head to put on, and where it sits on a head
+local function jackOf()
+	local figure = KIT.FigureHalloween and KIT.FigureHalloween[1]
+	local head = figure and figure:FindFirstChild("Head")
+	local kitJack = head and head:FindFirstChild("Jack O' Lantern")
+	if kitJack and OK[kitJack] then return { model = kitJack, head = head.CFrame } end
+	-- Else: the kit's lit pumpkin (if it loads) or one made here, as big as a head, its face to the front
+	local front = Vector3.new(0, 0, -1)
+	local teeth = head and head:FindFirstChild("Teeth", true)
+	if teeth then
+		local v = head.CFrame:VectorToObjectSpace(teeth.Position - head.Position) * Vector3.new(1, 0, 1)
+		if v.Magnitude > 0.05 then front = v.Unit end
+	end
+	local pumpkin = one("Small_Pumpkin_On")
+	local model
+	if pumpkin and OK[pumpkin] then
+		model = pumpkin:Clone()
+		local _, size = footprint(model)
+		pcall(function() model:ScaleTo(2.1 / math.max(size.X, size.Z)) end)
+	else
+		model = make("Model", { Name = "Jack O' Lantern" }, nil)
+		local ball = make("Part", { Name = "PumpkinBase", Size = Vector3.new(2.1, 1.7, 2.1), Color = Color3.fromRGB(230, 110, 20), Material = Enum.Material.SmoothPlastic }, model)
+		make("SpecialMesh", { MeshType = Enum.MeshType.Sphere }, ball)
+		make("Decal", { Name = "Face", Face = Enum.NormalId.Front, Texture = asset(file("JackFace.png", "\137PNG")) or "" }, ball)
+		make("PointLight", { Color = ORANGE, Range = 6, Brightness = 2 }, ball)
+		make("Part", { Name = "Stem", Size = Vector3.new(0.3, 0.45, 0.3), Color = Color3.fromRGB(70, 90, 40), CFrame = CFrame.new(0, 0.95, 0) }, model)
+		local face = make("Part", { Name = "Part", Size = Vector3.new(0.2, 0.2, 0.2), Transparency = 1, CFrame = CFrame.new(0, 0, -1) }, model)
+		face.Name = "Part"
+	end
+	-- Placed as the head is: its middle on the head's, its face (the side its glowing face part is on) to the head's front
+	local base, size = footprint(model)
+	local middle = base + Vector3.new(0, size.Y / 2, 0)
+	local facePart, body = model:FindFirstChild("Part"), model:FindFirstChild("PumpkinBase")
+	local f = if facePart and body then (facePart.Position - body.Position) * Vector3.new(1, 0, 1) else Vector3.new(0, 0, -1)
+	if f.Magnitude < 0.05 then f = Vector3.new(0, 0, -1) end
+	local yaw = yawOf(front) - yawOf(f.Unit)
+	model:PivotTo(CFrame.Angles(0, yaw, 0) * CFrame.new(-middle) * model:GetPivot())
+	return { model = model, head = ID }
+end
+local function dressFigure(head)
+	if H.heads[head] or not JACK or head:IsDescendantOf(H.folder) then return end
+	local fake = head:FindFirstChild("FakeHead")
+	local copy = prepare(JACK.model:Clone())
+	local entry = { head = head, copy = copy, parts = {} }
+	for _, p in ipairs(copy:GetDescendants()) do
+		if p:IsA("BasePart") then table.insert(entry.parts, { p, JACK.head:Inverse() * p.CFrame }) end
+	end
+	for _, d in ipairs(fake and fake:GetDescendants() or {}) do
+		if d:IsA("BasePart") or d:IsA("Decal") then set(d, "LocalTransparencyModifier", 1) end
+	end
+	if fake then set(fake, "LocalTransparencyModifier", 1) end
+	copy.Parent = H.folder
+	H.heads[head] = entry
+end
+
+---====== GETTING READY (does it load here?), THEN EVERYTHING AS IT COMES ======---
+
+task.spawn(function()
+	local checks, pending = {}, 0
+	for name, list in pairs(KIT) do
+		if name ~= "SeekHalloween" and name ~= "FigureHalloween" then
+			for _, m in ipairs(list) do table.insert(checks, m) end
+		end
+	end
+	local figure = KIT.FigureHalloween and KIT.FigureHalloween[1]
+	local kitJack = figure and figure:FindFirstChild("Jack O' Lantern", true)
+	if kitJack then table.insert(checks, kitJack) end
+	local seek = KIT.SeekHalloween and KIT.SeekHalloween[1]
+	if seek then table.insert(checks, seek) end
+	for _, m in ipairs(checks) do
+		pending += 1
+		task.spawn(function()
+			OK[m] = loads(visuals(m))
+			pending -= 1
+		end)
+	end
+	local waited = 0
+	while pending > 0 and waited < 20 do
+		waited += task.wait(0.1)
+	end
+	if not H.alive then return end
+	if seek and OK[seek] then
+		local ok, s = pcall(prepareSeek, seek)
+		if ok and s then SEEK = s else warn("[HalloweenMode] the kit's Seek could not be made ready: DOORS' own dressed instead", s) end
+	end
+	local okJack, jack = pcall(jackOf)
+	if okJack then JACK = jack end
+	H.ready = true
+	for head in pairs(H.pendingHeads or {}) do dressFigure(head) end
+	H.pendingHeads = nil
+end)
+
+local function consider(d)
+	if not H.alive or d:IsDescendantOf(H.folder) then return end
+	if SEEKS[d.Name] and d:IsA("Model") then
+		task.delay(0.1, dressSeek, d) -- (its pieces arrive with it)
+	elseif d.Name == "Seek_Arm" and d:IsA("Model") then
+		task.delay(0.1, themeHand, d)
+	elseif d.Name == "FakeHead" and d:IsA("BasePart") and d.Parent and d.Parent:IsA("BasePart") then
+		if H.ready then
+			task.defer(dressFigure, d.Parent)
+		else
+			H.pendingHeads = H.pendingHeads or {}
+			H.pendingHeads[d.Parent] = true
+		end
+	end
+end
+for _, d in ipairs(workspace:GetDescendants()) do consider(d) end
+connect(workspace.DescendantAdded, consider)
+for _, eye in ipairs(CollectionService:GetTagged("SeekEye")) do task.spawn(themeEye, eye) end
+connect(CollectionService:GetInstanceAddedSignal("SeekEye"), function(eye) task.delay(0.1, themeEye, eye) end)
+
+task.spawn(function()
+	local rooms = workspace:WaitForChild("CurrentRooms", 60)
+	if not (rooms and H.alive) then return end
+	for _, room in ipairs(rooms:GetChildren()) do dressRoom(room) end
+	connect(rooms.ChildAdded, function(room) task.delay(0.5, dressRoom, room) end)
+	connect(rooms.ChildRemoved, undressRoom)
+end)
+
+connect(RunService.RenderStepped, function(dt)
+	local gone = {}
+	for original, entry in pairs(H.seeks) do
+		if not entry.themed then
+			if entry.leaving then
+				if entry.copy.Parent then stepSeek(entry, dt) else table.insert(gone, original) end
+			elseif not original:IsDescendantOf(workspace) then
+				table.insert(gone, original)
+			else
+				stepSeek(entry, dt)
+			end
+		elseif not original:IsDescendantOf(workspace) then
+			table.insert(gone, original)
+		end
+	end
+	for _, original in ipairs(gone) do -- (after the loop: the table is not changed while it is gone through)
+		if H.seeks[original] and H.seeks[original].leaving then H.seeks[original] = nil else undressSeek(original, true) end
+	end
+	for head, entry in pairs(H.heads) do
+		if not head:IsDescendantOf(workspace) then
+			entry.copy:Destroy()
+			H.heads[head] = nil
+		else
+			local cf = head.CFrame
+			for _, pair in ipairs(entry.parts) do pair[1].CFrame = cf * pair[2] end
+		end
+	end
+end)
+
+GENV.__HalloweenMode = function()
+	H.alive = false
+	for _, c in ipairs(H.connections) do c:Disconnect() end
+	for _, entry in pairs(H.seeks) do
+		for _, c in ipairs(entry.watch or {}) do c:Disconnect() end
+	end
+	for inst, props in pairs(H.changed) do
+		for prop, old in pairs(props) do pcall(function() inst[prop] = old[1] end) end
+	end
+	for _, i in ipairs(H.made) do pcall(function() i:Destroy() end) end
+	H.folder:Destroy()
+	H.music:Destroy()
+	H.grade:Destroy()
+	GENV.__HalloweenMode = nil
+end
