@@ -5,7 +5,7 @@
 
         Everything from your kit (assets/halloween/HalloweenKit.rbxm):
 
-        The hotel: every room, as it comes, is decorated: pumpkins on its floor (lit and unlit, their carved faces toward
+        The hotel: every room, as it comes, is decorated (but those DOORS itself never decorates, as the library): pumpkins on its floor (lit and unlit, their carved faces toward
         the room, never in front of a door), candles, candelabras and candy on its furniture, cobwebs in the corners under
         its ceiling, bats hanging from it, the triangle flags along its walls, a spider on one, now and then the candy
         cauldron. Fog on every floor (the kit's own). Its lights pumpkin orange, some purple; a Halloween grade on your sight.
@@ -171,6 +171,17 @@ end
 
 ---====== THE HOTEL: its lights, its fires, its fog, its decorations ======---
 
+-- The room it is in (a child of CurrentRooms)
+local function roomOf(d)
+	local a = d
+	while a and a.Parent and a.Parent ~= workspace do
+		if a.Parent.Name == "CurrentRooms" then return a end
+		a = a.Parent
+	end
+	return nil
+end
+-- A room DOORS itself never decorates (the library: Figure's): left as it is
+local function undecorated(room) return room ~= nil and room:GetAttribute("CannotDecorate") == true end
 -- Part of an entity (Figure, Seek, its eyes, its hands...): not the room's
 local function entity(d)
 	local a = d.Parent
@@ -197,6 +208,7 @@ local function touch(d)
 			set(d, "Color", PURPLE)
 			return
 		end
+		if undecorated(roomOf(d)) then return end
 		local holder = if d.Parent and d.Parent:IsA("Attachment") then d.Parent.Parent else d.Parent
 		local key = holder or d
 		H.tones[key] = H.tones[key] or (if math.random() < 0.33 then PURPLE_LIGHT else ORANGE_LIGHT)
@@ -554,7 +566,7 @@ end
 
 local function decorate(room, entry)
 	while H.alive and not H.ready do task.wait(0.25) end
-	if not (H.alive and H.rooms[room] == entry and room.Parent) then return end
+	if not (H.alive and H.rooms[room] == entry and room.Parent) or undecorated(room) then return end
 	local info = measure(room)
 	if not info then return end
 	entry.info = info
