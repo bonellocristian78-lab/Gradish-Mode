@@ -50,7 +50,7 @@ mod rather than playing it.
 | Scanners: DOORS' radar (Nokia) or the NVCS tablet (`_G.Scanner = { Type = "Tablet" }`) | `.../ObjectScanner` |
 | Lucky Bottle: a Starlight Bottle that brings luck through DOORS' Admin Panel (needs it) | `.../LuckyBottle` |
 | Unlucky Bottle: a Starlight Bottle that brings bad luck (no more wardrobes, Rush, Screech...; never kills you; needs the Admin Panel) | `.../UnluckyBottle` |
-| Halloween Mode: the hotel dressed with your kit (pumpkins, candles, cobwebs, bats, flags, candy, fog on the floor, orange and purple lights), Seek's Halloween body with purple fire, Halloween eyes and hands, Figure's jack o' lantern head, an ambience in the background | `.../HalloweenMode` |
+| Halloween Mode: the hotel dressed with your kit (pumpkins, candles, cobwebs, bats, flags, candy, fog on the floor, orange and purple lights), Seek's Halloween body with purple fire and its own animations, Halloween hands, Figure's jack o' lantern head, an ambience in the background | `.../HalloweenMode` |
 | Universal Custom Assets: animator with Studio controls (Ctrl + U I O) | `.../UniversalAssets` |
 | The same, obfuscated | `.../UniversalAssets.obf` |
 
@@ -900,19 +900,23 @@ loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab
   it); a Halloween grade on your sight. Each room's decorations go when the room goes. Nothing of it collides, is
   touched or casts a shadow; at most two lights a candle.
 - **Seek**: the kit's Halloween Seek in its place (DOORS' own still there for the server: its hit and cutscenes are
-  DOORS'), with the kit's own animations: out of the floor, its run (as fast as Seek goes), the crucifix. Its fire
-  purple, never the orange flame: on while it runs, lit with its FireIgnite. Its eyes Halloween eyes (orange, a
-  cat's slit, purple veins: `assets/halloween/Eye.png`, drawn for this), an orange glow on its head; its hand and its
-  hook purple with purple embers. The eyes on the walls (`SeekEye`) the same, their light orange, their veins and
-  goo purple; the hands out of the walls (`Seek_Arm`) purple with glowing orange claws and purple embers. The fire of
-  its chase purple too (every fire, flame, ember in the rooms). If the kit's Seek will not load in DOORS, DOORS' own
-  Seek is dressed so instead (the kit's purple fire on it, its eyes and hands).
-- **Figure**: all of it as it is (its blisters, its sounds, its moves), its head the kit's jack o' lantern; if the
-  kit's union will not load there, the kit's lit pumpkin as big as a head, else one made here
-  (`assets/halloween/JackFace.png`).
+  DOORS'), with the kit's own animations: out of the floor (`rise wit no camera`, all through DOORS' rise, even when
+  DOORS starts its run before it moves), its run (`run new`, as fast as Seek goes), and the crucifix (`cruxstart`,
+  `cruxloop`, `cruxend`) only once it has run and is held still. What it does and plays is on its model, as the
+  attributes `State` and `Animation` (`workspace.HalloweenMode.SeekHalloween`). Its fire purple, never the orange
+  flame: on while it runs, lit with its FireIgnite. Its eyes the kit's own, an orange glow on its head; its hand and
+  its hook purple with purple embers. The eyes on the walls (`SeekEye`) DOORS' own, their light orange, their veins
+  and goo purple; the hands out of the walls (`Seek_Arm`) purple with glowing orange claws and purple embers. The
+  fire of its chase purple too (every fire, flame, ember in the rooms). If the kit's Seek will not load in DOORS,
+  DOORS' own Seek is dressed so instead (the kit's purple fire on it, its hands).
+- **Figure**: all of it as it is (its blisters, its sounds, its moves), its head the kit's jack o' lantern: every
+  Figure, the library's too (its `Head` is the one it shows: its teeth, gums and veins hidden with it) as well as
+  those whose `Head` holds a `FakeHead`; never a player's head. If the kit's union will not load there, the kit's lit
+  pumpkin as big as a head, else one made here (`assets/halloween/JackFace.png`).
 - **Music**: an ambience in the background (`assets/halloween/Ambience.mp3`): an original piece made for this, in
   the spirit of a cozy autumn Halloween night: a slow waltz on a music box, a harp and soft strings, over wind, a
-  fire crackling, crows now and then, an owl, a far bell, a wolf far away; 2 min 17 s, made to loop.
+  fire crackling, crows now and then, an owl, a far bell, a wolf far away; 2 min 17 s, made to loop; low, in the
+  background (volume 0.2).
 
 Every piece of the kit is checked first: what will not load in DOORS (a mesh or union of someone else's) is left
 out, never shown broken. `getgenv().__HalloweenMode()` takes it all off (every light, fire, eye, hand and head back
@@ -1251,7 +1255,7 @@ That includes the files made to be copied or filled in (`AchievementConfig`,
 | `assets/washroom/` | the Washroom's textures (tiles, mould, grille, drum, stains, grate) and sounds (neon buzz, drip, gurgle, bang, clank, spin, valve, chime) |
 | `assets/surprise/` | the surprises' sounds (steps, psst, bite, shriek, heartbeat, whispers, roar, clicks, hum, whoosh, rumble) |
 | `assets/bottles/` | The bottles' hotbar icons and the green one's triangle |
-| `assets/halloween/` | Your Halloween kit (`HalloweenKit.rbxm`), the ambience (`Ambience.mp3`, made here), Seek's Halloween eye, the stand-in pumpkin face and fog puff |
+| `assets/halloween/` | Your Halloween kit (`HalloweenKit.rbxm`), the ambience (`Ambience.mp3`, made here), the stand-in pumpkin face and fog puff |
 | `assets/monochrome/` | VER's stand-ins, where its game's own files do not load (its presence, its scream, a lamp's click, the radar's ping, its eyes) and the film grain; its own shape (`VERBody.lua`); its Noise variant's tape (sheets, sound) and Noise's Emerge made VER's |
 | `tools/` | Prometheus' settings for the obfuscation, the script that runs it, its fix for Luau |
 | `assets/scanner/` | The scanners' own icons without their background (`.png`) and ready to be recoloured by the script (`.icon`) |
