@@ -897,7 +897,8 @@ loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab
   it), cobwebs in the corners under its ceiling, bats hanging from it (over your head), the triangle flags along two
   walls, a spider on one, in big rooms now and then the candy cauldron. Fog on every floor: the kit's own (its
   ThickFog and ThinFog), as wide as the room. Its lights pumpkin orange, one fixture in three purple (its bulb with
-  it); a Halloween grade on your sight. Each room's decorations go when the room goes. Nothing of it collides, is
+  it); a Halloween grade on your sight. Each room's decorations go when the room goes. A room DOORS itself never
+  decorates (`CannotDecorate`: the library, Figure's) is left as it is: no decorations, no fog, its lights its own. Nothing of it collides, is
   touched or casts a shadow; at most two lights a candle.
 - **Seek**: the kit's Halloween Seek in its place (DOORS' own still there for the server: its hit and cutscenes are
   DOORS'), with the kit's own animations: out of the floor (`rise wit no camera`, all through DOORS' rise, even when
