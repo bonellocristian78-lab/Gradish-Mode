@@ -49,7 +49,8 @@ mod rather than playing it.
 | MONOCHROME: VER at the next door (its own walk, sounds, lights, kill, radar), with its creator's permission; `_G.VER` = `"White"`, `"Glitch"`, `"Noise"` (out of a TV) | `.../Monochrome` |
 | Scanners: DOORS' radar (Nokia) or the NVCS tablet (`_G.Scanner = { Type = "Tablet" }`) | `.../ObjectScanner` |
 | Lucky Bottle: a Starlight Bottle that brings luck through DOORS' Admin Panel (needs it) | `.../LuckyBottle` |
-| Unlucky Bottle: a Starlight Bottle that brings bad luck (no more wardrobes, 1 health...; needs the Admin Panel) | `.../UnluckyBottle` |
+| Unlucky Bottle: a Starlight Bottle that brings bad luck (no more wardrobes, Rush, Screech...; never kills you; needs the Admin Panel) | `.../UnluckyBottle` |
+| Halloween Mode: the hotel dressed with your kit (pumpkins, candles, cobwebs, bats, flags, candy, fog on the floor, orange and purple lights), Seek's Halloween body with purple fire, Halloween eyes and hands, Figure's jack o' lantern head, an ambience in the background | `.../HalloweenMode` |
 | Universal Custom Assets: animator with Studio controls (Ctrl + U I O) | `.../UniversalAssets` |
 | The same, obfuscated | `.../UniversalAssets.obf` |
 
@@ -883,6 +884,40 @@ sent as its own buttons send them. Without it there is no bottle, and DOORS' cap
 If the bottle's unions or the green one's triangle will not load in DOORS, a capsule of the same size and colours
 and a triangle of ours take their place; without `game:GetObjects` the bottle is made here.
 
+## Halloween Mode
+
+The hotel dressed for Halloween with your kit (`assets/halloween/HalloweenKit.rbxm`), only for you:
+
+```lua
+loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/claude/sei-qui-con-noi-ye4k62/HalloweenMode"))()
+```
+
+- **The hotel**: every room, as it comes, is decorated: pumpkins on its floor (lit and unlit, their carved faces
+  toward the room, never in front of a door), candles, candelabras and candy on its furniture (their whole base on
+  it), cobwebs in the corners under its ceiling, bats hanging from it (over your head), the triangle flags along two
+  walls, a spider on one, in big rooms now and then the candy cauldron. Fog on every floor: the kit's own (its
+  ThickFog and ThinFog), as wide as the room. Its lights pumpkin orange, one fixture in three purple (its bulb with
+  it); a Halloween grade on your sight. Each room's decorations go when the room goes. Nothing of it collides, is
+  touched or casts a shadow; at most two lights a candle.
+- **Seek**: the kit's Halloween Seek in its place (DOORS' own still there for the server: its hit and cutscenes are
+  DOORS'), with the kit's own animations: out of the floor, its run (as fast as Seek goes), the crucifix. Its fire
+  purple, never the orange flame: on while it runs, lit with its FireIgnite. Its eyes Halloween eyes (orange, a
+  cat's slit, purple veins: `assets/halloween/Eye.png`, drawn for this), an orange glow on its head; its hand and its
+  hook purple with purple embers. The eyes on the walls (`SeekEye`) the same, their light orange, their veins and
+  goo purple; the hands out of the walls (`Seek_Arm`) purple with glowing orange claws and purple embers. The fire of
+  its chase purple too (every fire, flame, ember in the rooms). If the kit's Seek will not load in DOORS, DOORS' own
+  Seek is dressed so instead (the kit's purple fire on it, its eyes and hands).
+- **Figure**: all of it as it is (its blisters, its sounds, its moves), its head the kit's jack o' lantern; if the
+  kit's union will not load there, the kit's lit pumpkin as big as a head, else one made here
+  (`assets/halloween/JackFace.png`).
+- **Music**: an ambience in the background (`assets/halloween/Ambience.mp3`): an original piece made for this, in
+  the spirit of a cozy autumn Halloween night: a slow waltz on a music box, a harp and soft strings, over wind, a
+  fire crackling, crows now and then, an owl, a far bell, a wolf far away; 2 min 17 s, made to loop.
+
+Every piece of the kit is checked first: what will not load in DOORS (a mesh or union of someone else's) is left
+out, never shown broken. `getgenv().__HalloweenMode()` takes it all off (every light, fire, eye, hand and head back
+as it was); running it again starts a new one.
+
 ## Scanners (Object Scanner)
 
 ```lua
@@ -1208,6 +1243,7 @@ That includes the files made to be copied or filled in (`AchievementConfig`,
 | `Errorbush` / `Errorbush.rbxm` | 3rr0rbu2h, the broken Ambush; its model |
 | `ObjectScanner` / `ObjectScanner.rbxm` | The scanners (Nokia and Tablet, their Lights); DOORS' scanner's model, out of a saved place |
 | `LuckyBottle` / `UnluckyBottle` / `Bottles.rbxm` | The two bottles (Starlight Bottle copies: luck through DOORS' Admin Panel, bad luck); your model of them |
+| `HalloweenMode` | The Halloween Mode (the hotel decorated, Seek and Figure for Halloween, the ambience) |
 | `Monochrome` / `Monochrome.rbxm` / `MonochromeTV.rbxm` | VER, the monster of MONOCHROME; its model, out of a saved copy of its place; Noise's TV on its arm (out of Noise's kit), for its Noise variant |
 | `assets/errorbush/` | 3rr0rbu2h's two faces |
 | `assets/noise/` | Noise's kit, tape and sheets; Noise 90's props kit, grey sheets and faces |
@@ -1215,6 +1251,7 @@ That includes the files made to be copied or filled in (`AchievementConfig`,
 | `assets/washroom/` | the Washroom's textures (tiles, mould, grille, drum, stains, grate) and sounds (neon buzz, drip, gurgle, bang, clank, spin, valve, chime) |
 | `assets/surprise/` | the surprises' sounds (steps, psst, bite, shriek, heartbeat, whispers, roar, clicks, hum, whoosh, rumble) |
 | `assets/bottles/` | The bottles' hotbar icons and the green one's triangle |
+| `assets/halloween/` | Your Halloween kit (`HalloweenKit.rbxm`), the ambience (`Ambience.mp3`, made here), Seek's Halloween eye, the stand-in pumpkin face and fog puff |
 | `assets/monochrome/` | VER's stand-ins, where its game's own files do not load (its presence, its scream, a lamp's click, the radar's ping, its eyes) and the film grain; its own shape (`VERBody.lua`); its Noise variant's tape (sheets, sound) and Noise's Emerge made VER's |
 | `tools/` | Prometheus' settings for the obfuscation, the script that runs it, its fix for Luau |
 | `assets/scanner/` | The scanners' own icons without their background (`.png`) and ready to be recoloured by the script (`.icon`) |
