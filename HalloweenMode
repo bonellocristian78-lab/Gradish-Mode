@@ -10,12 +10,13 @@
         its ceiling, bats hanging from it, the triangle flags along its walls, a spider on one, now and then the candy
         cauldron. Fog on every floor (the kit's own). Its lights pumpkin orange, some purple; a Halloween grade on your sight.
 
-        Seek: the kit's Halloween Seek in its place, with its own animations (out of the floor, its run, the crucifix); its
-        fire purple, never the orange flame; its eyes Halloween eyes (orange, a cat's slit, purple veins); its hand and its
-        hook purple with purple embers. The eyes on the walls and the hands out of them the same; the fire of its chase
-        purple too. If the kit's Seek will not load here, DOORS' own Seek is dressed so instead.
+        Seek: the kit's Halloween Seek in its place, with its own animations (out of the floor, its run new, the crucifix
+        once it has run); its fire purple, never the orange flame; its eyes the kit's, an orange glow on its head; its hand
+        and its hook purple with purple embers. The eyes on the walls glow orange, their veins purple; the hands out of the
+        walls purple, their claws orange; the fire of its chase purple too. If the kit's Seek will not load here, DOORS' own
+        Seek is dressed so instead.
 
-        Figure: all of it as it is, its head the kit's jack o' lantern.
+        Figure: all of it as it is, its head the kit's jack o' lantern (every Figure: the library's too).
 
         Music: an ambience in the background, a waltz on a music box over an autumn night (made for this, loops).
 
@@ -97,7 +98,6 @@ local function asset(path)
 	local ok, id = pcall(getcustomasset, path)
 	return if ok and type(id) == "string" then id else nil
 end
-local EYE = asset(file("Eye.png", "\137PNG"))
 
 local kit = nil
 pcall(function() kit = game:GetObjects(getcustomasset(file("HalloweenKit.rbxm", "<roblox!")))[1] end)
@@ -144,7 +144,7 @@ end
 -- A Halloween grade on your sight, and the music
 H.grade = make("ColorCorrectionEffect", { Name = "HalloweenGrade", TintColor = Color3.fromRGB(255, 236, 222), Saturation = 0.12, Contrast = 0.06 },
 	Lighting)
-H.music = make("Sound", { Name = "HalloweenAmbience", SoundId = asset(file("Ambience.mp3", "ID3")) or "", Looped = true, Volume = 0.5 }, SoundService)
+H.music = make("Sound", { Name = "HalloweenAmbience", SoundId = asset(file("Ambience.mp3", "ID3")) or "", Looped = true, Volume = 0.2 }, SoundService)
 H.music:Play()
 
 ---====== DOES IT LOAD HERE? (a mesh, a union, a texture of someone else's will not: then not that one) ======---
@@ -633,7 +633,7 @@ local function prepareSeek(template)
 		for key, name in pairs(wanted) do
 			local kfs = saves:FindFirstChild(name) or (key == "run" and saves:FindFirstChild("run")) or nil
 			if kfs and kfs:IsA("KeyframeSequence") then
-				local anim = { joints = {}, length = 0, looped = key == "run" or key == "cruxloop" }
+				local anim = { name = kfs.Name, joints = {}, length = 0, looped = key == "run" or key == "cruxloop" }
 				local frames = kfs:GetKeyframes()
 				table.sort(frames, function(a, b) return a.Time < b.Time end)
 				for _, frame in ipairs(frames) do
@@ -682,8 +682,6 @@ local function prepareSeek(template)
 			d:Destroy()
 		elseif d:IsA("Sound") and d.Name ~= "FireIgnite" then
 			d:Destroy()
-		elseif d:IsA("Decal") and d.Parent and d.Parent.Name == "Eye" and EYE then
-			d.Texture = EYE -- (its Halloween eyes)
 		end
 	end
 	s.fires = seekFire(model)
@@ -767,8 +765,6 @@ local function themeSeek(original)
 			set(d, "Color", purpleSequence(d.Color))
 		elseif d:IsA("Light") then
 			set(d, "Color", PURPLE)
-		elseif d:IsA("Decal") and d.Parent and d.Parent.Name == "Eye" and EYE then
-			set(d, "Texture", EYE)
 		elseif d:IsA("BasePart") and d.Name:find("Hand") then
 			set(d, "Color", DARK_PURPLE)
 			made(embers(d, nil))
@@ -805,8 +801,8 @@ local function dressSeek(original)
 	end
 	local copy = SEEK.model:Clone()
 	local all = copy:GetDescendants()
-	local entry = { original = original, copy = copy, follow = follow, watch = {}, state = "emerge", time = 0, born = os.clock(),
-		running = 0, seen = {}, parts = {}, fires = {} }
+	local entry = { original = original, copy = copy, follow = follow, watch = {}, state = "emerge", time = 0, running = 0, seen = {},
+		parts = {}, fires = {} }
 	for template, i in pairs(SEEK.index) do entry.parts[template] = all[i] end
 	entry.root = copy:FindFirstChild("Root")
 	for _, d in ipairs(all) do
@@ -819,15 +815,15 @@ local function dressSeek(original)
 		end
 	end
 	entry.ignite = copy:FindFirstChild("FireIgnite", true)
-	-- What DOORS plays on it: the animations of its first seconds are its rise and its run; one after those, with it
-	-- standing still, is the crucifix
+	-- What DOORS plays on it: its rise, its run (it may start it still standing: its rise is long); only once it has run,
+	-- an animation never played before with it standing still is the crucifix
 	local animator = original:FindFirstChildWhichIsA("Animator", true)
 	if animator then
 		table.insert(entry.watch, animator.AnimationPlayed:Connect(function(track)
 			local id = track.Animation and track.Animation.AnimationId or ""
-			if os.clock() - entry.born < 4 then
+			if not (entry.ran and entry.state == "run" and not entry.seen[id] and (entry.pace or 0) < 3) then
 				entry.seen[id] = true
-			elseif not entry.seen[id] and entry.state ~= "crux" and entry.state ~= "cruxend" and (entry.pace or 0) < 3 then
+			else
 				entry.state, entry.time = "crux", 0
 				table.insert(entry.watch, track.Stopped:Connect(function()
 					if entry.state == "crux" then entry.state, entry.time = "cruxend", 0 end
@@ -860,6 +856,7 @@ local function stepSeek(entry, dt)
 	end
 	-- Which: out of the floor (until it really runs), its run (as fast as it goes), the crucifix
 	entry.running = if (entry.pace or 0) > 8 and (entry.pace or 0) < 200 then entry.running + dt else 0
+	if entry.running > 0.25 then entry.ran = true end
 	if entry.state == "emerge" and (entry.running > 0.25 or not SEEK.anims.emerge or entry.time >= SEEK.anims.emerge.length) then
 		entry.state, entry.time = "run", 0
 	end
@@ -875,6 +872,8 @@ local function stepSeek(entry, dt)
 		anim = SEEK.anims.cruxend
 	end
 	burn(entry, entry.state ~= "emerge")
+	entry.copy:SetAttribute("State", entry.state) -- (what it does and plays: in the explorer)
+	entry.copy:SetAttribute("Animation", anim and anim.name or "")
 	entry.time += dt * speed
 	local T = {}
 	if anim then
@@ -911,12 +910,10 @@ local function undressSeek(original, gone)
 	entry.copy:Destroy()
 end
 
--- The eyes on the walls: Halloween eyes, their light orange, their veins and their goo purple
+-- The eyes on the walls: their light orange, their veins and their goo purple (the eyes themselves DOORS')
 local function themeEye(model)
 	for _, d in ipairs(model:GetDescendants()) do
-		if d:IsA("Decal") and d.Parent and d.Parent.Name == "Eye" and EYE then
-			set(d, "Texture", EYE)
-		elseif d:IsA("Decal") and d.Parent and d.Parent.Name == "Veins" then
+		if d:IsA("Decal") and d.Parent and d.Parent.Name == "Veins" then
 			set(d, "Color3", Color3.fromRGB(170, 70, 255))
 		elseif d:IsA("Light") then
 			set(d, "Color", ORANGE)
@@ -954,7 +951,10 @@ local function jackOf()
 	local figure = KIT.FigureHalloween and KIT.FigureHalloween[1]
 	local head = figure and figure:FindFirstChild("Head")
 	local kitJack = head and head:FindFirstChild("Jack O' Lantern")
-	if kitJack and OK[kitJack] then return { model = kitJack, head = head.CFrame } end
+	if kitJack and OK[kitJack] then
+		local fake = head:FindFirstChild("FakeHead")
+		return { model = kitJack, head = head.CFrame, fake = fake and fake.CFrame, fakeMesh = fake and fake.MeshId }
+	end
 	-- Else: the kit's lit pumpkin (if it loads) or one made here, as big as a head, its face to the front
 	local front = Vector3.new(0, 0, -1)
 	local teeth = head and head:FindFirstChild("Teeth", true)
@@ -988,18 +988,38 @@ local function jackOf()
 	model:PivotTo(CFrame.Angles(0, yaw, 0) * CFrame.new(-middle) * model:GetPivot())
 	return { model = model, head = ID }
 end
+-- Figure's: a model tagged FigureRig, or named for it (FigureRig, FigureLibrary, FigureRagdoll...)
+local function figureOf(part)
+	local a = part.Parent
+	while a and a ~= workspace do
+		if a:IsA("Model") and Players:GetPlayerFromCharacter(a) then return nil end -- (never one of you)
+		if a:IsA("Model") and (CollectionService:HasTag(a, "FigureRig") or a.Name:find("Figure")) then return a end
+		a = a.Parent
+	end
+	return nil
+end
+-- Its head: what it shows of it unseen (its FakeHead if its Head has one, else its Head itself, as in the library's: its
+-- teeth, gums, veins, blood with it), the jack o' lantern on it
 local function dressFigure(head)
-	if H.heads[head] or not JACK or head:IsDescendantOf(H.folder) then return end
-	local fake = head:FindFirstChild("FakeHead")
+	if H.heads[head] or not JACK or not head:IsDescendantOf(workspace) or head:IsDescendantOf(H.folder) then return end
+	local shown = head:FindFirstChild("FakeHead") or head
+	local seen = shown.Transparency < 1
+	for _, d in ipairs(shown:GetDescendants()) do
+		if d:IsA("BasePart") and d.Transparency < 1 then seen = true end
+	end
+	if not seen then return end -- (a head of its it does not show)
+	local ref = if JACK.fake and head:IsA("MeshPart") and head.MeshId == JACK.fakeMesh then JACK.fake else JACK.head
 	local copy = prepare(JACK.model:Clone())
 	local entry = { head = head, copy = copy, parts = {} }
 	for _, p in ipairs(copy:GetDescendants()) do
-		if p:IsA("BasePart") then table.insert(entry.parts, { p, JACK.head:Inverse() * p.CFrame }) end
+		if p:IsA("BasePart") then table.insert(entry.parts, { p, ref:Inverse() * p.CFrame }) end
 	end
-	for _, d in ipairs(fake and fake:GetDescendants() or {}) do
+	local function hideHead(d)
 		if d:IsA("BasePart") or d:IsA("Decal") then set(d, "LocalTransparencyModifier", 1) end
 	end
-	if fake then set(fake, "LocalTransparencyModifier", 1) end
+	hideHead(shown)
+	for _, d in ipairs(shown:GetDescendants()) do hideHead(d) end
+	entry.watch = connect(shown.DescendantAdded, hideHead)
 	copy.Parent = H.folder
 	H.heads[head] = entry
 end
@@ -1047,12 +1067,15 @@ local function consider(d)
 		task.delay(0.1, dressSeek, d) -- (its pieces arrive with it)
 	elseif d.Name == "Seek_Arm" and d:IsA("Model") then
 		task.delay(0.1, themeHand, d)
-	elseif d.Name == "FakeHead" and d:IsA("BasePart") and d.Parent and d.Parent:IsA("BasePart") then
-		if H.ready then
-			task.defer(dressFigure, d.Parent)
-		else
-			H.pendingHeads = H.pendingHeads or {}
-			H.pendingHeads[d.Parent] = true
+	elseif (d.Name == "Head" or d.Name == "FakeHead") and d:IsA("BasePart") then
+		local head = if d.Name == "FakeHead" and d.Parent and d.Parent:IsA("BasePart") then d.Parent else d
+		if head.Name == "Head" and figureOf(head) then
+			if H.ready then
+				task.defer(dressFigure, head)
+			else
+				H.pendingHeads = H.pendingHeads or {}
+				H.pendingHeads[head] = true
+			end
 		end
 	end
 end
@@ -1090,6 +1113,7 @@ connect(RunService.RenderStepped, function(dt)
 	for head, entry in pairs(H.heads) do
 		if not head:IsDescendantOf(workspace) then
 			entry.copy:Destroy()
+			entry.watch:Disconnect()
 			H.heads[head] = nil
 		else
 			local cf = head.CFrame
