@@ -751,7 +751,7 @@ end
 local function hide(entry, d)
 	if d:IsA("BasePart") or d:IsA("Decal") then
 		set(d, "LocalTransparencyModifier", 1)
-	elseif d:IsA("ParticleEmitter") or d:IsA("Light") or d:IsA("Beam") or d:IsA("Trail") or d:IsA("Fire") or d:IsA("Smoke") then
+	elseif d:IsA("ParticleEmitter") or d:IsA("Light") or d:IsA("Beam") or d:IsA("Trail") or d:IsA("Fire") or d:IsA("Smoke") or d:IsA("Highlight") then
 		set(d, "Enabled", false)
 		table.insert(entry.watch, d:GetPropertyChangedSignal("Enabled"):Connect(function() if d.Enabled and H.alive then d.Enabled = false end end))
 	end
@@ -762,8 +762,14 @@ local function floorUnder(entry, at)
 	local from = if me and math.abs(me.Position.Y - at.Y) < 20 then me.Position.Y + 3 else at.Y + 2
 	local hit = nil
 	pcall(function()
-		probe.FilterDescendantsInstances = { H.folder, entry.original, character }
-		hit = workspace:Raycast(Vector3.new(at.X, from, at.Z), Vector3.new(0, -30, 0), probe)
+		local skip = { H.folder, entry.original, character }
+		for _ = 1, 6 do -- (through what is not seen or not solid)
+			probe.FilterDescendantsInstances = skip
+			hit = workspace:Raycast(Vector3.new(at.X, from, at.Z), Vector3.new(0, -30, 0), probe)
+			if not hit or (hit.Instance.Transparency < 0.9 and hit.Instance.CanCollide) then break end
+			table.insert(skip, hit.Instance)
+			hit = nil
+		end
 	end)
 	if hit then entry.floor = hit.Position.Y end
 	return entry.floor or (at.Y - 5.8)
@@ -864,7 +870,7 @@ local function stepSeek(entry, dt)
 		local look = if entry.pace > 2 then flat.Unit else entry.follow.CFrame.LookVector * Vector3.new(1, 0, 1)
 		if look.Magnitude > 1e-3 then entry.look = (entry.look or look.Unit):Lerp(look.Unit, math.min(dt * 10, 1)) end
 		local pos = Vector3.new(at.X, floorUnder(entry, at) - SEEK.floor, at.Z)
-		entry.root.CFrame = CFrame.lookAt(pos, pos + (entry.look or Vector3.new(0, 0, -1)))
+		entry.root.CFrame = CFrame.lookAt(pos, pos + (entry.look or Vector3.new(0, 0, -1))) -- (its Root looks where its eyes do)
 	end
 	-- Which: out of the floor (until it really runs), its run (as fast as it goes), the crucifix
 	entry.running = if (entry.pace or 0) > 8 and (entry.pace or 0) < 200 then entry.running + dt else 0
