@@ -15,11 +15,20 @@
         a colour of yours, the same icon with its screen in that colour (made
         once from assets/scanner/, kept in ObjectScanner/Icons/).
 
+        And the Golden Tablet (the Curious Tablet: Variant "Golden"): the
+        tablet in gold, its frames per second past counting (MoonSec-3: a
+        number that never stands still). By the Guiding Light (a Seek chase's
+        guiding sparkles) its screen says CURIOUS LIGHT NOT FOUND; by the
+        Curious Light (the subfloors', the Curious Door's) it is charged,
+        lightning all over it: then R (RT on a controller) powers it up, a
+        scanner and a console at once: FLAPPY, SNAKE, BREAKOUT, 2048, TRIS
+        and the FEED to scroll. T turns it (a tablet, or held up as a phone).
+
             _G.Scanner = { Type = "Tablet", Variant = "Guiding" }   -- optional
             loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/main/ObjectScanner"))()
 
         Type       "Scanner" (the Nokia: the default), "Tablet"
-        Variant    "Normal" (the default), "Guiding", "Curious"
+        Variant    "Normal" (the default), "Guiding", "Curious", "Golden"
         Color      its screen: "Red", "Orange", "Yellow", "Lime", "Green", "Cyan",
                    "Blue", "Purple", "Pink", "White" (or any Color3); by default
                    its own, or the Light's
@@ -31,6 +40,10 @@
             F            the next function
             L            a trick: it flies, it spins, it falls...
             X            drop it (E to pick it up)
+          the Golden Tablet's own:
+            R (RT)       charged: power it up; powered: hold it up to your face
+            T            turn it: tablet, phone
+            arrows       in its games (and Space in FLAPPY); the wheel in FEED
 
         Its functions (F): SCANNER (DOORS' own: what is worth finding),
         ENTITIES (what is coming, and from where), EXIT (an arrow to the next
@@ -63,8 +76,10 @@ local KIND_NAMES = { nokia = "Nokia", radar = "Nokia", scanner = "Nokia", object
 local LIGHTS = {
 	Guiding = { title = "Guiding Light", color = rgb(95, 180, 255) },
 	Curious = { title = "Curious Light", color = rgb(255, 205, 70) },
+	Golden = { title = "Golden Tablet", color = rgb(255, 205, 70) }, -- (the Curious Tablet: the Curious Light's, in gold)
 }
-local LIGHT_NAMES = { guiding = "Guiding", guidinglight = "Guiding", curious = "Curious", curiouslight = "Curious" }
+local LIGHT_NAMES = { guiding = "Guiding", guidinglight = "Guiding", curious = "Curious", curiouslight = "Curious", golden = "Golden",
+	goldentablet = "Golden", curioustablet = "Golden" }
 -- Its screen's colours, by name
 local COLORS = { red = rgb(255, 45, 45), orange = rgb(255, 140, 40), yellow = rgb(250, 210, 60), lime = rgb(130, 220, 80),
 	green = rgb(124, 200, 110), cyan = rgb(40, 200, 220), blue = rgb(50, 110, 240), purple = rgb(150, 80, 230), pink = rgb(255, 110, 190),
@@ -73,16 +88,17 @@ local function simple(s) return if type(s) == "string" then (s:lower():gsub("[^%
 local given = _G.Scanner
 _G.Scanner = nil
 given = if type(given) == "table" then given else {}
-local KIND = KIND_NAMES[simple(given.Type)] or "Nokia"
-if given.Type ~= nil and not KIND_NAMES[simple(given.Type)] then warn("[Scanner] there is no Type " .. tostring(given.Type) .. ": the Nokia") end
 local LIGHT = LIGHT_NAMES[simple(given.Variant)] -- nil: Normal
+local GOLDEN = LIGHT == "Golden" -- the Golden Tablet: a tablet, always
+local KIND = if GOLDEN then "Tablet" else (KIND_NAMES[simple(given.Type)] or "Nokia")
+if given.Type ~= nil and not KIND_NAMES[simple(given.Type)] then warn("[Scanner] there is no Type " .. tostring(given.Type) .. ": the Nokia") end
 local CUSTOM = if typeof(given.Color) == "Color3" then given.Color else COLORS[simple(given.Color)] -- a colour of yours
 if given.Color ~= nil and not CUSTOM then warn("[Scanner] there is no Color " .. tostring(given.Color) .. ": its own") end
 local CONFIG = {
-	FPS = math.clamp(tonumber(given.FPS) or 30, 1, 240),
+	FPS = math.clamp(tonumber(given.FPS) or (if GOLDEN then 240 else 30), 1, 240), -- (the Golden Tablet's: every frame)
 	Screen = CUSTOM or (if LIGHT then LIGHTS[LIGHT].color else KINDS[KIND].screen),
 }
-local TITLE = KINDS[KIND].title .. (if LIGHT then " (" .. LIGHTS[LIGHT].title .. ")" else "")
+local TITLE = if GOLDEN then LIGHTS.Golden.title else KINDS[KIND].title .. (if LIGHT then " (" .. LIGHTS[LIGHT].title .. ")" else "")
 local FNS = { "ITEMS", "ENTITIES", "EXIT", "HIDING", "TRAPS" } -- its functions, in order (F): these, then its own
 for _, name in ipairs(KINDS[KIND].own) do table.insert(FNS, name) end
 
@@ -209,6 +225,34 @@ local function make()
 	d.grip = if grip then grip.CFrame else tool.Grip
 	d.centre = centreOf(tool, d.handle)
 	d.assets = tool.ScannerAssets
+	if GOLDEN then -- the Golden Tablet: its body gold (its screen as it is), and its screen turned upright for when it is held as a phone
+		for _, p in ipairs(partsOf(tool)) do
+			if p ~= d.screen and p.Transparency < 1 then
+				pcall(function() p.TextureID = "" end)
+				local _, sat, v = p.Color:ToHSV()
+				p.Color = Color3.fromHSV(0.12, math.clamp(0.55 + sat * 0.4, 0, 1), math.clamp(0.5 + v * 0.5, 0, 1))
+				p.Material, p.Reflectance = Enum.Material.Foil, 0.08
+			end
+		end
+		for _, a in ipairs(tool:GetDescendants()) do
+			if a:IsA("SurfaceAppearance") then a:Destroy() end
+		end
+		local n = Vector3.FromNormalId(d.face) -- (its screen's face, in its own space: the axis it turns about)
+		local size = d.screen.Size
+		local swapped = if math.abs(n.Z) > 0.5 then Vector3.new(size.Y, size.X, size.Z) elseif math.abs(n.X) > 0.5 then Vector3.new(size.X, size.Z, size.Y)
+			else Vector3.new(size.Z, size.Y, size.X)
+		local upright = Instance.new("Part")
+		upright.Name = "ScreenUpright"
+		upright.Size, upright.Transparency = swapped, 1
+		upright.CFrame = d.screen.CFrame * CFrame.fromAxisAngle(n, -math.pi / 2)
+		upright.CanCollide, upright.CanQuery, upright.CanTouch, upright.Massless, upright.Anchored = false, false, false, true, false
+		local weld = Instance.new("WeldConstraint")
+		weld.Part0, weld.Part1 = d.screen, upright
+		weld.Parent = upright
+		upright.Parent = d.screen
+		d.upright = upright
+		d.normal = d.handle.CFrame:VectorToObjectSpace(d.screen.CFrame:VectorToWorldSpace(n)) -- (the same axis, in its handle's space)
+	end
 	if LIGHT then -- the Light's glow on it, and its sparkles
 		local color = LIGHTS[LIGHT].color
 		local glow = Instance.new("PointLight")
@@ -343,6 +387,24 @@ end
 
 -- Its icon in your inventory: its own; in a Light or in a colour of yours, its own recoloured (once, then kept)
 local function useIcon(d)
+	if GOLDEN then -- (the Golden Tablet's own: drawn for it, fetched once)
+		pcall(function()
+			local path = "ObjectScanner/Icons/GoldenTablet.png"
+			if not isfolder("ObjectScanner") then makefolder("ObjectScanner") end
+			if not isfolder("ObjectScanner/Icons") then makefolder("ObjectScanner/Icons") end
+			if not isfile(path) then
+				for _, branch in ipairs(BRANCHES) do
+					local ok, body = pcall(function() return game:HttpGet(REPO .. branch .. "/assets/curious/GoldenTablet.png") end)
+					if ok and type(body) == "string" and body:sub(1, 4) == "\137PNG" then
+						writefile(path, body)
+						break
+					end
+				end
+			end
+			if isfile(path) then d.tool.TextureId = getcustomasset(path) end
+		end)
+		return
+	end
 	local base = ICON_BASES[KIND]
 	if not (base and (LIGHT or CUSTOM)) then return end
 	local c = CONFIG.Screen
@@ -378,6 +440,9 @@ local S = {
 	snakeBest = 0, dropped = nil,
 }
 local ui = {} -- its screen's pieces, while it is in your hand
+-- The Golden Tablet's own: charged by the Curious Light, powered up (R), held up, turned, the Lights it knows of
+local GOLD = { charged = false, powered = false, powering = false, portrait = false, raised = false, turning = false, felt = nil, nextFeel = 0,
+	guidingUntil = 0, message = nil, lights = setmetatable({}, { __mode = "k" }), arcs = {}, nextArc = 0, nextZap = 0, keysBound = false }
 local MODE = { Label = "SCANNER", BootImage = "rbxassetid://100718803042146", PulseInterval = 2.5, PulseRange = 60, RevealTime = 2,
 	Tags = { "SalvageDrop", "RBS" } }
 local STATIC = { "rbxassetid://8681113666", "rbxassetid://8681113503" }
@@ -401,7 +466,8 @@ local function sound(name) -- one of its sounds (the tablet's have names of thei
 end
 -- DOORS' own sounds, for its tricks, its falls and its pick-ups: { id, volume, speed }
 local SFX = { toss = { 17815910619, 0.5, 1.1 }, catch = { 5188314808, 0.3, 1.6 }, smack = { 510935326, 0.35, 1.4 }, rattle = { 3848738542, 0.45, 1.2 },
-	floor = { 9116673678, 0.35, 2.2 }, pickup = { 18125587966, 0.5, 1 }, tap = { 11689017821, 0.5, 1.1 }, slip = { 28976727, 0.25, 1.3 } }
+	floor = { 9116673678, 0.35, 2.2 }, pickup = { 18125587966, 0.5, 1 }, tap = { 11689017821, 0.5, 1.1 }, slip = { 28976727, 0.25, 1.3 },
+	zap = { 8829969521, 0.3, 1 }, charge = { 9125986239, 0.6, 1 } } -- (a bulb's zap; the Curious Light's shimmer)
 local function sfx(name, speed)
 	if not S.d then return end
 	local spec = SFX[name]
@@ -455,6 +521,42 @@ local function bindUI()
 	pcall(function() alert.FontFace = ui.mode.FontFace end)
 	alert.Parent = ui.inner
 	ui.alert = alert
+	if GOLDEN then
+		gui.Adornee = if GOLD.portrait then S.d.upright else S.d.screen
+		-- MoonSec-3: its frames per second, a number that never stands still
+		local fps = Instance.new("TextLabel")
+		fps.Name = "Fps"
+		fps.BackgroundTransparency = 1
+		fps.Position, fps.Size = UDim2.fromScale(0.25, 0), UDim2.fromScale(0.42, 0.1)
+		fps.TextScaled = true
+		fps.TextXAlignment = Enum.TextXAlignment.Left
+		fps.ZIndex = 9
+		pcall(function() fps.FontFace = ui.mode.FontFace end)
+		fps.Parent = ui.inner
+		ui.fps = fps
+		-- What it says of the Lights it feels: over everything, even when it is off
+		local banner = Instance.new("Frame")
+		banner.Name = "LightBanner"
+		banner.AnchorPoint = Vector2.new(0.5, 0.5)
+		banner.Position, banner.Size = UDim2.fromScale(0.5, 0.55), UDim2.fromScale(0.92, 0.42)
+		banner.BorderSizePixel = 0
+		banner.ZIndex = 40
+		banner.Visible = false
+		banner.Parent = gui
+		local title = Instance.new("TextLabel")
+		title.Name = "Title"
+		title.BackgroundTransparency = 1
+		title.Position, title.Size = UDim2.fromScale(0.04, 0.08), UDim2.fromScale(0.92, 0.46)
+		title.TextScaled = true
+		title.ZIndex = 41
+		pcall(function() title.FontFace = ui.mode.FontFace end)
+		title.Parent = banner
+		local line = title:Clone()
+		line.Name = "Line"
+		line.Position, line.Size = UDim2.fromScale(0.04, 0.58), UDim2.fromScale(0.92, 0.32)
+		line.Parent = banner
+		ui.banner, ui.bannerTitle, ui.bannerLine = banner, title, line
+	end
 end
 
 local function applyColor(c)
@@ -1048,6 +1150,12 @@ do
 	end
 	function FN.SNAKE.left() return steer(-1) end
 	function FN.SNAKE.right() return steer(1) end
+	function FN.SNAKE.key(k) -- (the Golden Tablet's arrows: where it goes; never straight back)
+		local want = ({ [Enum.KeyCode.Right] = 1, [Enum.KeyCode.Down] = 2, [Enum.KeyCode.Left] = 3, [Enum.KeyCode.Up] = 4 })[k]
+		if not want then return false end
+		if not g.over and want ~= (g.dir + 1) % 4 + 1 then g.dir, g.turns = want, {} end
+		return true
+	end
 end
 
 -- X-RAY (the Tablet's, as its own script): the room you are in, seen through its screen, and a star on what opens the way
@@ -1110,6 +1218,484 @@ do
 	function FN.XRAY.leave() x.token += 1 end
 end
 
+-- THE GOLDEN TABLET'S APPS (once it is powered up): its games, its feed. Each as the functions are; key(k) for the arrows
+-- (and Space), wheel(d) for the mouse wheel, held(dir) to ask whether left (-1) or right (1) is held
+local function heldDir()
+	local left = UserInputService:IsKeyDown(Enum.KeyCode.Left) or UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1)
+	local right = UserInputService:IsKeyDown(Enum.KeyCode.Right) or UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2)
+	return (if right then 1 else 0) - (if left then 1 else 0)
+end
+local function board(c, top)
+	local b = W.new("Frame", c, { Position = UDim2.fromScale(0, top or 0.12), Size = UDim2.fromScale(1, 1 - (top or 0.12)), BackgroundColor3 = hsv(CONFIG.Screen, 0.18),
+		BackgroundTransparency = 0.45, ClipsDescendants = true })
+	W.new("UIStroke", b, { Color = CONFIG.Screen, Thickness = 1 })
+	return b
+end
+local function block(parent, z)
+	return W.new("Frame", parent, { BackgroundColor3 = CONFIG.Screen, BackgroundTransparency = 0, ZIndex = z or 9 })
+end
+
+-- FLAPPY: click (or Space, or up) to flap, through the gaps
+FN.FLAPPY = { label = "FLAPPY", clean = true }
+do
+	local g = {}
+	local GAP, PIPE, SPEED, FALL, FLAP, X = 0.38, 0.12, 0.34, 2.3, -0.78, 0.25
+	local function clear()
+		for _, p in ipairs(g.pipes or {}) do
+			p.top:Destroy()
+			p.bottom:Destroy()
+		end
+		g.pipes = {}
+	end
+	local function reset(now)
+		clear()
+		g.y, g.vy, g.next, g.points, g.over, g.started = 0.5, 0, now + 0.4, 0, nil, false
+		if g.hint then g.hint.Visible = true end
+	end
+	local function die(now)
+		g.over = now + 1.4
+		S.flappyBest = math.max(S.flappyBest or 0, g.points)
+		oneShot(S.d.assets.Ping, 0.5)
+		S.flash = math.max(S.flash, 0.6)
+	end
+	function FN.FLAPPY.enter(c)
+		g.score = W.text(c, { Size = UDim2.fromScale(1, 0.11), TextXAlignment = Enum.TextXAlignment.Left })
+		g.board = board(c)
+		g.bird = W.round(block(g.board, 10), 0.35)
+		g.bird.AnchorPoint, g.bird.Size = Vector2.new(0.5, 0.5), UDim2.fromScale(0.07, 0.1)
+		g.hint = W.text(g.board, { Position = UDim2.fromScale(0, 0.72), Size = UDim2.fromScale(1, 0.12), Text = "CLICK TO FLAP", TextTransparency = 0.3 })
+		g.pipes = {}
+		reset(os.clock())
+	end
+	function FN.FLAPPY.step(dt, now)
+		dt = math.min(dt, 0.05)
+		if g.over then
+			if now >= g.over then reset(now) end
+		elseif g.started then
+			g.vy += FALL * dt
+			g.y += g.vy * dt
+			if now >= g.next then
+				g.next = now + 1.45
+				table.insert(g.pipes, { x = 1.02, gap = 0.26 + math.random() * 0.48, top = block(g.board), bottom = block(g.board) })
+			end
+			for i = #g.pipes, 1, -1 do
+				local p = g.pipes[i]
+				p.x -= SPEED * dt
+				if p.x < -PIPE - 0.05 then
+					p.top:Destroy()
+					p.bottom:Destroy()
+					table.remove(g.pipes, i)
+				else
+					if p.x < X + 0.03 and p.x + PIPE > X - 0.03 and (g.y - 0.045 < p.gap - GAP / 2 or g.y + 0.045 > p.gap + GAP / 2) then die(now) end
+					if not p.passed and p.x + PIPE < X - 0.03 then
+						p.passed = true
+						g.points += 1
+						oneShot(S.d.assets.Found, 1 + math.min(g.points, 20) * 0.03)
+					end
+				end
+			end
+			if not g.over and (g.y > 0.96 or g.y < 0.04) then die(now) end
+		end
+		for _, p in ipairs(g.pipes) do
+			p.top.Position, p.top.Size = UDim2.fromScale(p.x, 0), UDim2.fromScale(PIPE, math.max(p.gap - GAP / 2, 0))
+			p.bottom.Position, p.bottom.Size = UDim2.fromScale(p.x, p.gap + GAP / 2), UDim2.fromScale(PIPE, math.max(1 - p.gap - GAP / 2, 0))
+		end
+		g.bird.Position = UDim2.fromScale(X, g.y)
+		g.bird.Rotation = math.clamp(g.vy * 45, -30, 70)
+		g.bird.BackgroundTransparency = if g.over and math.floor(now * 6) % 2 == 1 then 0.75 else 0
+		g.score.Text = if g.over then ("GAME OVER  %d"):format(g.points) else ("SCORE %d  BEST %d"):format(g.points, math.max(S.flappyBest or 0, g.points))
+	end
+	local function flap()
+		if g.over then return true end
+		g.started = true
+		g.hint.Visible = false
+		g.vy = FLAP
+		sfx("tap", 1.5)
+		return true
+	end
+	FN.FLAPPY.left, FN.FLAPPY.right = flap, flap
+	function FN.FLAPPY.key(k)
+		if k == Enum.KeyCode.Space or k == Enum.KeyCode.Up then return flap() end
+		return false
+	end
+	function FN.FLAPPY.leave() g.pipes = {} end
+end
+
+-- BREAKOUT: hold left or right (the mouse's buttons, or the arrows); the ball breaks the bricks
+FN.BREAKOUT = { label = "BREAKOUT", clean = true }
+do
+	local g = {}
+	local COLS, ROWS, PADDLE = 8, 4, 0.2
+	local function serve(now)
+		g.bx, g.by, g.vx, g.vy, g.wait = g.px, 0.82, (math.random() < 0.5 and -1 or 1) * 0.32, -0.42, now + 0.8
+	end
+	local function level(now)
+		for _, b in ipairs(g.bricks or {}) do b.frame:Destroy() end
+		g.bricks = {}
+		for r = 0, ROWS - 1 do
+			for c = 0, COLS - 1 do
+				local f = block(g.board)
+				f.Position, f.Size = UDim2.new(c / COLS, 1, 0.06 + r * 0.07, 1), UDim2.new(1 / COLS, -2, 0.07, -2)
+				f.BackgroundTransparency = r * 0.15
+				table.insert(g.bricks, { frame = f, c = c, r = r, alive = true })
+			end
+		end
+		serve(now)
+	end
+	local function reset(now)
+		g.px, g.lives, g.points, g.over = 0.5, 3, 0, nil
+		level(now)
+	end
+	function FN.BREAKOUT.enter(c)
+		g.score = W.text(c, { Size = UDim2.fromScale(1, 0.11), TextXAlignment = Enum.TextXAlignment.Left })
+		g.board = board(c)
+		g.paddle = block(g.board, 10)
+		g.paddle.AnchorPoint, g.paddle.Size = Vector2.new(0.5, 0.5), UDim2.fromScale(PADDLE, 0.035)
+		g.ball = W.round(block(g.board, 10), 1)
+		g.ball.AnchorPoint, g.ball.Size = Vector2.new(0.5, 0.5), UDim2.fromScale(0.03, 0.045)
+		g.bricks = {}
+		reset(os.clock())
+	end
+	function FN.BREAKOUT.step(dt, now)
+		dt = math.min(dt, 0.05)
+		if g.over then
+			if now >= g.over then reset(now) end
+		else
+			g.px = math.clamp(g.px + heldDir() * 1.1 * dt, PADDLE / 2, 1 - PADDLE / 2)
+			if now < g.wait then
+				g.bx = g.px
+			else
+				g.bx += g.vx * dt
+				g.by += g.vy * dt
+				if g.bx < 0.015 or g.bx > 0.985 then
+					g.vx = -g.vx
+					g.bx = math.clamp(g.bx, 0.015, 0.985)
+				end
+				if g.by < 0.02 then
+					g.vy = math.abs(g.vy)
+				end
+				if g.vy > 0 and g.by > 0.88 and g.by < 0.93 and math.abs(g.bx - g.px) < PADDLE / 2 + 0.015 then -- (off the paddle, where it hits it)
+					local off = (g.bx - g.px) / (PADDLE / 2)
+					local speed = math.min(math.sqrt(g.vx * g.vx + g.vy * g.vy) * 1.02, 0.85)
+					g.vx, g.vy = speed * math.sin(off * 1.05), -speed * math.cos(off * 1.05)
+					sfx("tap", 1.2)
+				end
+				local c, r = math.floor(g.bx * COLS), math.floor((g.by - 0.06) / 0.07)
+				if r >= 0 and r < ROWS and c >= 0 and c < COLS then
+					local b = g.bricks[r * COLS + c + 1]
+					if b and b.alive then
+						b.alive = false
+						b.frame.Visible = false
+						g.vy = -g.vy
+						g.points += 1
+						oneShot(S.d.assets.Found, 1 + (ROWS - r) * 0.06)
+						local left = 0
+						for _, other in ipairs(g.bricks) do
+							if other.alive then left += 1 end
+						end
+						if left == 0 then level(now) end
+					end
+				end
+				if g.by > 1.02 then
+					g.lives -= 1
+					oneShot(S.d.assets.Ping, 0.5)
+					S.flash = math.max(S.flash, 0.5)
+					if g.lives <= 0 then
+						g.over = now + 1.6
+						S.breakoutBest = math.max(S.breakoutBest or 0, g.points)
+					else
+						serve(now)
+					end
+				end
+			end
+		end
+		g.paddle.Position = UDim2.fromScale(g.px, 0.9)
+		g.ball.Position = UDim2.fromScale(g.bx, g.by)
+		g.ball.Visible = not g.over
+		g.score.Text = if g.over then ("GAME OVER  %d"):format(g.points) else ("SCORE %d  LIVES %d"):format(g.points, g.lives)
+	end
+	FN.BREAKOUT.left = function() return true end -- (held: the paddle; a click is not an on and off)
+	FN.BREAKOUT.right = function() return true end
+	function FN.BREAKOUT.key(k) return k == Enum.KeyCode.Left or k == Enum.KeyCode.Right end
+end
+
+-- 2048: the arrows slide the tiles; two the same make one
+local TWENTY = { label = "2048", clean = true } -- (2048: its name is a number)
+FN["2048"] = TWENTY
+do
+	local g = {}
+	local function empty()
+		local out = {}
+		for i = 1, 16 do
+			if g.cells[i] == 0 then table.insert(out, i) end
+		end
+		return out
+	end
+	local function spawn()
+		local list = empty()
+		if #list > 0 then g.cells[list[math.random(#list)]] = if math.random() < 0.9 then 2 else 4 end
+	end
+	local function stuck()
+		if #empty() > 0 then return false end
+		for r = 0, 3 do
+			for c = 0, 3 do
+				local v = g.cells[r * 4 + c + 1]
+				if (c < 3 and g.cells[r * 4 + c + 2] == v) or (r < 3 and g.cells[(r + 1) * 4 + c + 1] == v) then return false end
+			end
+		end
+		return true
+	end
+	local function reset()
+		g.cells, g.points, g.over = table.create(16, 0), 0, false
+		spawn()
+		spawn()
+	end
+	-- One line of four (its indices, the way they slide toward the first): slid and merged
+	local function slide(idx)
+		local vals = {}
+		for _, i in ipairs(idx) do
+			if g.cells[i] ~= 0 then table.insert(vals, g.cells[i]) end
+		end
+		local out, k = {}, 1
+		while k <= #vals do
+			if vals[k + 1] and vals[k + 1] == vals[k] then
+				table.insert(out, vals[k] * 2)
+				g.points += vals[k] * 2
+				k += 2
+			else
+				table.insert(out, vals[k])
+				k += 1
+			end
+		end
+		local moved = false
+		for n, i in ipairs(idx) do
+			local v = out[n] or 0
+			if g.cells[i] ~= v then moved = true end
+			g.cells[i] = v
+		end
+		return moved
+	end
+	local function push(dir) -- 1 left, 2 right, 3 up, 4 down
+		local moved = false
+		for line = 0, 3 do
+			local idx = {}
+			for k = 0, 3 do
+				if dir == 1 then table.insert(idx, line * 4 + k + 1)
+				elseif dir == 2 then table.insert(idx, line * 4 + (3 - k) + 1)
+				elseif dir == 3 then table.insert(idx, k * 4 + line + 1)
+				else table.insert(idx, (3 - k) * 4 + line + 1) end
+			end
+			if slide(idx) then moved = true end
+		end
+		if moved then
+			spawn()
+			sfx("tap", 1.3)
+			if stuck() then
+				g.over = true
+				S.best2048 = math.max(S.best2048 or 0, g.points)
+				oneShot(S.d.assets.Ping, 0.5)
+			end
+		end
+	end
+	function TWENTY.enter(c)
+		g.score = W.text(c, { Size = UDim2.fromScale(1, 0.11), TextXAlignment = Enum.TextXAlignment.Left })
+		local grid = W.new("Frame", c, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0.13), Size = UDim2.fromScale(0.86, 0.86) })
+		W.new("UIAspectRatioConstraint", grid, { AspectRatio = 1 })
+		g.tiles = {}
+		for i = 1, 16 do
+			local r, col = math.floor((i - 1) / 4), (i - 1) % 4
+			local tile = W.new("Frame", grid, { Position = UDim2.new(col / 4, 2, r / 4, 2), Size = UDim2.new(0.25, -4, 0.25, -4), BackgroundColor3 = CONFIG.Screen, BackgroundTransparency = 0.85 })
+			W.new("UICorner", tile, { CornerRadius = UDim.new(0.12, 0) })
+			g.tiles[i] = { frame = tile, text = W.text(tile, { Size = UDim2.fromScale(1, 1), ZIndex = 10 }) }
+		end
+		if not g.cells then reset() end
+	end
+	function TWENTY.step(_, now)
+		for i = 1, 16 do
+			local v, t = g.cells[i], g.tiles[i]
+			t.frame.BackgroundTransparency = if v == 0 then 0.85 else math.max(0.6 - math.log(v, 2) * 0.05, 0.05)
+			t.text.Text = if v == 0 then "" else tostring(v)
+			t.text.TextColor3 = if v >= 8 then hsv(CONFIG.Screen, 0.15) else CONFIG.Screen
+		end
+		g.score.Text = if g.over then (if math.floor(now * 2) % 2 == 0 then "NO MOVES  CLICK" else ("SCORE %d"):format(g.points)) else ("SCORE %d  BEST %d"):format(g.points, math.max(S.best2048 or 0, g.points))
+	end
+	function TWENTY.key(k)
+		local dir = ({ [Enum.KeyCode.Left] = 1, [Enum.KeyCode.Right] = 2, [Enum.KeyCode.Up] = 3, [Enum.KeyCode.Down] = 4 })[k]
+		if not dir then return false end
+		if not g.over then push(dir) end
+		return true
+	end
+	TWENTY.left = function()
+		if g.over then reset() end
+		return true
+	end
+end
+
+-- TRIS: you and it, noughts and crosses; the arrows choose, a click plays (X); it plays O
+FN.TRIS = { label = "TRIS", clean = true }
+do
+	local g = {}
+	local LINES = { { 1, 2, 3 }, { 4, 5, 6 }, { 7, 8, 9 }, { 1, 4, 7 }, { 2, 5, 8 }, { 3, 6, 9 }, { 1, 5, 9 }, { 3, 5, 7 } }
+	local function winner(b)
+		for _, l in ipairs(LINES) do
+			if b[l[1]] ~= "" and b[l[1]] == b[l[2]] and b[l[2]] == b[l[3]] then return b[l[1]] end
+		end
+		for i = 1, 9 do
+			if b[i] == "" then return nil end
+		end
+		return "DRAW"
+	end
+	local function reset()
+		g.b, g.cursor, g.result, g.thinking = table.create(9, ""), 5, nil, false
+	end
+	local function aiMove() -- win, block, the middle, a corner, anything
+		for _, mark in ipairs({ "O", "X" }) do
+			for _, l in ipairs(LINES) do
+				local count, free = 0, nil
+				for _, i in ipairs(l) do
+					if g.b[i] == mark then count += 1 elseif g.b[i] == "" then free = i end
+				end
+				if count == 2 and free then return free end
+			end
+		end
+		if g.b[5] == "" then return 5 end
+		local corners = {}
+		for _, i in ipairs({ 1, 3, 7, 9 }) do
+			if g.b[i] == "" then table.insert(corners, i) end
+		end
+		if #corners > 0 then return corners[math.random(#corners)] end
+		for i = 1, 9 do
+			if g.b[i] == "" then return i end
+		end
+		return nil
+	end
+	local function finish()
+		g.result = winner(g.b)
+		if g.result then
+			S.trisScore = S.trisScore or { X = 0, O = 0 }
+			if g.result == "X" or g.result == "O" then S.trisScore[g.result] += 1 end
+			oneShot(if g.result == "X" then S.d.assets.Found else S.d.assets.Ping, 0.8)
+		end
+	end
+	function FN.TRIS.enter(c)
+		g.score = W.text(c, { Size = UDim2.fromScale(1, 0.11), TextXAlignment = Enum.TextXAlignment.Left })
+		local grid = W.new("Frame", c, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0.13), Size = UDim2.fromScale(0.86, 0.86) })
+		W.new("UIAspectRatioConstraint", grid, { AspectRatio = 1 })
+		g.cells = {}
+		for i = 1, 9 do
+			local r, col = math.floor((i - 1) / 3), (i - 1) % 3
+			local cell = W.new("Frame", grid, { Position = UDim2.new(col / 3, 2, r / 3, 2), Size = UDim2.new(1 / 3, -4, 1 / 3, -4), BackgroundColor3 = CONFIG.Screen })
+			W.new("UIStroke", cell, { Color = CONFIG.Screen, Thickness = 1 })
+			g.cells[i] = { frame = cell, text = W.text(cell, { Size = UDim2.fromScale(1, 1), ZIndex = 10 }) }
+		end
+		if not g.b then reset() end
+	end
+	function FN.TRIS.step(_, now)
+		for i = 1, 9 do
+			local cell = g.cells[i]
+			cell.text.Text = g.b[i]
+			cell.frame.BackgroundTransparency = if i == g.cursor and not g.result and math.floor(now * 3) % 2 == 0 then 0.55 else 0.9
+		end
+		local score = S.trisScore or { X = 0, O = 0 }
+		g.score.Text = if g.result == "DRAW" then "DRAW  CLICK" elseif g.result then (if g.result == "X" then "YOU WIN  CLICK" else "IT WINS  CLICK")
+			else ("YOU %d  IT %d"):format(score.X, score.O)
+	end
+	function FN.TRIS.key(k)
+		local move = ({ [Enum.KeyCode.Left] = -1, [Enum.KeyCode.Right] = 1, [Enum.KeyCode.Up] = -3, [Enum.KeyCode.Down] = 3 })[k]
+		if not move then return false end
+		local n = g.cursor + move
+		if (move == -1 and g.cursor % 3 == 1) or (move == 1 and g.cursor % 3 == 0) or n < 1 or n > 9 then return true end
+		g.cursor = n
+		sfx("tap", 1.6)
+		return true
+	end
+	FN.TRIS.left = function()
+		if g.result then
+			reset()
+			return true
+		end
+		if g.thinking or g.b[g.cursor] ~= "" then return true end
+		g.b[g.cursor] = "X"
+		sfx("tap", 1.2)
+		finish()
+		if not g.result then
+			g.thinking = true
+			task.delay(0.45, function()
+				g.thinking = false
+				local i = aiMove()
+				if i and not g.result then
+					g.b[i] = "O"
+					sfx("tap", 0.9)
+					finish()
+				end
+			end)
+		end
+		return true
+	end
+end
+
+-- FEED: posts from the Hotel, to scroll (the wheel, the arrows, or the clicks); best held up as a phone
+FN.FEED = { label = "FEED", clean = true }
+do
+	local POSTS = {
+		{ "Curious Light", "Something golden waits behind the skull door. Curious? You should be." },
+		{ "Guiding Light", "You died to Rush. Remember: when the lights flicker, hide." },
+		{ "Jeff", "Shop's open. Skeleton keys on sale today. No refunds, no questions." },
+		{ "Seek", "Don't look back. Just run. Mind the hands." },
+		{ "Figure", "Shhh. Library hours. I can hear your heartbeat." },
+		{ "Halt", "TURN AROUND. TURN AROUND. TURN AROUND." },
+		{ "Screech", "psst" },
+		{ "Timothy", "Opened a drawer, found a human. Scared them more than they scared me." },
+		{ "Rush", "Coming through!!! Don't mind me." },
+		{ "Ambush", "Coming through. Again. And again. And again." },
+		{ "Eyes", "Don't stare. It's rude." },
+		{ "Dupe", "Door 42 or door 43? Choose wisely." },
+		{ "Hide", "Get out." },
+		{ "El Goblino", "Will trade gold for nothing. Great deal. Ask me." },
+		{ "Bob", "rattle rattle" },
+		{ "Golden Tablet", "MoonSec-3 says: frames per second? Yes." },
+	}
+	local g = {}
+	local POST = 0.34 -- (a post's height: a third of the screen, near enough)
+	function FN.FEED.enter(c)
+		g.view = W.new("Frame", c, { Position = UDim2.fromScale(0, 0.02), Size = UDim2.fromScale(1, 0.98), ClipsDescendants = true })
+		g.list = W.new("Frame", g.view, { Size = UDim2.fromScale(1, POST * #POSTS) })
+		for i, post in ipairs(POSTS) do
+			local card = W.new("Frame", g.list, { Position = UDim2.new(0, 2, (i - 1) / #POSTS, 2), Size = UDim2.new(1, -4, 1 / #POSTS, -6),
+				BackgroundColor3 = CONFIG.Screen, BackgroundTransparency = 0.86 })
+			W.new("UICorner", card, { CornerRadius = UDim.new(0.08, 0) })
+			local face = W.round(W.square(W.new("Frame", card, { Position = UDim2.fromScale(0.03, 0.1), Size = UDim2.fromScale(0.16, 0.36), BackgroundColor3 = CONFIG.Screen,
+				BackgroundTransparency = 0.2 })))
+			W.text(face, { Size = UDim2.fromScale(1, 1), Text = post[1]:sub(1, 1), TextColor3 = hsv(CONFIG.Screen, 0.15), ZIndex = 10 })
+			W.text(card, { Position = UDim2.fromScale(0.24, 0.08), Size = UDim2.fromScale(0.72, 0.3), Text = post[1]:upper(), TextXAlignment = Enum.TextXAlignment.Left })
+			W.text(card, { Position = UDim2.fromScale(0.05, 0.44), Size = UDim2.fromScale(0.9, 0.36), Text = post[2], TextXAlignment = Enum.TextXAlignment.Left,
+				TextWrapped = true, TextTransparency = 0.15 })
+			W.text(card, { Position = UDim2.fromScale(0.05, 0.8), Size = UDim2.fromScale(0.9, 0.16), Text = ("LIKES %d"):format((i * 7919) % 900 + 12),
+				TextXAlignment = Enum.TextXAlignment.Right, TextTransparency = 0.45 })
+		end
+		g.at, g.speed = g.at or 0, 0
+	end
+	local function limit() return math.max(POST * #POSTS - 1, 0) end
+	function FN.FEED.step(dt)
+		g.at = math.clamp(g.at + g.speed * dt, 0, limit())
+		g.speed *= math.exp(-4 * dt)
+		if math.abs(g.speed) < 0.01 then g.speed = 0 end
+		g.list.Position = UDim2.fromScale(0, -g.at)
+	end
+	local function fling(v)
+		g.speed = math.clamp(g.speed + v, -4, 4)
+		return true
+	end
+	function FN.FEED.wheel(d) return fling(-d * 1.2) end
+	function FN.FEED.key(k)
+		if k == Enum.KeyCode.Down then return fling(1.4) end
+		if k == Enum.KeyCode.Up then return fling(-1.4) end
+		return false
+	end
+	FN.FEED.left = function() return fling(1.4) end
+	FN.FEED.right = function() return fling(-1.4) end
+end
+
 ---- Its screen on and off, its functions in turn ----
 
 local function current() return FN[FNS[S.fn]] end
@@ -1132,7 +1718,7 @@ local function startScreen(fromOff)
 	S.on, S.booting = true, true
 	applyColor(CONFIG.Screen)
 	ui.image.Image = MODE.BootImage
-	ui.mode.Text = KINDS[KIND].title:upper()
+	ui.mode.Text = if GOLDEN then (if GOLD.powered then "CURIOUS OS" else "GOLDEN TABLET") else KINDS[KIND].title:upper()
 	ui.frame.Visible, ui.off.Visible = true, false
 	ui.content:ClearAllChildren()
 	S.flash = 1
@@ -1188,11 +1774,201 @@ local function nextFn()
 	end
 end
 
+---- THE GOLDEN TABLET: the Lights it feels, its lightning when charged, what its screen says of them, its frames per second ----
+
+local APPS = { "SNAKE", "FLAPPY", "BREAKOUT", "2048", "TRIS", "FEED" } -- (its own, once powered up)
+if GOLDEN then
+	-- The Lights: the Guiding Light's and the Curious Light's sparkles (DOORS' own texture, in their colour), and whatever is
+	-- named for them; kept up to date as they come and go
+	local SPARKLE = "2581223252"
+	local function kindOf(i)
+		local name = i.Name:lower()
+		if name:find("curious", 1, true) then return "Curious" end
+		if name:find("guiding", 1, true) then return "Guiding" end
+		if i:IsA("ParticleEmitter") and tostring(i.Texture):find(SPARKLE, 1, true) then
+			local ok, c = pcall(function() return i.Color.Keypoints[1].Value end)
+			if ok and c then
+				local h, sat = c:ToHSV()
+				if sat > 0.35 and h > 0.07 and h < 0.2 then return "Curious" end
+				if sat > 0.35 and h > 0.45 and h < 0.7 then return "Guiding" end
+			end
+		end
+		return nil
+	end
+	local function consider(i)
+		if i:IsA("ParticleEmitter") or i:IsA("BasePart") or i:IsA("Model") or i:IsA("Light") then
+			local kind = kindOf(i)
+			if kind then GOLD.lights[i] = kind end
+		end
+	end
+	for _, i in ipairs(workspace:GetDescendants()) do consider(i) end
+	on(workspace.DescendantAdded, consider)
+	-- The Light it feels (18 studs round it): the Curious Light before the Guiding Light; none on you or in your hands
+	function GOLD.feel()
+		local d = S.d
+		if not d then return nil end
+		local at, me = d.handle.Position, LocalPlayer.Character
+		local felt = nil
+		for i, kind in pairs(GOLD.lights) do
+			if not i:IsDescendantOf(workspace) then -- (gone)
+				GOLD.lights[i] = nil
+			elseif kind ~= felt and felt ~= "Curious" and not i:IsDescendantOf(d.tool) and not (me and i:IsDescendantOf(me)) then
+				local lit = true
+				if i:IsA("ParticleEmitter") then lit = i.Enabled ~= false end
+				if i:IsA("Light") then lit = i.Enabled ~= false and (i.Brightness or 1) > 0 end
+				local pos = nil
+				if lit then
+					if i:IsA("BasePart") then
+						pos = i.Position
+					elseif i:IsA("Model") then
+						local ok, cf = pcall(function() return i:GetPivot() end)
+						pos = if ok then cf.Position else nil
+					else
+						local holder = i.Parent
+						if holder:IsA("Attachment") then pos = holder.WorldPosition elseif holder:IsA("BasePart") then pos = holder.Position end
+					end
+				end
+				if pos and (pos - at).Magnitude < 18 then felt = kind end
+			end
+		end
+		return felt
+	end
+end
+-- A message on its screen for a while (over everything)
+function GOLD.say(title, line, seconds, color)
+	GOLD.message = { title = title, line = line, untilAt = os.clock() + seconds, color = color }
+end
+-- Charged: the Curious Light in it: its sparks, its light flickering (and lightning over it, below)
+function GOLD.dress()
+	local d = S.d
+	if not (GOLDEN and GOLD.charged and d) or d.handle:FindFirstChild("Electric") then return end
+	local glow = Instance.new("PointLight")
+	glow.Name = "Electric"
+	glow.Color, glow.Brightness, glow.Range, glow.Shadows = rgb(255, 236, 150), 1, 8, false
+	glow.Parent = d.handle
+	local sparks = Instance.new("ParticleEmitter")
+	sparks.Name = "ElectricSparks"
+	sparks.Texture = "rbxassetid://2581223252"
+	sparks.Color = ColorSequence.new(rgb(255, 250, 210), LIGHTS.Golden.color)
+	sparks.LightEmission = 1
+	sparks.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.07), NumberSequenceKeypoint.new(1, 0) })
+	sparks.Lifetime = NumberRange.new(0.1, 0.3)
+	sparks.Speed = NumberRange.new(3, 7)
+	sparks.SpreadAngle = Vector2.new(180, 180)
+	sparks.Rate = 12
+	sparks.Parent = d.handle:FindFirstChild("LightSparkles") or d.handle
+end
+function GOLD.charge()
+	if GOLD.charged then return end
+	GOLD.charged = true
+	GOLD.dress()
+	S.flash = 1
+	GOLD.nextArc, GOLD.nextZap = 0, 0
+	sfx("charge")
+	GOLD.say("CURIOUS LIGHT FOUND", "IT IS IN YOUR TABLET NOW", 2.2)
+end
+function GOLD.clearArcs()
+	for _, a in ipairs(GOLD.arcs) do a:Destroy() end
+	table.clear(GOLD.arcs)
+end
+-- Lightning over it (two crooked arcs at most, new every few frames), its light flickering, a zap now and then
+function GOLD.electric(now)
+	local d = S.d
+	if not (GOLD.charged and d and S.equipped) then
+		GOLD.clearArcs()
+		return
+	end
+	if now >= GOLD.nextArc then
+		GOLD.nextArc = now + 0.08
+		GOLD.clearArcs()
+		local chance = if GOLD.powered then 0.25 else 0.6
+		local camera = workspace.CurrentCamera
+		local function around()
+			return d.handle.CFrame:PointToWorldSpace(d.centre + Vector3.new((math.random() - 0.5) * 1.4, (math.random() - 0.5) * 1.0, (math.random() - 0.5) * 0.4))
+		end
+		for _ = 1, 2 do
+			if math.random() < chance then
+				local a, b = around(), around()
+				local prev = a
+				for k = 1, 3 do
+					local nxt = if k == 3 then b else a:Lerp(b, k / 3) + Vector3.new(math.random() - 0.5, math.random() - 0.5, math.random() - 0.5) * 0.18
+					local len = (nxt - prev).Magnitude
+					if len > 0.01 then
+						local seg = Instance.new("Part")
+						seg.Name = "GoldenArc"
+						seg.Anchored, seg.CanCollide, seg.CanQuery, seg.CanTouch, seg.CastShadow = true, false, false, false, false
+						seg.Material, seg.Color = Enum.Material.Neon, rgb(255, 244, 170)
+						seg.Size = Vector3.new(0.025, 0.025, len)
+						seg.CFrame = CFrame.lookAt((prev + nxt) / 2, nxt)
+						seg.Parent = camera -- (only for you, in nothing of the scanner's)
+						table.insert(GOLD.arcs, seg)
+					end
+					prev = nxt
+				end
+			end
+		end
+		local glow = d.handle:FindFirstChild("Electric")
+		if glow then glow.Brightness = 0.6 + math.random() * (if GOLD.powered then 1.2 else 2) end
+	end
+	if now >= GOLD.nextZap then
+		GOLD.nextZap = now + 1.5 + math.random() * 2.5
+		sfx("zap", 0.9 + math.random() * 0.4)
+	end
+end
+-- MoonSec-3: its frames per second, a number that never stands still
+local GLYPHS = { "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "?", "#", "%", "&" }
+function GOLD.fps()
+	if not ui.fps then return end
+	local n = math.random(3, 6)
+	local out = table.create(n)
+	for k = 1, n do out[k] = if math.random() < 0.12 then GLYPHS[math.random(11, #GLYPHS)] else GLYPHS[math.random(1, 10)] end
+	ui.fps.Text = "MoonSec-3  " .. (if math.random() < 0.06 then "INF" else table.concat(out)) .. " FPS"
+	ui.fps.TextColor3 = CONFIG.Screen
+end
+-- What its screen says of the Lights: a message of its own; by the Guiding Light, CURIOUS LIGHT NOT FOUND; charged, PRESS R
+function GOLD.banner(now)
+	if not ui.banner then return end
+	local msg = nil
+	if GOLD.message and now < GOLD.message.untilAt then
+		msg = GOLD.message
+	elseif now < GOLD.guidingUntil then
+		msg = { title = "CURIOUS LIGHT NOT FOUND", line = "ERR 0xG1D-404: ONLY THE GUIDING LIGHT IS HERE", color = LIGHTS.Guiding.color, blink = true }
+	elseif GOLD.charged and not GOLD.powered and not GOLD.powering then
+		msg = { title = "CURIOUS LIGHT FOUND", line = "PRESS R TO POWER IT UP", blink = true }
+	end
+	ui.banner.Visible = msg ~= nil
+	if not msg then return end
+	local c = msg.color or CONFIG.Screen
+	ui.banner.BackgroundColor3 = hsv(c, 0.12)
+	ui.banner.BackgroundTransparency = 0.08
+	ui.bannerTitle.Text, ui.bannerLine.Text = msg.title, msg.line
+	ui.bannerTitle.TextColor3, ui.bannerLine.TextColor3 = c, c
+	ui.bannerTitle.TextTransparency = if msg.blink and math.floor(now * 3) % 2 == 1 then 0.45 else 0
+end
+-- Every frame in your hand: the Lights it feels (every 0.3 s), its lightning, its numbers, its banner
+function GOLD.tick(now)
+	if now >= GOLD.nextFeel then
+		GOLD.nextFeel = now + 0.3
+		local felt = GOLD.feel()
+		if felt == "Curious" then GOLD.charge() end
+		if felt == "Guiding" then
+			if GOLD.felt ~= "Guiding" then oneShot(S.d.assets.Ping, 0.55) end
+			GOLD.guidingUntil = now + 2
+		end
+		GOLD.felt = felt
+	end
+	GOLD.electric(now)
+	if S.on then GOLD.fps() end
+	GOLD.banner(now)
+	GOLD.keys(S.on and not S.booting and current().key ~= nil)
+end
+
 -- Its screen, CONFIG.FPS times a second: its static, what is coming, its function
 local function step(dt)
 	local now = os.clock()
 	S.flash = math.max(S.flash - dt * 2.5, 0)
 	animateStatic()
+	if GOLDEN then GOLD.tick(now) end
 	if not S.on then return end
 	if now >= S.nextThreat then
 		S.nextThreat = now + 0.25
@@ -1235,8 +2011,19 @@ end
 local function move(time, f, events)
 	S.motion = { start = os.clock(), time = time, f = f, events = events or {} }
 end
-local function moveStep()
+local function moveStep(dt)
 	local m, joint = S.motion, S.held.joint
+	if GOLDEN and joint then -- (the Golden Tablet: held up, turned, smoothly, under its motions)
+		local goal = CFrame.new()
+		if GOLD.raised then goal = CFrame.new(0, 0.2, -0.75) * CFrame.Angles(0.3, 0, 0) end
+		if GOLD.portrait and S.d.normal then goal = goal * CFrame.fromAxisAngle(S.d.normal, math.pi / 2) end
+		S.hold = (S.hold or CFrame.new()):Lerp(goal, math.min((dt or 1 / 60) * 8, 1))
+		if not m then
+			local c = S.d.centre
+			joint.C1 = (CFrame.new(c) * S.hold * CFrame.new(-c)):Inverse() * S.d.grip
+			return
+		end
+	end
 	if not (m and joint) then return end
 	local u = math.min((os.clock() - m.start) / m.time, 1)
 	for _, e in ipairs(m.events) do
@@ -1246,13 +2033,13 @@ local function moveStep()
 		end
 	end
 	if S.motion ~= m then return end -- (one of its events ended it)
+	local c, hold = S.d.centre, S.hold or CFrame.new()
 	if u >= 1 then
-		joint.C1 = S.d.grip
+		joint.C1 = if GOLDEN then (CFrame.new(c) * hold * CFrame.new(-c)):Inverse() * S.d.grip else S.d.grip
 		S.motion = nil
 		return
 	end
-	local c = S.d.centre
-	joint.C1 = (CFrame.new(c) * m.f(u) * CFrame.new(-c)):Inverse() * S.d.grip
+	joint.C1 = (CFrame.new(c) * hold * m.f(u) * CFrame.new(-c)):Inverse() * S.d.grip
 end
 local function jolt(k) -- its screen feels it
 	if S.on then S.flash = math.max(S.flash, k) end
@@ -1361,6 +2148,7 @@ local function equipped()
 	end
 	play("equip")
 	play(if S.on then "idle_open" else "idle", 0.2)
+	if GOLDEN then GOLD.dress() end
 	bindUI()
 	applyColor(CONFIG.Screen)
 	if S.on then
@@ -1372,7 +2160,7 @@ local function equipped()
 	end
 	local acc = 0
 	S.held.step = RunService.RenderStepped:Connect(function(dt)
-		moveStep() -- its motions: every frame
+		moveStep(dt) -- its motions: every frame
 		acc += dt -- its screen: CONFIG.FPS times a second, steadily (what is left over carries on)
 		local period = 1 / CONFIG.FPS
 		if acc + 1e-4 < period then return end
@@ -1391,6 +2179,11 @@ local function unequipped()
 	if S.held.step then S.held.step:Disconnect() end
 	if S.held.joint then S.held.joint:Destroy() end
 	S.held = {}
+	if GOLDEN then -- (its lightning, your sight, its keys: given back)
+		GOLD.clearArcs()
+		if GOLD.raised then GOLD.raise(false) end
+		GOLD.keys(false)
+	end
 	for _, t in pairs(S.tracks) do t:Stop(0.1) end
 	S.tracks = {}
 	for _, name in ipairs({ "SystemIdle", "ScannedIdle" }) do
@@ -1435,6 +2228,98 @@ local function inspected()
 	local f = current()
 	if S.on and not S.booting and f.right and f.right() then return end
 	inspect()
+end
+
+---- THE GOLDEN TABLET'S KEYS: R (RT) powers it up, then holds it up to your face; T turns it; the arrows in its games ----
+
+-- Powered up: up it goes, once round in the air, lightning all over it, back in your hand: CURIOUS OS and its games
+function GOLD.powerUp()
+	if GOLD.powered or GOLD.powering then return end
+	GOLD.powering = true
+	move(1.3, function(u) return CFrame.new(0, 6.6 * u * (1 - u), 0) * CFrame.Angles(0, math.pi * 2 * ease(u), 0) end, {
+		{ at = 0, fn = function() sfx("toss") sfx("zap") end },
+		{ at = 0.5, fn = function() sfx("charge") S.flash = 1 end },
+		{ at = 0.96, fn = function() sfx("catch") jolt(1) end },
+	})
+	GOLD.nextArc = 0
+	task.delay(1.3, function()
+		GOLD.powering = false
+		GOLD.powered = true
+		for _, name in ipairs(APPS) do
+			if not table.find(FNS, name) then table.insert(FNS, name) end
+		end
+		if not (S.equipped and ui.gui) then
+			S.fn = table.find(FNS, "FLAPPY")
+			return
+		end
+		if S.on and not S.booting then leaveFn() end
+		S.fn = table.find(FNS, "FLAPPY")
+		S.d.tool:SetAttribute("ScannerFunction", FNS[S.fn])
+		if S.on then startScreen(true) else activated() end
+		GOLD.say("CURIOUS OS", "R: HOLD IT UP   T: TURN IT   F: NEXT APP", 3)
+	end)
+end
+-- Held up to your face (your sight drawn in to it), or down again
+function GOLD.raise(up)
+	GOLD.raised = up
+	local camera = workspace.CurrentCamera
+	if up then
+		GOLD.fov = GOLD.fov or camera.FieldOfView
+		RunService:BindToRenderStep("GoldenTabletRaise", Enum.RenderPriority.Last.Value + 1, function(dt)
+			camera.FieldOfView += (48 - camera.FieldOfView) * math.min((dt or 1 / 60) * 8, 1)
+		end)
+	else
+		pcall(function() RunService:UnbindFromRenderStep("GoldenTabletRaise") end)
+		if GOLD.fov then camera.FieldOfView = GOLD.fov end
+		GOLD.fov = nil
+	end
+end
+function GOLD.r()
+	if not (S.equipped and S.d) or S.motion then return end
+	if GOLD.powered then
+		GOLD.raise(not GOLD.raised)
+		sfx("tap", 0.9)
+	elseif GOLD.charged then
+		GOLD.powerUp()
+	else
+		GOLD.say("NO CURIOUS LIGHT", "FIND THE CURIOUS LIGHT FIRST", 1.6, LIGHTS.Guiding.color)
+		oneShot(S.d.assets.Ping, 0.5)
+	end
+end
+-- Turned: a tablet, or held up as a phone (it turns in your hand; then its picture turns upright on it)
+function GOLD.rotate()
+	if not (S.equipped and S.d) or GOLD.turning then return end
+	GOLD.turning = true
+	GOLD.portrait = not GOLD.portrait
+	sfx("tap", 0.8)
+	task.delay(0.45, function()
+		GOLD.turning = false
+		if not (ui.gui and S.d) then return end
+		ui.gui.Adornee = if GOLD.portrait then S.d.upright else S.d.screen
+		if S.on and not S.booting then
+			leaveFn()
+			enterFn()
+		end
+		S.flash = 0.6
+	end)
+end
+-- The arrows and Space, while one of its games is on: its own (not your feet's)
+function GOLD.keys(want)
+	if want == GOLD.keysBound then return end
+	GOLD.keysBound = want
+	pcall(function()
+		local actions = game:GetService("ContextActionService")
+		if want then
+			actions:BindActionAtPriority("GoldenTabletKeys", function(_, state, input)
+				if state ~= Enum.UserInputState.Begin then return Enum.ContextActionResult.Sink end
+				local f = current()
+				if S.on and not S.booting and f.key then f.key(input.KeyCode) end
+				return Enum.ContextActionResult.Sink
+			end, false, 3000, Enum.KeyCode.Up, Enum.KeyCode.Down, Enum.KeyCode.Left, Enum.KeyCode.Right, Enum.KeyCode.Space)
+		else
+			actions:UnbindAction("GoldenTabletKeys")
+		end
+	end)
 end
 
 ---- DROPPED: X throws it in front of you (or it slips out of your hand); E picks it up ----
@@ -1529,13 +2414,23 @@ end
 on(UserInputService.InputBegan, function(input, processed)
 	if processed or not S.equipped or UserInputService:GetFocusedTextBox() then return end
 	local key = input.KeyCode
-	if key == Enum.KeyCode.F then
+	if GOLDEN and (key == Enum.KeyCode.R or key == Enum.KeyCode.ButtonR2) then
+		GOLD.r()
+	elseif GOLDEN and key == Enum.KeyCode.T then
+		GOLD.rotate()
+	elseif key == Enum.KeyCode.F then
 		nextFn()
 	elseif key == Enum.KeyCode.L then
 		trick()
 	elseif key == Enum.KeyCode.X or key == Enum.KeyCode.Backspace or key == Enum.KeyCode.DPadDown then
 		drop(false)
 	end
+end)
+
+on(UserInputService.InputChanged, function(input) -- (the wheel, in the apps that scroll)
+	if not (S.equipped and S.on and not S.booting) or input.UserInputType ~= Enum.UserInputType.MouseWheel then return end
+	local f = current()
+	if f.wheel then f.wheel(input.Position.Z) end
 end)
 
 give()
@@ -1562,5 +2457,6 @@ if getgenv then
 			S.dropped = nil
 		end
 		if S.d then S.d.tool:Destroy() end
+		GOLD.clearArcs()
 	end
 end

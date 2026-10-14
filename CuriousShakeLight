@@ -1,0 +1,258 @@
+--[[
+================================================================================
+
+        C U R I O U S   S H A K E   L I G H T
+
+        DOORS' Shakelight, from the Admin Panel, in the Curious Light's yellow:
+        its glass, its switch, its light and its sparkles yellow, its own icon.
+        It is DOORS' own: its animations, its shaking, its light are DOORS'.
+
+        Shake it a few times (4 shakes, close together) and it is charged with
+        the Curious Light: where you walk with it in your hand it leaves a
+        trail of yellow light on the floor, glowing and fading. Shake it again
+        to keep it charged.
+
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/claude/sei-qui-con-noi-ye4k62/CuriousShakeLight"))()
+
+        It needs DOORS' Admin Panel (the ADMIN PANEL pass, in your own run).
+        The Curious Door gives it too, from its chest.
+
+================================================================================
+]]
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local LocalPlayer = Players.LocalPlayer
+local GENV = if getgenv then getgenv() else _G
+
+local TITLE = "Curious Shake Light"
+local YELLOW = Color3.fromRGB(255, 214, 60)
+local GLASS = Color3.fromRGB(255, 226, 70)
+local NEON = Color3.fromRGB(255, 236, 120)
+local LIGHT = Color3.fromRGB(255, 222, 110)
+local TRAIL = { shakes = 4, within = 6, lasts = 25, step = 1.6, fade = 18, most = 90 } -- (shakes in `within` s charge it for `lasts` s)
+
+local function make(class, props, parent)
+	local i = Instance.new(class)
+	for k, v in pairs(props) do i[k] = v end
+	i.Parent = parent
+	return i
+end
+local function caption(text)
+	print("[" .. TITLE .. "] " .. text)
+	pcall(function() require(LocalPlayer.PlayerGui.MainUI.Initiator.Main_Game).caption(text, true) end)
+end
+
+-- One at a time: running it again takes the old one's trail and watch away
+if type(GENV.__CuriousShakeLightStop) == "function" then pcall(GENV.__CuriousShakeLightStop) end
+local connections, alive = {}, true
+local function on(signal, fn)
+	local c = signal:Connect(fn)
+	table.insert(connections, c)
+	return c
+end
+
+---====== DOORS' ADMIN PANEL: it gives the Shakelight ======---
+
+local remotes = ReplicatedStorage:FindFirstChild("RemotesFolder")
+local runCommand = remotes and remotes:FindFirstChild("AdminPanelRunCommand")
+local playerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+local isAdmin = (tonumber(LocalPlayer:GetAttribute("ServerAdmin")) or 0) >= 1 or (playerGui ~= nil and playerGui:FindFirstChild("DoorsAdmin") ~= nil)
+if not (runCommand and isAdmin) then
+	caption("Serve l'Admin Panel di DOORS (il pass ADMIN PANEL, nella tua run): la " .. TITLE .. " è la sua Shakelight.")
+	return
+end
+local ME = { [LocalPlayer.Name] = LocalPlayer.Name }
+
+-- Its icon (fetched once, kept in the executor's folder CuriousDoor)
+local REPO = "https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/claude/sei-qui-con-noi-ye4k62/assets/curious/"
+local function icon(name)
+	local here = "CuriousDoor/" .. name
+	pcall(function()
+		if not isfolder("CuriousDoor") then makefolder("CuriousDoor") end
+		if isfile(here) and readfile(here):sub(1, 4) == "\137PNG" then return end
+		local data = game:HttpGet(REPO .. name)
+		if type(data) == "string" and data:sub(1, 4) == "\137PNG" then writefile(here, data) end
+	end)
+	local ok, id = pcall(function() return isfile(here) and getcustomasset(here) end)
+	return if ok and type(id) == "string" then id else nil
+end
+
+-- The tool the Admin Panel is about to give you: the first new one named for it (or, failing that, any new one)
+local function arriving(stem)
+	local known = {}
+	local function places()
+		local out = { LocalPlayer:FindFirstChildOfClass("Backpack") }
+		if LocalPlayer.Character then table.insert(out, LocalPlayer.Character) end
+		return out
+	end
+	for _, place in ipairs(places()) do
+		for _, t in ipairs(place:GetChildren()) do known[t] = true end
+	end
+	local since = os.clock()
+	return function()
+		local other = nil
+		for _, place in ipairs(places()) do
+			for _, t in ipairs(place:GetChildren()) do
+				if t:IsA("Tool") and not known[t] then
+					if t.Name:lower():find(stem, 1, true) then return t end
+					other = other or t
+				end
+			end
+		end
+		return if os.clock() - since > 3 then other else nil
+	end
+end
+
+---====== ITS LOOK: yellow (its glass yellow, its metal amber, what glows yellow), and its own icon ======---
+
+local function curious(tool)
+	for _, d in ipairs(tool:GetDescendants()) do
+		if d:IsA("BasePart") and d.Transparency < 1 then
+			if d:IsA("MeshPart") then pcall(function() d.TextureID = "" end) end
+			if d.Material == Enum.Material.Neon then
+				d.Color = NEON
+			elseif d.Material == Enum.Material.Glass or d.Material == Enum.Material.Ice or d.Transparency > 0.2 then
+				d.Color = GLASS
+			else
+				local _, s, v = d.Color:ToHSV() -- (its own light and dark, in amber)
+				d.Color = Color3.fromHSV(0.11, math.clamp(0.75 + s * 0.25, 0, 1), math.clamp(0.35 + v * 0.65, 0, 1))
+			end
+		elseif d:IsA("SurfaceAppearance") then
+			d:Destroy()
+		elseif d:IsA("Light") then
+			d.Color = LIGHT
+		elseif d:IsA("ParticleEmitter") then
+			d.Color = ColorSequence.new(YELLOW)
+		elseif d:IsA("Beam") then
+			d.Color = ColorSequence.new(YELLOW)
+		end
+	end
+	local handle = tool:FindFirstChild("Handle") or tool:FindFirstChildWhichIsA("BasePart", true)
+	if handle then -- the Curious Light's glow on it, and its sparkles
+		make("PointLight", { Name = "CuriousGlow", Color = LIGHT, Brightness = 0.6, Range = 5, Shadows = false }, handle)
+		make("ParticleEmitter", { Name = "CuriousSparkles", Texture = "rbxassetid://2581223252", Color = ColorSequence.new(YELLOW), LightEmission = 1,
+			Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.12), NumberSequenceKeypoint.new(1, 0) }),
+			Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.1), NumberSequenceKeypoint.new(1, 1) }),
+			Lifetime = NumberRange.new(0.6, 1.2), Rate = 6, Speed = NumberRange.new(0.2, 0.6), SpreadAngle = Vector2.new(180, 180) }, handle)
+	end
+	tool:SetAttribute("NameSingular", TITLE)
+	tool:SetAttribute("NamePlural", TITLE .. "s")
+	tool.ToolTip = TITLE
+	local id = icon("CuriousShakeLight.png")
+	if id then tool.TextureId = id end
+	return handle
+end
+
+---====== ITS TRAIL: shaken enough, it leaves the Curious Light where you walk ======---
+
+local folder = make("Folder", { Name = "CuriousTrail" }, workspace)
+local marks = {}
+local probe = RaycastParams.new()
+probe.FilterType = Enum.RaycastFilterType.Exclude
+
+local function sparkles(parent, rate)
+	return make("ParticleEmitter", { Name = "Sparkles", Texture = "rbxassetid://2581223252", Color = ColorSequence.new(YELLOW), LightEmission = 1,
+		Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.18), NumberSequenceKeypoint.new(1, 0) }),
+		Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.2), NumberSequenceKeypoint.new(1, 1) }),
+		Lifetime = NumberRange.new(1.5, 3), Rate = rate, Speed = NumberRange.new(0.3, 0.9), SpreadAngle = Vector2.new(25, 25),
+		Acceleration = Vector3.new(0, 0.6, 0), EmissionDirection = Enum.NormalId.Right }, parent)
+end
+-- A mark of light on the floor at `at`: it glows, then fades away
+local function mark(at, n)
+	local disc = make("Part", { Name = "CuriousMark", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.05, 1.3, 1.3),
+		CFrame = CFrame.new(at) * CFrame.Angles(0, 0, math.pi / 2), Material = Enum.Material.Neon, Color = YELLOW, Transparency = 0.3,
+		Anchored = true, CanCollide = false, CanQuery = false, CanTouch = false, CastShadow = false }, folder)
+	local glow = if n % 3 == 0 then make("PointLight", { Name = "Glow", Color = LIGHT, Brightness = 1.2, Range = 8, Shadows = false }, disc) else nil
+	local emitter = if n % 2 == 0 then sparkles(disc, 3) else nil
+	table.insert(marks, disc)
+	while #marks > TRAIL.most do
+		local old = table.remove(marks, 1)
+		pcall(function() old:Destroy() end)
+	end
+	local fade = TweenInfo.new(TRAIL.fade, Enum.EasingStyle.Sine, Enum.EasingDirection.In)
+	TweenService:Create(disc, fade, { Transparency = 1 }):Play()
+	if glow then TweenService:Create(glow, fade, { Brightness = 0 }):Play() end
+	task.delay(TRAIL.fade * 0.6, function()
+		if emitter and emitter.Parent then emitter.Rate = 0 end
+	end)
+	task.delay(TRAIL.fade + 3, function()
+		local i = table.find(marks, disc)
+		if i then table.remove(marks, i) end
+		disc:Destroy()
+	end)
+end
+
+---====== GIVE IT ======---
+
+local poll = arriving("shake")
+runCommand:FireServer("Give Items", { Players = ME, Items = { Shakelight = "Shakelight" } })
+local tool = nil
+local deadline = os.clock() + 10
+repeat
+	task.wait(0.1)
+	tool = poll()
+until tool or os.clock() > deadline or not alive
+if not tool then
+	caption("Il Pannello Admin non ha dato la Shakelight: riprova.")
+	folder:Destroy()
+	return
+end
+local handle = curious(tool)
+
+local shakes, chargedUntil, count = {}, 0, 0
+local lastAt = nil
+-- Charged: its lights flare, a shimmer
+local function flare()
+	for _, d in ipairs(tool:GetDescendants()) do
+		if d:IsA("Light") then
+			local was = d.Brightness
+			d.Brightness = was * 2.5 + 1
+			TweenService:Create(d, TweenInfo.new(0.8), { Brightness = was }):Play()
+		end
+	end
+	if handle then
+		local s = make("Sound", { Name = "CuriousShimmer", SoundId = "rbxassetid://9125986239", Volume = 0.6 }, handle)
+		s:Play()
+		task.delay(4, function() s:Destroy() end)
+		local burst = sparkles(handle, 0)
+		pcall(function() burst:Emit(25) end)
+		task.delay(3, function() burst:Destroy() end)
+	end
+end
+on(tool.Activated, function() -- (a shake)
+	local now = os.clock()
+	table.insert(shakes, now)
+	while shakes[1] and now - shakes[1] > TRAIL.within do table.remove(shakes, 1) end
+	if #shakes >= TRAIL.shakes then
+		if chargedUntil < now then flare() end
+		chargedUntil = now + TRAIL.lasts
+	end
+end)
+on(RunService.Heartbeat, function()
+	local character = LocalPlayer.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	if os.clock() >= chargedUntil or not root or tool.Parent ~= character then
+		lastAt = nil
+		return
+	end
+	local at = root.Position
+	if lastAt and ((at - lastAt) * Vector3.new(1, 0, 1)).Magnitude < TRAIL.step then return end
+	probe.FilterDescendantsInstances = { character, folder }
+	local hit = workspace:Raycast(at, Vector3.new(0, -6, 0), probe)
+	if not hit then return end
+	lastAt = at
+	count += 1
+	mark(hit.Position + Vector3.new(0, 0.03, 0), count)
+end)
+on(tool.AncestryChanged, function()
+	if not tool.Parent then chargedUntil = 0 end
+end)
+
+GENV.__CuriousShakeLightStop = function()
+	alive = false
+	for _, c in ipairs(connections) do c:Disconnect() end
+	pcall(function() folder:Destroy() end)
+end

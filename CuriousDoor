@@ -1,0 +1,1460 @@
+--[[
+================================================================================
+
+        C U R I O U S   D O O R
+
+        At door 1 of the Hotel, the Curious Light's secret:
+
+          * in room 1, chests on the floor glowing with the Curious Light's
+            yellow, each shut with a padlock
+          * in your hands, the Curious Lockpicks (DOORS' Lockpick from the Admin
+            Panel, in gold, two little golden keys hanging from it): two uses,
+            and they break a padlock
+          * in one chest the Golden Skeleton Key (DOORS' Skeleton Key from the
+            Admin Panel, gold, glowing); in the other, gold
+          * in a wall of the room, DOORS' skeleton door (the Infirmary's, its
+            skull and its frame). The key opens it: a cutscene (the key turns
+            in the skull, the skull falls, the door swings open, the Curious
+            Light pours out over you: you are seen, your head too) and the
+            music starts (an original piece)
+          * behind it, a little room of gold, a chest in it. Open it and the
+            Curious Light blesses you; in it, the Curious Shake Light and the
+            Golden Tablet
+
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/claude/sei-qui-con-noi-ye4k62/CuriousDoor"))()
+
+        It needs DOORS' Admin Panel (the ADMIN PANEL pass, in your own run): the
+        lockpicks, the key and the shake light are its own items, with DOORS'
+        own animations. Run it at the start (room 1 is used; later on, the room
+        you are in). Everything is only for you; getgenv().__CuriousDoorStop()
+        takes it all away and puts the room back as it was.
+
+================================================================================
+]]
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local Lighting = game:GetService("Lighting")
+local SoundService = game:GetService("SoundService")
+local LocalPlayer = Players.LocalPlayer
+local GENV = if getgenv then getgenv() else _G
+
+local TITLE = "Curious Door"
+local REPO = "https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/claude/sei-qui-con-noi-ye4k62/"
+local FOLDER = "CuriousDoor"
+local VOLUME = 0.5
+local YELLOW = Color3.fromRGB(255, 214, 60)
+local LIGHT = Color3.fromRGB(255, 222, 110)
+local BLESS = Color3.fromRGB(255, 251, 131) -- (the Curious Light's own, on whoever it revives in DOORS)
+local TRIM = Color3.fromRGB(67, 62, 60) -- (the Hotel's wall strips)
+local UP = Vector3.new(0, 1, 0)
+local ID = {
+	interact = "rbxassetid://10215020064", -- your character's Interact (DOORS')
+	sparkle = "rbxassetid://2581223252", -- the Curious and Guiding Lights' sparkles (DOORS')
+	shimmer = "rbxassetid://9125986239", -- the Curious Light's shimmer
+	skull = "rbxassetid://11781965809", -- the skeleton door's skull (DOORS')
+	unlock = "rbxassetid://11781878747", -- a padlock opened (DOORS': the stairwell's)
+	creak = "rbxassetid://9114205783", -- a door opened (DOORS': the stairwell's)
+	fall = "rbxassetid://257422322", -- a lock falling (DOORS')
+	chestOpen = "rbxassetid://10046256519", chestClose = "rbxassetid://10046256745", -- DOORS' chest's
+	gold = "rbxassetid://930700226", -- a gold pile collected (DOORS')
+	tablet = "rbxassetid://12594482248", -- the NVCS tablet (the Golden Tablet's model)
+}
+
+---====== THIS RUN: what it made, what it hid of DOORS' (given back at the end) ======---
+
+if type(GENV.__CuriousDoorStop) == "function" then pcall(GENV.__CuriousDoorStop) end
+local C = { connections = {}, hidden = {}, effects = {}, alive = true }
+local function make(class, props, parent)
+	local i = Instance.new(class)
+	for k, v in pairs(props) do i[k] = v end
+	i.Parent = parent
+	return i
+end
+local function on(signal, fn)
+	local c = signal:Connect(fn)
+	table.insert(C.connections, c)
+	return c
+end
+local function caption(text)
+	print("[" .. TITLE .. "] " .. text)
+	pcall(function() require(LocalPlayer.PlayerGui.MainUI.Initiator.Main_Game).caption(text, true) end)
+end
+local function tween(inst, time, goal, style, direction)
+	local t = TweenService:Create(inst, TweenInfo.new(time, style or Enum.EasingStyle.Quad, direction or Enum.EasingDirection.Out), goal)
+	t:Play()
+	return t
+end
+local function sfx(id, parent, volume, speed)
+	local s = make("Sound", { Name = "CuriousSfx", SoundId = id, Volume = volume or 0.5, PlaybackSpeed = speed or 1 }, parent)
+	s:Play()
+	task.delay(8, function() s:Destroy() end)
+	return s
+end
+local function flat(v)
+	local f = Vector3.new(v.X, 0, v.Z)
+	return if f.Magnitude > 1e-3 then f.Unit else Vector3.new(0, 0, -1)
+end
+local function ease(u) return u * u * (3 - 2 * u) end
+local function lerp(a, b, u) return a + (b - a) * u end
+
+---====== DOORS' ADMIN PANEL: the lockpicks, the key, the shake light, the gold ======---
+
+local remotes = ReplicatedStorage:FindFirstChild("RemotesFolder")
+local runCommand = remotes and remotes:FindFirstChild("AdminPanelRunCommand")
+local playerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+local isAdmin = (tonumber(LocalPlayer:GetAttribute("ServerAdmin")) or 0) >= 1 or (playerGui ~= nil and playerGui:FindFirstChild("DoorsAdmin") ~= nil)
+if not (runCommand and isAdmin) then
+	caption("Serve l'Admin Panel di DOORS (il pass ADMIN PANEL, nella tua run): lockpick, chiave e torcia sono i suoi oggetti.")
+	return
+end
+local ME = { [LocalPlayer.Name] = LocalPlayer.Name }
+local function command(name, data) runCommand:FireServer(name, data or {}) end
+
+---====== ITS FILES: the kit (your kit's pieces), the music, the icons (fetched once, kept in the executor's folder) ======---
+
+local function file(name, magic)
+	local here = FOLDER .. "/" .. name
+	pcall(function()
+		if not isfolder(FOLDER) then makefolder(FOLDER) end
+		if isfile(here) and readfile(here):sub(1, #magic) == magic then return end
+		local data = game:HttpGet(REPO .. "assets/curious/" .. name)
+		if type(data) == "string" and data:sub(1, #magic) == magic then writefile(here, data) end
+	end)
+	local ok, there = pcall(isfile, here)
+	return if ok and there then here else nil
+end
+local function asset(path)
+	if not path then return nil end
+	local ok, id = pcall(getcustomasset, path)
+	return if ok and type(id) == "string" then id else nil
+end
+local KIT = {}
+pcall(function()
+	local kit = game:GetObjects(getcustomasset(file("CuriousKit.rbxm", "<roblox!")))[1]
+	for _, d in ipairs(kit:GetDescendants()) do -- (nothing of DOORS' own systems on our copies: no modules, no tags, no prompts)
+		for name in pairs(d:GetAttributes()) do d:SetAttribute(name, nil) end
+		for _, tag in ipairs(d:GetTags()) do d:RemoveTag(tag) end
+		if d:IsA("ProximityPrompt") or d:IsA("LuaSourceContainer") then d:Destroy() end
+	end
+	for _, m in ipairs(kit:GetChildren()) do KIT[m.Name] = m end
+end)
+if not (KIT.SkullDoor and KIT.SkullDoorFrame and KIT.Chest and KIT.Padlock and KIT.SkeletonKey) then
+	caption("Il kit della Curious Door non si è caricato: riprova.")
+	return
+end
+pcall(function()
+	KIT.Chest.Main.Open.SoundId = ID.chestOpen
+	KIT.Chest.Main.Close.SoundId = ID.chestClose
+end)
+
+---====== THE ROOM: room 1 (or the one you are in) ======---
+
+local rooms = workspace:FindFirstChild("CurrentRooms")
+local room = nil
+for _ = 1, 100 do
+	room = rooms and (rooms:FindFirstChild("1") or rooms:FindFirstChild(tostring(LocalPlayer:GetAttribute("CurrentRoom") or "")))
+	if room then break end
+	task.wait(0.1)
+end
+if not room then
+	caption("Non trovo la stanza 1 di DOORS.")
+	return
+end
+local folder = make("Folder", { Name = "CuriousDoor" }, workspace)
+
+local probe = RaycastParams.new()
+probe.FilterType = Enum.RaycastFilterType.Exclude
+local overlap = OverlapParams.new()
+overlap.FilterType = Enum.RaycastFilterType.Exclude
+local function skipList()
+	local skip = { folder }
+	for _, p in ipairs(Players:GetPlayers()) do
+		if p.Character then table.insert(skip, p.Character) end
+	end
+	return skip
+end
+-- A ray through what is not seen or not solid
+local function ray(from, dir)
+	local skip = skipList()
+	for _ = 1, 6 do
+		probe.FilterDescendantsInstances = skip
+		local hit = workspace:Raycast(from, dir, probe)
+		if not hit or (hit.Instance.Transparency < 0.9 and hit.Instance.CanCollide) then return hit end
+		table.insert(skip, hit.Instance)
+	end
+	return nil
+end
+local function partsIn(cf, size)
+	overlap.FilterDescendantsInstances = skipList()
+	local ok, parts = pcall(function() return workspace:GetPartBoundsInBox(cf, size, overlap) end)
+	return if ok then parts else {}
+end
+local function there(p) return p.Transparency < 0.95 or p.CanCollide end -- (seen, or in the way)
+local function empty(cf, size)
+	for _, p in ipairs(partsIn(cf, size)) do
+		if there(p) then return false end
+	end
+	return true
+end
+local function commonest(list)
+	local count, best, most = {}, nil, 0
+	for _, y in ipairs(list) do
+		local k = math.floor(y * 2 + 0.5) / 2
+		count[k] = (count[k] or 0) + 1
+		if count[k] > most or (count[k] == most and k < best) then best, most = k, count[k] end
+	end
+	return best
+end
+-- Its frame (its bounding box), its floor and its ceiling (the commonest heights under and over it), its doors
+local function measure()
+	local ok, cf, size = pcall(function() return room:GetBoundingBox() end)
+	if not ok or not cf then return nil end
+	cf = CFrame.new(cf.Position) * CFrame.fromAxisAngle(UP, math.atan2(-cf.LookVector.X, -cf.LookVector.Z))
+	local doors = {}
+	for _, name in ipairs({ "RoomEntrance", "RoomExit" }) do
+		local door = room:FindFirstChild(name)
+		if door and door:IsA("BasePart") then table.insert(doors, door.Position) end
+	end
+	local startY = if doors[1] then doors[1].Y else cf.Position.Y - size.Y / 2 + 4
+	local floors, ceilings = {}, {}
+	for i = -1, 1 do
+		for j = -1, 1 do
+			local p = cf:PointToWorldSpace(Vector3.new(i * size.X * 0.25, 0, j * size.Z * 0.25))
+			local from = Vector3.new(p.X, startY, p.Z)
+			local down = ray(from, Vector3.new(0, -12, 0))
+			if down then table.insert(floors, down.Position.Y) end
+			local up = ray(from, Vector3.new(0, 40, 0))
+			if up then table.insert(ceilings, up.Position.Y) end
+		end
+	end
+	local floor = commonest(floors)
+	if not floor then return nil end
+	local ceiling = commonest(ceilings)
+	if ceiling and (ceiling - floor < 7 or ceiling - floor > 60) then ceiling = nil end
+	return { cf = cf, size = size, floor = floor, height = math.clamp((ceiling or floor + 11) - floor, 9.5, 13), doors = doors }
+end
+local info = measure()
+if not info then
+	folder:Destroy()
+	caption("Non riesco a misurare la stanza.")
+	return
+end
+local HORIZONTAL = { Vector3.new(1, 0, 0), Vector3.new(-1, 0, 0), Vector3.new(0, 0, 1), Vector3.new(0, 0, -1) }
+local CORNERS = {}
+for _, x in ipairs({ -0.5, 0.5 }) do
+	for _, y in ipairs({ -0.5, 0.5 }) do
+		for _, z in ipairs({ -0.5, 0.5 }) do table.insert(CORNERS, Vector3.new(x, y, z)) end
+	end
+end
+
+---====== WHERE THE DOOR GOES: a plain wall of the room, nothing before it, room behind it for the little room ======---
+
+-- The door as the Infirmary has it: its frame (the hole it needs in the wall: 6 wide, 8.45 high), the passage behind it
+-- (3.13 deep) and the little room behind that
+local DOOR = { half = 3.0, high = 8.45, passage = 3.13, width = 14, depth = 12 }
+-- The Infirmary's own frame: its wall's face at its floor, the door's middle; -z into the wall
+local KFRAME = CFrame.lookAt(Vector3.new(919.28, 18.79, -250.89), Vector3.new(919.28, 18.79, -249.89))
+local function square(p, E) -- its sides square with the wall (it can be cut round the door)
+	local ok = { false, false }
+	for _, a in ipairs({ Vector3.new(1, 0, 0), Vector3.new(0, 1, 0), Vector3.new(0, 0, 1) }) do
+		local w = p.CFrame:VectorToWorldSpace(a)
+		if math.abs(w:Dot(E.RightVector)) > 0.99 then ok[1] = true end
+		if math.abs(w:Dot(E.UpVector)) > 0.99 then ok[2] = true end
+	end
+	return ok[1] and ok[2]
+end
+local function depthOf(p, E) -- how far behind the wall's face it goes
+	local deepest = -math.huge
+	for _, c in ipairs(CORNERS) do
+		deepest = math.max(deepest, -E:PointToObjectSpace(p.CFrame:PointToWorldSpace(p.Size * c)).Z)
+	end
+	return deepest
+end
+-- A wall hit by a ray from the room: a place for the door there, or nil
+local function wallSpot(hit)
+	local n = Vector3.new(hit.Normal.X, 0, hit.Normal.Z)
+	if n.Magnitude < 0.9 then return nil end
+	n = n.Unit
+	local base = Vector3.new(hit.Position.X, info.floor, hit.Position.Z)
+	local E = CFrame.lookAt(base, base - n)
+	for _, x in ipairs({ -DOOR.half + 0.3, 0, DOOR.half - 0.3 }) do -- flat where the door goes
+		for _, y in ipairs({ 1.2, 4.5, DOOR.high - 0.4 }) do
+			local from = E:PointToWorldSpace(Vector3.new(x, y, 1.5))
+			local h = ray(from, -n * 3)
+			if not h or math.abs((from - h.Position):Dot(n) - 1.5) > 0.3 then return nil end
+		end
+	end
+	if not empty(E * CFrame.new(0, 4.8, 3), Vector3.new(DOOR.half * 2 + 1, 8, 5.2)) then return nil end -- nothing before it
+	for _, d in ipairs(info.doors) do -- not by the room's doors
+		if (Vector3.new(d.X, base.Y, d.Z) - base).Magnitude < 9 then return nil end
+	end
+	local wall, thick = {}, 0 -- the wall: plain parts square with it, not too thick
+	for _, p in ipairs(partsIn(E * CFrame.new(0, DOOR.high / 2, -1.6), Vector3.new(DOOR.half * 2 - 0.1, DOOR.high - 0.2, 3.6))) do
+		if there(p) then
+			if not (p:IsDescendantOf(room) and p:IsA("Part") and p.Shape == Enum.PartType.Block and square(p, E)) then return nil end -- (not another room's)
+			table.insert(wall, p)
+			thick = math.max(thick, depthOf(p, E))
+		end
+	end
+	if #wall == 0 or thick > 4 then return nil end
+	local front = math.max(thick, DOOR.passage - 0.38) -- (the little room's front: behind the wall, or at the passage's end)
+	local back = front + DOOR.depth + 0.6
+	local high = info.height + 0.65
+	if not empty(E * CFrame.new(0, 0.15 + high / 2, -(thick + 0.1 + back) / 2), Vector3.new(DOOR.width + 1.2, high, back - thick - 0.1)) then return nil end
+	return { E = E, wall = wall, thick = thick, front = front }
+end
+local function findSpot()
+	local path = if #info.doors >= 2 then flat(info.doors[2] - info.doors[1]) else info.cf.LookVector
+	local middle = info.cf.Position
+	local reach = math.max(info.size.X, info.size.Z)
+	local best, bestScore = nil, -math.huge
+	for i = -2, 2 do
+		for j = -2, 2 do
+			local p = info.cf:PointToWorldSpace(Vector3.new(i * info.size.X / 6, 0, j * info.size.Z / 6))
+			local from = Vector3.new(p.X, info.floor + 4, p.Z)
+			for _, dir in ipairs(HORIZONTAL) do
+				local hit = ray(from, info.cf:VectorToWorldSpace(dir) * reach)
+				if hit and hit.Instance:IsDescendantOf(room) then
+					local spot = wallSpot(hit)
+					if spot then -- (better: on a side wall, toward the middle of the room)
+						local side = 1 - math.abs(spot.E.LookVector:Dot(path))
+						local score = side * 3 - math.abs((spot.E.Position - middle):Dot(path)) / reach + math.random() * 0.3
+						if score > bestScore then best, bestScore = spot, score end
+					end
+				end
+			end
+		end
+	end
+	return best
+end
+-- No wall will do: the door on a wall all the same (flat, nothing before it), a doorway of light; its room far below
+local function portalSpot()
+	local list = {}
+	for i = -2, 2 do
+		for j = -2, 2 do
+			local p = info.cf:PointToWorldSpace(Vector3.new(i * info.size.X / 6, 0, j * info.size.Z / 6))
+			for _, dir in ipairs(HORIZONTAL) do
+				local hit = ray(Vector3.new(p.X, info.floor + 4, p.Z), info.cf:VectorToWorldSpace(dir) * math.max(info.size.X, info.size.Z))
+				if hit and math.abs(hit.Normal.Y) < 0.1 then table.insert(list, hit) end
+			end
+		end
+	end
+	for _, hit in ipairs(list) do
+		local n = flat(hit.Normal)
+		local base = Vector3.new(hit.Position.X, info.floor, hit.Position.Z)
+		local E = CFrame.lookAt(base, base - n)
+		local near = false
+		for _, d in ipairs(info.doors) do
+			if (Vector3.new(d.X, base.Y, d.Z) - base).Magnitude < 9 then near = true end
+		end
+		if not near and empty(E * CFrame.new(0, 4.8, 3), Vector3.new(DOOR.half * 2 + 1, 8, 5.2)) then
+			return { E = E * CFrame.new(0, 0, 0.65), portal = true }
+		end
+	end
+	local E = CFrame.lookAt(Vector3.new(info.cf.X, info.floor, info.cf.Z), Vector3.new(info.cf.X, info.floor, info.cf.Z) + info.cf.LookVector)
+	return { E = E * CFrame.new(0, 0, 0.65), portal = true }
+end
+local spot = findSpot() or portalSpot()
+local E = spot.E
+
+---====== THE WALL CUT ROUND THE DOOR (only for you: copies of it round the hole, the wall itself hidden) ======---
+
+local function hideLocally(p)
+	if C.hidden[p] then return end
+	C.hidden[p] = { p.LocalTransparencyModifier, p.CanCollide }
+	p.LocalTransparencyModifier, p.CanCollide = 1, false
+	for _, d in ipairs(p:GetChildren()) do
+		if d:IsA("Decal") or d:IsA("Texture") then
+			C.hidden[d] = { d.LocalTransparencyModifier }
+			d.LocalTransparencyModifier = 1
+		end
+	end
+end
+local RIGHTOF = { Front = Vector3.new(-1, 0, 0), Back = Vector3.new(1, 0, 0), Right = Vector3.new(0, 0, -1), Left = Vector3.new(0, 0, 1) }
+local function cut(p, x0, x1, y0, y1) -- up to four copies of it round the hole (x0..x1, y0..y1 in E, through it)
+	local ax, ay = nil, nil
+	for i, a in ipairs({ Vector3.new(1, 0, 0), Vector3.new(0, 1, 0), Vector3.new(0, 0, 1) }) do
+		local w = p.CFrame:VectorToWorldSpace(a)
+		if math.abs(w:Dot(E.RightVector)) > 0.99 then ax = i end
+		if math.abs(w:Dot(E.UpVector)) > 0.99 then ay = i end
+	end
+	local lo, hi = { math.huge, math.huge, math.huge }, { -math.huge, -math.huge, -math.huge }
+	for _, c in ipairs({ { x0, y0 }, { x0, y1 }, { x1, y0 }, { x1, y1 } }) do
+		local l = p.CFrame:PointToObjectSpace(E:PointToWorldSpace(Vector3.new(c[1], c[2], 0)))
+		local v = { l.X, l.Y, l.Z }
+		for k = 1, 3 do lo[k], hi[k] = math.min(lo[k], v[k]), math.max(hi[k], v[k]) end
+	end
+	local half = { p.Size.X / 2, p.Size.Y / 2, p.Size.Z / 2 }
+	local u0, u1 = math.clamp(lo[ax], -half[ax], half[ax]), math.clamp(hi[ax], -half[ax], half[ax])
+	local v0, v1 = math.clamp(lo[ay], -half[ay], half[ay]), math.clamp(hi[ay], -half[ay], half[ay])
+	if u1 - u0 < 0.01 or v1 - v0 < 0.01 then return end -- (not in the way)
+	for _, r in ipairs({ { -half[ax], u0, -half[ay], half[ay] }, { u1, half[ax], -half[ay], half[ay] }, { u0, u1, -half[ay], v0 }, { u0, u1, v1, half[ay] } }) do
+		if r[2] - r[1] > 0.02 and r[4] - r[3] > 0.02 then
+			local ok, piece = pcall(function() return p:Clone() end)
+			if not (ok and piece) then piece = make("Part", { Color = p.Color, Material = p.Material, Transparency = p.Transparency }, nil) end
+			for _, d in ipairs(piece:GetChildren()) do
+				if not (d:IsA("Texture") or d:IsA("Decal")) then d:Destroy() end
+			end
+			for _, tag in ipairs(piece:GetTags()) do piece:RemoveTag(tag) end
+			piece.Anchored = true
+			local size, offset = { p.Size.X, p.Size.Y, p.Size.Z }, { 0, 0, 0 }
+			size[ax], offset[ax] = r[2] - r[1], (r[1] + r[2]) / 2
+			size[ay], offset[ay] = r[4] - r[3], (r[3] + r[4]) / 2
+			local o = Vector3.new(offset[1], offset[2], offset[3])
+			piece.Size = Vector3.new(size[1], size[2], size[3])
+			piece.CFrame = p.CFrame * CFrame.new(o)
+			for _, t in ipairs(piece:GetChildren()) do -- (its wallpaper where it was)
+				local right = t:IsA("Texture") and RIGHTOF[tostring(t.Face):match("(%a+)$")]
+				if right then
+					local axis = ({ "X", "Y", "Z" })[math.abs(right.X) * 1 + math.abs(right.Y) * 2 + math.abs(right.Z) * 3]
+					t.OffsetStudsU -= p.Size[axis] / 2 - piece.Size[axis] / 2 + o:Dot(right)
+					t.OffsetStudsV -= p.Size.Y / 2 - piece.Size.Y / 2 - o.Y
+				end
+			end
+			piece.Parent = folder
+		end
+	end
+	hideLocally(p)
+end
+if not spot.portal then
+	for _, p in ipairs(spot.wall) do cut(p, -DOOR.half, DOOR.half, -0.01, DOOR.high) end
+end
+
+---====== THE DOOR: DOORS' skeleton door in its frame, as the Infirmary has it ======---
+
+local function placed(template, to)
+	local m = template:Clone()
+	for _, p in ipairs(m:GetDescendants()) do
+		if p:IsA("BasePart") then
+			p.CFrame = to * p.CFrame
+			p.Anchored, p.CanCollide, p.CanTouch, p.CanQuery = true, true, false, false
+		end
+	end
+	m.Parent = folder
+	return m
+end
+local door = {}
+do
+	local to = E * KFRAME:Inverse()
+	door.frame = placed(KIT.SkullDoorFrame, to)
+	door.model = placed(KIT.SkullDoor, to)
+	door.leaf = door.model:FindFirstChild("Door")
+	door.lock = door.model:FindFirstChild("SkullLock")
+	door.leafAt = door.leaf.CFrame
+	door.hinge = E * CFrame.new(-2.5, 0, -0.32) -- (its hinge: one edge of it, at its middle's depth)
+	door.lock.CanCollide = false
+	door.glow = make("PointLight", { Name = "CuriousGlow", Color = LIGHT, Brightness = 0.6, Range = 7, Shadows = false }, door.lock)
+	for _, e in ipairs(door.model:GetDescendants()) do
+		if e:IsA("ParticleEmitter") then e.Color = ColorSequence.new(Color3.new(1, 1, 1), YELLOW) end
+	end
+end
+-- Its swing: 0 shut, 1 open (into the passage; on a wall without a room behind, toward you)
+local function swing(u)
+	local angle = math.rad(if spot.portal then -100 else 95) * u
+	door.leaf.CFrame = door.hinge * CFrame.Angles(0, angle, 0) * door.hinge:Inverse() * door.leafAt
+end
+
+---====== THE LITTLE ROOM: walls, floor and ceiling as room 1's own; gold light, a rug, gold, a chest ======---
+
+local looks = {}
+do
+	local floorHit = ray(E:PointToWorldSpace(Vector3.new(0, 2, 3)), Vector3.new(0, -6, 0))
+	local ceilingHit = ray(E:PointToWorldSpace(Vector3.new(0, 2, 3)), Vector3.new(0, 40, 0))
+	looks.floor = floorHit and floorHit.Instance
+	looks.ceiling = ceilingHit and ceilingHit.Instance
+	if spot.wall then
+		local main = spot.wall[1]
+		for _, p in ipairs(spot.wall) do
+			if p.Size.X * p.Size.Y * p.Size.Z > main.Size.X * main.Size.Y * main.Size.Z then main = p end
+		end
+		looks.wall = main
+	else
+		local wallHit = ray(E:PointToWorldSpace(Vector3.new(0, 4, 2)), E.LookVector * 4)
+		looks.wall = wallHit and wallHit.Instance
+	end
+end
+-- A part with the look of one of the room's (its material, colour, textures on the face that shows)
+local function dressed(size, cf, source, face, fallback, parent)
+	local p = make("Part", { Name = "CuriousRoom", Size = size, CFrame = cf, Anchored = true, CanCollide = true, CanQuery = false, CanTouch = false,
+		Material = fallback.material, Color = fallback.color }, parent)
+	if source then
+		p.Material, p.Color = source.Material, source.Color
+		pcall(function() p.MaterialVariant = source.MaterialVariant end)
+		for _, t in ipairs(source:GetChildren()) do
+			if t:IsA("Texture") then
+				local copy = t:Clone()
+				copy.Face = face
+				copy.OffsetStudsU, copy.OffsetStudsV = 0, 0
+				copy.Parent = p
+			end
+		end
+	end
+	return p
+end
+local WALL = { material = Enum.Material.SmoothPlastic, color = Color3.fromRGB(110, 86, 74) }
+local FLOOR = { material = Enum.Material.WoodPlanks, color = Color3.fromRGB(105, 74, 56) }
+local closet = { model = make("Model", { Name = "CuriousRoom" }, folder) }
+do
+	local H = info.height
+	local Wd, D = DOOR.width, DOOR.depth
+	-- Its frame: its front's middle at the floor, -z into it (behind the door, or far below for a doorway of light)
+	local R = if spot.portal then E * CFrame.new(0, -320, -(DOOR.passage + 0.5)) else E * CFrame.new(0, 0, -spot.front)
+	closet.R = R
+	local function at(x, y, z) return R * CFrame.new(x, y, z) end
+	local m = closet.model
+	dressed(Vector3.new(Wd + 1, 1, D + 1), at(0, -0.5, -D / 2), looks.floor, Enum.NormalId.Top, FLOOR, m)
+	dressed(Vector3.new(Wd + 1, 1, D + 1), at(0, H + 0.5, -D / 2), looks.ceiling, Enum.NormalId.Bottom, WALL, m)
+	dressed(Vector3.new(Wd + 1, H, 0.5), at(0, H / 2, -D - 0.25), looks.wall, Enum.NormalId.Back, WALL, m)
+	dressed(Vector3.new(0.5, H, D + 1), at(-Wd / 2 - 0.25, H / 2, -D / 2), looks.wall, Enum.NormalId.Right, WALL, m)
+	dressed(Vector3.new(0.5, H, D + 1), at(Wd / 2 + 0.25, H / 2, -D / 2), looks.wall, Enum.NormalId.Left, WALL, m)
+	-- Its front: round the passage (and between the room's wall and it, where the wall is thinner than the passage)
+	local gap = if spot.portal then 0.1 else math.max(spot.front - spot.thick, 0.1)
+	for _, piece in ipairs({ { -Wd / 2 - 0.5, -DOOR.half, 0, H }, { DOOR.half, Wd / 2 + 0.5, 0, H }, { -DOOR.half, DOOR.half, DOOR.high, H } }) do
+		local w, h = piece[2] - piece[1], piece[4] - piece[3]
+		dressed(Vector3.new(w, h, gap), at((piece[1] + piece[2]) / 2, (piece[3] + piece[4]) / 2, gap / 2), looks.wall, Enum.NormalId.Front, WALL, m)
+	end
+	-- The Hotel's strips along its walls, at the floor and under the ceiling
+	for _, y in ipairs({ 0.31, H - 0.31 }) do
+		make("Part", { Name = "Wall_Strip", Size = Vector3.new(Wd, 0.62, 0.75), CFrame = at(0, y, -D + 0.12), Color = TRIM, Material = Enum.Material.Wood, Anchored = true, CanCollide = false }, m)
+		for _, s in ipairs({ -1, 1 }) do
+			make("Part", { Name = "Wall_Strip", Size = Vector3.new(0.75, 0.62, D), CFrame = at(s * (Wd / 2 - 0.12), y, -D / 2), Color = TRIM, Material = Enum.Material.Wood, Anchored = true, CanCollide = false }, m)
+			make("Part", { Name = "Wall_Strip", Size = Vector3.new(Wd / 2 - DOOR.half, 0.62, 0.75), CFrame = at(s * (Wd / 2 + DOOR.half) / 2, y, -0.12), Color = TRIM, Material = Enum.Material.Wood, Anchored = true, CanCollide = false }, m)
+		end
+	end
+	-- A rug before the chest (red, a gold border)
+	make("Part", { Name = "RugBorder", Size = Vector3.new(7.6, 0.05, 5.6), CFrame = at(0, 0.025, -D + 3.4), Color = Color3.fromRGB(214, 160, 50), Material = Enum.Material.Fabric, Anchored = true, CanCollide = false }, m)
+	make("Part", { Name = "Rug", Size = Vector3.new(7, 0.06, 5), CFrame = at(0, 0.03, -D + 3.4), Color = Color3.fromRGB(116, 24, 32), Material = Enum.Material.Fabric, Anchored = true, CanCollide = false }, m)
+	-- Gold round it
+	if KIT.GoldPile then
+		for _, g in ipairs({ { -3.2, -D + 1.6 }, { 3.0, -D + 1.9 }, { -5.2, -D + 4.6 }, { 5.0, -D + 4.1 }, { -1.8, -D + 6.2 } }) do
+			local pile = KIT.GoldPile:Clone()
+			local hitbox = pile:FindFirstChild("Hitbox")
+			if hitbox then
+				local to = at(g[1], 0.05, g[2]) * CFrame.Angles(0, math.random() * 6.28, 0) * hitbox.CFrame.Rotation:Inverse() * CFrame.new(-hitbox.Position)
+				for _, p in ipairs(pile:GetDescendants()) do
+					if p:IsA("BasePart") then
+						p.CFrame = to * p.CFrame
+						p.Anchored, p.CanCollide = true, false
+					end
+				end
+				for _, s in ipairs(pile:GetDescendants()) do
+					if s:IsA("Sound") then s:Destroy() end
+				end
+				pile.Parent = m
+			end
+		end
+	end
+	-- Its light: warm from above, shafts of light on the chest, golden dust in the air (dim until the door opens)
+	local lamp = make("Part", { Name = "Light", Size = Vector3.new(1, 1, 1), CFrame = at(0, H - 1, -D / 2), Transparency = 1, Anchored = true, CanCollide = false, CanQuery = false }, m)
+	closet.lamp = make("PointLight", { Name = "Light", Color = LIGHT, Brightness = 0, Range = 24, Shadows = false }, lamp)
+	local dust = make("Part", { Name = "Dust", Size = Vector3.new(Wd - 1, H - 1, D - 1), CFrame = at(0, H / 2, -D / 2), Transparency = 1, Anchored = true, CanCollide = false, CanQuery = false }, m)
+	closet.dust = make("ParticleEmitter", { Name = "Dust", Texture = ID.sparkle, Color = ColorSequence.new(YELLOW), LightEmission = 1, Rate = 0,
+		Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(0.5, 0.16), NumberSequenceKeypoint.new(1, 0) }),
+		Lifetime = NumberRange.new(4, 7), Speed = NumberRange.new(0.1, 0.4), SpreadAngle = Vector2.new(180, 180) }, dust)
+	pcall(function() closet.dust.Shape = Enum.ParticleEmitterShape.Box end)
+	closet.beams = {}
+	for _, x in ipairs({ -1.6, 0, 1.6 }) do
+		local top = make("Attachment", { Name = "Top", Position = Vector3.new(x * 0.6, H / 2 - 0.2, 0) }, dust)
+		local bottom = make("Attachment", { Name = "Bottom", Position = Vector3.new(x, -H / 2 + 0.6, -D / 2 + 2.6 + D / 2 - 2.6) }, dust)
+		bottom.Position = Vector3.new(x, -H / 2 + 0.6, -(D / 2 - 2.6))
+		table.insert(closet.beams, make("Beam", { Name = "Shaft", Attachment0 = top, Attachment1 = bottom, Color = ColorSequence.new(LIGHT), LightEmission = 1,
+			Transparency = NumberSequence.new(1), Width0 = 1.8, Width1 = 3, FaceCamera = true, Segments = 2 }, dust))
+	end
+	-- The way back, from a room far below: a doorway of light in its front
+	if spot.portal then
+		closet.exit = make("Part", { Name = "WayBack", Size = Vector3.new(DOOR.half * 2 - 1, DOOR.high - 0.5, 0.05), CFrame = at(0, DOOR.high / 2, 0.05),
+			Material = Enum.Material.Neon, Color = BLESS, Transparency = 0.15, Anchored = true, CanCollide = false, CanQuery = false }, m)
+	end
+end
+
+---====== CHESTS: DOORS' own (its lid, its lock, its animations), the Curious Light's glow ======---
+
+-- A chest standing at `at` (its bottom), its front (its lock) toward `facing`, `scale` times its size
+local function newChest(at, facing, scale)
+	local m = KIT.Chest:Clone()
+	local main = m:FindFirstChild("Main")
+	pcall(function() m.PrimaryPart = main end)
+	if scale and scale ~= 1 then pcall(function() m:ScaleTo(scale) end) end
+	local to = CFrame.lookAt(at + UP * (main.Size.Y / 2), at + UP * (main.Size.Y / 2) + facing) * main.CFrame:Inverse()
+	for _, p in ipairs(m:GetDescendants()) do
+		if p:IsA("BasePart") then p.CFrame = to * p.CFrame end
+	end
+	m.Parent = folder
+	local chest = { model = m, main = main, lid = m:FindFirstChild("Lid"), front = facing, tracks = {} }
+	chest.lock = chest.lid and chest.lid:FindFirstChild("Lock", true)
+	local controller = m:FindFirstChildOfClass("AnimationController")
+	chest.animator = controller and controller:FindFirstChildOfClass("Animator")
+	-- The Curious Light in it: its glow through the lid's seam, its sparkles over it
+	local top = main.Position + UP * (main.Size.Y / 2)
+	chest.seam = make("Part", { Name = "Seam", Size = Vector3.new(0.05, main.Size.X * 1.02, main.Size.Z * 1.02), Shape = Enum.PartType.Block,
+		CFrame = main.CFrame.Rotation * CFrame.Angles(0, 0, math.pi / 2) + top, Material = Enum.Material.Neon, Color = YELLOW, Transparency = 0.35,
+		Anchored = true, CanCollide = false, CanQuery = false, CanTouch = false }, m)
+	local glow = (KIT.CuriousLight and KIT.CuriousLight:Clone()) or make("Part", { Name = "CuriousLight", Size = Vector3.new(4, 1, 2) }, nil)
+	glow.CFrame = CFrame.new(top + UP * 0.4)
+	glow.Transparency, glow.Anchored, glow.CanCollide, glow.CanQuery, glow.CanTouch = 1, true, false, false, false
+	local emitters = 0
+	for _, e in ipairs(glow:GetChildren()) do
+		if e:IsA("ParticleEmitter") then
+			emitters += 1
+			if emitters > 2 then e:Destroy() else e.Rate = 6 end
+		elseif e:IsA("PointLight") then
+			e.Color, e.Brightness, e.Range, e.Shadows = LIGHT, 1.1, 12, false
+			chest.light = e
+		end
+	end
+	if not chest.light then chest.light = make("PointLight", { Name = "PointLight", Color = LIGHT, Brightness = 1.1, Range = 12, Shadows = false }, glow) end
+	glow.Parent = m
+	chest.glow = glow
+	return chest
+end
+local function playChest(chest, name, fade)
+	if not chest.animator then return end
+	local anim = chest.model:FindFirstChild("Animations") and chest.model.Animations:FindFirstChild(name)
+	if not anim then return end
+	local t = chest.tracks[name]
+	if not t then
+		local ok, track = pcall(function() return chest.animator:LoadAnimation(anim) end)
+		if not ok then return end
+		t = track
+		chest.tracks[name] = t
+	end
+	pcall(function() t:Play(fade or 0.1) end)
+end
+local function openChest(chest)
+	playChest(chest, "open")
+	task.delay(0.75, function() playChest(chest, "openidle", 0.2) end)
+	local s = chest.main:FindFirstChild("Open")
+	if s then pcall(function() s:Play() end) else sfx(ID.chestOpen, chest.main, 0.55) end
+	chest.seam.Transparency = 1
+	chest.light.Brightness = 3
+	tween(chest.light, 1.5, { Brightness = 1.4 })
+	for _, e in ipairs(chest.glow:GetChildren()) do
+		if e:IsA("ParticleEmitter") then pcall(function() e:Emit(20) end) end
+	end
+end
+local function prompt(parent, action, object, hold, distance)
+	local p = make("ProximityPrompt", { Name = "CuriousPrompt", ActionText = action, ObjectText = object, HoldDuration = hold or 0,
+		MaxActivationDistance = distance or 8, RequiresLineOfSight = false, KeyboardKeyCode = Enum.KeyCode.E }, parent)
+	if playerGui and playerGui:FindFirstChild("MainUI") then p.Style = Enum.ProximityPromptStyle.Custom end -- (DOORS draws its own)
+	return p
+end
+
+---====== THE ITEMS: DOORS' own from the Admin Panel, in the Curious Light's gold ======---
+
+-- The tool the Admin Panel is about to give you: the first new one named for it (or, failing that, any new one)
+local function arriving(stem)
+	local known = {}
+	local function places()
+		local out = { LocalPlayer:FindFirstChildOfClass("Backpack") }
+		if LocalPlayer.Character then table.insert(out, LocalPlayer.Character) end
+		return out
+	end
+	for _, place in ipairs(places()) do
+		for _, t in ipairs(place:GetChildren()) do known[t] = true end
+	end
+	local since = os.clock()
+	return function()
+		local other = nil
+		for _, place in ipairs(places()) do
+			for _, t in ipairs(place:GetChildren()) do
+				if t:IsA("Tool") and not known[t] then
+					if t.Name:lower():find(stem, 1, true) then return t end
+					other = other or t
+				end
+			end
+		end
+		return if os.clock() - since > 3 then other else nil
+	end
+end
+local function give(item, stem)
+	local poll = arriving(stem)
+	command("Give Items", { Players = ME, Items = { [item] = item } })
+	local deadline = os.clock() + 10
+	while os.clock() < deadline and C.alive do
+		task.wait(0.1)
+		local tool = poll()
+		if tool then return tool end
+	end
+	return nil
+end
+-- Gold: its metal gold and shining, what glows yellow, a soft yellow glow and sparkles round it
+local function gild(model)
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("BasePart") and d.Transparency < 1 then
+			if d:IsA("MeshPart") then pcall(function() d.TextureID = "" end) end
+			if d.Material == Enum.Material.Neon or d.Name == "Eyeholes" then
+				d.Material, d.Color = Enum.Material.Neon, YELLOW
+			else
+				local _, s, v = d.Color:ToHSV() -- (its own light and dark, in gold)
+				d.Color = Color3.fromHSV(0.115, math.clamp(0.55 + s * 0.4, 0, 1), math.clamp(0.45 + v * 0.55, 0, 1))
+				d.Material, d.Reflectance = Enum.Material.Foil, 0.1
+			end
+		elseif d:IsA("SurfaceAppearance") then
+			d:Destroy()
+		elseif d:IsA("Light") then
+			d.Color = LIGHT
+		elseif d:IsA("ParticleEmitter") or d:IsA("Beam") or d:IsA("Trail") then
+			d.Color = ColorSequence.new(YELLOW)
+		end
+	end
+	local handle = model:FindFirstChild("Handle") or model:FindFirstChildWhichIsA("BasePart", true)
+	if handle then
+		make("PointLight", { Name = "CuriousGlow", Color = LIGHT, Brightness = 0.8, Range = 6, Shadows = false }, handle)
+		make("ParticleEmitter", { Name = "CuriousSparkles", Texture = ID.sparkle, Color = ColorSequence.new(YELLOW), LightEmission = 1,
+			Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.12), NumberSequenceKeypoint.new(1, 0) }),
+			Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.1), NumberSequenceKeypoint.new(1, 1) }),
+			Lifetime = NumberRange.new(0.6, 1.2), Rate = 6, Speed = NumberRange.new(0.2, 0.6), SpreadAngle = Vector2.new(180, 180) }, handle)
+	end
+	return handle
+end
+local function named(tool, kind, singular, plural, icon)
+	tool:SetAttribute("CuriousItem", kind)
+	tool:SetAttribute("NameSingular", singular)
+	tool:SetAttribute("NamePlural", plural)
+	tool.ToolTip = singular
+	local id = asset(file(icon, "\137PNG"))
+	if id then tool.TextureId = id end
+end
+-- Two little golden keys on a ring, hanging from the lockpicks' handle
+local function charms(handle)
+	if not (KIT.Key and handle) then return end
+	for i, side in ipairs({ -1, 1 }) do
+		local key = KIT.Key:Clone()
+		pcall(function() key:ScaleTo(0.45) end)
+		gild(key)
+		local parts = {}
+		for _, p in ipairs(key:GetDescendants()) do
+			if p:IsA("BasePart") then table.insert(parts, p) end
+		end
+		local main = key:FindFirstChild("Key") or parts[1]
+		if main then
+			local to = handle.CFrame * CFrame.new(side * 0.09, -0.18 - i * 0.04, 0.05) * CFrame.Angles(0, 0, math.rad(80 + side * 18)) * main.CFrame:Inverse()
+			for _, p in ipairs(parts) do
+				p.CFrame = to * p.CFrame
+				p.Anchored, p.CanCollide, p.CanQuery, p.CanTouch, p.Massless = false, false, false, false, true
+				make("Weld", { Name = "CharmWeld", Part0 = handle, Part1 = p, C0 = handle.CFrame:ToObjectSpace(p.CFrame) }, p)
+			end
+			key.Parent = handle
+		end
+	end
+end
+local items = { picks = 2 }
+local function holding(kind)
+	local character = LocalPlayer.Character
+	local tool = character and character:FindFirstChildOfClass("Tool")
+	return if tool and tool:GetAttribute("CuriousItem") == kind then tool else nil
+end
+-- DOORS' Interact on your character
+local interactTrack = nil
+local function interact()
+	pcall(function()
+		local animator = LocalPlayer.Character.Humanoid:FindFirstChildOfClass("Animator")
+		if not interactTrack then
+			interactTrack = animator:LoadAnimation(make("Animation", { AnimationId = ID.interact }, nil))
+			interactTrack.Priority = Enum.AnimationPriority.Action
+		end
+		interactTrack:Play(0.1)
+	end)
+end
+
+---====== ROOM 1: two chests with the Curious Light, each padlocked; the golden key in one, gold in the other ======---
+
+local function chestSpots(count)
+	local found, tries = {}, {}
+	local step = 2
+	for x = -info.size.X / 2 + 2.5, info.size.X / 2 - 2.5, step do
+		for z = -info.size.Z / 2 + 2.5, info.size.Z / 2 - 2.5, step do table.insert(tries, Vector3.new(x, 0, z)) end
+	end
+	for i = #tries, 2, -1 do -- (in no order)
+		local j = math.random(1, i)
+		tries[i], tries[j] = tries[j], tries[i]
+	end
+	local center = info.cf.Position
+	for pass = 1, 2 do
+		for _, t in ipairs(tries) do
+			if #found >= count then break end
+			local p = info.cf:PointToWorldSpace(t)
+			local hit = ray(Vector3.new(p.X, info.floor + 2.5, p.Z), Vector3.new(0, -4, 0))
+			local at = Vector3.new(p.X, info.floor, p.Z)
+			local ok = hit ~= nil and math.abs(hit.Position.Y - info.floor) < 0.6 and hit.Normal.Y > 0.9
+			if ok and pass == 1 then -- (first: by a wall)
+				local near = false
+				for _, dir in ipairs(HORIZONTAL) do
+					if ray(at + UP * 1.2, info.cf:VectorToWorldSpace(dir) * 4.2) then near = true end
+				end
+				ok = near
+			end
+			for _, d in ipairs(info.doors) do
+				if ok and (Vector3.new(d.X, at.Y, d.Z) - at).Magnitude < 8 then ok = false end
+			end
+			if ok and (E:PointToWorldSpace(Vector3.new(0, 0, 2.5)) - at).Magnitude < 8 then ok = false end
+			for _, f in ipairs(found) do
+				if ok and (f.at - at).Magnitude < 7 then ok = false end
+			end
+			if ok and empty(CFrame.new(at + UP * 1.6), Vector3.new(4.6, 2.9, 4.6)) then
+				table.insert(found, { at = at, facing = flat(center - at) })
+			end
+		end
+	end
+	return found
+end
+local chests = {}
+local spots = chestSpots(2)
+local keyIn = math.random(1, math.max(#spots, 1))
+for i, s in ipairs(spots) do
+	local chest = newChest(s.at, s.facing, 1)
+	chest.holdsKey = i == keyIn
+	table.insert(chests, chest)
+end
+if #chests == 0 then caption("Non c'è posto per le casse nella stanza: la chiave è davanti alla porta.") end
+
+-- A padlock on a chest's lock (DOORS' own, the stairwell's): the lockpicks break it
+local function padlock(chest)
+	local m = KIT.Padlock:Clone()
+	local base = m:FindFirstChild("LockBase")
+	local lockAt = if chest.lock then chest.lock.Position else chest.main.Position + chest.front * (chest.main.Size.Z / 2)
+	local T = CFrame.lookAt(lockAt + chest.front * 0.18 - UP * 0.3, lockAt + chest.front * 1.18 - UP * 0.3)
+	local to = T * base.CFrame.Rotation:Inverse() * CFrame.new(-base.Position)
+	for _, p in ipairs(m:GetDescendants()) do
+		if p:IsA("BasePart") then
+			p.CFrame = to * p.CFrame
+			p.Anchored, p.CanCollide, p.CanQuery, p.CanTouch = true, false, false, false
+		elseif p:IsA("JointInstance") then
+			p:Destroy()
+		end
+	end
+	m.Parent = chest.model
+	chest.padlock = m
+	return base
+end
+-- It breaks: sparks at its keyhole, its shackle springs up, it falls to the floor
+local function breakPadlock(chest)
+	local m = chest.padlock
+	local base, top = m:FindFirstChild("LockBase"), m:FindFirstChild("LockTop")
+	interact()
+	sfx(ID.unlock, base, 0.6)
+	local sparks = make("ParticleEmitter", { Name = "Sparks", Texture = ID.sparkle, Color = ColorSequence.new(YELLOW), LightEmission = 1,
+		Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.18), NumberSequenceKeypoint.new(1, 0) }), Lifetime = NumberRange.new(0.3, 0.8),
+		Speed = NumberRange.new(4, 9), SpreadAngle = Vector2.new(70, 70), Rate = 0 }, base)
+	pcall(function() sparks:Emit(30) end)
+	if top then tween(top, 0.25, { CFrame = top.CFrame + base.CFrame.UpVector * 0.25 }) end
+	task.delay(0.35, function()
+		sfx(ID.fall, base, 0.3)
+		for _, p in ipairs(m:GetDescendants()) do
+			if p:IsA("BasePart") then
+				p.Anchored, p.CanCollide = false, true
+				pcall(function() p.AssemblyLinearVelocity = chest.front * 3 + UP * 2 end)
+			end
+		end
+		task.delay(6, function() m:Destroy() end)
+	end)
+	chest.padlock = nil
+end
+
+-- The golden key over its open chest, turning, glowing: take it and it is yours (the Admin Panel's, in gold)
+local function keyDisplay(at)
+	local key = KIT.SkeletonKey:Clone()
+	local main = key:FindFirstChild("Main")
+	if main then main:Destroy() end
+	local handle = key:FindFirstChild("Handle")
+	gild(key)
+	local parts = {}
+	for _, p in ipairs(key:GetDescendants()) do
+		if p:IsA("BasePart") then
+			p.Anchored, p.CanCollide, p.CanQuery = true, false, false
+			table.insert(parts, { p, handle.CFrame:ToObjectSpace(p.CFrame) })
+		end
+	end
+	key.Parent = folder
+	local born = os.clock()
+	local spin = on(RunService.RenderStepped, function()
+		local t = os.clock() - born
+		local cf = CFrame.new(at + UP * (math.sin(t * 2) * 0.12 + math.min(t, 1) * 0.6)) * CFrame.Angles(0, t * 1.4, 0) * CFrame.Angles(0, 0, 0.4)
+		for _, e in ipairs(parts) do e[1].CFrame = cf * e[2] end
+	end)
+	return key, handle, spin
+end
+local function takeKey(chest)
+	if items.keyTaken then return end
+	items.keyTaken = true
+	if chest.display then
+		chest.spin:Disconnect()
+		chest.display:Destroy()
+	end
+	sfx(ID.shimmer, chest.main, 0.5)
+	task.spawn(function()
+		local tool = give("SkeletonKey", "skeleton")
+		if not tool then
+			items.keyTaken = false
+			caption("Il Pannello Admin non ha dato la Skeleton Key: riprova.")
+			return
+		end
+		gild(tool)
+		named(tool, "Key", "Golden Skeleton Key", "Golden Skeleton Keys", "GoldenSkeletonKey.png")
+		items.key = tool
+		caption("La Golden Skeleton Key: la porta col teschio la aspetta.")
+	end)
+end
+for _, chest in ipairs(chests) do
+	local base = padlock(chest)
+	local lockPrompt = prompt(base, "Break", "Padlock", 1.2, 7)
+	local openPrompt = prompt(chest.main, "Open", "Chest", 0.6, 7)
+	openPrompt.Enabled = false
+	on(lockPrompt.Triggered, function()
+		if not holding("Lockpicks") then
+			caption("Il catenaccio si rompe solo coi Curious Lockpicks in mano.")
+			return
+		end
+		if items.picks <= 0 then
+			caption("I Curious Lockpicks sono consumati.")
+			return
+		end
+		items.picks -= 1
+		local tool = holding("Lockpicks")
+		tool:SetAttribute("Durability", items.picks)
+		lockPrompt:Destroy()
+		breakPadlock(chest)
+		task.delay(0.6, function() openPrompt.Enabled = true end)
+	end)
+	on(openPrompt.Triggered, function()
+		openPrompt:Destroy()
+		interact()
+		openChest(chest)
+		local inside = chest.main.Position + UP * 0.5
+		if chest.holdsKey then
+			chest.display, chest.handle, chest.spin = keyDisplay(inside)
+			local take = prompt(chest.handle, "Take", "Golden Skeleton Key", 0, 8)
+			on(take.Triggered, function()
+				take:Destroy()
+				takeKey(chest)
+			end)
+		elseif KIT.GoldPile then
+			local pile = KIT.GoldPile:Clone()
+			local hitbox = pile:FindFirstChild("Hitbox")
+			local to = CFrame.new(inside - UP * 0.3) * CFrame.new(-hitbox.Position)
+			for _, p in ipairs(pile:GetDescendants()) do
+				if p:IsA("BasePart") then
+					p.CFrame = to * p.CFrame
+					p.Anchored, p.CanCollide = true, false
+				end
+			end
+			pile.Parent = folder
+			local take = prompt(hitbox, "Collect", "Gold ( 50 )", 0, 8)
+			on(take.Triggered, function()
+				take:Destroy()
+				sfx(ID.gold, hitbox, 0.55, 0.8)
+				command("Give Gold", { Players = ME, ["Gold Amount"] = 50, ["Add To Current Gold"] = true })
+				pile:Destroy()
+			end)
+		end
+	end)
+end
+if #chests == 0 then -- (no room for the chests: the key before the door)
+	local fake = { main = door.lock, model = folder }
+	fake.display, fake.handle, fake.spin = keyDisplay(E:PointToWorldSpace(Vector3.new(0, 1, 2.5)))
+	local take = prompt(fake.handle, "Take", "Golden Skeleton Key", 0, 8)
+	on(take.Triggered, function()
+		take:Destroy()
+		takeKey(fake)
+	end)
+end
+
+-- The lockpicks, now: the Admin Panel's Lockpick, in gold, two little keys hanging from it
+task.spawn(function()
+	local tool = give("Lockpick", "lockpick")
+	if not tool then
+		caption("Il Pannello Admin non ha dato il Lockpick: rilancia lo script.")
+		return
+	end
+	local handle = gild(tool)
+	charms(handle)
+	named(tool, "Lockpicks", "Curious Lockpicks", "Curious Lockpicks", "CuriousLockpicks.png")
+	tool:SetAttribute("Durability", items.picks)
+	tool:SetAttribute("DurabilityMax", 2)
+	items.lockpicks = tool
+	caption("I Curious Lockpicks: rompono i catenacci delle casse con la luce gialla.")
+end)
+
+---====== A FILM: black bars, your camera and your body for a cutscene (you seen from outside, your head too), all given back ======---
+
+local grade = make("ColorCorrectionEffect", { Name = "CuriousGrade", Enabled = true }, Lighting)
+local bloom = make("BloomEffect", { Name = "CuriousBloom", Intensity = 0, Size = 30, Threshold = 0.9 }, Lighting)
+C.effects = { grade, bloom }
+local mainGame = nil
+pcall(function() mainGame = require(LocalPlayer.PlayerGui.MainUI.Initiator.Main_Game) end)
+local JOINTS = { root = { "Root", "RootJoint" }, waist = { "Waist" }, neck = { "Neck" }, rS = { "RightShoulder", "Right Shoulder" },
+	rE = { "RightElbow" }, lS = { "LeftShoulder", "Left Shoulder" }, lE = { "LeftElbow" } }
+local ZERO = { 0, 0, 0 }
+-- A pose between two of a list { t, pose = { joint = { pitch, yaw, roll } } } (degrees: pitch > 0 lifts an arm forward)
+local function poseAt(list, t)
+	local a, b = list[#list], list[#list]
+	for i = 2, #list do
+		if list[i].t > t then
+			a, b = list[i - 1], list[i]
+			break
+		end
+	end
+	local u = if b.t > a.t then ease(math.clamp((t - a.t) / (b.t - a.t), 0, 1)) else 1
+	local out = {}
+	for name in pairs(JOINTS) do
+		local p, q = a.pose[name] or ZERO, b.pose[name] or ZERO
+		out[name] = { lerp(p[1], q[1], u), lerp(p[2], q[2], u), lerp(p[3], q[3], u) }
+	end
+	return out
+end
+local function newFilm(character, root)
+	local camera = workspace.CurrentCamera
+	local film = { done = false, saved = { type = camera.CameraType, fov = camera.FieldOfView, cframe = camera.CFrame, anchored = root.Anchored,
+		stopcam = mainGame and mainGame.stopcam }, hide = {} }
+	if mainGame then mainGame.stopcam = true end
+	root.Anchored = true
+	camera.CameraType = Enum.CameraType.Scriptable
+	local bars = make("ScreenGui", { Name = "CuriousFilm", IgnoreGuiInset = true, DisplayOrder = 99998, ResetOnSpawn = false }, playerGui)
+	local top = make("Frame", { Size = UDim2.fromScale(1, 0), BackgroundColor3 = Color3.new(0, 0, 0), BorderSizePixel = 0 }, bars)
+	local bottom = make("Frame", { AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1), Size = UDim2.fromScale(1, 0),
+		BackgroundColor3 = Color3.new(0, 0, 0), BorderSizePixel = 0 }, bars)
+	local function barsTo(height, seconds)
+		for _, bar in ipairs({ top, bottom }) do tween(bar, seconds, { Size = UDim2.fromScale(1, height) }) end
+	end
+	barsTo(0.11, 0.35)
+	local joints = {}
+	for name, names in pairs(JOINTS) do
+		for _, n in ipairs(names) do
+			local m = character:FindFirstChild(n, true)
+			if m and m:IsA("Motor6D") then
+				local q = m.C0.Rotation
+				joints[name] = { motor = m, q = q, qi = q:Inverse() }
+				break
+			end
+		end
+	end
+	film.hand = character:FindFirstChild("RightHand") or character:FindFirstChild("Right Arm") or root
+	-- The body, after Roblox's animations
+	local writer = on(RunService.PreSimulation or RunService.Stepped, function()
+		if not film.bodyAt then return end
+		local pose, at, face = film.bodyAt(os.clock())
+		for name, j in pairs(joints) do
+			local a = pose[name] or ZERO
+			j.motor.Transform = j.qi * CFrame.fromEulerAnglesYXZ(math.rad(a[1]), math.rad(a[2]), math.rad(a[3])) * j.q
+		end
+		root.CFrame = CFrame.lookAt(at, at + face)
+	end)
+	-- The picture
+	RunService:BindToRenderStep("CuriousFilm", Enum.RenderPriority.Last.Value + 2, function()
+		local now = os.clock()
+		for _, d in ipairs(character:GetDescendants()) do -- seen from outside, even in first person
+			if d:IsA("BasePart") or d:IsA("Decal") then d.LocalTransparencyModifier = if film.hide[d] then 1 else 0 end
+		end
+		if film.every then film.every(now) end
+		if film.shot then
+			local cf, fov = film.shot(now)
+			camera.CFrame, camera.FieldOfView = cf, fov
+		end
+	end)
+	function film.finish()
+		if film.done then return end
+		film.done = true
+		C.film = nil
+		RunService:UnbindFromRenderStep("CuriousFilm")
+		writer:Disconnect()
+		for _, j in pairs(joints) do j.motor.Transform = CFrame.new() end
+		camera.CameraType = film.saved.type
+		camera.FieldOfView = film.saved.fov
+		if mainGame then mainGame.stopcam = film.saved.stopcam end
+		if root.Parent then root.Anchored = film.saved.anchored end
+		bars:Destroy()
+	end
+	-- Back to you, wherever you are now, and the bars go
+	function film.home(at, seconds)
+		local leaving, fov, from = camera.CFrame, camera.FieldOfView, os.clock()
+		local home = CFrame.lookAt(at + UP * 1.5, at + UP * 1.5 + film.facing)
+		film.shot = function(now)
+			local u = ease(math.clamp((now - from) / seconds, 0, 1))
+			return leaving:Lerp(home, u), lerp(fov, film.saved.fov, u)
+		end
+		barsTo(0, seconds * 0.85)
+		task.wait(seconds + 0.05)
+		film.finish()
+	end
+	C.film = film
+	return film
+end
+
+---====== THE MUSIC (an original piece): it starts as the door opens, it is loudest by the little room ======---
+
+local music = make("Sound", { Name = "CuriousMusic", Looped = true, Volume = 0 }, SoundService)
+pcall(function() music.SoundId = asset(file("CuriousLight.mp3", "ID3")) or "" end)
+local function startMusic()
+	if music.IsPlaying then return end
+	music.Volume = 0
+	music:Play()
+	C.musicOn = true
+end
+on(RunService.Heartbeat, function(dt)
+	if not C.musicOn then return end
+	local character = LocalPlayer.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	local centre = closet.R:PointToWorldSpace(Vector3.new(0, 3, -DOOR.depth / 2))
+	local dist = if root then (root.Position - centre).Magnitude else 0
+	if spot.portal and C.inside then dist = 0 end
+	local want = VOLUME * math.clamp(1 - (dist - 16) / 34, 0, 1)
+	music.Volume += (want - music.Volume) * math.min(dt * 2, 1)
+end)
+
+---====== THE SKELETON DOOR: the golden key in the skull, the skull falls, the door opens, the Curious Light pours out ======---
+
+local veil = make("Part", { Name = "LightVeil", Size = Vector3.new(DOOR.half * 2 - 1, DOOR.high - 0.5, 0.05),
+	CFrame = E * CFrame.new(0, (DOOR.high - 0.5) / 2, if spot.portal then -0.7 else -1.4), Material = Enum.Material.Neon, Color = BLESS,
+	Transparency = 1, Anchored = true, CanCollide = false, CanQuery = false, CanTouch = false }, folder)
+local flood = make("SpotLight", { Name = "CuriousFlood", Face = Enum.NormalId.Back, Color = LIGHT, Brightness = 0, Range = 30, Angle = 80, Shadows = false }, veil)
+
+local function openDoor(tool)
+	if door.opened then return end
+	door.opened = true
+	local character = LocalPlayer.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	if not root then
+		door.opened = false
+		return
+	end
+	local face = flat(E.LookVector) -- (toward the door)
+	local right = face:Cross(UP)
+	local height = root.Position.Y
+	local mark = E:PointToWorldSpace(Vector3.new(0.6, 0, 4.2))
+	local stand = Vector3.new(mark.X, height, mark.Z)
+	local film = newFilm(character, root)
+	film.facing = face
+	if tool then
+		for _, d in ipairs(tool:GetDescendants()) do
+			if d:IsA("BasePart") then film.hide[d] = true end
+		end
+	end
+	-- The key: out of your hand, into the skull, turned
+	local prop = KIT.SkeletonKey:Clone()
+	local propMain = prop:FindFirstChild("Main")
+	if propMain then propMain:Destroy() end
+	local propHandle = prop:FindFirstChild("Handle")
+	gild(prop)
+	local propParts = {}
+	for _, p in ipairs(prop:GetDescendants()) do
+		if p:IsA("BasePart") then
+			p.Anchored, p.CanCollide, p.CanQuery = true, false, false
+			table.insert(propParts, { p, propHandle.CFrame:ToObjectSpace(p.CFrame) })
+		end
+	end
+	prop.Parent = folder
+	local lockFront = door.lock.Position - face * 0.24
+	local inLock = CFrame.fromMatrix(lockFront - face * 0.3, -face, UP) -- (its shaft in, its skull out)
+	local t0 = os.clock()
+	local fromHand = film.hand.CFrame
+	local function propAt(cf)
+		for _, e in ipairs(propParts) do e[1].CFrame = cf * e[2] end
+	end
+	local poses = {
+		{ t = 0, pose = {} },
+		{ t = 0.5, pose = { rS = { 78, 4, 0 }, neck = { -6, 0, 0 } } },
+		{ t = 1.5, pose = { rS = { 74, 4, 0 }, neck = { -4, 0, 0 } } },
+		{ t = 2.1, pose = { rS = { 10, 0, 0 } } },
+		{ t = 3.0, pose = { neck = { 14, 0, 0 }, waist = { -5, 0, 0 }, rS = { 28, 0, 22 }, lS = { 28, 0, -22 }, rE = { 20, 0, 0 }, lE = { 20, 0, 0 } } },
+		{ t = 5.6, pose = { neck = { 10, 0, 0 }, waist = { -3, 0, 0 }, rS = { 22, 0, 16 }, lS = { 22, 0, -16 } } },
+		{ t = 7.0, pose = { neck = { 4, 0, 0 } } },
+	}
+	film.bodyAt = function(now)
+		local t = now - t0
+		local back = ease(math.clamp((t - 2.8) / 1.4, 0, 1)) * 0.6
+		return poseAt(poses, t), stand - face * back, face
+	end
+	local head = function() return stand + UP * 1.5 end
+	film.shot = function(now) -- over your shoulder at the skull; then before you, your face in its light; then behind you, the door of light
+		local t = now - t0
+		if t < 2.4 then
+			local push = ease(math.clamp(t / 2.4, 0, 1)) * 0.5
+			local eye = head() + right * 1.15 + UP * 0.35 - face * (1.5 - push)
+			return CFrame.lookAt(eye, door.lock.Position), 52
+		elseif t < 5.6 then
+			local u = ease(math.clamp((t - 2.4) / 3.2, 0, 1))
+			local eye = stand + face * (2.1 - u * 0.3) + right * (1.2 - u * 0.4) + UP * (1.7 + u * 0.1)
+			return CFrame.lookAt(eye, head() + UP * 0.15 - face * (ease(math.clamp((t - 2.8) / 1.4, 0, 1)) * 0.6)), 46 - u * 6
+		else
+			local u = ease(math.clamp((t - 5.6) / 2.8, 0, 1))
+			local eye = stand - face * (3.6 - u * 1.0) + right * 0.9 + UP * 1.9
+			return CFrame.lookAt(eye, E:PointToWorldSpace(Vector3.new(0, 4, -1))), 58
+		end
+	end
+	film.every = function(now)
+		local t = now - t0
+		if t < 0.8 then -- (out of your hand, before the skull)
+			propAt(fromHand:Lerp(inLock * CFrame.new(0.6, 0, 0), ease(t / 0.8)))
+		elseif t < 1.0 then -- (in)
+			propAt((inLock * CFrame.new(0.6, 0, 0)):Lerp(inLock, ease((t - 0.8) / 0.2)))
+		elseif t < 1.5 then -- (turned)
+			propAt(inLock * CFrame.Angles(math.rad(90) * ease((t - 1.0) / 0.5), 0, 0))
+		elseif t < 2.15 then
+			local k = (2.15 - t) * 0.04
+			door.lock.CFrame = door.lockAt * CFrame.Angles((math.random() - 0.5) * k, (math.random() - 0.5) * k, (math.random() - 0.5) * k)
+			propAt(door.lock.CFrame * door.lockAt:ToObjectSpace(inLock * CFrame.Angles(math.rad(90), 0, 0)))
+		end
+		if t >= 2.6 and t < 5.0 then swing(ease((t - 2.6) / 2.4)) end
+	end
+	door.lockAt = door.lock.CFrame
+	task.delay(1.4, function() -- the skull: its sound, its eyes lit, its sparkles
+		sfx(ID.skull, door.lock, 0.8)
+		door.glow.Brightness, door.glow.Range = 4, 12
+		for _, e in ipairs(door.model:GetDescendants()) do
+			if e:IsA("ParticleEmitter") then pcall(function() e:Emit(35) end) end
+		end
+	end)
+	task.delay(2.15, function() -- it falls, the key in it
+		sfx(ID.fall, door.lock, 0.4)
+		for _, e in ipairs(propParts) do -- (the key with it)
+			e[1].Anchored, e[1].CanCollide = false, false
+			make("WeldConstraint", { Part0 = door.lock, Part1 = e[1] }, e[1])
+		end
+		door.lock.Anchored, door.lock.CanCollide = false, true
+		pcall(function() door.lock.AssemblyLinearVelocity = -face * 2 + UP * 1.5 end)
+		tween(door.glow, 1.5, { Brightness = 0 })
+		task.delay(5, function()
+			pcall(function() prop:Destroy() end)
+			pcall(function() door.lock:Destroy() end)
+		end)
+	end)
+	task.delay(2.6, function() -- the door: open, and the Curious Light pours out
+		sfx(ID.creak, door.leaf, 0.6, 0.9)
+		startMusic()
+		tween(flood, 2.2, { Brightness = 5 })
+		tween(veil, 1.6, { Transparency = if spot.portal then 0.15 else 0.6 })
+		tween(closet.lamp, 2.5, { Brightness = 1.2 })
+		closet.dust.Rate = 14
+		for _, b in ipairs(closet.beams) do b.Transparency = NumberSequence.new(0.78, 0.97) end
+		tween(grade, 2.2, { TintColor = Color3.fromRGB(255, 240, 200), Brightness = 0.06 })
+		tween(bloom, 2.2, { Intensity = 0.6 })
+	end)
+	task.delay(6.2, function()
+		tween(flood, 3, { Brightness = 1.4 })
+		if not spot.portal then tween(veil, 3, { Transparency = 0.94 }) end
+		tween(grade, 3, { TintColor = Color3.new(1, 1, 1), Brightness = 0 })
+		tween(bloom, 3, { Intensity = 0 })
+	end)
+	task.delay(8.4, function()
+		swing(1)
+		film.home(stand - face * 0.6, 1.4)
+		pcall(function() character.Humanoid:UnequipTools() end)
+		caption("La Curious Light ti chiama.")
+	end)
+end
+local doorPrompt = prompt(door.lock, "Unlock", "Skeleton Lock", 0.9, 10)
+on(doorPrompt.Triggered, function()
+	local tool = holding("Key")
+	if not tool then
+		caption("La serratura col teschio vuole la Golden Skeleton Key.")
+		local at = door.lock.CFrame
+		tween(door.lock, 0.06, { CFrame = at * CFrame.Angles(0, 0, 0.08) })
+		task.delay(0.07, function() tween(door.lock, 0.1, { CFrame = at }) end)
+		return
+	end
+	doorPrompt:Destroy()
+	openDoor(tool)
+end)
+
+-- Through a doorway of light (the door on a wall with no room behind it): to the little room far below, and back
+if spot.portal then
+	local cooldown = 0
+	on(RunService.Heartbeat, function()
+		if not door.opened or C.film then return end
+		local character = LocalPlayer.Character
+		local root = character and character:FindFirstChild("HumanoidRootPart")
+		if not root or os.clock() < cooldown then return end
+		local function inside(frame)
+			local l = frame:PointToObjectSpace(root.Position)
+			return math.abs(l.X) < DOOR.half - 0.5 and l.Y > -1 and l.Y < DOOR.high and math.abs(l.Z) < 1.2
+		end
+		local goTo = nil
+		if inside(E * CFrame.new(0, 0, -0.4)) then
+			goTo, C.inside = closet.R * CFrame.new(0, 3, -2.5), true
+		elseif inside(closet.R * CFrame.new(0, 0, 0.4)) then
+			goTo, C.inside = E * CFrame.new(0, 3, 3.5), false
+		end
+		if goTo then
+			cooldown = os.clock() + 1.5
+			grade.Brightness, grade.TintColor = 0.5, BLESS
+			tween(grade, 1, { Brightness = 0, TintColor = Color3.new(1, 1, 1) })
+			sfx(ID.shimmer, root, 0.5)
+			local look = if C.inside then closet.R.LookVector else -E.LookVector
+			root.CFrame = CFrame.lookAt(goTo.Position, goTo.Position + flat(look))
+		end
+	end)
+end
+
+---====== THE TREASURE: the chest of the little room; the Curious Light's blessing; the Shake Light and the Golden Tablet ======---
+
+local treasure = newChest(closet.R:PointToWorldSpace(Vector3.new(0, 0, -DOOR.depth + 2.4)), closet.R:VectorToWorldSpace(Vector3.new(0, 0, 1)), 1.3)
+for _, p in ipairs(treasure.model:GetDescendants()) do -- (its metal gold)
+	if p:IsA("BasePart") and p.Material == Enum.Material.Metal then p.Color, p.Material = Color3.fromRGB(236, 184, 64), Enum.Material.Foil end
+end
+treasure.light.Range = 16
+
+-- The Curious Light on you: a shell of light over your body (as it shines on whoever it revives), a flash, sparkles round you
+local function bless()
+	local character = LocalPlayer.Character
+	if not character then return end
+	local shells = {}
+	for _, p in ipairs(character:GetDescendants()) do
+		if p:IsA("BasePart") and p.Transparency < 0.5 and p.Name ~= "HumanoidRootPart" then
+			local ok, c = pcall(function() return p:Clone() end)
+			if ok and c then
+				for _, k in ipairs(c:GetChildren()) do
+					if not k:IsA("SpecialMesh") then k:Destroy() end
+				end
+				c.Anchored, c.CanCollide, c.CanQuery, c.CanTouch, c.Massless = true, false, false, false, true
+				c.Material, c.Color, c.Transparency = Enum.Material.ForceField, BLESS, 0
+				c.Size = p.Size + Vector3.new(0.05, 0.05, 0.05)
+				c.CFrame = p.CFrame
+				c.Parent = folder
+				table.insert(shells, { p, c })
+			end
+		end
+	end
+	local root = character:FindFirstChild("HumanoidRootPart")
+	if root then
+		local rise = make("ParticleEmitter", { Name = "Blessing", Texture = ID.sparkle, Color = ColorSequence.new(YELLOW), LightEmission = 1,
+			Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.25), NumberSequenceKeypoint.new(1, 0) }), Lifetime = NumberRange.new(1.2, 2.2),
+			Speed = NumberRange.new(1.5, 3), SpreadAngle = Vector2.new(30, 30), Acceleration = UP * 2, Rate = 40, EmissionDirection = Enum.NormalId.Top }, root)
+		local shine = make("PointLight", { Name = "Blessing", Color = BLESS, Brightness = 3, Range = 14, Shadows = false }, root)
+		tween(shine, 3, { Brightness = 0 })
+		task.delay(2.2, function() rise.Rate = 0 end)
+		task.delay(5, function()
+			rise:Destroy()
+			shine:Destroy()
+		end)
+	end
+	sfx(ID.shimmer, treasure.main, 0.8)
+	grade.TintColor, grade.Brightness = BLESS, 0.35
+	tween(grade, 2.4, { TintColor = Color3.new(1, 1, 1), Brightness = 0 })
+	bloom.Intensity = 1.2
+	tween(bloom, 2.4, { Intensity = 0 })
+	local start = os.clock()
+	local follow
+	follow = on(RunService.RenderStepped, function()
+		local u = (os.clock() - start) / 2.6
+		for _, s in ipairs(shells) do
+			if s[1].Parent then s[2].CFrame = s[1].CFrame end
+			s[2].Transparency = math.clamp(u, 0, 1)
+		end
+		if u >= 1 then
+			follow:Disconnect()
+			for _, s in ipairs(shells) do s[2]:Destroy() end
+		end
+	end)
+end
+
+-- Run one of this repository's scripts (the Shake Light's, the scanners')
+local function run(name, config)
+	task.spawn(function()
+		if config then _G.Scanner = config end
+		local ok, err = pcall(function() loadstring(game:HttpGet(REPO .. name))() end)
+		if not ok then
+			warn("[" .. TITLE .. "] " .. name .. ": " .. tostring(err))
+			caption("Non sono riuscito a darti " .. name .. ": riprova.")
+		end
+	end)
+end
+-- What floats over the open chest: turning, glowing; take it
+local function floating(model, at, label, onTake)
+	local parts, pivot = {}, nil
+	for _, p in ipairs(model:GetDescendants()) do
+		if p:IsA("BasePart") then
+			p.Anchored, p.CanCollide, p.CanQuery, p.CanTouch = true, false, false, false
+			pivot = pivot or p
+			table.insert(parts, p)
+		end
+	end
+	if not pivot then return end
+	local rel = {}
+	for _, p in ipairs(parts) do rel[p] = pivot.CFrame:ToObjectSpace(p.CFrame) end
+	model.Parent = folder
+	local born, offset = os.clock(), math.random() * 6
+	local spin = on(RunService.RenderStepped, function()
+		local t = os.clock() - born
+		local cf = CFrame.new(at + UP * (math.min(t / 1.2, 1) * 1.6 + math.sin(t * 1.8 + offset) * 0.12)) * CFrame.Angles(0, t * 0.9 + offset, 0)
+		for _, p in ipairs(parts) do p.CFrame = cf * rel[p] end
+	end)
+	make("PointLight", { Name = "Glow", Color = LIGHT, Brightness = 1, Range = 7, Shadows = false }, pivot)
+	local take = prompt(pivot, "Take", label, 0, 9)
+	on(take.Triggered, function()
+		take:Destroy()
+		spin:Disconnect()
+		model:Destroy()
+		sfx(ID.shimmer, treasure.main, 0.5, 1.2)
+		onTake()
+	end)
+end
+-- The Curious Shake Light, as it floats: a shake light of yellow glass, its lens lit
+local function shakeLightModel()
+	local m = make("Model", { Name = "CuriousShakeLight" }, nil)
+	local body = make("Part", { Name = "Body", Shape = Enum.PartType.Cylinder, Size = Vector3.new(1.3, 0.5, 0.5), Material = Enum.Material.Glass,
+		Color = Color3.fromRGB(255, 226, 70), Transparency = 0.25 }, m)
+	make("Part", { Name = "Core", Shape = Enum.PartType.Cylinder, Size = Vector3.new(1.1, 0.28, 0.28), Material = Enum.Material.Neon, Color = BLESS,
+		CFrame = body.CFrame }, m)
+	make("Part", { Name = "Head", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.35, 0.66, 0.66), Material = Enum.Material.Metal,
+		Color = Color3.fromRGB(226, 150, 30), CFrame = body.CFrame * CFrame.new(0.8, 0, 0) }, m)
+	make("Part", { Name = "Lens", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.05, 0.56, 0.56), Material = Enum.Material.Neon, Color = BLESS,
+		CFrame = body.CFrame * CFrame.new(1.0, 0, 0) }, m)
+	make("Part", { Name = "Switch", Size = Vector3.new(0.3, 0.12, 0.16), Material = Enum.Material.SmoothPlastic, Color = Color3.fromRGB(255, 140, 20),
+		CFrame = body.CFrame * CFrame.new(-0.2, 0.27, 0) }, m)
+	return m
+end
+-- The Golden Tablet, as it floats: the tablet's own model, its body gold, its screen lit (or a tablet of parts)
+local function tabletModel()
+	local ok, tool = pcall(function() return game:GetObjects(ID.tablet)[1] end)
+	local m = make("Model", { Name = "GoldenTablet" }, nil)
+	if ok and typeof(tool) == "Instance" and tool:FindFirstChild("Handle") then
+		local handle = tool.Handle
+		handle.Parent = m
+		for _, d in ipairs(handle:GetDescendants()) do
+			if d:IsA("Sound") or d:IsA("LuaSourceContainer") then d:Destroy() end
+		end
+		gild(m)
+		local screen = handle:FindFirstChild("Screen")
+		if screen then screen.Material, screen.Color, screen.Transparency = Enum.Material.Neon, Color3.fromRGB(255, 208, 70), 0 end
+		handle.Transparency = 1
+		return m
+	end
+	make("Part", { Name = "Body", Size = Vector3.new(1.3, 0.9, 0.12), Material = Enum.Material.Foil, Color = Color3.fromRGB(236, 184, 64) }, m)
+	make("Part", { Name = "Screen", Size = Vector3.new(1.05, 0.7, 0.02), CFrame = CFrame.new(0, 0, -0.07), Material = Enum.Material.Neon, Color = Color3.fromRGB(255, 208, 70) }, m)
+	return m
+end
+local treasurePrompt = prompt(treasure.main, "Open", "Chest", 1, 8)
+on(treasurePrompt.Triggered, function()
+	treasurePrompt:Destroy()
+	interact()
+	openChest(treasure)
+	bless()
+	caption("La Curious Light ti benedice.")
+	local inside = treasure.main.Position + UP * 0.6
+	local side = closet.R:VectorToWorldSpace(Vector3.new(1, 0, 0))
+	task.delay(0.8, function()
+		floating(shakeLightModel(), inside - side * 0.8, "Curious Shake Light", function() run("CuriousShakeLight") end)
+		floating(tabletModel(), inside + side * 0.8, "Golden Tablet", function() run("ObjectScanner", { Type = "Tablet", Variant = "Golden" }) end)
+	end)
+end)
+
+---====== STOP: everything taken away, the room as it was ======---
+
+GENV.__CuriousDoorStop = function()
+	C.alive = false
+	if C.film then pcall(C.film.finish) end
+	pcall(function() RunService:UnbindFromRenderStep("CuriousFilm") end)
+	for _, c in ipairs(C.connections) do c:Disconnect() end
+	for inst, was in pairs(C.hidden) do
+		pcall(function()
+			inst.LocalTransparencyModifier = was[1]
+			if was[2] ~= nil then inst.CanCollide = was[2] end
+		end)
+	end
+	pcall(function() music:Destroy() end)
+	for _, e in ipairs(C.effects) do pcall(function() e:Destroy() end) end
+	pcall(function() folder:Destroy() end)
+end
