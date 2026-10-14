@@ -337,10 +337,23 @@ do
 	end
 
 	local SCREEN_S = 0.63 -- how green its screen is in its own picture (its saturation)
-	--[[ ICON.paint(base, color, light): a PNG of its own picture (base: a .icon file, see assets/scanner/) with its
+	-- The Golden Tablet's gold: its body's light (0 dark, 1 bright) to a colour
+	local GOLD_RAMP = { { 0, 0.2, 0.11, 0.02 }, { 0.3, 0.59, 0.36, 0.05 }, { 0.62, 0.93, 0.72, 0.23 }, { 0.85, 1, 0.89, 0.51 }, { 1, 1, 0.98, 0.84 } }
+	local function goldAt(l)
+		for i = 2, #GOLD_RAMP do
+			local a, b = GOLD_RAMP[i - 1], GOLD_RAMP[i]
+			if l <= b[1] then
+				local u = (l - a[1]) / (b[1] - a[1])
+				return a[2] + (b[2] - a[2]) * u, a[3] + (b[3] - a[3]) * u, a[4] + (b[4] - a[4]) * u
+			end
+		end
+		return 1, 0.98, 0.84
+	end
+	--[[ ICON.paint(base, color, light, gilded): a PNG of its own picture (base: a .icon file, see assets/scanner/) with its
 	     screen, and the green it casts on its body, in `color` (what the file says takes it); with `light`, the Light's
-	     glow and sparkles in it. Colours as { r, g, b }, 0 to 1 ]]
-	function ICON.paint(base, color, light)
+	     glow and sparkles in it; `gilded` (the Golden Tablet): its body gold, a softer glow, no sparkles. Colours as
+	     { r, g, b }, 0 to 1 ]]
+	function ICON.paint(base, color, light, gilded)
 		assert(base:sub(1, 8) == "SCNICON2", "not an icon")
 		local w, h = base:byte(9) * 256 + base:byte(10), base:byte(11) * 256 + base:byte(12)
 		local th, ts, tv = toHSV(color[1], color[2], color[3])
@@ -352,21 +365,28 @@ do
 				local r, g, b, a, glow, spark, core, paint = string.byte(base, at, at + 7)
 				at += 8
 				r, g, b, a = r / 255, g / 255, b / 255, a / 255
+				local _, s0 = toHSV(r, g, b)
+				local body = 1 - clamp01((s0 - 0.25) / 0.2) -- (not its screen: grey)
+				local l0 = 0.299 * r + 0.587 * g + 0.114 * b
 				if paint > 0 then -- its screen (saturated), and its light on the body: to the new colour
 					local _, s, v = toHSV(r, g, b)
 					local m, k = clamp01((s - 0.25) / 0.2), paint / 255
 					local nr, ng, nb = fromHSV(th, math.min(s * ts / SCREEN_S, 1), v * (1 - m + m * tv))
 					r, g, b = r + (nr - r) * k, g + (ng - g) * k, b + (nb - b) * k
 				end
+				if gilded and a > 0 then -- its body gold, by its own light
+					local gr, gg, gb = goldAt(clamp01(l0 / 0.8))
+					r, g, b = r + (gr - r) * body, g + (gg - g) * body, b + (gb - b) * body
+				end
 				if light then
-					local ga = glow / 255 * 0.55 -- under it, its glow
+					local ga = glow / 255 * (if gilded then 0.35 else 0.55) -- under it, its glow
 					local under = ga * (1 - a)
 					local out = a + under
 					if out > 0 then
 						r, g, b = (r * a + light[1] * under) / out, (g * a + light[2] * under) / out, (b * a + light[3] * under) / out
 					end
 					a = out
-					for _, layer in ipairs({ { spark / 255, light }, { core / 255, { 1, 1, 1 } } }) do -- over it, its sparkles
+					for _, layer in ipairs(if gilded then {} else { { spark / 255, light }, { core / 255, { 1, 1, 1 } } }) do -- over it, its sparkles
 						local k, c = layer[1], layer[2]
 						if k > 0 then
 							local keep = a * (1 - k)
@@ -385,26 +405,9 @@ do
 end
 ---- END ICON ----
 
--- Its icon in your inventory: its own; in a Light or in a colour of yours, its own recoloured (once, then kept)
+-- Its icon in your inventory: its own; in a Light or in a colour of yours, its own recoloured (once, then kept); the Golden
+-- Tablet's, its own in gold
 local function useIcon(d)
-	if GOLDEN then -- (the Golden Tablet's own: drawn for it, fetched once)
-		pcall(function()
-			local path = "ObjectScanner/Icons/GoldenTablet.png"
-			if not isfolder("ObjectScanner") then makefolder("ObjectScanner") end
-			if not isfolder("ObjectScanner/Icons") then makefolder("ObjectScanner/Icons") end
-			if not isfile(path) then
-				for _, branch in ipairs(BRANCHES) do
-					local ok, body = pcall(function() return game:HttpGet(REPO .. branch .. "/assets/curious/GoldenTablet.png") end)
-					if ok and type(body) == "string" and body:sub(1, 4) == "\137PNG" then
-						writefile(path, body)
-						break
-					end
-				end
-			end
-			if isfile(path) then d.tool.TextureId = getcustomasset(path) end
-		end)
-		return
-	end
 	local base = ICON_BASES[KIND]
 	if not (base and (LIGHT or CUSTOM)) then return end
 	local c = CONFIG.Screen
@@ -423,7 +426,7 @@ local function useIcon(d)
 			end
 			if not data then return end
 			local function three(color) return { color.R, color.G, color.B } end
-			writefile(path, ICON.paint(data, three(c), if LIGHT then three(LIGHTS[LIGHT].color) else nil))
+			writefile(path, ICON.paint(data, three(c), if LIGHT then three(LIGHTS[LIGHT].color) else nil, GOLDEN))
 		end
 		d.tool.TextureId = getcustomasset(path)
 	end)

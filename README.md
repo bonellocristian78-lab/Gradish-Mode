@@ -945,10 +945,10 @@ are in.
   room 1, by a wall, clear of the furniture and of the doors, each glowing with the Curious Light (its yellow
   sparkles, its light, a seam of light under the lid) and shut with DOORS' padlock (the stairwell's lockpick door's).
 - **The Curious Lockpicks**, in your hands at once: the panel's Lockpick, in gold, two little golden keys hanging from
-  it, their own icon. Two uses: hold one to a padlock (`Break`): DOORS' Interact, sparks, its shackle springs, it falls
+  it, the panel's own icon in gold. Two uses: hold one to a padlock (`Break`): DOORS' Interact, sparks, its shackle springs, it falls
   to the floor. Without them in your hand the padlock stays and it says so.
 - **Opened** on DOORS' own chest animations: in one, the **Golden Skeleton Key**, turning over it (`Take`: the panel's
-  Skeleton Key, in gold, its skull's eyes lit, glowing, its own icon); in the other, 50 gold (the panel's Give Gold).
+  Skeleton Key, in gold, its skull's eyes lit, glowing, the panel's own icon in gold); in the other, 50 gold (the panel's Give Gold).
 - **The skeleton door**: DOORS' own (the Infirmary's: its skull lock, its leaf, its frame, its sparkles, its sound) in
   a side wall of the room where there is room behind it: the wall is cut round it (copies of it round the hole, with
   its wallpaper; the wall itself hidden, only for you). Only the golden key opens it (`Unlock`). **A cutscene**:
@@ -966,6 +966,10 @@ are in.
   `ObjectScanner` as the Golden Tablet).
 - Where no wall of the room has room behind it, the door goes on a wall all the same and opens toward you onto a
   doorway of light: through it to the little room, far below, and back through its own.
+- **The icons** are the items' own, the Admin Panel's (its list of items), recoloured: where the game lets an icon's
+  pixels be read (`EditableImage`), each pixel takes the colour of its light on a ramp of gold (or of the Curious
+  Light's yellow), kept in the executor's folder (`CuriousDoor/Icons/`, made once); where it doesn't, DOORS' own
+  hotbar tints the same icon (`ScannerColor`).
 
 `getgenv().__CuriousDoorStop()` takes it all away (the wall back as it was).
 
@@ -976,7 +980,7 @@ loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab
 ```
 
 DOORS' Shakelight from the Admin Panel (it needs it), in the Curious Light's yellow: its glass yellow, its metal
-amber, what glows yellow, its light yellow, its sparkles, its own icon; its shaking and its light DOORS' own. **Shake
+amber, what glows yellow, its light yellow, its sparkles, the panel's own icon in yellow (as the Curious Door's); its shaking and its light DOORS' own. **Shake
 it four times** (within 6 s) and it is charged (its light flares, a shimmer): for 25 s, where you walk with it in your
 hand, it leaves **a trail of the Curious Light** on the floor, a glowing mark every 1.6 studs (a light on every third,
 sparkles rising), each fading away in 18 s. Shake it again to keep it charged.
@@ -1041,7 +1045,7 @@ loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab
 ```
 
 The Curious Tablet (the Curious Door gives it too): the tablet, its body gold, its screen the Curious Light's, its
-own icon (`assets/curious/GoldenTablet.png`). Everything the tablet does, and:
+icon the tablet's own (`assets/scanner/Tablet.icon`), its body gold, its screen the Curious Light's. Everything the tablet does, and:
 
 - **Its frames per second past counting**: its screen is drawn every frame, and in its corner `MoonSec-3` and a
   number that never stands still (digits, now and then a sign, now and then `INF`).
@@ -1346,7 +1350,7 @@ That includes the files made to be copied or filled in (`AchievementConfig`,
 | `assets/surprise/` | the surprises' sounds (steps, psst, bite, shriek, heartbeat, whispers, roar, clicks, hum, whoosh, rumble) |
 | `assets/bottles/` | The bottles' hotbar icons and the green one's triangle |
 | `assets/halloween/` | Your Halloween kit (`HalloweenKit.rbxm`), the ambience (`Ambience.mp3`, made here), the stand-in pumpkin face and fog puff |
-| `assets/curious/` | The Curious Door's pieces of your kit (`CuriousKit.rbxm`: the skeleton door and its frame, the chest, the padlock, the skeleton key, the key, the gold, the Curious Light), its music (`CuriousLight.mp3`, made here), the icons drawn here (the Curious Lockpicks, the Golden Skeleton Key, the Curious Shake Light, the Golden Tablet) |
+| `assets/curious/` | The Curious Door's pieces of your kit (`CuriousKit.rbxm`: the skeleton door and its frame, the chest, the padlock, the skeleton key, the key, the gold, the Curious Light), its music (`CuriousLight.mp3`, made here) |
 | `assets/monochrome/` | VER's stand-ins, where its game's own files do not load (its presence, its scream, a lamp's click, the radar's ping, its eyes) and the film grain; its own shape (`VERBody.lua`); its Noise variant's tape (sheets, sound) and Noise's Emerge made VER's |
 | `tools/` | Prometheus' settings for the obfuscation, the script that runs it, its fix for Luau |
 | `assets/scanner/` | The scanners' own icons without their background (`.png`) and ready to be recoloured by the script (`.icon`) |
