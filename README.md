@@ -47,10 +47,12 @@ mod rather than playing it.
 | Hotel-: the Washroom, down a staircase beside door 0001: a laundry, the key of B-02, a big attic past it, the key of B-03 (DOORS' models, doors, locks, drawers, items, Guiding Light, hiding; no entities) | `.../Washroom` |
 | Hotel-: today's DOORS walk, crouch and sounds (doors, hits, footsteps) | `.../ModernHotel` |
 | MONOCHROME: VER at the next door (its own walk, sounds, lights, kill, radar), with its creator's permission; `_G.VER` = `"White"`, `"Glitch"`, `"Noise"` (out of a TV) | `.../Monochrome` |
-| Scanners: DOORS' radar (Nokia) or the NVCS tablet (`_G.Scanner = { Type = "Tablet" }`) | `.../ObjectScanner` |
+| Scanners: DOORS' radar (Nokia) or the NVCS tablet (`_G.Scanner = { Type = "Tablet" }`); the Golden Tablet (`_G.Scanner = { Variant = "Golden" }`: the Lights it feels, powered up its games, held as a phone) | `.../ObjectScanner` |
 | Lucky Bottle: a Starlight Bottle that brings luck through DOORS' Admin Panel (needs it) | `.../LuckyBottle` |
 | Unlucky Bottle: a Starlight Bottle that brings bad luck (no more wardrobes, Rush, Screech...; never kills you; needs the Admin Panel) | `.../UnluckyBottle` |
 | Halloween Mode: the hotel dressed with your kit (pumpkins, candles, cobwebs, bats, flags, candy, fog on the floor, orange and purple lights), Seek's Halloween body with purple fire and its own animations, Halloween hands, Figure's jack o' lantern head, an ambience in the background | `.../HalloweenMode` |
+| Curious Door: at door 1, padlocked chests in the Curious Light, the Curious Lockpicks, the Golden Skeleton Key, DOORS' skeleton door and its cutscene, a little room of gold with the Curious Shake Light and the Golden Tablet (needs the Admin Panel) | `.../CuriousDoor` |
+| Curious Shake Light: DOORS' Shakelight in yellow; shaken, a trail of light where you walk (needs the Admin Panel) | `.../CuriousShakeLight` |
 | Universal Custom Assets: animator with Studio controls (Ctrl + U I O) | `.../UniversalAssets` |
 | The same, obfuscated | `.../UniversalAssets.obf` |
 
@@ -925,6 +927,60 @@ Every piece of the kit is checked first: what will not load in DOORS (a mesh or 
 out, never shown broken. `getgenv().__HalloweenMode()` takes it all off (every light, fire, eye, hand and head back
 as it was); running it again starts a new one.
 
+## Curious Door
+
+At door 1 of the Hotel, the Curious Light's secret, with your kit's pieces (`assets/curious/CuriousKit.rbxm`), only
+for you:
+
+```lua
+loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/claude/sei-qui-con-noi-ye4k62/CuriousDoor"))()
+```
+
+**It needs DOORS' Admin Panel** (the ADMIN PANEL pass, in your own run): the lockpicks, the key and the shake light
+are its own items (Give Items), with DOORS' own animations; the script only changes how they look. Without it,
+nothing, and DOORS' caption says why. Run it at the start: it uses room 1 (behind door 0001); later on, the room you
+are in.
+
+- **The chests**: two of DOORS' locked chests (`ChestBoxLocked`: its lid, its lock, its animations) on the floor of
+  room 1, by a wall, clear of the furniture and of the doors, each glowing with the Curious Light (its yellow
+  sparkles, its light, a seam of light under the lid) and shut with DOORS' padlock (the stairwell's lockpick door's).
+- **The Curious Lockpicks**, in your hands at once: the panel's Lockpick, in gold, two little golden keys hanging from
+  it, their own icon. Two uses: hold one to a padlock (`Break`): DOORS' Interact, sparks, its shackle springs, it falls
+  to the floor. Without them in your hand the padlock stays and it says so.
+- **Opened** on DOORS' own chest animations: in one, the **Golden Skeleton Key**, turning over it (`Take`: the panel's
+  Skeleton Key, in gold, its skull's eyes lit, glowing, its own icon); in the other, 50 gold (the panel's Give Gold).
+- **The skeleton door**: DOORS' own (the Infirmary's: its skull lock, its leaf, its frame, its sparkles, its sound) in
+  a side wall of the room where there is room behind it: the wall is cut round it (copies of it round the hole, with
+  its wallpaper; the wall itself hidden, only for you). Only the golden key opens it (`Unlock`). **A cutscene**:
+  over your shoulder, the key flies out of your hand into the skull and turns; the skull's sound, its eyes lit, its
+  sparkles; it falls with the key in it. Then you, seen from before you (your head too), as the door swings open
+  into its passage and the Curious Light pours out over your face; then you from behind, before the doorway of
+  light; and back to your eyes. **The music** starts as the door opens (`assets/curious/CuriousLight.mp3`, an
+  original piece made for this: golden and curious, E major with the raised fourth, a celesta over a harp, a soft
+  choir, far bells and sparkles; 1 min 47 s, made to loop), loudest by the little room, fading as you walk away.
+- **The little room** behind it, its floor, walls and ceiling as room 1's own (their materials, colours and
+  textures), the Hotel's strips, a red rug with a gold border, gold all round, shafts of light and golden dust in the
+  air, and a big chest with gold fittings. Open it and **the Curious Light blesses you**: a shell of its light over
+  your body (as it shines on whoever it revives), a flash, sparkles rising round you. Out of it float the **Curious
+  Shake Light** and the **Golden Tablet**; `Take` gives each (their own scripts: `CuriousShakeLight`, and
+  `ObjectScanner` as the Golden Tablet).
+- Where no wall of the room has room behind it, the door goes on a wall all the same and opens toward you onto a
+  doorway of light: through it to the little room, far below, and back through its own.
+
+`getgenv().__CuriousDoorStop()` takes it all away (the wall back as it was).
+
+## Curious Shake Light
+
+```lua
+loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/claude/sei-qui-con-noi-ye4k62/CuriousShakeLight"))()
+```
+
+DOORS' Shakelight from the Admin Panel (it needs it), in the Curious Light's yellow: its glass yellow, its metal
+amber, what glows yellow, its light yellow, its sparkles, its own icon; its shaking and its light DOORS' own. **Shake
+it four times** (within 6 s) and it is charged (its light flares, a shimmer): for 25 s, where you walk with it in your
+hand, it leaves **a trail of the Curious Light** on the floor, a glowing mark every 1.6 studs (a light on every third,
+sparkles rising), each fading away in 18 s. Shake it again to keep it charged.
+
 ## Scanners (Object Scanner)
 
 ```lua
@@ -941,6 +997,7 @@ its own model and its own icon.
 | `"Tablet"` | the NVCS tablet: the model of the tablet's own script (`rbxassetid://12594482248`), its icon, sounds and animations | **X-RAY**: the room seen through its screen, stars on what opens the way |
 
 `Type`: `"Scanner"` (the Nokia, the default) or `"Tablet"`. `Variant`: `"Normal"`,
+`"Golden"` (the Golden Tablet, below),
 `"Guiding"` (Guiding Light: blue, its glow and sparkles) or `"Curious"` (Curious Light:
 yellow). `Color` is its screen's colour, by name: `"Red"`, `"Orange"`, `"Yellow"`,
 `"Lime"`, `"Green"`, `"Cyan"`, `"Blue"`, `"Purple"`, `"Pink"`, `"White"` (or any
@@ -975,6 +1032,35 @@ next door, its number, if it is locked), **HIDING** (where to hide, on a radar),
 (the Dupe's fake door, Snares, Giggles, Gloombat eggs; in a room with the Dupe, the real
 door's number). Its battery never runs out; after a respawn you have it again (the one
 on the floor too). Running it again replaces the one you have.
+
+### The Golden Tablet
+
+```lua
+_G.Scanner = { Variant = "Golden" }
+loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/claude/sei-qui-con-noi-ye4k62/ObjectScanner"))()
+```
+
+The Curious Tablet (the Curious Door gives it too): the tablet, its body gold, its screen the Curious Light's, its
+own icon (`assets/curious/GoldenTablet.png`). Everything the tablet does, and:
+
+- **Its frames per second past counting**: its screen is drawn every frame, and in its corner `MoonSec-3` and a
+  number that never stands still (digits, now and then a sign, now and then `INF`).
+- **The Lights** it feels within 18 studs (their sparkles, DOORS' own texture, in their colour, or anything named
+  for them; never what is on you or in your hands). By the **Guiding Light** (a door's guiding sparkles in a Seek
+  chase) its screen says **CURIOUS LIGHT NOT FOUND**, `ERR 0xG1D-404: ONLY THE GUIDING LIGHT IS HERE`, in blue,
+  even when it is off. By the **Curious Light** (the subfloors', the Curious Door's chests and room, the Curious Shake
+  Light's trail) it is **charged** for good: lightning over it (only for you), sparks, its light flickering, a zap
+  now and then; `CURIOUS LIGHT FOUND`, `PRESS R`.
+- **R** (RT on a controller), charged: **powered up**: up it goes, once round in the air, lightning all over it,
+  back in your hand; `CURIOUS OS`. Powered, R holds it up to your face (your sight drawn in to it) and down again.
+  Before the Curious Light, R says `NO CURIOUS LIGHT`.
+- **Its apps** (F, after its functions): **FLAPPY** (click, Space or up to flap), **SNAKE** (the clicks turn it, the
+  arrows say where it goes), **BREAKOUT** (hold left or right: the mouse's buttons or the arrows), **2048** (the
+  arrows), **TRIS** (noughts and crosses against it: the arrows choose, a click plays), **FEED** (posts from the
+  Hotel to scroll: the wheel, the arrows or the clicks). While a game is on, the arrows and Space are its, not your
+  feet's.
+- **T turns it**: a tablet, or held up as a phone: it turns in your hand, then its picture turns upright on it, its
+  app laid out again for the new shape.
 
 ## DOORS animations in any game
 
@@ -1248,9 +1334,10 @@ That includes the files made to be copied or filled in (`AchievementConfig`,
 | `HonchoRush` / `HonchoGiant` / `NoiseAmbush` / `SeekEyes` / `Listener` / `GlitchRush` / `Shadow` / `TurnAround` / `Psst` / `EntityTrain` | the ten surprises |
 | `Washroom` / `ModernHotel` | the Hotel-'s custom room; today's walk and sounds in the Hotel- |
 | `Errorbush` / `Errorbush.rbxm` | 3rr0rbu2h, the broken Ambush; its model |
-| `ObjectScanner` / `ObjectScanner.rbxm` | The scanners (Nokia and Tablet, their Lights); DOORS' scanner's model, out of a saved place |
+| `ObjectScanner` / `ObjectScanner.rbxm` | The scanners (Nokia and Tablet, their Lights, the Golden Tablet); DOORS' scanner's model, out of a saved place |
 | `LuckyBottle` / `UnluckyBottle` / `Bottles.rbxm` | The two bottles (Starlight Bottle copies: luck through DOORS' Admin Panel, bad luck); your model of them |
 | `HalloweenMode` | The Halloween Mode (the hotel decorated, Seek and Figure for Halloween, the ambience) |
+| `CuriousDoor` / `CuriousShakeLight` | The Curious Door (chests, padlocks, lockpicks, the golden key, the skeleton door and its cutscene, the little room of gold); the Curious Shake Light |
 | `Monochrome` / `Monochrome.rbxm` / `MonochromeTV.rbxm` | VER, the monster of MONOCHROME; its model, out of a saved copy of its place; Noise's TV on its arm (out of Noise's kit), for its Noise variant |
 | `assets/errorbush/` | 3rr0rbu2h's two faces |
 | `assets/noise/` | Noise's kit, tape and sheets; Noise 90's props kit, grey sheets and faces |
@@ -1259,6 +1346,7 @@ That includes the files made to be copied or filled in (`AchievementConfig`,
 | `assets/surprise/` | the surprises' sounds (steps, psst, bite, shriek, heartbeat, whispers, roar, clicks, hum, whoosh, rumble) |
 | `assets/bottles/` | The bottles' hotbar icons and the green one's triangle |
 | `assets/halloween/` | Your Halloween kit (`HalloweenKit.rbxm`), the ambience (`Ambience.mp3`, made here), the stand-in pumpkin face and fog puff |
+| `assets/curious/` | The Curious Door's pieces of your kit (`CuriousKit.rbxm`: the skeleton door and its frame, the chest, the padlock, the skeleton key, the key, the gold, the Curious Light), its music (`CuriousLight.mp3`, made here), the icons drawn here (the Curious Lockpicks, the Golden Skeleton Key, the Curious Shake Light, the Golden Tablet) |
 | `assets/monochrome/` | VER's stand-ins, where its game's own files do not load (its presence, its scream, a lamp's click, the radar's ping, its eyes) and the film grain; its own shape (`VERBody.lua`); its Noise variant's tape (sheets, sound) and Noise's Emerge made VER's |
 | `tools/` | Prometheus' settings for the obfuscation, the script that runs it, its fix for Luau |
 | `assets/scanner/` | The scanners' own icons without their background (`.png`) and ready to be recoloured by the script (`.icon`) |
