@@ -9,6 +9,8 @@
     GoldPile        DOORS' gold
     CuriousLight    the Curious Light's sparkles and light (the kit's)
     CuriousGlow     the Curious Light of the Rooms' secret (its sparkles, its light, its shimmer)
+    Flashlight      DOORS' flashlight (the asset pack's: its model, its lights, its sounds, its animations): the Curious
+                    Shake Light where the Admin Panel cannot give DOORS' Shakelight
 
 Every property is copied exactly as the kit has it (the raw values, column by column), except the few types that
 cannot be carried on their own: those go back to their defaults. Left out: scripts, remotes, saved animations
@@ -154,7 +156,7 @@ def chunk(name, raw, compress=True):
 
 
 ROOTS = {2912: "SkullDoor", 3039: "SkullDoorFrame", 85809: "Chest", 94689: "Padlock", 9922: "SkeletonKey", 85043: "Key",
-         10993: "GoldPile", 95243: "CuriousLight", 94048: "CuriousGlow"}
+         10993: "GoldPile", 95243: "CuriousLight", 94048: "CuriousGlow", 84693: "Flashlight"}
 LEAVE = ("Script", "LocalScript", "ModuleScript", "RemoteEvent", "RemoteFunction", "BindableEvent", "KeyframeSequence")
 
 

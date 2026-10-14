@@ -14,7 +14,9 @@
 
             loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/claude/sei-qui-con-noi-ye4k62/CuriousShakeLight"))()
 
-        It needs DOORS' Admin Panel (the ADMIN PANEL pass, in your own run).
+        Without DOORS' Admin Panel (the Hotel-, or a run without the pass):
+        DOORS' flashlight from the Curious Door's kit, in yellow, made here
+        (only for you), shaken by its own animation.
         The Curious Door gives it too, from its chest.
 
 ================================================================================
@@ -60,14 +62,32 @@ local remotes = ReplicatedStorage:FindFirstChild("RemotesFolder")
 local runCommand = remotes and remotes:FindFirstChild("AdminPanelRunCommand")
 local playerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
 local isAdmin = (tonumber(LocalPlayer:GetAttribute("ServerAdmin")) or 0) >= 1 or (playerGui ~= nil and playerGui:FindFirstChild("DoorsAdmin") ~= nil)
-if not (runCommand and isAdmin) then
-	caption("Serve l'Admin Panel di DOORS (il pass ADMIN PANEL, nella tua run): la " .. TITLE .. " è la sua Shakelight.")
-	return
-end
+local LOCAL = not (runCommand and isAdmin) -- (no Admin Panel: DOORS' flashlight from the kit, made here)
 local ME = { [LocalPlayer.Name] = LocalPlayer.Name }
 
-local FOLDER = "CuriousDoor" -- (the executor's folder, the Curious Door's: its icons kept there)
+local FOLDER = "CuriousDoor" -- (the executor's folder, the Curious Door's: its kit and its icons kept there)
 local ICONS = FOLDER .. "/Icons"
+local REPO = "https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/claude/sei-qui-con-noi-ye4k62/"
+-- The Curious Door's kit (fetched once, kept in its folder): its pieces by name
+local function kit()
+	local here = FOLDER .. "/CuriousKit.rbxm"
+	local out = {}
+	pcall(function()
+		if not isfolder(FOLDER) then makefolder(FOLDER) end
+		if not (isfile(here) and readfile(here):sub(1, 8) == "<roblox!") then
+			local data = game:HttpGet(REPO .. "assets/curious/CuriousKit.rbxm")
+			if type(data) == "string" and data:sub(1, 8) == "<roblox!" then writefile(here, data) end
+		end
+		local root = game:GetObjects(getcustomasset(here))[1]
+		for _, d in ipairs(root:GetDescendants()) do -- (nothing of DOORS' own systems on our copies)
+			for name in pairs(d:GetAttributes()) do d:SetAttribute(name, nil) end
+			for _, tag in ipairs(d:GetTags()) do d:RemoveTag(tag) end
+			if d:IsA("ProximityPrompt") or d:IsA("LuaSourceContainer") then d:Destroy() end
+		end
+		for _, m in ipairs(root:GetChildren()) do out[m.Name] = m end
+	end)
+	return out
+end
 ---====== ITS ICON: the item's own (the Admin Panel's), recoloured: pixel by pixel where the game lets its pixels be read
 ---====== (EditableImage: each pixel to the colour of its light, kept in the executor's folder), else tinted by DOORS' own
 ---====== hotbar (its ScannerColor) ======---
@@ -276,18 +296,44 @@ end
 
 ---====== GIVE IT ======---
 
-local poll = arriving("shake")
-runCommand:FireServer("Give Items", { Players = ME, Items = { Shakelight = "Shakelight" } })
 local tool = nil
-local deadline = os.clock() + 10
-repeat
-	task.wait(0.1)
-	tool = poll()
-until tool or os.clock() > deadline or not alive
-if not tool then
-	caption("Il Pannello Admin non ha dato la Shakelight: riprova.")
-	folder:Destroy()
-	return
+if LOCAL then -- DOORS' flashlight from the kit, into your backpack (DOORS' hotbar shows it; held on its own animations)
+	local KIT = kit()
+	if not KIT.Flashlight then
+		caption("Il kit della Curious Door non si è caricato: riprova.")
+		folder:Destroy()
+		return
+	end
+	tool = KIT.Flashlight:Clone()
+	tool.Name = "Shakelight"
+	tool.TextureId = "rbxassetid://121351942740185" -- (DOORS' Shakelight's own icon)
+	tool.CanBeDropped = false
+	local seen = false
+	for _, f in ipairs(tool:GetChildren()) do -- (one Animations folder)
+		if f.Name == "Animations" then
+			if seen then f:Destroy() end
+			seen = true
+		end
+	end
+	for _, p in ipairs(tool:GetDescendants()) do
+		if p:IsA("BasePart") then p.Anchored, p.CanCollide, p.CanQuery, p.CanTouch, p.Massless = false, false, false, false, true end
+	end
+	local neon = tool.Handle:FindFirstChild("Neon") -- (its light: lit, always)
+	if neon then neon.Transparency = 0 end
+	tool.Parent = LocalPlayer:FindFirstChildOfClass("Backpack")
+else
+	local poll = arriving("shake")
+	runCommand:FireServer("Give Items", { Players = ME, Items = { Shakelight = "Shakelight" } })
+	local deadline = os.clock() + 10
+	repeat
+		task.wait(0.1)
+		tool = poll()
+	until tool or os.clock() > deadline or not alive
+	if not tool then
+		caption("Il Pannello Admin non ha dato la Shakelight: riprova.")
+		folder:Destroy()
+		return
+	end
 end
 local handle = curious(tool)
 
@@ -311,7 +357,42 @@ local function flare()
 		task.delay(3, function() burst:Destroy() end)
 	end
 end
+-- Made here, it shakes itself: DOORS' flashlight's relight in your hand, a rattle, its light flickering (DOORS' own
+-- Shakelight does all this itself); it lights while in your hand
+local relight = nil
+local function shakeIt()
+	local character = LocalPlayer.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	local animator = humanoid and humanoid:FindFirstChildOfClass("Animator")
+	local anim = tool:FindFirstChild("Animations") and tool.Animations:FindFirstChild("relight")
+	pcall(function()
+		if not relight and animator and anim then relight = animator:LoadAnimation(anim) end
+		relight:Play(0.05, 1, 1.6)
+	end)
+	local sound = handle and (handle:FindFirstChild("sound_flick") or handle:FindFirstChild("sound_flicker"))
+	if sound then pcall(function() sound:Play() end) end
+	local grip, t0 = tool.Grip, os.clock()
+	local jiggle
+	jiggle = on(RunService.RenderStepped, function()
+		local t = os.clock() - t0
+		if t > 0.32 or tool.Parent ~= LocalPlayer.Character then
+			jiggle:Disconnect()
+			tool.Grip = grip
+			return
+		end
+		local k = math.sin(t / 0.32 * math.pi)
+		tool.Grip = grip * CFrame.new(0, math.sin(t * 70) * 0.12 * k, 0) * CFrame.Angles(math.sin(t * 55) * 0.35 * k, 0, 0)
+	end)
+end
+if LOCAL then
+	on(tool.Equipped, function()
+		for _, d in ipairs(tool:GetDescendants()) do
+			if d:IsA("Light") then d.Enabled = true end
+		end
+	end)
+end
 on(tool.Activated, function() -- (a shake)
+	if LOCAL then shakeIt() end
 	local now = os.clock()
 	table.insert(shakes, now)
 	while shakes[1] and now - shakes[1] > TRAIL.within do table.remove(shakes, 1) end
@@ -344,4 +425,5 @@ GENV.__CuriousShakeLightStop = function()
 	alive = false
 	for _, c in ipairs(connections) do c:Disconnect() end
 	pcall(function() folder:Destroy() end)
+	if LOCAL then pcall(function() tool:Destroy() end) end
 end

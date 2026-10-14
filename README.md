@@ -51,8 +51,8 @@ mod rather than playing it.
 | Lucky Bottle: a Starlight Bottle that brings luck through DOORS' Admin Panel (needs it) | `.../LuckyBottle` |
 | Unlucky Bottle: a Starlight Bottle that brings bad luck (no more wardrobes, Rush, Screech...; never kills you; needs the Admin Panel) | `.../UnluckyBottle` |
 | Halloween Mode: the hotel dressed with your kit (pumpkins, candles, cobwebs, bats, flags, candy, fog on the floor, orange and purple lights), Seek's Halloween body with purple fire and its own animations, Halloween hands, Figure's jack o' lantern head, an ambience in the background | `.../HalloweenMode` |
-| Curious Door: at door 1, padlocked chests in the Curious Light, the Curious Lockpicks, the Golden Skeleton Key, DOORS' skeleton door and its cutscene, a little room of gold with the Curious Shake Light and the Golden Tablet (needs the Admin Panel) | `.../CuriousDoor` |
-| Curious Shake Light: DOORS' Shakelight in yellow; shaken, a trail of light where you walk (needs the Admin Panel) | `.../CuriousShakeLight` |
+| Curious Door: at door 1, padlocked chests in the Curious Light, the Curious Lockpicks, the Golden Skeleton Key, DOORS' skeleton door and its cutscene, a little room of gold, the treasure's cutscene, the Curious Shake Light and the Golden Tablet (the Admin Panel's items, or made here: the Hotel- too) | `.../CuriousDoor` |
+| Curious Shake Light: DOORS' Shakelight in yellow (without the Admin Panel, DOORS' flashlight from the kit: the Hotel- too); shaken, a trail of light where you walk | `.../CuriousShakeLight` |
 | Universal Custom Assets: animator with Studio controls (Ctrl + U I O) | `.../UniversalAssets` |
 | The same, obfuscated | `.../UniversalAssets.obf` |
 
@@ -936,42 +936,60 @@ for you:
 loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/claude/sei-qui-con-noi-ye4k62/CuriousDoor"))()
 ```
 
-**It needs DOORS' Admin Panel** (the ADMIN PANEL pass, in your own run): the lockpicks, the key and the shake light
-are its own items (Give Items), with DOORS' own animations; the script only changes how they look. Without it,
-nothing, and DOORS' caption says why. Run it at the start: it uses room 1 (behind door 0001); later on, the room you
-are in.
+**With DOORS' Admin Panel** (the ADMIN PANEL pass, in your own run) the lockpicks, the key and the shake light are its
+own items (Give Items), with DOORS' own animations; the script only changes how they look. **Without it** (the
+**Hotel-**, or a run without the pass) they are made here, as DOORS' own, only for you: in your backpack (DOORS'
+hotbar shows them, with DOORS' shop's icons in gold), held on DOORS' flashlight's animation; the gold only on your
+screen. Run it at the start: it uses room 1 (behind door 0001); later on, the room you are in. In the Hotel- its rooms
+are found by their doorways' frames (they have no `RoomEntrance`).
 
 - **The chests**: two of DOORS' locked chests (`ChestBoxLocked`: its lid, its lock, its animations) on the floor of
   room 1, by a wall, clear of the furniture and of the doors, each glowing with the Curious Light (its yellow
   sparkles, its light, a seam of light under the lid) and shut with DOORS' padlock (the stairwell's lockpick door's).
-- **The Curious Lockpicks**, in your hands at once: the panel's Lockpick, in gold, two little golden keys hanging from
-  it, the panel's own icon in gold. Two uses: hold one to a padlock (`Break`): DOORS' Interact, sparks, its shackle springs, it falls
-  to the floor. Without them in your hand the padlock stays and it says so.
+- **The Curious Lockpicks**, in your hands at once: the panel's Lockpick (or a hook pick and a tension wrench on a
+  ring, made here), in deep gold metal, two little golden keys hanging from it. Two uses: hold one to a padlock
+  (`Break`): **DOORS' own use of the item** (its tool animator plays the lockpick's own Use, as when you pick a lock;
+  without one, your Interact), sparks, its shackle springs, it falls to the floor. Without them in your hand the
+  padlock stays and it says so.
 - **Opened** on DOORS' own chest animations: in one, the **Golden Skeleton Key**, turning over it (`Take`: the panel's
-  Skeleton Key, in gold, its skull's eyes lit, glowing, the panel's own icon in gold); in the other, 50 gold (the panel's Give Gold).
+  Skeleton Key, or the kit's made here, in gold, its skull's eyes lit, glowing); in the other, 50 gold (the panel's
+  Give Gold, or on your screen).
 - **The skeleton door**: DOORS' own (the Infirmary's: its skull lock, its leaf, its frame, its sparkles, its sound) in
-  a side wall of the room where there is room behind it: the wall is cut round it (copies of it round the hole, with
-  its wallpaper; the wall itself hidden, only for you). Only the golden key opens it (`Unlock`). **A cutscene**:
-  over your shoulder, the key flies out of your hand into the skull and turns; the skull's sound, its eyes lit, its
-  sparkles; it falls with the key in it. Then you, seen from before you (your head too), as the door swings open
-  into its passage and the Curious Light pours out over your face; then you from behind, before the doorway of
-  light; and back to your eyes. **The music** starts as the door opens (`assets/curious/CuriousLight.mp3`, an
-  original piece made for this: golden and curious, E major with the raised fourth, a celesta over a harp, a soft
-  choir, far bells and sparkles; 1 min 47 s, made to loop), loudest by the little room, fading as you walk away.
+  a side wall of the room where there is room behind it, **where nothing hangs on the wall round it** (no lamp, no
+  picture up to over its frame, nothing standing before it): the wall and its strips and panels are cut round it
+  (copies of them round the hole, with their wallpaper; the wall itself hidden, only for you). Only the golden key
+  opens it (`Unlock`): DOORS' own use of the key first, then **the cutscene** (DOORS' hotbar away):
+  - over your shoulder, drawing in: the key flies out of your hand in an arc, a trail of light behind it, into the
+    skull, and turns: a click, the skull's sound, its eyes lit, its sparkles, a pulse of light, the camera jolts;
+    light starts to show round the door's edges;
+  - from the floor by the door: the skull falls with the key in it; the door shakes on its hinges, more and more light
+    through its edges;
+  - from the side, wide: **it bursts open**, the Curious Light pours out (rays of light into the room, sparkles
+    streaming out, a flash, a pulse, the camera shaken) and **the music** starts; you are pushed back a step and shield
+    your eyes;
+  - your face in its light, looking into it; then behind you as you take two steps toward the doorway of light; back
+    to your eyes, your body as DOORS shows it.
+
+  **The music** (`assets/curious/CuriousLight.mp3`, an original piece made for this: golden and curious, E major with
+  the raised fourth, a celesta over a harp, a soft choir, far bells and sparkles; 1 min 47 s, made to loop) is
+  loudest by the little room, fading as you walk away.
 - **The little room** behind it, its floor, walls and ceiling as room 1's own (their materials, colours and
   textures), the Hotel's strips, a red rug with a gold border, gold all round, shafts of light and golden dust in the
-  air, and a big chest with gold fittings. Open it and **the Curious Light blesses you**: a shell of its light over
-  your body (as it shines on whoever it revives), a flash, sparkles rising round you. Out of it float the **Curious
-  Shake Light** and the **Golden Tablet**; `Take` gives each (their own scripts: `CuriousShakeLight`, and
+  air, and a big chest with gold fittings. Open it and **its cutscene**: close and low, its lid lifts slowly, light
+  through it; a burst: a pillar of the Curious Light from the chest to the ceiling, a flash, a pulse over the floor;
+  you are lifted in it, your arms open, **the Curious Light blesses you** (a shell of its light over your body, as it
+  shines on whoever it revives) and motes of light circle you; out of the chest rise the **Curious Shake Light**
+  (DOORS' flashlight of the kit, in yellow) and the **Golden Tablet** and circle you while the camera goes round you;
+  they settle over the chest and you come down. `Take` gives each (their own scripts: `CuriousShakeLight`, and
   `ObjectScanner` as the Golden Tablet).
 - Where no wall of the room has room behind it, the door goes on a wall all the same and opens toward you onto a
   doorway of light: through it to the little room, far below, and back through its own.
-- **The icons** are the items' own, the Admin Panel's (its list of items), recoloured: where the game lets an icon's
+- **The icons** are the items' own (the Admin Panel's, or DOORS' shop's), recoloured: where the game lets an icon's
   pixels be read (`EditableImage`), each pixel takes the colour of its light on a ramp of gold (or of the Curious
   Light's yellow), kept in the executor's folder (`CuriousDoor/Icons/`, made once); where it doesn't, DOORS' own
   hotbar tints the same icon (`ScannerColor`).
 
-`getgenv().__CuriousDoorStop()` takes it all away (the wall back as it was).
+`getgenv().__CuriousDoorStop()` takes it all away (the wall back as it was, the items made here gone).
 
 ## Curious Shake Light
 
@@ -979,11 +997,13 @@ are in.
 loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/claude/sei-qui-con-noi-ye4k62/CuriousShakeLight"))()
 ```
 
-DOORS' Shakelight from the Admin Panel (it needs it), in the Curious Light's yellow: its glass yellow, its metal
-amber, what glows yellow, its light yellow, its sparkles, the panel's own icon in yellow (as the Curious Door's); its shaking and its light DOORS' own. **Shake
-it four times** (within 6 s) and it is charged (its light flares, a shimmer): for 25 s, where you walk with it in your
-hand, it leaves **a trail of the Curious Light** on the floor, a glowing mark every 1.6 studs (a light on every third,
-sparkles rising), each fading away in 18 s. Shake it again to keep it charged.
+DOORS' Shakelight from the Admin Panel, in the Curious Light's yellow: its glass yellow, its metal amber, what glows
+yellow, its light yellow, its sparkles, the panel's own icon in yellow (as the Curious Door's); its shaking and its
+light DOORS' own. **Without the Admin Panel** (the Hotel-): DOORS' flashlight from the Curious Door's kit, in the same
+yellow, its light lit, made here (only for you); a click shakes it (DOORS' flashlight's relight animation, a rattle in
+your hand, its sound). **Shake it four times** (within 6 s) and it is charged (its light flares, a shimmer): for 25 s,
+where you walk with it in your hand, it leaves **a trail of the Curious Light** on the floor, a glowing mark every 1.6
+studs (a light on every third, sparkles rising), each fading away in 18 s. Shake it again to keep it charged.
 
 ## Scanners (Object Scanner)
 
@@ -998,7 +1018,7 @@ its own model and its own icon.
 | `Type` | What it is | Only it has |
 |---|---|---|
 | `"Nokia"` (default) | DOORS' own scanner from the Mines: its model (`ObjectScanner.rbxm`), icon, sounds and animations | **SNAKE** (left / right click turn it) |
-| `"Tablet"` | the NVCS tablet: the model of the tablet's own script (`rbxassetid://12594482248`), its icon, sounds and animations | **X-RAY**: the room seen through its screen, stars on what opens the way |
+| `"Tablet"` | the NVCS tablet: the model of the tablet's own script (`rbxassetid://12594482248`) (its own screen off: ours is on it), its icon, sounds and animations (where the game cannot play them, DOORS' scanner's) | **X-RAY**: the room seen through its screen, stars on what opens the way |
 
 `Type`: `"Scanner"` (the Nokia, the default) or `"Tablet"`. `Variant`: `"Normal"`,
 `"Golden"` (the Golden Tablet, below),
@@ -1044,8 +1064,9 @@ _G.Scanner = { Variant = "Golden" }
 loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/claude/sei-qui-con-noi-ye4k62/ObjectScanner"))()
 ```
 
-The Curious Tablet (the Curious Door gives it too): the tablet, its body gold, its screen the Curious Light's, its
-icon the tablet's own (`assets/scanner/Tablet.icon`), its body gold, its screen the Curious Light's. Everything the tablet does, and:
+The Curious Tablet (the Curious Door gives it too): the tablet, its body deep gold metal, its screen the Curious
+Light's, its icon the tablet's own (`assets/scanner/Tablet.icon`), its body gold, its screen the Curious Light's.
+Everything the tablet does, and:
 
 - **Its frames per second past counting**: its screen is drawn every frame, and in its corner `MoonSec-3` and a
   number that never stands still (digits, now and then a sign, now and then `INF`).
@@ -1350,7 +1371,7 @@ That includes the files made to be copied or filled in (`AchievementConfig`,
 | `assets/surprise/` | the surprises' sounds (steps, psst, bite, shriek, heartbeat, whispers, roar, clicks, hum, whoosh, rumble) |
 | `assets/bottles/` | The bottles' hotbar icons and the green one's triangle |
 | `assets/halloween/` | Your Halloween kit (`HalloweenKit.rbxm`), the ambience (`Ambience.mp3`, made here), the stand-in pumpkin face and fog puff |
-| `assets/curious/` | The Curious Door's pieces of your kit (`CuriousKit.rbxm`: the skeleton door and its frame, the chest, the padlock, the skeleton key, the key, the gold, the Curious Light), its music (`CuriousLight.mp3`, made here) |
+| `assets/curious/` | The Curious Door's pieces of your kit (`CuriousKit.rbxm`: the skeleton door and its frame, the chest, the padlock, the skeleton key, the key, the gold, the Curious Light, DOORS' flashlight), its music (`CuriousLight.mp3`, made here) |
 | `assets/monochrome/` | VER's stand-ins, where its game's own files do not load (its presence, its scream, a lamp's click, the radar's ping, its eyes) and the film grain; its own shape (`VERBody.lua`); its Noise variant's tape (sheets, sound) and Noise's Emerge made VER's |
 | `tools/` | Prometheus' settings for the obfuscation, the script that runs it, its fix for Luau |
 | `assets/scanner/` | The scanners' own icons without their background (`.png`) and ready to be recoloured by the script (`.icon`) |

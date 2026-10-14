@@ -193,6 +193,9 @@ local function make()
 		d.handle, d.screen, d.native = tool.Handle, tool.Handle.Screen, true -- its own animations (fire, equip, idle) and sounds (Use, Idle, Disable)
 		local own = tool:FindFirstChild("Storage") and tool.Storage:FindFirstChild("ScreenUI")
 		d.face = if own and own:IsA("SurfaceGui") then own.Face else FRONT
+		for _, g in ipairs(tool:GetDescendants()) do -- (its own screen off: it is on its screen already, its static over ours)
+			if g:IsA("SurfaceGui") then g.Enabled = false end
+		end
 	end
 	-- What every kind needs of DOORS' scanner: its sounds, its star and pings, its animations, its Inspect
 	for _, name in ipairs({ "NextMode", "ScannedIdle" }) do
@@ -229,9 +232,9 @@ local function make()
 		for _, p in ipairs(partsOf(tool)) do
 			if p ~= d.screen and p.Transparency < 1 then
 				pcall(function() p.TextureID = "" end)
-				local _, sat, v = p.Color:ToHSV()
-				p.Color = Color3.fromHSV(0.12, math.clamp(0.55 + sat * 0.4, 0, 1), math.clamp(0.5 + v * 0.5, 0, 1))
-				p.Material, p.Reflectance = Enum.Material.Foil, 0.08
+				local _, sat, v = p.Color:ToHSV() -- (its own light and dark, in a deep gold)
+				p.Color = Color3.fromHSV(0.115, math.clamp(0.66 + sat * 0.2, 0, 1), math.clamp(0.42 + v * 0.45, 0, 1))
+				p.Material, p.Reflectance = Enum.Material.Metal, 0.18
 			end
 		end
 		for _, a in ipairs(tool:GetDescendants()) do
@@ -2151,6 +2154,20 @@ local function equipped()
 	end
 	play("equip")
 	play(if S.on then "idle_open" else "idle", 0.2)
+	if d.native then -- the tablet's own animations: where the game cannot play them (not its maker's), DOORS' scanner's
+		task.delay(2, function()
+			local idle = S.tracks.idle
+			if not (S.equipped and S.d == d and d.native and idle) or idle.Length > 0 then return end
+			for _, t in pairs(S.tracks) do t:Stop(0) end
+			S.tracks, d.native = {}, false
+			d.tool.Animations:Destroy()
+			template.Animations:Clone().Parent = d.tool
+			for _, anim in ipairs(d.tool.Animations:GetChildren()) do
+				if anim:IsA("Animation") then S.tracks[anim.Name] = animator:LoadAnimation(anim) end
+			end
+			play(if S.on then "idle_open" else "idle", 0.2)
+		end)
+	end
 	if GOLDEN then GOLD.dress() end
 	bindUI()
 	applyColor(CONFIG.Screen)
