@@ -54,7 +54,7 @@ mod rather than playing it.
 | Curious Door: at door 1, padlocked chests in the Curious Light, the Curious Lockpicks, the Golden Skeleton Key, DOORS' skeleton door and its cutscene, a little room of gold, the treasure's cutscene, the Curious Shake Light and the Golden Tablet (the Admin Panel's items, or made here: the Hotel- too) | `.../CuriousDoor` |
 | Curious Shake Light: DOORS' Shakelight in yellow (without the Admin Panel, DOORS' flashlight from the kit: the Hotel- too); shaken, a trail of light where you walk | `.../CuriousShakeLight` |
 | Universal Custom Assets: animator with Studio controls (Ctrl + U I O) | `.../UniversalAssets` |
-| **Toilet World Roleplay 2**: the Ultimate Morph Creator, custom morphs made easy in your private server (a guide in 8 checked steps, what would fall and where to weld it, colours, catalog and toolbox ids, the Fork3x keys on a phone's screen; Obsidian window) | `.../UltimateMorphCreator` |
+| **Toilet World Roleplay 2**: the Ultimate Morph Creator, custom morphs made easy in your private server, phone or PC (guides on a bar at the top that press Fork3x's keys for you, what would fall and where to weld it, colours, catalog and toolbox ids, a pad of Fork3x keys; Obsidian window, in English) | `.../UltimateMorphCreator` |
 | The same, obfuscated | `.../UniversalAssets.obf` |
 
 ### Build (tools — not for players)
@@ -1202,47 +1202,49 @@ script as `UniversalAssets` (see [Obfuscation](#obfuscation)).
 loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/claude/sei-qui-con-noi-ye4k62/UltimateMorphCreator"))()
 ```
 
-For **Toilet World Roleplay 2**: a helper for making custom morphs the way the game makes them, in your private
-server, with its own building tools (Fork3x or BTools) and its Save Morph Tool, on a phone or a PC. It builds nothing
-itself and calls none of the game's remotes: every change the others see is one you make with the game's tools and
-save with the Save Morph Tool, so everyone sees your morphs. What it shows (marks, previews, copies, the pad) is only
-on your screen. Its window is [Obsidian](https://github.com/deividcomsono/Obsidian)'s.
+For **Toilet World Roleplay 2**, on a phone or a PC: custom morphs made easy in your private server, the way the game
+makes them, with its own building tools (Fork3x or BTools) and its Save Morph Tool. It builds nothing itself and calls
+none of the game's remotes: what the others see is what you build with the game's tools and save with the Save Morph
+Tool, so everyone sees your morphs. What it shows is only on your screen. Its window is
+[Obsidian](https://github.com/deividcomsono/Obsidian)'s, in English, its buttons short enough to fit on a phone.
 
-- **Crea**: the guide, the eight steps of a custom morph (a recolour, or a piece of one morph put inside another), each
-  checked as you go:
-  1. the tools: Fork3x or BTools, the Save Morph Tool, your private server; the Fork3x taken in hand;
-  2. the morph you work on: yourself, any of `Workspace.Morphs` (a list) or the one you touch; framed by the camera,
-     anchored (the Anchor tool, M), gone to (only in your own server);
-  3. the piece to take, from any morph (its pieces listed, its body parts marked) or touched;
-  4. in place: Move (Z), Rotate (C), Resize (X), Undo; how far it is from the morph's body;
-  5. inside the character: grouped five times (Shift+J ×5), Ctrl held, the morph's HumanoidRootPart shown, grouped
-     and ungrouped (Shift+J, Shift+U); whether it is inside now;
-  6. welded: the body part it belongs to (the nearest), the piece yellow and the part green, the Weld tool (F);
-     whether it holds;
-  7. tried: `;thaw me` or `;unfreeze me` said in the chat;
-  8. saved: the Save Morph Tool in hand.
-- **Saldature**: every part of a morph not welded to its body (it would fall when the morph is used) in red, in groups
-  (parts already joined to each other need one weld), each with the body part to weld it to; the next one framed;
-  the list copied.
-- **Colori**: the morph's palette (most used first), a colour tried on its parts, ten styles tried on the whole morph
-  from its own shades (gold, shadow, neon blue, blood red, titanium, emerald, fire, ice, inverted, rainbow), the codes
-  (RGB, HEX) and the map from each colour to its new one, to paint with the Paint tool (V). Its particles, fire,
-  smoke, sparkles, beams, trails and lights: their colours tried, their codes, the tool that changes them (Decorate,
-  P; Lighting, U).
-- **Catalogo**: the catalog's accessories (UGC, for the Mesh tool) or the toolbox's models searched ("skibidi
-  toilet"...), their picture, a 3D preview, their id, MeshId and TextureId (to paste in the Mesh tool, H), tried on;
-  models loaded without their scripts (and said to have them).
-- **Vista**: a copy of the morph before you, turning; the camera round the morph or the piece; the map faded round
-  it; the field of view; a ruler.
-- **Pad**: the tools' shortcuts on the screen for phones (the tools' keys, Shift+J/U/F/T, Ctrl+Z/Y, Ctrl and Shift
-  held for more parts), pressed as on a keyboard (the executor's virtual keys), one after the other; dragged,
-  folded, sized.
-- **Impostazioni**: the window's size, its key (RightShift), themes and configs, what's new.
+**The guides.** When you have to touch the world, the menu hides and a bar at the top of the screen says what to do,
+with its buttons and Cancel; Fork3x's keys are pressed for you. A swipe that turns the camera is not taken as a tap.
+- **Add a Piece** (Build, Start Guide): tap your morph (once), tap the piece you want on any morph, move it onto your
+  morph with Fork3x and tap Next. It is grouped five times (each group waited for, as Fork3x asks the server), Ctrl is
+  held, you tap your morph, it is grouped and ungrouped: the piece is inside, ready to be welded. A wrong tap with Ctrl
+  held (Fork3x took it too) makes you pick the piece again; if Fork3x grouped something else (the whole morph), the
+  bar says so and lets you retry.
+- **Fix Loose Parts** (Build): each part that would fall when the morph is used, one by one: tap the yellow piece, then
+  (Ctrl held) the green body part it belongs to; the Weld tool is opened, you tap Weld, it is checked.
+- **Tap Morph** and **Tap Part** use the same bar.
 
-`getgenv().__UMCStop()` (or **Chiudi** in Impostazioni) closes it and puts back all it showed (colours, the map, the
-camera, keys held).
+**The tabs**
+- **Build**: your morph (its parts, anchored or not), the piece you added (inside, welded), what would fall (in red if
+  you like), Thaw and Unfreeze said in the chat, the Save Morph Tool and Fork3x taken in hand.
+- **Colors**: a part's colour tried on all the parts of that colour, its code (`#HEX (R, G, B)`) for Fork3x's Paint;
+  ten styles on the whole morph; its effects (particles, fire, smoke, sparkles, beams, trails, lights): two colours
+  tried, their codes, the tool that changes them.
+- **Search**: the catalog's accessories or the toolbox's models ("skibidi toilet"...): picture, id, Mesh ID and
+  Texture ID for Fork3x's Mesh tool, tried on (models without their scripts).
+- **Settings**: the menu's size, the pad and its size, Close Script, what's new.
+
+**The pad** (shown on phones; on a PC from Settings): Group (Shift+J), Ungroup (Shift+U), Select In (Shift+T), Multi
+(Ctrl held, lit while on), Undo, Redo, Weld (F), Menu. Dragged by its top, with that finger only; folded with its dash.
+
+`getgenv().__UMCStop()` (or Close Script) closes it and puts back all it showed.
 
 ### Changelog
+
+**v2.0**
+- In English, with short buttons whose text fits (phones too).
+- Add a Piece and Fix Loose Parts are guides: a bar at the top tells you each step, the menu hides while you tap, and
+  Ctrl, Group and Ungroup are pressed for you (waiting for Fork3x each time).
+- 4 tabs: Build, Colors, Search, Settings.
+- Phones: the menu fits the screen, with bigger text; turning the camera is no longer taken as a tap; the pad drags
+  without jumping.
+- The pad: 8 big keys (Group, Ungroup, Select In, Multi, Undo, Redo, Weld, Menu).
+- Removed: the long 8-step text guide, the View tab and other extras.
 
 **v1.0**
 - The guide in 8 steps, as the game's morphs are made: tools, morph, piece, in place, inside the character, welded,
@@ -1435,7 +1437,7 @@ That includes the files made to be copied or filled in (`AchievementConfig`,
 | `tools/` | Prometheus' settings for the obfuscation, the script that runs it, its fix for Luau |
 | `assets/scanner/` | The scanners' own icons without their background (`.png`) and ready to be recoloured by the script (`.icon`) |
 | `UniversalAssets` / `.obf` | the animator for DOORS' things and custom assets, readable and obfuscated |
-| `UltimateMorphCreator` | Toilet World Roleplay 2's Ultimate Morph Creator (the guide, welds, colours, catalog, view, the pad of Fork3x keys) |
+| `UltimateMorphCreator` | Toilet World Roleplay 2's Ultimate Morph Creator (its guides, welds, colours, search, the pad of Fork3x keys) |
 | `GradishCheck` | the config report |
 | `ImagesA/` | one file per entity saying where its picture comes from |
 | `*.rbxm` | the models |

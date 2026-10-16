@@ -1,33 +1,30 @@
 --[[
 ================================================================================
 
-        U L T I M A T E   M O R P H   C R E A T O R
+        U L T I M A T E   M O R P H   C R E A T O R   2
         (Toilet World Roleplay 2)
 
-        A helper for making custom morphs the way the game makes them, in
-        your private server: with the game's own building tools (Fork3x or
-        BTools) and its Save Morph Tool. It builds nothing itself: every
-        change the others see is yours, made with the game's tools. It
-        shows you the way and does the rest, only for you:
+        Custom morphs made easy in your private server, on a phone or a PC,
+        the way the game makes them: with its own building tools (Fork3x or
+        BTools) and its Save Morph Tool. It builds nothing itself and calls
+        none of the game's remotes: what the others see is what you build
+        with the game's tools. What it shows is only on your screen.
 
-          * the guide, step by step, each step checked: the morph you work
-            on, the piece you take from another, in place, inside it,
-            welded, tried, saved
-          * on-screen keys for the tools' shortcuts (Shift+J, Shift+U,
-            Shift+T, Ctrl to pick more parts...), for phones
-          * what would fall: every part of a morph not welded to its body,
-            and the body part to weld it to
-          * its colours: its palette, recoloured first for you only, the
-            codes to paint it with; its particles' and effects' colours
-          * the catalog and the toolbox searched (Skibidi Toilet...), a
-            preview, the mesh and texture ids for the Mesh tool
-          * the morph seen from outside: a copy of it before you, the
-            camera round it, the map faded round it, a ruler
+          * Add a Piece: a bar at the top of the screen tells you each step
+            (tap the piece, move it, tap your morph) and presses the keys
+            for you (grouped five times, Ctrl held, grouped, ungrouped)
+          * Fix Loose Parts: each part that would fall, one by one: tap the
+            yellow piece, then the green part, then Weld
+          * the pad for phones: Group, Ungroup, Select In, Multi (Ctrl
+            held), Undo, Redo, Weld, Menu
+          * colours and effects tried on your screen first, their codes
+          * the catalog's accessories and the toolbox's models: their ids,
+            mesh and texture for Fork3x's Mesh tool
 
             loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/claude/sei-qui-con-noi-ye4k62/UltimateMorphCreator"))()
 
-        Its window is Obsidian's (deividcomsono/Obsidian), on a phone and on
-        a PC. getgenv().__UMCStop() closes it and puts back all it showed.
+        Its window is Obsidian's (deividcomsono/Obsidian). getgenv().__UMCStop()
+        closes it and puts back all it showed.
 
 ================================================================================
 ]]
@@ -40,9 +37,9 @@ local LocalPlayer = Players.LocalPlayer
 local GENV = if getgenv then getgenv() else _G
 
 local TITLE = "Ultimate Morph Creator"
-local VERSION = "1.0"
+local VERSION = "2.0"
 local OBSIDIAN = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
-local GOOD, BAD, WARN = "✓", "✗", "!"
+local GOOD, BAD = "✓", "✗"
 local RED, GREEN, YELLOW, BLUE = Color3.fromRGB(255, 70, 70), Color3.fromRGB(80, 230, 120), Color3.fromRGB(255, 214, 60), Color3.fromRGB(90, 170, 255)
 
 ---====== THIS RUN: what it made and changed (all of it only on your screen), given back at the end ======---
@@ -69,13 +66,12 @@ end
 
 local okLib, Library = pcall(function() return loadstring(game:HttpGet(OBSIDIAN .. "Library.lua"))() end)
 if not okLib or type(Library) ~= "table" then
-	warn("[" .. TITLE .. "] Obsidian non si è caricata: " .. tostring(Library))
+	warn("[" .. TITLE .. "] Obsidian did not load: " .. tostring(Library))
 	return
 end
-local ThemeManager, SaveManager = nil, nil
-pcall(function() ThemeManager = loadstring(game:HttpGet(OBSIDIAN .. "addons/ThemeManager.lua"))() end)
-pcall(function() SaveManager = loadstring(game:HttpGet(OBSIDIAN .. "addons/SaveManager.lua"))() end)
 local Options, Toggles = Library.Options, Library.Toggles
+-- A phone or a tablet (as Obsidian sees it)
+local MOBILE = Library.IsMobile == true or (UserInputService.TouchEnabled == true and UserInputService.KeyboardEnabled ~= true)
 
 ---====== SMALL THINGS: notices, the clipboard, the web, you, your tools, the chat ======---
 
@@ -86,15 +82,17 @@ end
 function U.copy(text)
 	local set = setclipboard or toclipboard
 	if set and pcall(set, text) then
-		U.notify("Copiato", text, 3)
+		U.notify("Copied", text, 3)
 		return true
 	end
-	U.notify("Da copiare a mano", text, 10)
+	U.notify("Copy this", text, 10)
 	return false
 end
 local function byte(x) return math.clamp(math.floor(x * 255 + 0.5), 0, 255) end
 function U.hex(c) return string.format("#%02X%02X%02X", byte(c.R), byte(c.G), byte(c.B)) end
 function U.rgb(c) return string.format("%d, %d, %d", byte(c.R), byte(c.G), byte(c.B)) end
+-- A colour's code, for Fork3x's Paint tool
+function U.code(c) return U.hex(c) .. " (" .. U.rgb(c) .. ")" end
 local requestFn = (syn and syn.request) or (http and http.request) or http_request or request
 -- A page of the web (Roblox's catalog and toolbox): its body, or nil
 function U.get(url)
@@ -172,13 +170,6 @@ function U.chat(text)
 	if ok then U.notify("Chat", text, 3) else U.copy(text) end
 	return ok
 end
--- Its point: a part's position, a model's pivot
-function U.where(i)
-	if not i then return nil end
-	if i:IsA("BasePart") then return i.Position end
-	local ok, cf = pcall(function() return i:GetPivot() end)
-	return if ok and cf then cf.Position else nil
-end
 -- Its parts (itself, if it is one)
 function U.partsOf(i)
 	local out = {}
@@ -188,7 +179,7 @@ function U.partsOf(i)
 	end
 	return out
 end
--- Where your helpers live (only on your screen; rays go through them)
+-- Where your helpers live (only on your screen; taps go through them)
 local helpers = make("Folder", { Name = "UMC_Local" }, workspace.CurrentCamera or workspace)
 table.insert(C.made, helpers)
 
@@ -199,23 +190,6 @@ local BODY = {}
 for _, n in ipairs({ "Head", "Torso", "UpperTorso", "LowerTorso", "HumanoidRootPart", "Left Arm", "Right Arm", "Left Leg", "Right Leg", "LeftUpperArm",
 	"LeftLowerArm", "LeftHand", "RightUpperArm", "RightLowerArm", "RightHand", "LeftUpperLeg", "LeftLowerLeg", "LeftFoot", "RightUpperLeg", "RightLowerLeg",
 	"RightFoot" }) do BODY[n] = true end
-Find.BODY = BODY
--- The morphs' models on the map (Workspace.Morphs: each its pad and its Character): name -> its Character
-function Find.morphs()
-	local out, names = {}, {}
-	local folder = workspace:FindFirstChild("Morphs")
-	if folder then
-		for _, m in ipairs(folder:GetChildren()) do
-			local character = m:FindFirstChild("Character")
-			if character and character:IsA("Model") and not out[m.Name] then
-				out[m.Name] = character
-				table.insert(names, m.Name)
-			end
-		end
-	end
-	table.sort(names, function(a, b) return a:lower() < b:lower() end)
-	return out, names
-end
 -- The morph (a model with a Humanoid, or a morph's Character) something is in
 function Find.characterOf(i)
 	local m = i:FindFirstAncestorWhichIsA("Model")
@@ -232,19 +206,10 @@ function Find.pieceOf(i, model)
 	while p.Parent and p.Parent ~= model do p = p.Parent end
 	return if p.Parent == model then p else i
 end
--- Its pieces: what is right under it (parts, models, accessories), named, its body parts marked
-function Find.pieces(model)
-	local list, count = {}, {}
-	for _, c in ipairs(model:GetChildren()) do
-		if c:IsA("BasePart") or c:IsA("Model") or c:IsA("Accessory") or c:IsA("Folder") then
-			count[c.Name] = (count[c.Name] or 0) + 1
-			local label = c.Name .. (if count[c.Name] > 1 then " #" .. count[c.Name] else "")
-			if BODY[c.Name] then label = label .. " (corpo)" end
-			table.insert(list, { label = label, inst = c })
-		end
-	end
-	table.sort(list, function(a, b) return a.label:lower() < b.label:lower() end)
-	return list
+-- A morph's name (the morphs on the map are a "Character" in a model named after them)
+function Find.nameOf(m)
+	if m.Name == "Character" and m.Parent and m.Parent ~= workspace then return m.Parent.Name end
+	return m.Name
 end
 
 ---====== MARKS: boxes and highlights round things (only on your screen) ======---
@@ -380,21 +345,24 @@ function Welds.groupOf(analysis, thing)
 	end
 	return nil
 end
-function Welds.line(g)
-	return string.format("%s%s → %s (%.1f st)", g.piece.Name, if #g.parts > 1 then " (" .. #g.parts .. " pezzi)" else "",
-		if g.to then g.to.Name else "?", math.min(g.distance, 999))
+-- Is this part one of the group's (or of its piece)?
+function Welds.inGroup(g, part)
+	for _, p in ipairs(g.parts) do
+		if p == part then return true end
+	end
+	return part:IsDescendantOf(g.piece)
 end
 
----====== COLOURS: a morph's palette, recoloured first only for you, the codes to paint it with ======---
+---====== COLOURS: tried first only on your screen, the codes to paint with ======---
 
 local Paint = {}
-local function key3(c) return string.format("%02X%02X%02X", byte(c.R), byte(c.G), byte(c.B)) end
+function Paint.key(c) return string.format("%02X%02X%02X", byte(c.R), byte(c.G), byte(c.B)) end
 -- Its colours: { key, color, parts } (the most used first)
 function Paint.palette(model)
 	local map, list = {}, {}
 	for _, p in ipairs(model:GetDescendants()) do
 		if p:IsA("BasePart") and p.Transparency < 1 then
-			local k = key3(p.Color)
+			local k = Paint.key(p.Color)
 			local e = map[k]
 			if not e then
 				e = { key = k, color = p.Color, parts = {} }
@@ -407,7 +375,6 @@ function Paint.palette(model)
 	table.sort(list, function(a, b) return #a.parts > #b.parts end)
 	return list
 end
-function Paint.label(e) return "#" .. e.key .. " · " .. #e.parts .. (if #e.parts == 1 then " pezzo" else " pezzi") end
 -- Changed only on your screen, its own value kept to put back
 function Paint.set(inst, prop, value)
 	local r = C.restore[inst]
@@ -427,18 +394,18 @@ function Paint.restore(within)
 		end
 	end
 end
--- Ramps: from its dark to its light, { at, r, g, b }
-Paint.PRESETS = {
-	{ "Oro", { { 0, 60, 38, 6 }, { 0.45, 190, 140, 30 }, { 0.8, 255, 214, 90 }, { 1, 255, 246, 200 } } },
-	{ "Ombra", { { 0, 8, 6, 14 }, { 0.5, 46, 20, 72 }, { 1, 150, 90, 220 } } },
-	{ "Neon blu", { { 0, 4, 10, 40 }, { 0.5, 20, 90, 220 }, { 1, 140, 240, 255 } } },
-	{ "Rosso sangue", { { 0, 16, 0, 0 }, { 0.5, 120, 10, 14 }, { 1, 255, 80, 70 } } },
-	{ "Titanio", { { 0, 40, 44, 50 }, { 0.5, 130, 136, 146 }, { 1, 236, 240, 246 } } },
-	{ "Smeraldo", { { 0, 2, 26, 12 }, { 0.5, 20, 130, 70 }, { 1, 150, 255, 180 } } },
-	{ "Fuoco", { { 0, 30, 4, 0 }, { 0.4, 200, 50, 0 }, { 0.75, 255, 160, 20 }, { 1, 255, 240, 160 } } },
-	{ "Ghiaccio", { { 0, 20, 40, 70 }, { 0.5, 110, 180, 230 }, { 1, 240, 252, 255 } } },
-	{ "Inverti", "invert" },
-	{ "Arcobaleno", "rainbow" },
+-- Styles: from its dark to its light, { at, r, g, b }
+Paint.STYLES = {
+	{ "Gold", { { 0, 60, 38, 6 }, { 0.45, 190, 140, 30 }, { 0.8, 255, 214, 90 }, { 1, 255, 246, 200 } } },
+	{ "Shadow", { { 0, 8, 6, 14 }, { 0.5, 46, 20, 72 }, { 1, 150, 90, 220 } } },
+	{ "Neon Blue", { { 0, 4, 10, 40 }, { 0.5, 20, 90, 220 }, { 1, 140, 240, 255 } } },
+	{ "Blood Red", { { 0, 16, 0, 0 }, { 0.5, 120, 10, 14 }, { 1, 255, 80, 70 } } },
+	{ "Titanium", { { 0, 40, 44, 50 }, { 0.5, 130, 136, 146 }, { 1, 236, 240, 246 } } },
+	{ "Emerald", { { 0, 2, 26, 12 }, { 0.5, 20, 130, 70 }, { 1, 150, 255, 180 } } },
+	{ "Fire", { { 0, 30, 4, 0 }, { 0.4, 200, 50, 0 }, { 0.75, 255, 160, 20 }, { 1, 255, 240, 160 } } },
+	{ "Ice", { { 0, 20, 40, 70 }, { 0.5, 110, 180, 230 }, { 1, 240, 252, 255 } } },
+	{ "Invert", "invert" },
+	{ "Rainbow", "rainbow" },
 }
 function Paint.luma(c) return 0.299 * c.R + 0.587 * c.G + 0.114 * c.B end
 function Paint.ramp(stops, l)
@@ -452,15 +419,15 @@ function Paint.ramp(stops, l)
 	local last = stops[#stops]
 	return Color3.fromRGB(last[2], last[3], last[4])
 end
--- Its palette in a preset's colours, on your screen: the list of { from, to, count } to paint with
-function Paint.preset(model, name)
+-- Its colours in a style, on your screen (each shade of it to the style's shade)
+function Paint.style(model, name)
 	local stops = nil
-	for _, p in ipairs(Paint.PRESETS) do
-		if p[1] == name then stops = p[2] end
+	for _, s in ipairs(Paint.STYLES) do
+		if s[1] == name then stops = s[2] end
 	end
-	if not stops then return {} end
-	local out = {}
-	for i, e in ipairs(Paint.palette(model)) do
+	if not stops then return 0 end
+	local palette = Paint.palette(model)
+	for i, e in ipairs(palette) do
 		local to
 		if stops == "invert" then
 			to = Color3.new(1 - e.color.R, 1 - e.color.G, 1 - e.color.B)
@@ -470,33 +437,28 @@ function Paint.preset(model, name)
 			to = Paint.ramp(stops, Paint.luma(e.color))
 		end
 		for _, p in ipairs(e.parts) do Paint.set(p, "Color", to) end
-		table.insert(out, { from = e.color, to = to, count = #e.parts })
 	end
-	return out
-end
-function Paint.mapText(map)
-	local lines = {}
-	for _, m in ipairs(map) do
-		table.insert(lines, string.format("%s → %s (%s) · %d", U.hex(m.from), U.hex(m.to), U.rgb(m.to), m.count))
-	end
-	return table.concat(lines, "\n")
+	return #palette
 end
 
 ---====== EFFECTS: a morph's particles, fire, smoke, sparkles, beams, trails, lights: their colours ======---
 
 local Fx = {}
-local FX = { ParticleEmitter = true, Fire = true, Smoke = true, Sparkles = true, Beam = true, Trail = true, PointLight = true, SpotLight = true, SurfaceLight = true }
+local FX = { ParticleEmitter = "Particles", Fire = "Fire", Smoke = "Smoke", Sparkles = "Sparkles", Beam = "Beam", Trail = "Trail", PointLight = "Light",
+	SpotLight = "Light", SurfaceLight = "Light" }
+-- Its effects: { label ("Glow · Head"), inst }
 function Fx.list(model)
 	local list, count = {}, {}
 	for _, d in ipairs(model:GetDescendants()) do
 		if FX[d.ClassName] then
-			local base = d.ClassName .. " «" .. d.Name .. "» su " .. (if d.Parent then d.Parent.Name else "?")
+			local base = d.Name .. " · " .. (if d.Parent then d.Parent.Name else "?")
 			count[base] = (count[base] or 0) + 1
 			table.insert(list, { label = base .. (if count[base] > 1 then " #" .. count[base] else ""), inst = d })
 		end
 	end
 	return list
 end
+function Fx.kind(i) return FX[i.ClassName] or i.ClassName end
 function Fx.colorOf(i)
 	local ok, c = pcall(function()
 		if i:IsA("ParticleEmitter") or i:IsA("Beam") or i:IsA("Trail") then return i.Color.Keypoints[1].Value end
@@ -518,193 +480,104 @@ function Fx.preview(i, a, b)
 		Paint.set(i, "Color", a)
 	end
 end
--- Which of the building tools changes it (the Decorate tool: fire, smoke, sparkles; Lighting: lights)
+-- Which of Fork3x's tools changes it (Decorate: fire, smoke, sparkles; Lighting: lights)
 function Fx.toolFor(i)
-	if i:IsA("Fire") or i:IsA("Smoke") or i:IsA("Sparkles") then return "Decora (P)" end
-	if i:IsA("Light") then return "Luci (U)" end
+	if i:IsA("Fire") or i:IsA("Smoke") or i:IsA("Sparkles") then return "Decorate (P)" end
+	if i:IsA("Light") then return "Lighting (U)" end
 	return nil
 end
 
----====== KEYS: the building tools' shortcuts pressed for you (their own keys: as if you pressed them) ======---
+---====== KEYS: Fork3x's shortcuts pressed for you (its own keys: as if you pressed them) ======---
 
-local Keys = { held = {} }
+local Keys = { held = {}, busy = false, onChange = nil }
 pcall(function() Keys.vim = game:GetService("VirtualInputManager") end)
 function Keys.send(name, down)
 	if not Keys.vim then return false end
 	return pcall(function() Keys.vim:SendKeyEvent(down, Enum.KeyCode[name], false, game) end)
 end
--- A shortcut: its modifiers held (unless you already hold them), its key tapped; the other keys you hold let go meanwhile (Ctrl+Z is not Z)
-function Keys.tap(mods, key, times)
-	task.spawn(function()
-		while Keys.busy do task.wait(0.05) end -- (one shortcut after the other: never two mixed)
-		Keys.busy = true
-		local ok, lifted = true, {}
-		for m in pairs(Keys.held) do
-			if not table.find(mods, m) then
-				Keys.send(m, false)
-				table.insert(lifted, m)
-			end
+-- A shortcut, pressed now (it waits for it): its modifiers held unless you hold them, its key tapped; the other keys you hold
+-- let go meanwhile (Ctrl+Z is not Z); one shortcut after the other, never two mixed
+function Keys.press(mods, key, times)
+	while Keys.busy do task.wait(0.05) end
+	Keys.busy = true
+	local ok, lifted = true, {}
+	for m in pairs(Keys.held) do
+		if not table.find(mods, m) then
+			Keys.send(m, false)
+			table.insert(lifted, m)
 		end
-		for _ = 1, times or 1 do
-			for _, m in ipairs(mods) do
-				if not Keys.held[m] then Keys.send(m, true) end
-			end
-			task.wait(0.03)
-			ok = Keys.send(key, true) and ok
-			task.wait(0.05)
-			Keys.send(key, false)
-			task.wait(0.03)
-			for i = #mods, 1, -1 do
-				if not Keys.held[mods[i]] then Keys.send(mods[i], false) end
-			end
-			task.wait(0.2)
+	end
+	for _ = 1, times or 1 do
+		for _, m in ipairs(mods) do
+			if not Keys.held[m] then Keys.send(m, true) end
 		end
-		for _, m in ipairs(lifted) do
-			if Keys.held[m] then Keys.send(m, true) end
+		task.wait(0.03)
+		ok = Keys.send(key, true) and ok
+		task.wait(0.05)
+		Keys.send(key, false)
+		task.wait(0.03)
+		for i = #mods, 1, -1 do
+			if not Keys.held[mods[i]] then Keys.send(mods[i], false) end
 		end
-		Keys.busy = false
-		if not ok then U.notify(TITLE, "Il tuo executor non permette i tasti virtuali: usa la tastiera o i pulsanti del Fork3x.", 6) end
-	end)
+		task.wait(0.2)
+	end
+	for _, m in ipairs(lifted) do
+		if Keys.held[m] then Keys.send(m, true) end
+	end
+	Keys.busy = false
+	if not ok then U.notify(TITLE, "Your executor can't press keys. Use a keyboard or Fork3x's own buttons.", 6) end
+	return ok
 end
--- A modifier held down (Ctrl: to pick more parts), or let go
+-- The same, without waiting for it
+function Keys.tap(mods, key, times) task.spawn(Keys.press, mods, key, times) end
+-- A key held down (Ctrl: to pick more parts), or let go
 function Keys.hold(name, down)
 	Keys.held[name] = if down then true else nil
-	Keys.send(name, down)
+	Keys.send(name, down == true)
+	if Keys.onChange then Keys.onChange() end
 end
 function Keys.releaseAll()
 	for name in pairs(Keys.held) do Keys.send(name, false) end
 	table.clear(Keys.held)
+	if Keys.onChange then Keys.onChange() end
 end
-Keys.TOOLS = { { "Muovi", "Z" }, { "Ridimens.", "X" }, { "Ruota", "C" }, { "Colore", "V" }, { "Superficie", "B" }, { "Materiale", "N" }, { "Ancora", "M" },
-	{ "Collisione", "K" }, { "Nuova parte", "J" }, { "Mesh", "H" }, { "Texture", "G" }, { "Salda", "F" }, { "Luci", "U" }, { "Decora", "P" } }
-Keys.COMBOS = { { "Raggruppa", { "LeftShift" }, "J" }, { "In cartella", { "LeftShift" }, "F" }, { "Separa", { "LeftShift" }, "U" },
-	{ "Seleziona dentro", { "LeftShift" }, "T" }, { "Annulla", { "LeftControl" }, "Z" }, { "Ripeti", { "LeftControl" }, "Y" } }
 
----====== PICKING: the next thing you touch or click in the world ======---
+---====== TAPS: the next tap on the world (a tap, not a drag that turns the camera; not on a button) ======---
 
-local Pick = { cb = nil }
-function Pick.start(what, cb)
-	Pick.cb = cb
-	U.notify(TITLE, "Tocca o clicca " .. what .. " nel mondo.", 5)
+local Tap = { cb = nil, down = {} }
+function Tap.wait(cb) Tap.cb = cb end
+function Tap.cancel()
+	Tap.cb = nil
+	table.clear(Tap.down)
 end
+local function tapKey(input) return if input.UserInputType == Enum.UserInputType.MouseButton1 then "mouse" else input end
 on(UserInputService.InputBegan, function(input, processed)
-	if not Pick.cb or processed then return end
+	if processed or not Tap.cb then return end
 	if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
-	local cb = Pick.cb
-	Pick.cb = nil
+	Tap.down[tapKey(input)] = { at = input.Position, t = os.clock() }
+end)
+on(UserInputService.InputEnded, function(input)
+	local key = tapKey(input)
+	local d = Tap.down[key]
+	if not d then return end
+	Tap.down[key] = nil
+	if not Tap.cb or (input.Position - d.at).Magnitude > 16 or os.clock() - d.t > 0.7 then return end
 	local camera = workspace.CurrentCamera
 	local ray = camera:ScreenPointToRay(input.Position.X, input.Position.Y)
 	local params = RaycastParams.new()
 	params.FilterType = Enum.RaycastFilterType.Exclude
 	params.FilterDescendantsInstances = { helpers }
-	local hit = workspace:Raycast(ray.Origin, ray.Direction * 1000, params)
-	if hit and hit.Instance then cb(hit.Instance, hit.Position) else U.notify(TITLE, "Lì non c'è niente.", 3) end
-end)
-
----====== SEEING IT: a copy of it before you, the camera round it, the map faded round it, a ruler ======---
-
-local View = { copy = nil, spin = 0, fadedParts = {} }
--- A copy of a morph before you, facing you, turning if you like (only on your screen)
-function View.mirror(model)
-	if View.copy then
-		View.copy:Destroy()
-		View.copy = nil
-	end
-	if not model then return false end
-	local was = model.Archivable
-	model.Archivable = true
-	local ok, copy = pcall(function() return model:Clone() end)
-	model.Archivable = was
-	if not (ok and copy) then return false end
-	for _, d in ipairs(copy:GetDescendants()) do
-		if d:IsA("LuaSourceContainer") or d:IsA("ProximityPrompt") or d:IsA("ClickDetector") or d:IsA("Sound") or d:IsA("TouchTransmitter") then
-			d:Destroy()
-		elseif d:IsA("BasePart") then
-			d.Anchored, d.CanCollide, d.CanQuery, d.CanTouch = true, false, false, false
-		elseif d:IsA("Humanoid") then
-			pcall(function() d.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None end)
-		end
-	end
-	copy.Name = "UMC_Mirror"
-	copy.Parent = helpers
-	View.copy = copy
-	View.spin = 0
-	View.place()
-	return true
-end
--- Before you: on the floor in front of you, facing you
-function View.place()
-	local copy, root = View.copy, U.root()
-	if not (copy and root) then return end
-	local _, size = copy:GetBoundingBox()
-	local look = flat(workspace.CurrentCamera.CFrame.LookVector)
-	local at = root.Position + look * (math.max(size.X, size.Z) / 2 + 6)
-	View.base = CFrame.lookAt(at, at - look)
-	copy:PivotTo(View.base * CFrame.Angles(0, View.spin, 0))
-end
-on(RunService.Heartbeat, function(dt)
-	if View.copy and Toggles.UMC_MirrorSpin and Toggles.UMC_MirrorSpin.Value and View.base then
-		View.spin += dt * 0.8
-		View.copy:PivotTo(View.base * CFrame.Angles(0, View.spin, 0))
-	end
-end)
--- The camera round something (as round you: turn it with your finger or mouse), or back to you
-function View.orbit(thing)
-	local camera = workspace.CurrentCamera
-	if not thing then
-		camera.CameraSubject = U.humanoid()
+	local hit = workspace:Raycast(ray.Origin, ray.Direction * 1500, params)
+	if not (hit and hit.Instance) then
+		U.notify(TITLE, "Nothing there. Tap again.", 2)
 		return
 	end
-	local part = thing
-	if not thing:IsA("BasePart") then
-		part = thing:FindFirstChild("HumanoidRootPart") or (thing:IsA("Model") and thing.PrimaryPart) or thing:FindFirstChildWhichIsA("BasePart", true)
-	end
-	if part then camera.CameraSubject = part end
-end
--- The map round it faded (only for you), or back as it was: how many parts faded
-function View.fade(model, on, radius)
-	for _, p in ipairs(View.fadedParts) do -- (what was faded before)
-		local props = C.restore[p]
-		if props and props.LocalTransparencyModifier then
-			pcall(function() p.LocalTransparencyModifier = props.LocalTransparencyModifier[1] end)
-			props.LocalTransparencyModifier = nil
-		end
-	end
-	View.fadedParts = {}
-	if not (on and model) then return 0 end
-	local center = U.where(model)
-	if not center then return 0 end
-	local mine = U.character()
-	local parts = nil
-	pcall(function() parts = workspace:GetPartBoundsInRadius(center, radius) end)
-	if not parts then
-		parts = {}
-		for _, d in ipairs(workspace:GetDescendants()) do
-			if d:IsA("BasePart") and (d.Position - center).Magnitude < radius then table.insert(parts, d) end
-		end
-	end
-	for _, p in ipairs(parts) do
-		if not (p:IsDescendantOf(model) or p:IsDescendantOf(helpers) or (mine and p:IsDescendantOf(mine))) then
-			Paint.set(p, "LocalTransparencyModifier", 0.85)
-			table.insert(View.fadedParts, p)
-		end
-	end
-	return #View.fadedParts
-end
--- A ruler: from one point to another, its length
-function View.ruler()
-	Pick.start("il primo punto", function(_, a)
-		Pick.start("il secondo punto", function(_, b)
-			Mark.clear("ruler")
-			local d = b - a
-			Mark.add("ruler", make("Part", { Name = "UMC_Ruler", Anchored = true, CanCollide = false, CanQuery = false, CanTouch = false, Material = Enum.Material.Neon,
-				Color = YELLOW, Size = Vector3.new(0.08, 0.08, math.max(d.Magnitude, 0.05)), CFrame = CFrame.lookAt((a + b) / 2, b) }, helpers))
-			U.notify("Righello", string.format("%.2f stud (X %.2f · Y %.2f · Z %.2f)", d.Magnitude, d.X, d.Y, d.Z), 8)
-		end)
-	end)
-end
+	local cb = Tap.cb
+	Tap.cb = nil
+	cb(hit.Instance, hit.Position)
+end)
 
----====== THE CATALOG AND THE TOOLBOX: found, seen, their ids for the building tools ======---
+---====== THE CATALOG AND THE TOOLBOX: found, seen, their ids for Fork3x ======---
 
 local Cat = { results = {}, loaded = nil, tried = nil }
 -- Searched: "ugc" (the catalog's accessories: their meshes for the Mesh tool) or "toolbox" (models)
@@ -715,7 +588,7 @@ function Cat.search(source, keyword)
 		local data = U.json(U.get("https://catalog.roblox.com/v1/search/items/details?Category=11&Limit=30&Keyword=" .. q))
 		for _, item in ipairs(data and data.data or {}) do
 			if item.id and (item.itemType == nil or item.itemType == "Asset") then
-				table.insert(out, { id = item.id, name = tostring(item.name), creator = tostring(item.creatorName or "?"), kind = "UGC" })
+				table.insert(out, { id = item.id, name = tostring(item.name), creator = tostring(item.creatorName or "?"), kind = "Accessory" })
 			end
 		end
 	else
@@ -729,7 +602,7 @@ function Cat.search(source, keyword)
 			local a = d.asset or {}
 			local counts = a.modelTechnicalDetails and a.modelTechnicalDetails.instanceCounts
 			if a.id then
-				table.insert(out, { id = a.id, name = tostring(a.name), creator = tostring(d.creator and d.creator.name or "?"), kind = "Modello",
+				table.insert(out, { id = a.id, name = tostring(a.name), creator = tostring(d.creator and d.creator.name or "?"), kind = "Model",
 					scripts = counts and counts.script or 0 })
 			end
 		end
@@ -737,8 +610,10 @@ function Cat.search(source, keyword)
 	Cat.results = out
 	return out
 end
+-- Its line in the list (short: it has to fit)
 function Cat.label(r)
-	return string.format("%s — %s (%s)", r.name, r.creator, tostring(r.id))
+	local name = if #r.name > 24 then r.name:sub(1, 22) .. "…" else r.name
+	return name .. " · " .. tostring(r.id)
 end
 -- Loaded here (only for you), without its scripts
 function Cat.load(id)
@@ -759,7 +634,7 @@ function Cat.meshOf(obj)
 	if obj:IsA("MeshPart") then return obj.MeshId, obj.TextureID end
 	return nil, nil
 end
--- What a viewport can show of it (a part or a model)
+-- What can be shown of it (a part or a model)
 function Cat.viewable(obj)
 	if not obj then return nil end
 	if obj:IsA("Model") or obj:IsA("BasePart") then return obj end
@@ -796,163 +671,156 @@ function Cat.takeOff()
 	Cat.tried = nil
 end
 
----====== THE PAD: the shortcuts on your screen, big enough for a finger, wherever you drag it ======---
+---====== ON YOUR SCREEN: the bar at the top (what to do now) and the pad (Fork3x's shortcuts, for phones) ======---
 
-local Pad = { gui = nil, buttons = {} }
-local PAD_BG, PAD_BOX, PAD_ON, PAD_TEXT = Color3.fromRGB(18, 18, 22), Color3.fromRGB(32, 32, 40), Color3.fromRGB(125, 85, 255), Color3.fromRGB(235, 235, 245)
-local function padButton(parent, text, order, fn)
-	local b = make("TextButton", { Name = text, Text = text, BackgroundColor3 = PAD_BOX, TextColor3 = PAD_TEXT, Font = Enum.Font.GothamBold, TextScaled = true,
-		AutoButtonColor = true, LayoutOrder = order, BorderSizePixel = 0 }, parent)
-	make("UICorner", { CornerRadius = UDim.new(0, 6) }, b)
-	make("UITextSizeConstraint", { MaxTextSize = 15, MinTextSize = 8 }, b)
-	make("UIPadding", { PaddingLeft = UDim.new(0, 3), PaddingRight = UDim.new(0, 3) }, b)
-	on(b.MouseButton1Click, fn)
-	Pad.buttons[text] = b
+local Gui = { padButtons = {} }
+local G_BG, G_BOX, G_ON, G_STOP, G_TEXT = Color3.fromRGB(20, 20, 26), Color3.fromRGB(40, 40, 52), Color3.fromRGB(125, 85, 255), Color3.fromRGB(110, 40, 52),
+	Color3.fromRGB(240, 240, 248)
+-- Text that always fits its box: it shrinks, it never spills out
+local function fitText(t, max)
+	t.TextScaled = true
+	t.TextWrapped = true
+	make("UITextSizeConstraint", { MaxTextSize = max, MinTextSize = 7 }, t)
+	return t
+end
+local function guiButton(parent, name, order)
+	local b = make("TextButton", { Name = name, Text = name, BackgroundColor3 = G_BOX, TextColor3 = G_TEXT, Font = Enum.Font.GothamBold, AutoButtonColor = true,
+		BorderSizePixel = 0, LayoutOrder = order or 0 }, parent)
+	fitText(b, 16)
+	make("UICorner", { CornerRadius = UDim.new(0, 8) }, b)
+	make("UIPadding", { PaddingLeft = UDim.new(0, 4), PaddingRight = UDim.new(0, 4), PaddingTop = UDim.new(0, 2), PaddingBottom = UDim.new(0, 2) }, b)
 	return b
 end
-local function padSection(parent, title, order, cell)
-	local box = make("Frame", { Name = title, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = order }, parent)
-	make("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 3) }, box)
-	make("TextLabel", { Name = "Title", Text = title, BackgroundTransparency = 1, TextColor3 = Color3.fromRGB(160, 160, 175), Font = Enum.Font.GothamMedium,
-		TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, Size = UDim2.new(1, 0, 0, 14), LayoutOrder = 0 }, box)
-	local grid = make("Frame", { Name = "Grid", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = 1 }, box)
-	make("UIGridLayout", { CellSize = cell, CellPadding = UDim2.fromOffset(4, 4), SortOrder = Enum.SortOrder.LayoutOrder }, grid)
-	return grid
+local screen = make("ScreenGui", { Name = "UMC_Gui", ResetOnSpawn = false, ZIndexBehavior = Enum.ZIndexBehavior.Sibling, DisplayOrder = 60, IgnoreGuiInset = false }, nil)
+table.insert(C.made, screen)
+
+-- The bar: what to do now, in a few words, its buttons on its right
+local BAR_H, BAR_BUTTON = if MOBILE then 64 else 52, if MOBILE then 84 else 72
+local banner = make("Frame", { Name = "Banner", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 8), Size = UDim2.new(0.72, 0, 0, BAR_H),
+	BackgroundColor3 = G_BG, BackgroundTransparency = 0.04, BorderSizePixel = 0, Visible = false }, screen)
+make("UICorner", { CornerRadius = UDim.new(0, 10) }, banner)
+make("UIStroke", { Color = G_ON, Thickness = 1.5, Transparency = 0.15 }, banner)
+make("UISizeConstraint", { MaxSize = Vector2.new(700, BAR_H), MinSize = Vector2.new(300, BAR_H) }, banner)
+local bannerText = fitText(make("TextLabel", { Name = "Text", Text = "", BackgroundTransparency = 1, Position = UDim2.fromOffset(12, 6), TextColor3 = G_TEXT,
+	Font = Enum.Font.GothamMedium, TextXAlignment = Enum.TextXAlignment.Left }, banner), 20)
+local bannerRow = make("Frame", { Name = "Buttons", BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -8, 0.5, 0) }, banner)
+make("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Right,
+	VerticalAlignment = Enum.VerticalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 6) }, bannerRow)
+local bannerLinks = {}
+-- Shown at the top: what to do now, its buttons (and Cancel): `pressed(name)`, `cancel()`
+function Gui.ask(text, buttons, pressed, cancel)
+	for _, c in ipairs(bannerLinks) do c:Disconnect() end
+	table.clear(bannerLinks)
+	for _, b in ipairs(bannerRow:GetChildren()) do
+		if b:IsA("TextButton") then b:Destroy() end
+	end
+	local names = table.clone(buttons)
+	table.insert(names, "Cancel")
+	for i, name in ipairs(names) do
+		local b = guiButton(bannerRow, name, i)
+		b.Size = UDim2.fromOffset(BAR_BUTTON, BAR_H - 16)
+		b.BackgroundColor3 = if name == "Cancel" then G_STOP else G_ON
+		table.insert(bannerLinks, b.MouseButton1Click:Connect(function()
+			if name == "Cancel" then
+				if cancel then cancel() end
+			elseif pressed then
+				pressed(name)
+			end
+		end))
+	end
+	local width = #names * (BAR_BUTTON + 6)
+	bannerRow.Size = UDim2.fromOffset(width, BAR_H - 16)
+	bannerText.Size = UDim2.new(1, -(width + 28), 1, -12)
+	bannerText.Text = text
+	banner.Visible = true
 end
-function Pad.refresh()
-	for name, b in pairs({ ["Ctrl (più pezzi)"] = "LeftControl", ["Shift"] = "LeftShift" }) do
-		local button = Pad.buttons[name]
-		if button then button.BackgroundColor3 = if Keys.held[b] then PAD_ON else PAD_BOX end
-	end
-end
-function Pad.build()
-	if Pad.gui then Pad.gui:Destroy() end
-	Pad.buttons = {}
-	local touch = UserInputService.TouchEnabled
-	local cell = if touch then UDim2.fromOffset(70, 40) else UDim2.fromOffset(62, 30)
-	local columns = 4
-	local width = columns * (cell.X.Offset + 4) + 12
-	local gui = make("ScreenGui", { Name = "UMC_Pad", ResetOnSpawn = false, ZIndexBehavior = Enum.ZIndexBehavior.Sibling, DisplayOrder = 60, IgnoreGuiInset = true }, nil)
-	local frame = make("Frame", { Name = "Pad", BackgroundColor3 = PAD_BG, BackgroundTransparency = 0.08, BorderSizePixel = 0, AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.new(1, -10, 0.5, 0), Size = UDim2.new(0, width, 0, 0), AutomaticSize = Enum.AutomaticSize.Y }, gui)
-	make("UICorner", { CornerRadius = UDim.new(0, 8) }, frame)
-	make("UIStroke", { Color = PAD_ON, Transparency = 0.4, Thickness = 1 }, frame)
-	Pad.scale = make("UIScale", { Scale = if Options.UMC_PadScale then Options.UMC_PadScale.Value / 100 else 1 }, frame)
-	make("UIPadding", { PaddingLeft = UDim.new(0, 6), PaddingRight = UDim.new(0, 6), PaddingTop = UDim.new(0, 4), PaddingBottom = UDim.new(0, 6) }, frame)
-	make("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 5) }, frame)
-	-- Its bar: drag it; tap the dash to fold it
-	local bar = make("TextButton", { Name = "Bar", Text = "  UMC · tasti Fork3x", TextXAlignment = Enum.TextXAlignment.Left, BackgroundTransparency = 1,
-		TextColor3 = PAD_TEXT, Font = Enum.Font.GothamBold, TextSize = 13, Size = UDim2.new(1, 0, 0, 22), LayoutOrder = 0, AutoButtonColor = false }, frame)
-	local fold = make("TextButton", { Name = "Fold", Text = "–", BackgroundColor3 = PAD_BOX, TextColor3 = PAD_TEXT, Font = Enum.Font.GothamBold, TextSize = 16,
-		AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 0), Size = UDim2.fromOffset(26, 20) }, bar)
-	make("UICorner", { CornerRadius = UDim.new(0, 5) }, fold)
-	local body = make("Frame", { Name = "Body", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = 1 }, frame)
-	make("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 6) }, body)
-	on(fold.MouseButton1Click, function()
-		body.Visible = not body.Visible
-		fold.Text = if body.Visible then "–" else "+"
-	end)
-	local dragging, from, start = false, nil, nil
-	on(bar.InputBegan, function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-			dragging, from, start = true, input.Position, frame.Position
-		end
-	end)
-	on(UserInputService.InputChanged, function(input)
-		if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-			local d = input.Position - from
-			frame.Position = UDim2.new(start.X.Scale, start.X.Offset + d.X, start.Y.Scale, start.Y.Offset + d.Y)
-		end
-	end)
-	on(UserInputService.InputEnded, function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then dragging = false end
-	end)
-	-- Its keys
-	local tools = padSection(body, "Strumenti", 1, cell)
-	for i, t in ipairs(Keys.TOOLS) do
-		padButton(tools, t[1] .. " " .. t[2], i, function() Keys.tap({}, t[2]) end)
-	end
-	local groups = padSection(body, "Gruppi e selezione", 2, cell)
-	for i, c in ipairs(Keys.COMBOS) do
-		padButton(groups, c[1], i, function() Keys.tap(c[2], c[3]) end)
-	end
-	local hold = padSection(body, "Tieni premuto", 3, cell)
-	padButton(hold, "Ctrl (più pezzi)", 1, function()
-		Keys.hold("LeftControl", not Keys.held.LeftControl)
-		Pad.refresh()
-	end)
-	padButton(hold, "Shift", 2, function()
-		Keys.hold("LeftShift", not Keys.held.LeftShift)
-		Pad.refresh()
-	end)
-	gui.Parent = U.guiParent()
-	Pad.gui = gui
-	Pad.refresh()
-	return gui
-end
-function Pad.show(visible)
-	if visible then
-		if not (Pad.gui and Pad.gui.Parent) then Pad.build() end
-		Pad.gui.Enabled = true
-	elseif Pad.gui then
-		Pad.gui.Enabled = false
-		Keys.releaseAll()
-		Pad.refresh()
-	end
+function Gui.hideBanner()
+	banner.Visible = false
+	for _, c in ipairs(bannerLinks) do c:Disconnect() end
+	table.clear(bannerLinks)
 end
 
----====== ITS STATE: the morph you work on, the one you take a piece from, the piece ======---
-
-local S = { target = nil, targetName = "", source = nil, sourceName = "", asset = nil, assetName = "", picked = nil, morphs = {}, analysis = nil,
-	analysedAt = 0, nextLoose = 0, pieces = {}, fx = {}, palette = {}, map = {}, fov = nil, orbiting = false }
-local MINE = "Il mio personaggio"
--- A morph's name (the morphs on the map are a "Character" in a model named after them)
-local function nameOf(m)
-	if m.Name == "Character" and m.Parent and m.Parent ~= workspace then return m.Parent.Name end
-	return m.Name
+-- The pad: Fork3x's shortcuts, big enough for a finger, wherever you drag it
+local PAD = {
+	{ "Group", { "LeftShift" }, "J" }, { "Ungroup", { "LeftShift" }, "U" },
+	{ "Select In", { "LeftShift" }, "T" }, { "Multi" },
+	{ "Undo", { "LeftControl" }, "Z" }, { "Redo", { "LeftControl" }, "Y" },
+	{ "Weld", {}, "F" }, { "Menu" },
+}
+local CELL = if MOBILE then Vector2.new(70, 44) else Vector2.new(62, 32)
+local pad = make("Frame", { Name = "Pad", AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.45, 0), Size = UDim2.fromOffset(CELL.X * 2 + 18, 0),
+	AutomaticSize = Enum.AutomaticSize.Y, BackgroundColor3 = G_BG, BackgroundTransparency = 0.06, BorderSizePixel = 0, Visible = false }, screen)
+make("UICorner", { CornerRadius = UDim.new(0, 10) }, pad)
+make("UIStroke", { Color = G_ON, Thickness = 1, Transparency = 0.35 }, pad)
+Gui.padScale = make("UIScale", { Scale = 1 }, pad)
+make("UIPadding", { PaddingLeft = UDim.new(0, 6), PaddingRight = UDim.new(0, 6), PaddingTop = UDim.new(0, 5), PaddingBottom = UDim.new(0, 6) }, pad)
+make("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 6) }, pad)
+local head = make("TextButton", { Name = "Head", Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 24), LayoutOrder = 0 }, pad)
+fitText(make("TextLabel", { Name = "Title", Text = "⠿ UMC", BackgroundTransparency = 1, Size = UDim2.new(1, -32, 1, 0), TextColor3 = G_TEXT,
+	Font = Enum.Font.GothamBold, TextXAlignment = Enum.TextXAlignment.Left }, head), 14)
+local fold = guiButton(head, "Fold")
+fold.Text, fold.AnchorPoint, fold.Position, fold.Size = "–", Vector2.new(1, 0), UDim2.new(1, 0, 0, 0), UDim2.fromOffset(28, 24)
+local keys = make("Frame", { Name = "Keys", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = 1 }, pad)
+make("UIGridLayout", { CellSize = UDim2.fromOffset(CELL.X, CELL.Y), CellPadding = UDim2.fromOffset(6, 6), SortOrder = Enum.SortOrder.LayoutOrder }, keys)
+for i, k in ipairs(PAD) do
+	local b = guiButton(keys, k[1], i)
+	Gui.padButtons[k[1]] = b
+	on(b.MouseButton1Click, function()
+		if k[1] == "Multi" then
+			Keys.hold("LeftControl", not Keys.held.LeftControl)
+		elseif k[1] == "Menu" then
+			pcall(function() Library:Toggle() end)
+		else
+			Keys.tap(k[2], k[3])
+		end
+	end)
 end
-local function morphValues(withMine)
-	local morphs, names = Find.morphs()
-	S.morphs = morphs
-	local values = {}
-	if withMine then table.insert(values, MINE) end
-	if S.picked and S.picked.Parent then table.insert(values, "Toccato: " .. nameOf(S.picked)) end
-	for _, n in ipairs(names) do table.insert(values, "Morph: " .. n) end
-	return values
-end
-local function resolveMorph(label)
-	if label == MINE then return U.character() end
-	if type(label) ~= "string" then return nil end
-	if S.picked and label == "Toccato: " .. nameOf(S.picked) then return S.picked end
-	local name = label:match("^Morph: (.+)$")
-	return if name then S.morphs[name] else nil
-end
-local Guide = { labels = {} }
--- A choice's name as it is shown ("Morph: UTC" -> "UTC")
-local function display(label) return (label:gsub("^Morph: ", ""):gsub("^Toccato: ", "")) end
-local function setTarget(model, label)
-	S.target, S.targetName, S.analysis, S.nextLoose = model, if label then display(label) elseif model then nameOf(model) else "", nil, 0
-	Mark.clear("target")
-	if model then
-		Mark.glow("target", model, BLUE)
-		task.delay(2.5, function() Mark.clear("target") end)
+on(fold.MouseButton1Click, function()
+	keys.Visible = not keys.Visible
+	fold.Text = if keys.Visible then "–" else "+"
+end)
+-- Dragged by its top, by that finger only (the others walk you and turn the camera)
+local drag = nil
+on(head.InputBegan, function(input)
+	local t = input.UserInputType
+	if t == Enum.UserInputType.MouseButton1 or t == Enum.UserInputType.Touch then
+		drag = { input = input, from = input.Position, start = pad.Position, mouse = t == Enum.UserInputType.MouseButton1 }
 	end
-	Guide.refresh()
+end)
+on(UserInputService.InputChanged, function(input)
+	if not drag then return end
+	if drag.mouse then
+		if input.UserInputType ~= Enum.UserInputType.MouseMovement then return end
+	elseif input ~= drag.input then
+		return
+	end
+	local d = input.Position - drag.from
+	pad.Position = UDim2.new(drag.start.X.Scale, drag.start.X.Offset + d.X, drag.start.Y.Scale, drag.start.Y.Offset + d.Y)
+end)
+on(UserInputService.InputEnded, function(input)
+	if drag and (input == drag.input or (drag.mouse and input.UserInputType == Enum.UserInputType.MouseButton1)) then drag = nil end
+end)
+-- Multi lit while Ctrl is held
+function Gui.refreshPad()
+	local b = Gui.padButtons.Multi
+	local held = Keys.held.LeftControl == true
+	b.Text = if held then "Multi ON" else "Multi"
+	b.BackgroundColor3 = if held then G_ON else G_BOX
 end
-local function setAsset(inst, label)
-	S.asset, S.assetName = inst, label or (if inst then inst.Name else "")
-	Mark.clear("asset")
-	if inst then Mark.glow("asset", inst, YELLOW) end
-	Guide.refresh()
+Keys.onChange = Gui.refreshPad
+function Gui.showPad(visible)
+	pad.Visible = visible == true
+	if not visible and Keys.held.LeftControl then Keys.hold("LeftControl", false) end
 end
-local function setSource(model, label)
-	S.source, S.sourceName = model, label or ""
-	S.pieces = if model then Find.pieces(model) else {}
-	local labels = {}
-	for _, p in ipairs(S.pieces) do table.insert(labels, p.label) end
-	if Options.UMC_Piece then Options.UMC_Piece:SetValues(labels) end
-end
--- Its body's analysis (every so often, or now)
+screen.Parent = U.guiParent()
+
+---====== WHAT YOU ARE MAKING: your morph, the piece you add ======---
+
+local S = { target = nil, targetIsMe = false, asset = nil, assetName = "", sourceName = "", analysis = nil, analysedAt = 0, glow = nil,
+	colorParts = {}, colorScope = nil, fx = {}, fxKey = nil, menuWasOpen = false, loose = nil }
+local UI = { labels = {}, ready = false }
+local function mark(ok) return if ok then GOOD else BAD end
+-- Its body's analysis (every second, or now)
 local function analysis(now)
 	if not (S.target and S.target.Parent) then return nil end
 	if now or not S.analysis or os.clock() - S.analysedAt > 1 then
@@ -961,553 +829,552 @@ local function analysis(now)
 	end
 	return S.analysis
 end
--- Somewhere near it (yours: your private server)
-local function goTo(thing)
-	if not U.privateOwner() then
-		U.notify(TITLE, "Solo nel tuo server privato.", 4)
+local function setTarget(model, isMe)
+	S.target, S.targetIsMe, S.analysis, S.fxKey = model, isMe == true, nil, nil
+	Mark.clear("target")
+	if model then
+		local glow = {}
+		S.glow = glow
+		Mark.glow("target", model, BLUE)
+		task.delay(2, function()
+			if S.glow == glow then Mark.clear("target") end
+		end)
+	end
+	UI.refresh()
+end
+local function setAsset(part)
+	local m = Find.characterOf(part)
+	local piece = if m then Find.pieceOf(part, m) else part
+	local name, o = piece.Name, part
+	while o and o ~= piece.Parent do -- (its own name: the highest one that is not a group's "Model")
+		if o.Name ~= "Model" then name = o.Name end
+		o = o.Parent
+	end
+	S.asset, S.assetName, S.sourceName = part, name, if m then Find.nameOf(m) else ""
+	Mark.clear("asset")
+	Mark.glow("asset", piece, YELLOW)
+	UI.refresh()
+end
+
+---====== THE GUIDES: the bar at the top says what to do; the menu out of your way while you tap the world ======---
+
+local Flow = { thread = nil, waiting = false }
+local function showMenu(open) pcall(function() Library:Toggle(open) end) end
+function Flow.live() return C.alive and Flow.thread ~= nil and coroutine.running() == Flow.thread end
+function Flow.resume(value)
+	local thread = Flow.thread
+	if thread and Flow.waiting then
+		Flow.waiting = false
+		task.spawn(thread, value)
+	end
+end
+function Flow.done()
+	Tap.cancel()
+	Gui.hideBanner()
+	if Keys.held.LeftControl then Keys.hold("LeftControl", false) end
+	Mark.clear("flow")
+	Mark.clear("asset")
+	if S.menuWasOpen and C.alive then showMenu(true) end
+	S.menuWasOpen = false
+	Flow.thread, Flow.waiting = nil, false
+	UI.refresh()
+end
+function Flow.cancel()
+	local thread, waiting = Flow.thread, Flow.waiting
+	if not thread then return end
+	Flow.done()
+	if waiting then task.spawn(thread, nil) end -- (let it end where it waits)
+end
+-- On the bar: what to do; waits for one of its buttons: its name (nil: cancelled)
+function Flow.ask(text, buttons)
+	if not Flow.live() then return nil end
+	Gui.ask(text, buttons, Flow.resume, Flow.cancel)
+	Flow.waiting = true
+	local r = coroutine.yield()
+	return if Flow.live() then r else nil
+end
+-- On the bar: what to tap; waits for a tap on the world that `accept` takes (else says why, and waits again): the part (nil: cancelled)
+function Flow.tap(text, accept)
+	while Flow.live() do
+		Gui.ask(text, {}, Flow.resume, Flow.cancel)
+		Tap.wait(function(part) Flow.resume(part) end)
+		Flow.waiting = true
+		local part = coroutine.yield()
+		Tap.cancel()
+		if not Flow.live() or typeof(part) ~= "Instance" then return nil end
+		local ok, why = accept(part)
+		if ok then return part end
+		U.notify(TITLE, why or "Not that one. Tap again.", 3)
+	end
+	return nil
+end
+-- On the bar while it works (only Cancel)
+function Flow.say(text)
+	if Flow.live() then Gui.ask(text, {}, nil, Flow.cancel) end
+end
+-- Waits (a few seconds at most) for Fork3x to have done it: true if it has
+function Flow.waitFor(done, seconds)
+	local start = os.clock()
+	while Flow.live() and not done() and os.clock() - start < (seconds or 3) do task.wait(0.1) end
+	return Flow.live() and done()
+end
+function Flow.run(fn)
+	if Flow.thread then Flow.cancel() end
+	S.menuWasOpen = Library.Toggled ~= false
+	showMenu(false)
+	local thread
+	thread = coroutine.create(function()
+		local ok, err = pcall(fn)
+		if not ok then warn("[" .. TITLE .. "] " .. tostring(err)) end
+		if Flow.thread == thread then Flow.done() end
+	end)
+	Flow.thread = thread
+	task.spawn(thread)
+end
+
+local Flows = {}
+-- Fork3x in your hand (if you have it)
+local function holdFork()
+	local tool = U.buildTool()
+	if not tool then
+		U.notify(TITLE, "Fork3x not found. Take it in your private server first.", 5)
 		return
 	end
-	local at, character = U.where(thing), U.character()
-	if not (at and character) then return end
-	local look = flat(workspace.CurrentCamera.CFrame.LookVector)
-	local from = at - look * 7 + Vector3.new(0, 3, 0)
-	pcall(function() character:PivotTo(CFrame.lookAt(from, Vector3.new(at.X, from.Y, at.Z))) end)
+	if tool.Parent ~= U.character() then U.equip(tool) end
 end
-local function orbit(thing)
-	View.orbit(thing)
-	S.orbiting = thing ~= nil
+function Flows.pickMorph()
+	local part = Flow.tap("Tap the morph you are making.", function(p) return Find.characterOf(p) ~= nil, "That's not a morph. Tap its body." end)
+	if not part then return end
+	local m = Find.characterOf(part)
+	setTarget(m, m == U.character())
 end
-local function mark(ok) return if ok then GOOD else BAD end
-
----====== THE GUIDE: the way the game's morphs are made, step by step, each step checked ======---
-
-function Guide.status()
-	local out = {}
-	local build, save = U.buildTool(), U.saveTool()
-	out[1] = string.format("Fork3x/BTools %s · SaveMorphTool %s · server privato %s", mark(build ~= nil), mark(save ~= nil), mark(U.privateOwner()))
-	local a = analysis(false)
-	if S.target and S.target.Parent then
-		out[2] = string.format("%s · ancorato %s · %d pezzi", S.targetName, mark(a and a.anchored), a and a.parts or 0)
-	else
-		out[2] = "Scegli il morph su cui lavori."
+local function haveMorph()
+	if not (S.target and S.target.Parent) then Flows.pickMorph() end
+	return Flow.live() and S.target ~= nil and S.target.Parent ~= nil
+end
+-- A tap with Ctrl held (Fork3x adds what you tap to what it has). A wrong one is in Fork3x's selection too: then Ctrl is let go,
+-- the first thing is tapped again (`again`), and Ctrl is held once more
+local function ctrlTap(text, accept, againText, again)
+	while Flow.live() do
+		Keys.hold("LeftControl", true)
+		local part = Flow.tap(text, function() return true end)
+		if not part then return nil end
+		task.wait(0.3) -- (Fork3x takes the tap while Ctrl is still down)
+		Keys.hold("LeftControl", false)
+		if not Flow.live() then return nil end
+		if accept(part) then return part end
+		U.notify(TITLE, "Not that one. Let's pick again.", 3)
+		if not Flow.tap(againText, again) then return nil end
 	end
-	if S.asset and S.asset.Parent then
-		out[3] = "Pezzo: " .. S.assetName .. (if S.sourceName ~= "" then " (da " .. S.sourceName .. ")" else "")
-		local inside = S.target ~= nil and S.asset:IsDescendantOf(S.target)
-		local best = nil
-		if a then
-			for _, p in ipairs(U.partsOf(S.asset)) do
-				for b in pairs(a.heldSet) do
-					if b == S.asset or b:IsDescendantOf(S.asset) then continue end
-					local d = U.boxDistance(b, p.Position)
-					if not best or d < best then best = d end
-				end
+	return nil
+end
+-- Add a Piece: from any morph, moved, grouped five times, grouped with your morph and ungrouped: inside it
+function Flows.add()
+	holdFork()
+	if not haveMorph() then return end
+	local part = Flow.tap("Tap the piece you want to add.", function() return true end)
+	if not part then return end
+	setAsset(part)
+	local piece = Find.pieceOf(part, Find.characterOf(part) or part)
+	local function isPiece(p) return p == part or p:IsDescendantOf(piece), "Tap " .. S.assetName .. "." end
+	if part:IsDescendantOf(S.target) then
+		if Flow.ask(S.assetName .. " is already in your morph.", { "Weld It" }) == "Weld It" then Flows.weld(part) end
+		return
+	end
+	if Flow.ask("Move " .. S.assetName .. " onto your morph with Fork3x. Keep it selected, then tap Next.", { "Next" }) ~= "Next" then return end
+	-- Grouped five times: each time one more group round it in its morph (not round the whole morph). Fork3x asks the
+	-- server each time: it is waited for
+	local home = piece.Parent
+	local function depth()
+		local n, o = 0, part
+		while o.Parent and o.Parent ~= home do
+			n += 1
+			o = o.Parent
+		end
+		return n
+	end
+	local grouped = 0
+	while grouped < 5 and Flow.live() do
+		Flow.say(string.format("Grouping it… %d/5", grouped + 1))
+		local before = depth()
+		if not Keys.press({ "LeftShift" }, "J") then
+			Flow.ask("Your executor can't press keys, so this guide can't work here.", { "OK" })
+			return
+		end
+		if Flow.waitFor(function() return depth() > before end, 3) then
+			grouped += 1
+		elseif Flow.ask("Fork3x didn't group " .. S.assetName .. ". Undo, select only " .. S.assetName .. ", then Retry.", { "Retry" }) ~= "Retry" then
+			return
+		end
+	end
+	while Flow.live() do
+		Mark.glow("flow", S.target, GREEN)
+		local body = ctrlTap("Ctrl is held. Now tap your morph (green).", function(p) return p:IsDescendantOf(S.target) end,
+			"Tap " .. S.assetName .. " again.", isPiece)
+		Mark.clear("flow")
+		if not body then return end
+		Flow.say("Putting it inside…")
+		local bodyHome = body.Parent
+		Keys.press({ "LeftShift" }, "J")
+		if Flow.waitFor(function() return part:IsDescendantOf(S.target) and body.Parent ~= bodyHome end, 3) then
+			Keys.press({ "LeftShift" }, "U")
+			Flow.waitFor(function() return body.Parent == bodyHome end, 3)
+		end
+		if not Flow.live() then return end
+		UI.refresh()
+		if S.asset:IsDescendantOf(S.target) then
+			if Flow.ask("Inside " .. GOOD .. "  Now weld it, or it will fall.", { "Weld It" }) == "Weld It" then Flows.weld(S.asset) end
+			return
+		end
+		if Flow.ask("Not inside yet " .. BAD .. "  Let's try again.", { "Retry" }) ~= "Retry" then return end
+		if not Flow.tap("Tap " .. S.assetName .. " again.", isPiece) then return end
+	end
+end
+-- Fix Loose Parts (or one piece): tap the yellow piece, then (Ctrl held) the green part, then Weld in Fork3x's weld tool
+function Flows.weld(thing)
+	holdFork()
+	if not haveMorph() then return end
+	while Flow.live() do
+		local a = analysis(true)
+		local g = if thing then Welds.groupOf(a, thing) else a.loose[1]
+		if not g then
+			if thing and not thing:IsDescendantOf(S.target) then
+				Flow.ask("Put it inside your morph first.", { "OK" })
+			else
+				Flow.ask((if thing then S.assetName .. " is welded " else "Nothing will fall ") .. GOOD, { "OK" })
 			end
+			return
 		end
-		out[4] = if best then string.format("A %.1f stud dal corpo del morph.", best) else "Avvicinalo al morph."
-		out[5] = "Dentro il morph: " .. mark(inside)
-		if a and inside then
-			local group = Welds.groupOf(a, S.asset)
-			out[6] = if Welds.holds(a, S.asset) then "Saldato al corpo " .. GOOD
-				elseif group and group.to then string.format("Da saldare a %s (a %.1f stud) %s", group.to.Name, group.distance, WARN)
-				else "Da saldare " .. WARN
+		local to = g.to or a.root
+		Mark.clear("flow")
+		Mark.glow("flow", g.piece, YELLOW)
+		if to then Mark.glow("flow", to, GREEN) end
+		if Keys.held.LeftControl then Keys.hold("LeftControl", false) end
+		local function yellow(q) return Welds.inGroup(g, q), "Tap the yellow one." end
+		if not Flow.tap("Tap the yellow piece (" .. g.piece.Name .. ").", yellow) then return end
+		local b = ctrlTap("Ctrl is held. Now tap the green part (" .. (if to then to.Name else "its body") .. ").", function(q) return a.heldSet[q] == true end,
+			"Tap the yellow piece again.", yellow)
+		if not b then return end
+		Keys.press({}, "F")
+		if Flow.ask("Tap Weld in Fork3x's weld tool, then Done.", { "Done" }) ~= "Done" then return end
+		Mark.clear("flow")
+		local after = analysis(true)
+		if after and Welds.groupOf(after, g.main) then
+			if Flow.ask("Not welded yet " .. BAD, { "Retry" }) ~= "Retry" then return end
 		else
-			out[6] = "Prima mettilo dentro il morph."
+			local left = if after then #after.loose else 0
+			if thing or left == 0 then
+				Flow.ask("Welded " .. GOOD .. (if left == 0 then "  Nothing will fall." else ""), { "OK" })
+				return
+			end
+			if Flow.ask(string.format("Welded %s  %d more will fall.", GOOD, left), { "Next One" }) ~= "Next One" then return end
 		end
-	else
-		out[3], out[4], out[5], out[6] = "Scegli il pezzo da prendere.", "—", "—", "—"
 	end
-	out[7] = if a then (if #a.loose == 0 then "Niente cadrebbe " .. GOOD else string.format("%d gruppi di pezzi cadrebbero %s (scheda Saldature)", #a.loose, WARN)) else "—"
-	out[8] = "SaveMorphTool " .. mark(save ~= nil) .. (if save and save.Parent == U.character() then " (in mano)" else "")
-	return out
 end
-function Guide.refresh()
-	local ok, out = pcall(Guide.status)
-	if not ok then return end
-	for i, label in pairs(Guide.labels) do
-		if out[i] and label.Text ~= out[i] then pcall(function() label:SetText(out[i]) end) end
+-- Recolor: the part you tap, and all of its colour in its morph
+function Flows.color()
+	local part = Flow.tap("Tap a part to pick its color.", function(p) return p:IsA("BasePart"), "Tap a part." end)
+	if not part then return end
+	local scope = if S.target and part:IsDescendantOf(S.target) then S.target else (Find.characterOf(part) or part)
+	local key = Paint.key(part.Color)
+	S.colorParts, S.colorScope = {}, scope
+	for _, p in ipairs(U.partsOf(scope)) do
+		if Paint.key(p.Color) == key then table.insert(S.colorParts, p) end
+	end
+	pcall(function() Options.UMC_NewColor:SetValueRGB(part.Color) end)
+	UI.set("color", string.format("%s · %d %s on %s", U.hex(part.Color), #S.colorParts, if #S.colorParts == 1 then "part" else "parts", Find.nameOf(scope)))
+	Mark.clear("color")
+	for i, p in ipairs(S.colorParts) do
+		if i <= 60 then Mark.box("color", p, YELLOW) end
+	end
+	task.delay(4, function() Mark.clear("color") end)
+end
+
+---====== WHAT THE WINDOW SAYS (every half second) ======---
+
+function UI.set(name, text)
+	local label = UI.labels[name]
+	if label and label.Text ~= text then pcall(function() label:SetText(text) end) end
+end
+function UI.refresh()
+	if not UI.ready then return end
+	local t = if S.target and S.target.Parent then S.target else nil
+	local a = analysis(false)
+	UI.set("morph", if t then string.format("%s · %d parts · anchored %s", Find.nameOf(t), a and a.parts or 0, mark(a and a.anchored)) else "No morph yet. Tap Morph, then tap it.")
+	if S.asset and S.asset.Parent then
+		local inside = t ~= nil and S.asset:IsDescendantOf(t)
+		UI.set("piece", string.format("%s · inside %s · welded %s", S.assetName, mark(inside), mark(inside and a ~= nil and Welds.holds(a, S.asset))))
+	else
+		UI.set("piece", "No piece yet.")
+	end
+	if not a then
+		UI.set("weld", "Pick your morph first.")
+	elseif #a.loose == 0 then
+		UI.set("weld", "Nothing will fall " .. GOOD)
+	else
+		UI.set("weld", string.format("%d %s will fall %s", #a.loose, if #a.loose == 1 then "piece" else "pieces", BAD))
+	end
+	UI.set("tools", string.format("Fork3x %s · Save Tool %s · Private server %s", mark(U.buildTool() ~= nil), mark(U.saveTool() ~= nil), mark(U.privateOwner())))
+	-- its effects, listed again when they change
+	local fx = if t then Fx.list(t) else {}
+	local labels = {}
+	for _, f in ipairs(fx) do table.insert(labels, f.label) end
+	local key = table.concat(labels, "\n")
+	if key ~= S.fxKey then
+		S.fxKey, S.fx = key, fx
+		pcall(function() Options.UMC_Fx:SetValues(labels) end)
+		UI.set("fx", if not t then "Pick your morph first." elseif #fx == 0 then "No effects on " .. Find.nameOf(t) .. "." else #fx .. " effects. Pick one.")
+	end
+	-- its loose parts in red (drawn again only when they change)
+	local show = Toggles.UMC_ShowLoose ~= nil and Toggles.UMC_ShowLoose.Value == true and a ~= nil
+	local parts = {}
+	if show then
+		for _, g in ipairs(a.loose) do
+			for _, p in ipairs(g.parts) do table.insert(parts, p) end
+		end
+	end
+	local same = S.loose ~= nil and #S.loose == #parts
+	if same then
+		for i, p in ipairs(parts) do
+			if S.loose[i] ~= p then same = false end
+		end
+	end
+	if not same then
+		S.loose = parts
+		Mark.clear("loose")
+		for i, p in ipairs(parts) do
+			if i <= 80 then Mark.box("loose", p, RED) end
+		end
 	end
 end
 
 ---====== THE WINDOW ======---
 
-local Window = Library:CreateWindow({ Title = TITLE, Footer = "v" .. VERSION .. " · Toilet World Roleplay 2 · i suoi aiuti li vedi solo tu", NotifySide = "Right",
-	ShowCustomCursor = not UserInputService.TouchEnabled, Center = true, AutoShow = true, Resizable = true, MobileButtonsSide = "Left" })
-local Tabs = {
-	Crea = Window:AddTab("Crea", "hammer"),
-	Saldature = Window:AddTab("Saldature", "link"),
-	Colori = Window:AddTab("Colori", "palette"),
-	Catalogo = Window:AddTab("Catalogo", "search"),
-	Vista = Window:AddTab("Vista", "eye"),
-	Pad = Window:AddTab("Pad", "gamepad-2"),
-	Impostazioni = Window:AddTab("Impostazioni", "settings"),
-}
-local UI = {}
-local function text(box, s) return box:AddLabel({ Text = s, DoesWrap = true }) end
-local function status(box, i)
-	local label = box:AddLabel({ Text = "…", DoesWrap = true })
-	Guide.labels[i] = label
-	return label
-end
+local view = workspace.CurrentCamera.ViewportSize
+local Window = Library:CreateWindow({ Title = TITLE, Footer = "v" .. VERSION .. " · Toilet World Roleplay 2",
+	Size = if MOBILE then UDim2.fromOffset(view.X, view.Y) else UDim2.fromOffset(720, 540), Center = true, AutoShow = true, Resizable = true,
+	ShowCustomCursor = not MOBILE, ToggleKeybind = Enum.KeyCode.RightShift, Font = Enum.Font.Gotham, SidebarCompacted = MOBILE, NotifySide = "Right",
+	MobileButtonsSide = "Left" })
+local Tabs = { Build = Window:AddTab("Build", "hammer"), Colors = Window:AddTab("Colors", "palette"), Search = Window:AddTab("Search", "search"),
+	Settings = Window:AddTab("Settings", "settings") }
+local function label(box, text) return box:AddLabel({ Text = text, DoesWrap = true }) end
 
-function UI.crea()
-	local tab = Tabs.Crea
-	local b1 = tab:AddLeftGroupbox("1 · Gli strumenti", "wrench")
-	status(b1, 1)
-	text(b1, "Nel tuo server privato prendi il Fork3x (o le BTools) e il SaveMorphTool con il pulsante del gioco. Le BTools sono comode per muovere; il Fork3x per gli effetti e per scalare modelli interi.")
-	b1:AddButton({ Text = "Equipaggia Fork3x", Func = function()
-		local tool = U.buildTool()
-		if tool then U.equip(tool) else U.notify(TITLE, "Non hai il Fork3x: prendilo dal pulsante del gioco nel tuo server privato.", 5) end
-	end }):AddButton({ Text = "Mostra il pad", Func = function() Toggles.UMC_Pad:SetValue(true) end })
+function UI.build()
+	local tab = Tabs.Build
+	local b1 = tab:AddLeftGroupbox("1. Your Morph", "user")
+	UI.labels.morph = label(b1, "…")
+	b1:AddButton({ Text = "Tap Morph", Func = function() Flow.run(Flows.pickMorph) end })
+		:AddButton({ Text = "Use Me", Func = function() setTarget(U.character(), true) end })
+	label(b1, "Tip: anchor it with Fork3x's Anchor tool, so it stays still while you work.")
 
-	local b2 = tab:AddLeftGroupbox("2 · Il morph su cui lavori", "user")
-	b2:AddDropdown("UMC_Target", { Values = morphValues(true), Default = 1, Text = "Morph", Searchable = true, MaxVisibleDropdownItems = 10,
-		Callback = function(v) setTarget(resolveMorph(v), v) end })
-	b2:AddButton({ Text = "Scegli toccando", Func = function()
-		Pick.start("il morph", function(part)
-			local m = Find.characterOf(part)
-			if not m then return U.notify(TITLE, "Non è un morph.", 3) end
-			S.picked = m
-			Options.UMC_Target:SetValues(morphValues(true))
-			Options.UMC_Source:SetValues(morphValues(false))
-			Options.UMC_Target:SetValue("Toccato: " .. nameOf(m))
-		end)
-	end }):AddButton({ Text = "Aggiorna elenco", Func = function()
-		Options.UMC_Target:SetValues(morphValues(true))
-		Options.UMC_Source:SetValues(morphValues(false))
-	end })
-	status(b2, 2)
-	text(b2, "Ancoralo con lo strumento Ancora (M): così la sua animazione non ti disturba e i pezzi non cadono mentre lavori.")
-	b2:AddButton({ Text = "Inquadra", Func = function() orbit(S.target) end }):AddButton({ Text = "Vai lì", Func = function() goTo(S.target) end })
-	b2:AddButton({ Text = "Ancora (M)", Func = function() Keys.tap({}, "M") end }):AddButton({ Text = "Telecamera su di me", Func = function() orbit(nil) end })
+	local b2 = tab:AddLeftGroupbox("2. Add a Piece", "package")
+	UI.labels.piece = label(b2, "…")
+	b2:AddButton({ Text = "Start Guide", Func = function() Flow.run(Flows.add) end })
+	label(b2, "Take a piece from any morph and put it on yours. The bar at the top tells you each step.")
 
-	local b3 = tab:AddLeftGroupbox("3 · Il pezzo da prendere", "package")
-	b3:AddDropdown("UMC_Source", { Values = morphValues(false), Text = "Dal morph", Searchable = true, MaxVisibleDropdownItems = 10,
-		Callback = function(v) setSource(resolveMorph(v), if v then display(v) else "") end })
-	b3:AddDropdown("UMC_Piece", { Values = {}, Text = "Pezzo", Searchable = true, MaxVisibleDropdownItems = 10, Callback = function(v)
-		for _, p in ipairs(S.pieces) do
-			if p.label == v then setAsset(p.inst, p.label) end
-		end
-	end })
-	b3:AddButton({ Text = "Scegli toccando", Func = function()
-		Pick.start("il pezzo", function(part)
-			local m = Find.characterOf(part)
-			local piece = if m then Find.pieceOf(part, m) else part
-			S.sourceName = if m then nameOf(m) else ""
-			setAsset(piece, piece.Name)
-		end)
-	end })
-	status(b3, 3)
-	b3:AddButton({ Text = "Inquadra", Func = function() orbit(S.asset) end }):AddButton({ Text = "Vai lì", Func = function() goTo(S.asset) end })
+	local b3 = tab:AddRightGroupbox("3. Weld", "link")
+	UI.labels.weld = label(b3, "…")
+	b3:AddButton({ Text = "Fix Loose Parts", Func = function() Flow.run(function() Flows.weld(nil) end) end })
+	b3:AddToggle("UMC_ShowLoose", { Text = "Show loose parts", Default = false, Callback = function() UI.refresh() end })
 
-	local b4 = tab:AddLeftGroupbox("4 · Mettilo in posizione", "move")
-	text(b4, "Muovi (Z): Global segue il mondo, Local il pezzo, Last l'ultimo pezzo selezionato. Ruota (C) e Ridimensiona (X: con «both» si allarga da entrambi i lati). Più piccolo l'incremento, più preciso il passo.")
-	status(b4, 4)
-	b4:AddButton({ Text = "Muovi (Z)", Func = function() Keys.tap({}, "Z") end }):AddButton({ Text = "Ruota (C)", Func = function() Keys.tap({}, "C") end })
-	b4:AddButton({ Text = "Ridimensiona (X)", Func = function() Keys.tap({}, "X") end }):AddButton({ Text = "Annulla", Func = function() Keys.tap({ "LeftControl" }, "Z") end })
-
-	local b5 = tab:AddRightGroupbox("5 · Dentro il personaggio", "box")
-	text(b5, "Seleziona il pezzo e raggruppalo 5 volte (Shift+J). Poi tieni Ctrl e tocca la HumanoidRootPart del morph, raggruppa (Shift+J) e separa (Shift+U): ora il pezzo è dentro il morph.")
-	b5:AddButton({ Text = "Raggruppa ×5", Func = function() Keys.tap({ "LeftShift" }, "J", 5) end }):AddButton({ Text = "Mostra la HumanoidRootPart", Func = function()
-		local root = S.target and S.target:FindFirstChild("HumanoidRootPart")
-		Mark.clear("root")
-		if root then
-			Mark.glow("root", root, GREEN)
-			task.delay(8, function() Mark.clear("root") end)
-		else
-			U.notify(TITLE, "Scegli prima il morph (passo 2).", 3)
-		end
-	end })
-	b5:AddButton({ Text = "Tieni / lascia Ctrl", Func = function()
-		Keys.hold("LeftControl", not Keys.held.LeftControl)
-		Pad.refresh()
-		U.notify("Ctrl", if Keys.held.LeftControl then "Tenuto: ora tocca la HumanoidRootPart." else "Lasciato.", 3)
-	end }):AddButton({ Text = "Seleziona dentro", Func = function() Keys.tap({ "LeftShift" }, "T") end })
-	b5:AddButton({ Text = "Raggruppa", Func = function() Keys.tap({ "LeftShift" }, "J") end }):AddButton({ Text = "Separa", Func = function() Keys.tap({ "LeftShift" }, "U") end })
-	status(b5, 5)
-
-	local b6 = tab:AddRightGroupbox("6 · Saldalo", "link")
-	text(b6, "Saldalo alla parte del corpo dove sta (sull'avambraccio destro: RightLowerArm). Prima tocca il pezzo, poi con Ctrl la parte del corpo: così saldi il pezzo al braccio, non il braccio al pezzo. Poi Salda (F) e Weld.")
-	status(b6, 6)
-	b6:AddButton({ Text = "Mostra dove saldarlo", Func = function()
-		local a = analysis(true)
-		local group = a and S.asset and Welds.groupOf(a, S.asset)
-		Mark.clear("weld")
-		if not group then return U.notify(TITLE, if a and S.asset and Welds.holds(a, S.asset) then "È già saldato." else "Scegli il morph e il pezzo.", 3) end
-		Mark.glow("weld", group.piece, YELLOW)
-		if group.to then Mark.glow("weld", group.to, GREEN) end
-		orbit(group.main)
-		U.notify("Saldatura", Welds.line(group), 6)
-	end }):AddButton({ Text = "Salda (F)", Func = function() Keys.tap({}, "F") end })
-
-	local b7 = tab:AddRightGroupbox("7 · Provalo", "play")
-	text(b7, "Tocca il pad del morph. All'inizio sarai congelato: vai in una mappa e scrivi ;thaw o ;unfreeze.")
-	status(b7, 7)
-	b7:AddButton({ Text = ";thaw me", Func = function() U.chat(";thaw me") end }):AddButton({ Text = ";unfreeze me", Func = function() U.chat(";unfreeze me") end })
-
-	local b8 = tab:AddRightGroupbox("8 · Salvalo", "save")
-	text(b8, "Equipaggia il SaveMorphTool e salva il morph in uno dei tuoi slot.")
-	status(b8, 8)
-	b8:AddButton({ Text = "Equipaggia SaveMorphTool", Func = function()
+	local b4 = tab:AddRightGroupbox("4. Test & Save", "save")
+	label(b4, "Use the morph's pad, then unfreeze yourself:")
+	b4:AddButton({ Text = "Thaw", Func = function() U.chat(";thaw me") end }):AddButton({ Text = "Unfreeze", Func = function() U.chat(";unfreeze me") end })
+	b4:AddButton({ Text = "Equip Save Tool", Func = function()
 		local tool = U.saveTool()
-		if tool then U.equip(tool) else U.notify(TITLE, "Non hai il SaveMorphTool.", 4) end
+		if tool then U.equip(tool) else U.notify(TITLE, "No Save Morph Tool. Take it in your private server.", 4) end
+	end })
+
+	local b5 = tab:AddRightGroupbox("Tools", "wrench")
+	UI.labels.tools = label(b5, "…")
+	b5:AddButton({ Text = "Equip Fork3x", Func = function()
+		local tool = U.buildTool()
+		if tool then U.equip(tool) else U.notify(TITLE, "No Fork3x. Take it in your private server.", 4) end
 	end })
 end
 
-function UI.saldature()
-	local tab = Tabs.Saldature
-	local box = tab:AddLeftGroupbox("Cosa cadrebbe nel vuoto", "triangle-alert")
-	local summary = box:AddLabel({ Text = "Scegli un morph e controllalo.", DoesWrap = true })
-	local list = box:AddLabel({ Text = "", DoesWrap = true })
-	local function show()
-		local a = analysis(true)
-		Mark.clear("loose")
-		if not a then
-			summary:SetText("Scegli un morph (Crea, passo 2) o controlla te stesso.")
-			list:SetText("")
-			return
-		end
-		local count = 0
-		for _, g in ipairs(a.loose) do count += #g.parts end
-		summary:SetText(string.format("%s: %d pezzi · %d saldati al corpo · %d staccati in %d gruppi%s", S.targetName, a.parts, a.held, count, #a.loose,
-			if #a.loose == 0 then " " .. GOOD else ""))
-		local lines = {}
-		for i, g in ipairs(a.loose) do
-			if i > 12 then
-				table.insert(lines, "… e altri " .. (#a.loose - 12))
-				break
-			end
-			table.insert(lines, "• " .. Welds.line(g))
-		end
-		list:SetText(table.concat(lines, "\n"))
-		if Toggles.UMC_ShowLoose and Toggles.UMC_ShowLoose.Value then
-			local boxes = 0
-			for _, g in ipairs(a.loose) do
-				for _, p in ipairs(g.parts) do
-					boxes += 1
-					if boxes <= 400 then Mark.box("loose", p, RED) end
-				end
-			end
-		end
+function UI.chosenFx()
+	local v = Options.UMC_Fx and Options.UMC_Fx.Value
+	for _, f in ipairs(S.fx) do
+		if f.label == v then return f.inst end
 	end
-	box:AddButton({ Text = "Controlla il morph scelto", Func = show }):AddButton({ Text = "Controlla me", Func = function()
-		Options.UMC_Target:SetValue(MINE)
-		show()
-	end })
-	box:AddToggle("UMC_ShowLoose", { Text = "Evidenzia in rosso i pezzi staccati", Default = true, Callback = function() show() end })
-	box:AddButton({ Text = "Prossimo pezzo staccato", Func = function()
-		local a = analysis(true)
-		if not a or #a.loose == 0 then return U.notify(TITLE, "Niente da saldare.", 3) end
-		S.nextLoose = S.nextLoose % #a.loose + 1
-		local g = a.loose[S.nextLoose]
-		Mark.clear("weld")
-		Mark.glow("weld", g.piece, YELLOW)
-		if g.to then Mark.glow("weld", g.to, GREEN) end
-		orbit(g.main)
-		U.notify(string.format("Pezzo %d di %d", S.nextLoose, #a.loose), Welds.line(g), 6)
-	end }):AddButton({ Text = "Copia l'elenco", Func = function()
-		local a = analysis(true)
-		if not a then return end
-		local lines = {}
-		for _, g in ipairs(a.loose) do table.insert(lines, Welds.line(g)) end
-		U.copy(if #lines > 0 then table.concat(lines, "\n") else "Niente da saldare")
-	end })
-	local help = tab:AddRightGroupbox("Come leggerlo", "info")
-	text(help, "In rosso: i pezzi non saldati al corpo del morph. Quando lo usi e scrivi ;thaw si sganciano e cadono. Per ognuno ti dico la parte del corpo più vicina a cui saldarlo. Più pezzi già saldati tra loro sono un gruppo: basta una saldatura.")
-	text(help, "Giallo: il pezzo. Verde: dove saldarlo. Seleziona prima il giallo, poi con Ctrl il verde, poi Salda (F).")
-	help:AddButton({ Text = "Torna alla tua telecamera", Func = function() orbit(nil) end })
+	return nil
 end
-
-function UI.colori()
-	local tab = Tabs.Colori
-	local box = tab:AddLeftGroupbox("I colori del morph", "palette")
-	local info = box:AddLabel({ Text = "Scegli un morph (Crea, passo 2).", DoesWrap = true })
-	local function selected()
-		local v = Options.UMC_Color and Options.UMC_Color.Value
-		for _, e in ipairs(S.palette) do
-			if Paint.label(e) == v then return e end
+function UI.colors()
+	local tab = Tabs.Colors
+	local b1 = tab:AddLeftGroupbox("Recolor", "paintbrush")
+	UI.labels.color = label(b1, "Tap a part to pick its color.")
+	b1:AddButton({ Text = "Tap Part", Func = function() Flow.run(Flows.color) end })
+	b1:AddLabel("New color"):AddColorPicker("UMC_NewColor", { Default = Color3.fromRGB(255, 200, 60), Title = "New color" })
+	b1:AddButton({ Text = "Preview", Func = function()
+		if #S.colorParts == 0 then return U.notify(TITLE, "Tap a part first.", 3) end
+		for _, p in ipairs(S.colorParts) do
+			if p.Parent then Paint.set(p, "Color", Options.UMC_NewColor.Value) end
 		end
-		return nil
-	end
-	local function readColors()
-		S.palette = if S.target then Paint.palette(S.target) else {}
-		local labels = {}
-		for _, e in ipairs(S.palette) do table.insert(labels, Paint.label(e)) end
-		Options.UMC_Color:SetValues(labels)
-		info:SetText(if S.target then string.format("%s: %d colori", S.targetName, #S.palette) else "Scegli un morph (Crea, passo 2).")
-	end
-	box:AddButton({ Text = "Leggi i colori", Func = readColors })
-	box:AddDropdown("UMC_Color", { Values = {}, Text = "Colore", Searchable = true, MaxVisibleDropdownItems = 10 })
-	box:AddLabel("Nuovo colore"):AddColorPicker("UMC_NewColor", { Default = Color3.fromRGB(255, 200, 60), Title = "Nuovo colore" })
-	box:AddButton({ Text = "Anteprima (solo tu)", Func = function()
-		local e = selected()
-		if not e then return U.notify(TITLE, "Scegli un colore.", 3) end
-		for _, p in ipairs(e.parts) do Paint.set(p, "Color", Options.UMC_NewColor.Value) end
-	end }):AddButton({ Text = "Evidenzia i pezzi", Func = function()
-		local e = selected()
-		Mark.clear("color")
-		if not e then return end
-		for _, p in ipairs(e.parts) do Mark.box("color", p, YELLOW) end
-		task.delay(8, function() Mark.clear("color") end)
+	end }):AddButton({ Text = "Reset", Func = function()
+		if S.colorScope then Paint.restore(S.colorScope) end
 	end })
-	box:AddButton({ Text = "Copia RGB", Func = function() U.copy(U.rgb(Options.UMC_NewColor.Value)) end })
-		:AddButton({ Text = "Copia HEX", Func = function() U.copy(U.hex(Options.UMC_NewColor.Value)) end })
-	box:AddDivider()
+	b1:AddButton({ Text = "Copy Code", Func = function() U.copy(U.code(Options.UMC_NewColor.Value)) end })
+	label(b1, "Paste the code in Fork3x's Paint tool. Only you see the preview.")
+
+	local b2 = tab:AddLeftGroupbox("Style Ideas", "sparkles")
 	local names = {}
-	for _, p in ipairs(Paint.PRESETS) do table.insert(names, p[1]) end
-	box:AddDropdown("UMC_Preset", { Values = names, Default = 1, Text = "Stile" })
-	local mapLabel = box:AddLabel({ Text = "", DoesWrap = true })
-	box:AddButton({ Text = "Prova lo stile (solo tu)", Func = function()
-		if not S.target then return U.notify(TITLE, "Scegli un morph.", 3) end
+	for _, s in ipairs(Paint.STYLES) do table.insert(names, s[1]) end
+	b2:AddDropdown("UMC_Style", { Values = names, Default = 1, Text = "Style" })
+	b2:AddButton({ Text = "Try It", Func = function()
+		if not (S.target and S.target.Parent) then return U.notify(TITLE, "Pick your morph first (Build tab).", 3) end
 		Paint.restore(S.target)
-		S.map = Paint.preset(S.target, Options.UMC_Preset.Value)
-		local text0 = Paint.mapText(S.map)
-		local lines = {}
-		for line in text0:gmatch("[^\n]+") do
-			if #lines >= 8 then break end
-			table.insert(lines, line)
-		end
-		mapLabel:SetText(table.concat(lines, "\n") .. (if #S.map > 8 then "\n…" else ""))
-	end }):AddButton({ Text = "Copia la mappa", Func = function() U.copy(Paint.mapText(S.map)) end })
-	box:AddButton({ Text = "Ripristina i colori", Func = function()
+		Paint.style(S.target, Options.UMC_Style.Value)
+	end }):AddButton({ Text = "Reset", Func = function()
 		if S.target then Paint.restore(S.target) end
-		S.map = {}
-		mapLabel:SetText("")
 	end })
-	text(box, "Poi col Fork3x: Colore (V), incolla il codice, tocca i pezzi evidenziati.")
+	label(b2, "Your whole morph in a style, only on your screen. Then Tap Part to copy a color.")
 
-	local fx = tab:AddRightGroupbox("Particelle ed effetti", "sparkles")
-	local fxInfo = fx:AddLabel({ Text = "", DoesWrap = true })
-	local function chosen()
-		local v = Options.UMC_Fx and Options.UMC_Fx.Value
-		for _, f in ipairs(S.fx) do
-			if f.label == v then return f.inst end
-		end
-		return nil
-	end
-	fx:AddButton({ Text = "Leggi gli effetti", Func = function()
-		S.fx = if S.target then Fx.list(S.target) else {}
-		local labels = {}
-		for _, f in ipairs(S.fx) do table.insert(labels, f.label) end
-		Options.UMC_Fx:SetValues(labels)
-		fxInfo:SetText(string.format("%d effetti", #S.fx))
-	end })
-	fx:AddDropdown("UMC_Fx", { Values = {}, Text = "Effetto", Searchable = true, MaxVisibleDropdownItems = 10, Callback = function()
-		local i = chosen()
+	local b3 = tab:AddRightGroupbox("Effects", "flame")
+	b3:AddDropdown("UMC_Fx", { Values = {}, Text = "Effect", Callback = function()
+		local i = UI.chosenFx()
 		if not i then return end
 		local tool = Fx.toolFor(i)
-		fxInfo:SetText(U.hex(Fx.colorOf(i)) .. (if tool then " · col Fork3x: " .. tool else " · si cambia solo se il tuo Fork3x lo permette"))
+		UI.set("fx", Fx.kind(i) .. " · " .. U.hex(Fx.colorOf(i)) .. (if tool then " · Fork3x: " .. tool else ""))
 		Mark.clear("fx")
 		if i.Parent and i.Parent:IsA("BasePart") then
 			Mark.box("fx", i.Parent, YELLOW)
-			task.delay(6, function() Mark.clear("fx") end)
+			task.delay(4, function() Mark.clear("fx") end)
 		end
 	end })
-	fx:AddLabel("Colore 1"):AddColorPicker("UMC_Fx1", { Default = Color3.fromRGB(255, 220, 90), Title = "Colore 1" })
-	fx:AddLabel("Colore 2"):AddColorPicker("UMC_Fx2", { Default = Color3.fromRGB(255, 120, 30), Title = "Colore 2" })
-	fx:AddButton({ Text = "Anteprima (solo tu)", Func = function()
-		local i = chosen()
-		if i then Fx.preview(i, Options.UMC_Fx1.Value, Options.UMC_Fx2.Value) end
-	end }):AddButton({ Text = "Ripristina", Func = function()
-		local i = chosen()
+	UI.labels.fx = label(b3, "Pick your morph first.")
+	b3:AddLabel("Color 1"):AddColorPicker("UMC_Fx1", { Default = Color3.fromRGB(255, 220, 90), Title = "Color 1" })
+	b3:AddLabel("Color 2"):AddColorPicker("UMC_Fx2", { Default = Color3.fromRGB(255, 120, 30), Title = "Color 2" })
+	b3:AddButton({ Text = "Preview", Func = function()
+		local i = UI.chosenFx()
+		if i then Fx.preview(i, Options.UMC_Fx1.Value, Options.UMC_Fx2.Value) else U.notify(TITLE, "Pick an effect.", 3) end
+	end }):AddButton({ Text = "Reset", Func = function()
+		local i = UI.chosenFx()
 		if i then Paint.restore(i) end
 	end })
-	fx:AddButton({ Text = "Copia i codici", Func = function()
-		U.copy(U.rgb(Options.UMC_Fx1.Value) .. " → " .. U.rgb(Options.UMC_Fx2.Value) .. "  (" .. U.hex(Options.UMC_Fx1.Value) .. " → " .. U.hex(Options.UMC_Fx2.Value) .. ")")
-	end })
-	text(fx, "Col Fork3x: Decora (P) cambia fuoco, fumo e scintille; Luci (U) le luci. Qui li provi prima, solo sul tuo schermo.")
+	b3:AddButton({ Text = "Copy Codes", Func = function() U.copy(U.code(Options.UMC_Fx1.Value) .. " → " .. U.code(Options.UMC_Fx2.Value)) end })
 end
 
-function UI.catalogo()
-	local tab = Tabs.Catalogo
-	local box = tab:AddLeftGroupbox("Cerca", "search")
-	box:AddInput("UMC_Keyword", { Text = "Cosa cerchi", Default = "skibidi toilet", Placeholder = "skibidi toilet", ClearTextOnFocus = false, Finished = true })
-	box:AddDropdown("UMC_Where", { Values = { "Catalogo UGC (per Mesh)", "Toolbox (modelli)" }, Default = 1, Text = "Dove" })
-	local info = box:AddLabel({ Text = "", DoesWrap = true })
-	local function current()
-		local v = Options.UMC_Results and Options.UMC_Results.Value
-		for _, r in ipairs(Cat.results) do
-			if Cat.label(r) == v then return r end
-		end
-		return nil
+function UI.current()
+	local v = Options.UMC_Results and Options.UMC_Results.Value
+	for _, r in ipairs(Cat.results) do
+		if Cat.label(r) == v then return r end
 	end
-	box:AddButton({ Text = "Cerca", Func = function()
-		info:SetText("Cerco…")
+	return nil
+end
+function UI.pick()
+	local r = UI.current()
+	if not r then return end
+	pcall(function() Options.UMC_Thumb:SetImage("rbxthumb://type=Asset&id=" .. tostring(r.id) .. "&w=150&h=150") end)
+	local info = string.format("%s by %s%s", r.kind, r.creator, if (r.scripts or 0) > 0 then " · has scripts" else "")
+	UI.set("search", info .. " · loading…")
+	Cat.loaded = nil
+	task.spawn(function()
+		local obj = Cat.load(r.id)
+		if UI.current() ~= r then return end
+		Cat.loaded = obj
+		local mesh = Cat.meshOf(obj)
+		UI.set("search", info .. (if not obj then " · can't load it" elseif mesh then " · has a mesh " .. GOOD else ""))
+	end)
+end
+function UI.search()
+	local tab = Tabs.Search
+	local b1 = tab:AddLeftGroupbox("Find", "search")
+	b1:AddInput("UMC_Keyword", { Text = "Search for", Default = "skibidi toilet", Placeholder = "skibidi toilet", ClearTextOnFocus = false, Finished = true })
+	b1:AddDropdown("UMC_Where", { Values = { "Accessories", "Models" }, Default = 1, Text = "Type" })
+	b1:AddButton({ Text = "Search", Func = function()
+		UI.set("search", "Searching…")
 		task.spawn(function()
-			local source = if Options.UMC_Where.Value == "Toolbox (modelli)" then "toolbox" else "ugc"
-			local results = Cat.search(source, Options.UMC_Keyword.Value ~= "" and Options.UMC_Keyword.Value or "skibidi toilet")
+			local word = Options.UMC_Keyword.Value
+			local results = Cat.search(if Options.UMC_Where.Value == "Models" then "toolbox" else "ugc", if word ~= "" then word else "skibidi toilet")
 			local labels = {}
 			for _, r in ipairs(results) do table.insert(labels, Cat.label(r)) end
 			Options.UMC_Results:SetValues(labels)
-			info:SetText(if #results > 0 then #results .. " risultati" else "Niente (o il tuo executor non può leggere il web).")
+			UI.set("search", if #results > 0 then #results .. " results. Pick one." else "Nothing found (or your executor can't read the web).")
 		end)
 	end })
-	box:AddDropdown("UMC_Results", { Values = {}, Text = "Risultati", Searchable = true, MaxVisibleDropdownItems = 10, Callback = function()
-		local r = current()
-		if not r then return end
-		if Options.UMC_Thumb then Options.UMC_Thumb:SetImage("rbxthumb://type=Asset&id=" .. tostring(r.id) .. "&w=150&h=150") end
-		info:SetText(string.format("%s · %s · ID %s%s", r.kind, r.creator, tostring(r.id), if (r.scripts or 0) > 0 then " · contiene script" else ""))
-		Cat.loaded = nil
-		task.spawn(function()
-			local obj = Cat.load(r.id)
-			if current() ~= r then return end
-			Cat.loaded = obj
-			local view = Cat.viewable(obj)
-			if view and Options.UMC_View then
-				pcall(function()
-					Options.UMC_View:SetObject(view, true)
-					Options.UMC_View:Focus()
-				end)
-			end
-			local mesh, texture = Cat.meshOf(obj)
-			if mesh then info:SetText(info.Text .. "\nMeshId " .. tostring(mesh) .. "\nTextureId " .. tostring(texture or "-")) end
-		end)
-	end })
+	b1:AddDropdown("UMC_Results", { Values = {}, Text = "Results", Callback = function() UI.pick() end })
+	UI.labels.search = label(b1, "Accessories: their mesh goes in Fork3x's Mesh tool.")
 
-	local prev = tab:AddRightGroupbox("Anteprima", "image")
-	prev:AddImage("UMC_Thumb", { Image = "rbxasset://textures/ui/GuiImagePlaceholder.png", Height = 120 })
-	local holder = Instance.new("Model")
-	make("Part", { Name = "Vuoto", Size = Vector3.new(1, 1, 1), Transparency = 1 }, holder)
-	prev:AddViewport("UMC_View", { Object = holder, Clone = true, Interactive = true, AutoFocus = true, Height = 170 })
-	prev:AddButton({ Text = "Copia MeshId", Func = function()
+	local b2 = tab:AddRightGroupbox("Item", "box")
+	b2:AddImage("UMC_Thumb", { Image = "rbxasset://textures/ui/GuiImagePlaceholder.png", Height = 120 })
+	b2:AddButton({ Text = "Copy ID", Func = function()
+		local r = UI.current()
+		if r then U.copy(tostring(r.id)) else U.notify(TITLE, "Pick a result first.", 3) end
+	end }):AddButton({ Text = "Try On", Func = function()
+		if not Cat.loaded then return U.notify(TITLE, "Pick a result and wait a moment.", 3) end
+		if not Cat.tryOn(Cat.loaded) then U.notify(TITLE, "Can't show it.", 3) end
+	end })
+	b2:AddButton({ Text = "Mesh ID", Func = function()
 		local mesh = Cat.meshOf(Cat.loaded)
-		if mesh then U.copy(tostring(mesh)) else U.notify(TITLE, "Non ha una mesh (o non è ancora caricato).", 3) end
-	end }):AddButton({ Text = "Copia TextureId", Func = function()
+		if mesh then U.copy(tostring(mesh)) else U.notify(TITLE, "No mesh (or not loaded yet).", 3) end
+	end }):AddButton({ Text = "Texture ID", Func = function()
 		local _, texture = Cat.meshOf(Cat.loaded)
-		if texture then U.copy(tostring(texture)) else U.notify(TITLE, "Non ha una texture.", 3) end
+		if texture and texture ~= "" then U.copy(tostring(texture)) else U.notify(TITLE, "No texture.", 3) end
 	end })
-	prev:AddButton({ Text = "Prova addosso (solo tu)", Func = function()
-		if not Cat.loaded then return U.notify(TITLE, "Scegli un risultato e aspetta che si carichi.", 3) end
-		if not Cat.tryOn(Cat.loaded) then U.notify(TITLE, "Non riesco a mostrarlo.", 3) end
-	end }):AddButton({ Text = "Togli", Func = Cat.takeOff })
-	prev:AddButton({ Text = "Copia ID", Func = function()
-		local r = current()
-		if r then U.copy(tostring(r.id)) end
-	end })
-	text(prev, "Nello strumento Mesh (H) del Fork3x incolla MeshId e TextureId (o l'ID dell'UGC): così il pezzo lo vedono tutti.")
+	b2:AddButton({ Text = "Take Off", Func = Cat.takeOff })
+	label(b2, "Paste Mesh ID and Texture ID in Fork3x's Mesh tool (H). Try On: only you see it.")
 end
 
-function UI.vista()
-	local tab = Tabs.Vista
-	local box = tab:AddLeftGroupbox("Il morph da fuori", "scan-eye")
-	box:AddToggle("UMC_Mirror", { Text = "Una sua copia davanti a te", Default = false, Callback = function(v)
-		if v and not View.mirror(S.target) then
-			U.notify(TITLE, "Scegli un morph (Crea, passo 2).", 3)
-		elseif not v then
-			View.mirror(nil)
-		end
+local SIZES = { Small = 85, Normal = 100, Big = 120 }
+local CHANGELOG = [[v2.0
+• In English, with short buttons whose text fits (phones too)
+• Add a Piece and Fix Loose Parts: a bar at the top tells you each step, the menu hides while you tap, and Ctrl, Group and Ungroup are pressed for you
+• 4 tabs: Build, Colors, Search, Settings
+• Phones: the menu fits the screen with bigger text; turning the camera is not taken as a tap; the pad drags without jumping
+• The pad: 8 big keys (Group, Ungroup, Select In, Multi, Undo, Redo, Weld, Menu)
+• Removed: the long guide, the View tab and other extras
+
+v1.0
+• First version]]
+function UI.settings()
+	local tab = Tabs.Settings
+	local b1 = tab:AddLeftGroupbox("Menu", "monitor")
+	b1:AddDropdown("UMC_Size", { Values = { "Small", "Normal", "Big" }, Default = if MOBILE then "Big" else "Normal", Text = "Menu size",
+		Callback = function(v) pcall(function() Library:SetDPIScale(SIZES[v] or 100) end) end })
+	b1:AddToggle("UMC_Pad", { Text = "Show pad", Default = MOBILE, Callback = function(v) Gui.showPad(v) end })
+	b1:AddSlider("UMC_PadSize", { Text = "Pad size", Default = 100, Min = 60, Max = 160, Rounding = 0, Suffix = "%", Callback = function(v)
+		Gui.padScale.Scale = v / 100
 	end })
-	box:AddToggle("UMC_MirrorSpin", { Text = "Falla girare", Default = true })
-	box:AddButton({ Text = "Rimettila davanti", Func = function()
-		if Toggles.UMC_Mirror.Value then View.mirror(S.target) end
-	end })
-	box:AddButton({ Text = "Telecamera sul morph", Func = function() orbit(S.target) end }):AddButton({ Text = "sul pezzo", Func = function() orbit(S.asset) end })
-	box:AddButton({ Text = "Telecamera su di me", Func = function() orbit(nil) end })
-	local tools = tab:AddRightGroupbox("Per vederci meglio", "sliders-horizontal")
-	tools:AddToggle("UMC_Fade", { Text = "Sfuma la mappa intorno", Default = false, Callback = function(v)
-		local n = View.fade(S.target, v, Options.UMC_FadeRadius and Options.UMC_FadeRadius.Value or 40)
-		if v and n == 0 then U.notify(TITLE, "Scegli un morph (Crea, passo 2).", 3) end
-	end })
-	tools:AddSlider("UMC_FadeRadius", { Text = "Raggio", Default = 40, Min = 10, Max = 150, Rounding = 0, Suffix = " stud", Callback = function(v)
-		if Toggles.UMC_Fade and Toggles.UMC_Fade.Value then View.fade(S.target, true, v) end
-	end })
-	tools:AddSlider("UMC_Fov", { Text = "Campo visivo", Default = math.floor(workspace.CurrentCamera.FieldOfView + 0.5), Min = 30, Max = 120, Rounding = 0,
-		Callback = function(v)
-			S.fov = S.fov or workspace.CurrentCamera.FieldOfView
-			workspace.CurrentCamera.FieldOfView = v
-		end })
-	tools:AddButton({ Text = "Righello", Func = View.ruler }):AddButton({ Text = "Togli righello", Func = function() Mark.clear("ruler") end })
+	b1:AddButton({ Text = "Close Script", Func = function() GENV.__UMCStop() end })
+	local b2 = tab:AddRightGroupbox("What's New", "sparkles")
+	label(b2, CHANGELOG)
 end
 
-function UI.pad()
-	local tab = Tabs.Pad
-	local box = tab:AddLeftGroupbox("I tasti sullo schermo", "gamepad-2")
-	box:AddToggle("UMC_Pad", { Text = "Mostra il pad", Default = UserInputService.TouchEnabled == true, Callback = function(v) Pad.show(v) end })
-	box:AddSlider("UMC_PadScale", { Text = "Grandezza", Default = 100, Min = 60, Max = 170, Rounding = 0, Suffix = "%", Callback = function(v)
-		if Pad.scale then Pad.scale.Scale = v / 100 end
-	end })
-	text(box, if Keys.vim then "Tasti virtuali: " .. GOOD .. " (il pad preme i tasti del Fork3x per te)" else "Tasti virtuali: " .. BAD .. " (il tuo executor non li permette)")
-	text(box, "Il pad preme le scorciatoie del Fork3x come se usassi la tastiera: utile sul cellulare, dove Shift e Ctrl non ci sono.")
-	local keys = tab:AddRightGroupbox("Scorciatoie", "keyboard")
-	for _, c in ipairs(Keys.COMBOS) do
-		keys:AddButton({ Text = c[1] .. " (" .. (if c[2][1] == "LeftShift" then "Shift+" else "Ctrl+") .. c[3] .. ")", Func = function() Keys.tap(c[2], c[3]) end })
-	end
-	for i = 1, #Keys.TOOLS, 2 do
-		local a, b = Keys.TOOLS[i], Keys.TOOLS[i + 1]
-		local row = keys:AddButton({ Text = a[1] .. " (" .. a[2] .. ")", Func = function() Keys.tap({}, a[2]) end })
-		if b then row:AddButton({ Text = b[1] .. " (" .. b[2] .. ")", Func = function() Keys.tap({}, b[2]) end }) end
-	end
-end
-
-local CHANGELOG = [[v1.0
-• Guida in 8 passi, come nel video: strumenti, morph, pezzo, posizione, dentro il personaggio, saldatura, prova, salvataggio (ogni passo controllato)
-• Pad sullo schermo per il cellulare: Shift+J, Shift+U, Shift+F, Shift+T, Ctrl+Z/Y, Ctrl per più pezzi e i tasti degli strumenti
-• Saldature: i pezzi che cadrebbero nel vuoto in rosso, dove saldarli, il prossimo da fare
-• Colori: palette del morph, anteprima, 10 stili, codici RGB/HEX da incollare
-• Particelle ed effetti: anteprima dei colori e codici
-• Catalogo UGC e Toolbox: ricerca, anteprima 3D, ID, MeshId e TextureId per lo strumento Mesh, prova addosso
-• Vista: copia del morph davanti a te, telecamera sul morph o sul pezzo, mappa sfumata, campo visivo, righello]]
-
-function UI.impostazioni()
-	local tab = Tabs.Impostazioni
-	local box = tab:AddLeftGroupbox("Menu", "wrench")
-	box:AddDropdown("UMC_DPI", { Values = { "70%", "85%", "100%", "115%", "130%" }, Default = "100%", Text = "Grandezza finestra",
-		Callback = function(v) pcall(function() Library:SetDPIScale(tonumber((v:gsub("%%", "")))) end) end })
-	box:AddLabel("Tasto del menu"):AddKeyPicker("UMC_MenuKey", { Default = "RightShift", NoUI = true, Text = "Menu" })
-	pcall(function() Library.ToggleKeybind = Options.UMC_MenuKey end)
-	box:AddButton({ Text = "Chiudi " .. TITLE, Func = function() GENV.__UMCStop() end })
-	local news = tab:AddRightGroupbox("Novità", "sparkles")
-	text(news, CHANGELOG)
-	if ThemeManager and SaveManager then
-		pcall(function()
-			ThemeManager:SetLibrary(Library)
-			SaveManager:SetLibrary(Library)
-			SaveManager:IgnoreThemeSettings()
-			SaveManager:SetIgnoreIndexes({ "UMC_MenuKey", "UMC_Target", "UMC_Source", "UMC_Piece", "UMC_Color", "UMC_Fx", "UMC_Results", "UMC_Mirror", "UMC_Fade", "UMC_Fov" })
-			ThemeManager:SetFolder("UltimateMorphCreator")
-			SaveManager:SetFolder("UltimateMorphCreator/ToiletWorld")
-			SaveManager:BuildConfigSection(tab)
-			ThemeManager:ApplyToTab(tab)
-		end)
-	end
-end
-
-for _, build in ipairs({ UI.crea, UI.saldature, UI.colori, UI.catalogo, UI.vista, UI.pad, UI.impostazioni }) do
+for _, build in ipairs({ UI.build, UI.colors, UI.search, UI.settings }) do
 	local ok, err = pcall(build)
 	if not ok then warn("[" .. TITLE .. "] " .. tostring(err)) end
 end
-S.target, S.targetName = U.character(), MINE
-if SaveManager then pcall(function() SaveManager:LoadAutoloadConfig() end) end
-if Toggles.UMC_Pad and Toggles.UMC_Pad.Value then Pad.show(true) end
+if MOBILE then pcall(function() Library:SetDPIScale(SIZES.Big) end) end
+Gui.showPad(Toggles.UMC_Pad ~= nil and Toggles.UMC_Pad.Value)
+UI.ready = true
+UI.refresh()
 
----====== EVERY SO OFTEN: the guide's checks ======---
+---====== EVERY HALF SECOND: what the window says ======---
 
 local nextCheck = 0
 on(RunService.Heartbeat, function()
 	if os.clock() < nextCheck then return end
 	nextCheck = os.clock() + 0.5
-	if S.targetName == MINE and S.target ~= U.character() then S.target, S.analysis = U.character(), nil end
-	Guide.refresh()
+	if S.targetIsMe and S.target ~= U.character() then S.target, S.analysis = U.character(), nil end
+	UI.refresh()
 end)
 
 ---====== STOP: all of it gone, all it showed put back ======---
 
 local function stop()
 	if not C.alive then return end
-	C.alive = false
-	Pick.cb = nil
+	C.alive, UI.ready = false, false
+	Flow.cancel()
+	Tap.cancel()
 	Keys.releaseAll()
 	for _, c in ipairs(C.connections) do pcall(function() c:Disconnect() end) end
 	Paint.restore()
-	View.mirror(nil)
 	Cat.takeOff()
-	if S.orbiting then pcall(function() workspace.CurrentCamera.CameraSubject = U.humanoid() end) end
-	if S.fov then pcall(function() workspace.CurrentCamera.FieldOfView = S.fov end) end
 	for group in pairs(Mark.groups) do Mark.clear(group) end
-	if Pad.gui then pcall(function() Pad.gui:Destroy() end) end
 	for _, m in ipairs(C.made) do pcall(function() m:Destroy() end) end
 	if not Library.Unloaded then pcall(function() Library:Unload() end) end
 end
 pcall(function() Library:OnUnload(stop) end)
 GENV.__UMCStop = stop
-U.notify(TITLE, if U.privateOwner() then "Pronto. Segui la guida nella scheda Crea." else "Pronto. Fork3x e SaveMorphTool li hai nel tuo server privato.", 6)
+U.notify(TITLE, if U.privateOwner() then "Ready! Start in the Build tab." else "Ready! Fork3x and the Save Morph Tool are in your private server.", 6)
