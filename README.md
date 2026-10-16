@@ -54,6 +54,7 @@ mod rather than playing it.
 | Curious Door: at door 1, padlocked chests in the Curious Light, the Curious Lockpicks, the Golden Skeleton Key, DOORS' skeleton door and its cutscene, a little room of gold, the treasure's cutscene, the Curious Shake Light and the Golden Tablet (the Admin Panel's items, or made here: the Hotel- too) | `.../CuriousDoor` |
 | Curious Shake Light: DOORS' Shakelight in yellow (without the Admin Panel, DOORS' flashlight from the kit: the Hotel- too); shaken, a trail of light where you walk | `.../CuriousShakeLight` |
 | Universal Custom Assets: animator with Studio controls (Ctrl + U I O) | `.../UniversalAssets` |
+| **Toilet World Roleplay 2**: the Ultimate Morph Creator, custom morphs made easy in your private server (a guide in 8 checked steps, what would fall and where to weld it, colours, catalog and toolbox ids, the Fork3x keys on a phone's screen; Obsidian window) | `.../UltimateMorphCreator` |
 | The same, obfuscated | `.../UniversalAssets.obf` |
 
 ### Build (tools — not for players)
@@ -1195,6 +1196,64 @@ the model works the same way. Nothing is uploaded anywhere; only you see it.
 `UniversalAssets.obf` stays for the links that use it: it is the same obfuscated
 script as `UniversalAssets` (see [Obfuscation](#obfuscation)).
 
+## Ultimate Morph Creator (Toilet World Roleplay 2)
+
+```lua
+loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/claude/sei-qui-con-noi-ye4k62/UltimateMorphCreator"))()
+```
+
+For **Toilet World Roleplay 2**: a helper for making custom morphs the way the game makes them, in your private
+server, with its own building tools (Fork3x or BTools) and its Save Morph Tool, on a phone or a PC. It builds nothing
+itself and calls none of the game's remotes: every change the others see is one you make with the game's tools and
+save with the Save Morph Tool, so everyone sees your morphs. What it shows (marks, previews, copies, the pad) is only
+on your screen. Its window is [Obsidian](https://github.com/deividcomsono/Obsidian)'s.
+
+- **Crea**: the guide, the eight steps of a custom morph (a recolour, or a piece of one morph put inside another), each
+  checked as you go:
+  1. the tools: Fork3x or BTools, the Save Morph Tool, your private server; the Fork3x taken in hand;
+  2. the morph you work on: yourself, any of `Workspace.Morphs` (a list) or the one you touch; framed by the camera,
+     anchored (the Anchor tool, M), gone to (only in your own server);
+  3. the piece to take, from any morph (its pieces listed, its body parts marked) or touched;
+  4. in place: Move (Z), Rotate (C), Resize (X), Undo; how far it is from the morph's body;
+  5. inside the character: grouped five times (Shift+J ×5), Ctrl held, the morph's HumanoidRootPart shown, grouped
+     and ungrouped (Shift+J, Shift+U); whether it is inside now;
+  6. welded: the body part it belongs to (the nearest), the piece yellow and the part green, the Weld tool (F);
+     whether it holds;
+  7. tried: `;thaw me` or `;unfreeze me` said in the chat;
+  8. saved: the Save Morph Tool in hand.
+- **Saldature**: every part of a morph not welded to its body (it would fall when the morph is used) in red, in groups
+  (parts already joined to each other need one weld), each with the body part to weld it to; the next one framed;
+  the list copied.
+- **Colori**: the morph's palette (most used first), a colour tried on its parts, ten styles tried on the whole morph
+  from its own shades (gold, shadow, neon blue, blood red, titanium, emerald, fire, ice, inverted, rainbow), the codes
+  (RGB, HEX) and the map from each colour to its new one, to paint with the Paint tool (V). Its particles, fire,
+  smoke, sparkles, beams, trails and lights: their colours tried, their codes, the tool that changes them (Decorate,
+  P; Lighting, U).
+- **Catalogo**: the catalog's accessories (UGC, for the Mesh tool) or the toolbox's models searched ("skibidi
+  toilet"...), their picture, a 3D preview, their id, MeshId and TextureId (to paste in the Mesh tool, H), tried on;
+  models loaded without their scripts (and said to have them).
+- **Vista**: a copy of the morph before you, turning; the camera round the morph or the piece; the map faded round
+  it; the field of view; a ruler.
+- **Pad**: the tools' shortcuts on the screen for phones (the tools' keys, Shift+J/U/F/T, Ctrl+Z/Y, Ctrl and Shift
+  held for more parts), pressed as on a keyboard (the executor's virtual keys), one after the other; dragged,
+  folded, sized.
+- **Impostazioni**: the window's size, its key (RightShift), themes and configs, what's new.
+
+`getgenv().__UMCStop()` (or **Chiudi** in Impostazioni) closes it and puts back all it showed (colours, the map, the
+camera, keys held).
+
+### Changelog
+
+**v1.0**
+- The guide in 8 steps, as the game's morphs are made: tools, morph, piece, in place, inside the character, welded,
+  tried, saved; each step checked.
+- The pad for phones: Shift+J, Shift+U, Shift+F, Shift+T, Ctrl+Z/Y, Ctrl held for more parts, the tools' keys.
+- Welds: what would fall in red, where to weld it, the next one.
+- Colours: the palette, a colour tried, 10 styles, RGB/HEX codes to paste.
+- Particles and effects: their colours tried, their codes.
+- The UGC catalog and the toolbox: search, 3D preview, id, MeshId and TextureId for the Mesh tool, tried on.
+- The view: a copy before you, the camera on the morph or the piece, the map faded, the field of view, a ruler.
+
 ## DOORS optimizer
 
 ```lua
@@ -1376,6 +1435,7 @@ That includes the files made to be copied or filled in (`AchievementConfig`,
 | `tools/` | Prometheus' settings for the obfuscation, the script that runs it, its fix for Luau |
 | `assets/scanner/` | The scanners' own icons without their background (`.png`) and ready to be recoloured by the script (`.icon`) |
 | `UniversalAssets` / `.obf` | the animator for DOORS' things and custom assets, readable and obfuscated |
+| `UltimateMorphCreator` | Toilet World Roleplay 2's Ultimate Morph Creator (the guide, welds, colours, catalog, view, the pad of Fork3x keys) |
 | `GradishCheck` | the config report |
 | `ImagesA/` | one file per entity saying where its picture comes from |
 | `*.rbxm` | the models |
