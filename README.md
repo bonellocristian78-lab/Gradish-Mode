@@ -54,7 +54,7 @@ mod rather than playing it.
 | Curious Door: at door 1, padlocked chests in the Curious Light, the Curious Lockpicks, the Golden Skeleton Key, DOORS' skeleton door and its cutscene, a little room of gold, the treasure's cutscene, the Curious Shake Light and the Golden Tablet (the Admin Panel's items, or made here: the Hotel- too) | `.../CuriousDoor` |
 | Curious Shake Light: DOORS' Shakelight in yellow (without the Admin Panel, DOORS' flashlight from the kit: the Hotel- too); shaken, a trail of light where you walk | `.../CuriousShakeLight` |
 | Universal Custom Assets: animator with Studio controls (Ctrl + U I O) | `.../UniversalAssets` |
-| **Toilet World Roleplay 2**: the Ultimate Morph Creator, custom morphs made easy in your private server, phone or PC (guides on a bar at the top that press Fork3x's keys for you, what would fall and where to weld it, colours, catalog and toolbox ids, a pad of Fork3x keys; Obsidian window, in English) | `.../UltimateMorphCreator` |
+| **Toilet World Roleplay 2**: the Ultimate Morph Creator, custom morphs made easy in your private server, phone or PC (guides that click and press Fork3x's keys for you: a piece put inside your morph and welded, every loose part welded; Test Morph, Go To, Undo; colours, catalog and toolbox ids, a pad of Fork3x keys, F2-F8 on a PC; Obsidian window, in English) | `.../UltimateMorphCreator` |
 | The same, obfuscated | `.../UniversalAssets.obf` |
 
 ### Build (tools — not for players)
@@ -1204,57 +1204,66 @@ loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab
 
 For **Toilet World Roleplay 2**, on a phone or a PC: custom morphs made easy in your private server, the way the game
 makes them, with its own building tools (Fork3x or BTools) and its Save Morph Tool. It builds nothing itself and calls
-none of the game's remotes: what the others see is what you build with the game's tools and save with the Save Morph
-Tool, so everyone sees your morphs. What it shows is only on your screen. Its window is
+none of the game's remotes: it uses Fork3x as you would, with its keys and your mouse, so what the others see is what
+Fork3x builds, saved with the Save Morph Tool. What it shows is only on your screen. Its window is
 [Obsidian](https://github.com/deividcomsono/Obsidian)'s, in English, its buttons short enough to fit on a phone.
 
-**The guides.** When you have to touch the world, the menu hides and a bar at the top of the screen says what to do,
-with its buttons and Cancel; Fork3x's keys are pressed for you. A swipe that turns the camera is not taken as a tap.
-- **Add a Piece** (Build, Start Guide): tap your morph (once), tap the piece you want on any morph, move it onto your
-  morph with Fork3x and tap Next. It is grouped five times (each group waited for, as Fork3x asks the server), Ctrl is
-  held, you tap your morph, it is grouped and ungrouped: the piece is inside, ready to be welded. A wrong tap with Ctrl
-  held (Fork3x took it too) makes you pick the piece again; if Fork3x grouped something else (the whole morph), the
-  bar says so and lets you retry.
-- **Fix Loose Parts** (Build): each part that would fall when the morph is used, one by one: tap the yellow piece, then
-  (Ctrl held) the green body part it belongs to; the Weld tool is opened, you tap Weld, it is checked.
-- **Tap Morph** and **Tap Part** use the same bar.
+**The guides.** When the world has to be touched, the menu hides and a bar at the top of the screen says what is
+happening, with its buttons and Cancel. With **Auto clicks** on (Settings), the guide clicks for you: the camera
+turns to what it clicks, a click as your mouse would make it (your executor's virtual mouse). Where a click cannot be
+done for you (nothing seen, or Fork3x did not take it), you tap or click it yourself.
+- **Add a Piece** (Build, Start Guide): pick your morph (once) and the piece you want on any morph, move it onto your
+  morph with Fork3x (the bar shows how far it still is) and press Next. Then it is grouped five times (each group
+  waited for, as Fork3x asks the server), your morph is clicked with Ctrl held, grouped and ungrouped: the piece is
+  inside, and it is welded to the body part it belongs to. If Fork3x grouped something else (the whole morph) the bar
+  says so; whatever was grouped by mistake is ungrouped again.
+- **Fix All** (Build): each part that would fall when the morph is used, welded for you to the body part it belongs
+  to: the piece clicked, the part clicked with Ctrl held, the weld tool opened. Its Weld button is pressed for you only
+  when Fork3x's outlines show exactly the piece and the part selected; otherwise you check and press it. A piece that
+  will not weld can be skipped.
+- **Test Morph**: onto its pad (your private server), your body becomes it, `;thaw me` is said; **Back** takes you
+  back where you were.
+- **Undo Guide**: Fork3x's steps of the last guide, undone (Ctrl+Z each).
+- **Pick Morph** and **Pick Color** use the same bar. A swipe that turns the camera is not taken as a tap.
 
 **The tabs**
 - **Build**: your morph (its parts, anchored or not), the piece you added (inside, welded), what would fall (in red if
-  you like), Thaw and Unfreeze said in the chat, the Save Morph Tool and Fork3x taken in hand.
+  you like), Go To any morph (your private server), Test Morph, Thaw, Back, the Save Morph Tool and Fork3x in hand,
+  Undo Guide; on a PC its keys.
 - **Colors**: a part's colour tried on all the parts of that colour, its code (`#HEX (R, G, B)`) for Fork3x's Paint;
   ten styles on the whole morph; its effects (particles, fire, smoke, sparkles, beams, trails, lights): two colours
   tried, their codes, the tool that changes them.
 - **Search**: the catalog's accessories or the toolbox's models ("skibidi toilet"...): picture, id, Mesh ID and
   Texture ID for Fork3x's Mesh tool, tried on (models without their scripts).
-- **Settings**: the menu's size, the pad and its size, Close Script, what's new.
+- **Settings**: the menu's size, Auto clicks, the pad and its size, Close Script, the keys, what's new.
 
 **The pad** (shown on phones; on a PC from Settings): Group (Shift+J), Ungroup (Shift+U), Select In (Shift+T), Multi
 (Ctrl held, lit while on), Undo, Redo, Weld (F), Menu. Dragged by its top, with that finger only; folded with its dash.
 
-`getgenv().__UMCStop()` (or Close Script) closes it and puts back all it showed.
+**On a PC**: F2 Add a Piece, F3 Fix All, F4 Test Morph, F5 Pick Morph, F6 Pick Color, F7 Undo Guide, F8 Back,
+RightShift the menu (none of them while you type in the chat).
+
+`getgenv().__UMCStop()` (or Close Script) closes it and puts back all it showed (colours, the camera, keys held).
 
 ### Changelog
 
+**v3.0**
+- More automatic: after you move a piece, Add a Piece groups it, clicks your morph with Ctrl, puts it inside and welds
+  it for you.
+- Fix All welds every loose part for you (Weld pressed only when Fork3x's outlines show the right selection; else it
+  asks you); a piece can be skipped.
+- Test Morph (onto its pad, thawed, Back to where you were), Go To any morph, Undo Guide.
+- PC: Click instead of Tap, F2 to F8 keys.
+- While you move a piece, the bar shows how far it is.
+- Auto clicks can be turned off (Settings): then you tap, as in v2.
+
 **v2.0**
 - In English, with short buttons whose text fits (phones too).
-- Add a Piece and Fix Loose Parts are guides: a bar at the top tells you each step, the menu hides while you tap, and
-  Ctrl, Group and Ungroup are pressed for you (waiting for Fork3x each time).
-- 4 tabs: Build, Colors, Search, Settings.
-- Phones: the menu fits the screen, with bigger text; turning the camera is no longer taken as a tap; the pad drags
-  without jumping.
-- The pad: 8 big keys (Group, Ungroup, Select In, Multi, Undo, Redo, Weld, Menu).
-- Removed: the long 8-step text guide, the View tab and other extras.
+- Add a Piece and Fix Loose Parts became guides on a bar at the top; 4 tabs; phones: the menu fits the screen, a swipe
+  is not a tap, the pad (8 big keys) drags without jumping.
 
 **v1.0**
-- The guide in 8 steps, as the game's morphs are made: tools, morph, piece, in place, inside the character, welded,
-  tried, saved; each step checked.
-- The pad for phones: Shift+J, Shift+U, Shift+F, Shift+T, Ctrl+Z/Y, Ctrl held for more parts, the tools' keys.
-- Welds: what would fall in red, where to weld it, the next one.
-- Colours: the palette, a colour tried, 10 styles, RGB/HEX codes to paste.
-- Particles and effects: their colours tried, their codes.
-- The UGC catalog and the toolbox: search, 3D preview, id, MeshId and TextureId for the Mesh tool, tried on.
-- The view: a copy before you, the camera on the morph or the piece, the map faded, the field of view, a ruler.
+- The first version: a guide in 8 checked steps, the pad, welds, colours, effects, catalog and toolbox, the view.
 
 ## DOORS optimizer
 
