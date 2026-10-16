@@ -1,22 +1,27 @@
 --[[
 ================================================================================
 
-        U L T I M A T E   M O R P H   C R E A T O R   2
+        U L T I M A T E   M O R P H   C R E A T O R   3
         (Toilet World Roleplay 2)
 
         Custom morphs made easy in your private server, on a phone or a PC,
         the way the game makes them: with its own building tools (Fork3x or
         BTools) and its Save Morph Tool. It builds nothing itself and calls
-        none of the game's remotes: what the others see is what you build
-        with the game's tools. What it shows is only on your screen.
+        none of the game's remotes: it uses Fork3x as you would (its keys,
+        your mouse), so what the others see is what Fork3x builds. What it
+        shows is only on your screen.
 
-          * Add a Piece: a bar at the top of the screen tells you each step
-            (tap the piece, move it, tap your morph) and presses the keys
-            for you (grouped five times, Ctrl held, grouped, ungrouped)
-          * Fix Loose Parts: each part that would fall, one by one: tap the
-            yellow piece, then the green part, then Weld
-          * the pad for phones: Group, Ungroup, Select In, Multi (Ctrl
-            held), Undo, Redo, Weld, Menu
+          * Add a Piece: you pick the piece and move it onto your morph; it
+            is grouped five times, your morph clicked with Ctrl held,
+            grouped, ungrouped (inside it), then welded, all for you
+          * Fix All: each part that would fall, welded for you to the body
+            part it belongs to
+          * Test Morph: onto its pad, thawed, and back where you were;
+            Go To any morph; Undo Guide
+          * a bar at the top says each step; the menu hides meanwhile;
+            where a click cannot be done for you, you tap it
+          * the pad for phones (Group, Ungroup, Select In, Multi, Undo,
+            Redo, Weld, Menu); Alt + a key on a PC
           * colours and effects tried on your screen first, their codes
           * the catalog's accessories and the toolbox's models: their ids,
             mesh and texture for Fork3x's Mesh tool
@@ -37,7 +42,7 @@ local LocalPlayer = Players.LocalPlayer
 local GENV = if getgenv then getgenv() else _G
 
 local TITLE = "Ultimate Morph Creator"
-local VERSION = "2.0"
+local VERSION = "3.0"
 local OBSIDIAN = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
 local GOOD, BAD = "✓", "✗"
 local RED, GREEN, YELLOW, BLUE = Color3.fromRGB(255, 70, 70), Color3.fromRGB(80, 230, 120), Color3.fromRGB(255, 214, 60), Color3.fromRGB(90, 170, 255)
@@ -72,6 +77,7 @@ end
 local Options, Toggles = Library.Options, Library.Toggles
 -- A phone or a tablet (as Obsidian sees it)
 local MOBILE = Library.IsMobile == true or (UserInputService.TouchEnabled == true and UserInputService.KeyboardEnabled ~= true)
+local TAP = if MOBILE then "Tap" else "Click"
 
 ---====== SMALL THINGS: notices, the clipboard, the web, you, your tools, the chat ======---
 
@@ -135,6 +141,18 @@ function U.guiParent()
 	return LocalPlayer:FindFirstChildOfClass("PlayerGui")
 end
 function U.volume(p) return p.Size.X * p.Size.Y * p.Size.Z end
+-- Its point: a part's position, a model's pivot
+function U.where(i)
+	if not i then return nil end
+	if i:IsA("BasePart") then return i.Position end
+	local ok, cf = pcall(function() return i:GetPivot() end)
+	return if ok and cf then cf.Position else nil
+end
+-- The top bar's height (what the screen's own buttons take)
+function U.inset()
+	local ok, inset = pcall(function() return game:GetService("GuiService"):GetGuiInset() end)
+	return if ok and inset then inset else Vector2.new(0, 0)
+end
 -- How far a point is from a part (from its box: 0 inside it)
 function U.boxDistance(part, point)
 	local l = part.CFrame:PointToObjectSpace(point)
@@ -569,7 +587,7 @@ on(UserInputService.InputEnded, function(input)
 	params.FilterDescendantsInstances = { helpers }
 	local hit = workspace:Raycast(ray.Origin, ray.Direction * 1500, params)
 	if not (hit and hit.Instance) then
-		U.notify(TITLE, "Nothing there. Tap again.", 2)
+		U.notify(TITLE, "Nothing there. " .. TAP .. " again.", 2)
 		return
 	end
 	local cb = Tap.cb
@@ -693,6 +711,7 @@ local function guiButton(parent, name, order)
 end
 local screen = make("ScreenGui", { Name = "UMC_Gui", ResetOnSpawn = false, ZIndexBehavior = Enum.ZIndexBehavior.Sibling, DisplayOrder = 60, IgnoreGuiInset = false }, nil)
 table.insert(C.made, screen)
+Gui.screen = screen
 
 -- The bar: what to do now, in a few words, its buttons on its right
 local BAR_H, BAR_BUTTON = if MOBILE then 64 else 52, if MOBILE then 84 else 72
@@ -732,9 +751,13 @@ function Gui.ask(text, buttons, pressed, cancel)
 	bannerRow.Size = UDim2.fromOffset(width, BAR_H - 16)
 	bannerText.Size = UDim2.new(1, -(width + 28), 1, -12)
 	bannerText.Text = text
-	banner.Visible = true
+	Gui.bannerOn = true
+	banner.Visible = not Gui.quieted
 end
+-- Only its words changed (its buttons stay)
+function Gui.say(text) bannerText.Text = text end
 function Gui.hideBanner()
+	Gui.bannerOn = false
 	banner.Visible = false
 	for _, c in ipairs(bannerLinks) do c:Disconnect() end
 	table.clear(bannerLinks)
@@ -809,15 +832,148 @@ function Gui.refreshPad()
 end
 Keys.onChange = Gui.refreshPad
 function Gui.showPad(visible)
-	pad.Visible = visible == true
+	Gui.padOn = visible == true
+	pad.Visible = Gui.padOn and not Gui.quieted
 	if not visible and Keys.held.LeftControl then Keys.hold("LeftControl", false) end
 end
+-- Out of the way of a click done for you (the bar and the pad), then back
+function Gui.quiet(on)
+	Gui.quieted = on == true
+	banner.Visible = Gui.bannerOn == true and not Gui.quieted
+	pad.Visible = Gui.padOn == true and not Gui.quieted
+end
 screen.Parent = U.guiParent()
+
+---====== AUTO: Fork3x's clicks done for you, with your mouse as you would click (the camera shows what it clicks) ======---
+
+local Auto = { camera = nil, alive = function() return true end } -- (alive: still wanted, or cancelled meanwhile)
+-- A ray that does not see your helpers or you
+local function rayParams()
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	local ignore = { helpers }
+	local me = U.character()
+	if me then table.insert(ignore, me) end
+	params.FilterDescendantsInstances = ignore
+	return params
+end
+local AROUND = { Vector3.new(0, 0.35, -1), Vector3.new(0, 0.35, 1), Vector3.new(1, 0.35, 0), Vector3.new(-1, 0.35, 0), Vector3.new(0.7, 0.7, -0.7),
+	Vector3.new(-0.7, 0.7, 0.7), Vector3.new(0.05, 1, 0.05), Vector3.new(0.7, -0.4, 0.7), Vector3.new(-0.7, -0.4, -0.7) }
+-- Where the camera sees `part` with nothing before it: the camera's place, the point, what is there (`ok(instance)`: which hits count)
+function Auto.view(part, ok)
+	local cam = workspace.CurrentCamera
+	local center = part.Position
+	local dist = math.clamp(part.Size.Magnitude * 1.5 + 6, 8, 40)
+	local params = rayParams()
+	local dirs = { -cam.CFrame.LookVector } -- (from where you look, first)
+	for _, d in ipairs(AROUND) do table.insert(dirs, d) end
+	for _, d in ipairs(dirs) do
+		local from = center + d.Unit * dist
+		local hit = workspace:Raycast(from, (center - from) * 1.5, params)
+		if hit and ok(hit.Instance) then return from, hit.Position, hit.Instance end
+	end
+	return nil
+end
+local function mouseClick(x, y)
+	local vim = Keys.vim
+	vim:SendMouseMoveEvent(x, y, game)
+	task.wait(0.05)
+	vim:SendMouseButtonEvent(x, y, 0, true, game, 1)
+	task.wait(0.06)
+	vim:SendMouseButtonEvent(x, y, 0, false, game, 1)
+end
+-- Clicks `part` (the first of `ok`'s it sees there) as your mouse would: true if it could, and what it clicked
+function Auto.click(part, ok)
+	if not (Keys.vim and part and part.Parent) then return false end
+	local from, point, what = Auto.view(part, ok or function(i) return i == part end)
+	if not from then return false end
+	local cam = workspace.CurrentCamera
+	if not Auto.camera then Auto.camera = { type = cam.CameraType, cf = cam.CFrame, subject = cam.CameraSubject } end
+	cam.CameraType = Enum.CameraType.Scriptable
+	cam.CFrame = CFrame.lookAt(from, point)
+	Gui.quiet(true)
+	task.wait(0.1)
+	if not Auto.alive() then
+		Gui.quiet(false)
+		return false
+	end
+	local screenAt, visible = cam:WorldToViewportPoint(point)
+	local done = visible and pcall(mouseClick, screenAt.X, screenAt.Y)
+	task.wait(0.25)
+	Gui.quiet(false)
+	return done == true, what
+end
+-- The camera back as it was
+function Auto.restore()
+	local saved = Auto.camera
+	Auto.camera = nil
+	if not saved then return end
+	pcall(function()
+		local cam = workspace.CurrentCamera
+		cam.CameraType = saved.type
+		cam.CFrame = saved.cf
+		cam.CameraSubject = saved.subject
+	end)
+end
+-- What a button says (its text, its labels')
+local function wordsOf(b)
+	local words = if b:IsA("TextButton") then { b.Text } else {}
+	for _, d in ipairs(b:GetDescendants()) do
+		if d:IsA("TextLabel") then table.insert(words, d.Text) end
+	end
+	return table.concat(words, " "):lower()
+end
+local function shown(g)
+	local o = g
+	while o and o:IsA("GuiObject") do
+		if not o.Visible then return false end
+		o = o.Parent
+	end
+	return not (o and o:IsA("ScreenGui") and o.Enabled == false)
+end
+-- Fork3x's own button on your screen, found by its words (`avoid`: words it must not have); never this script's or Obsidian's
+function Auto.findButton(want, avoid)
+	local gui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+	if not gui then return nil end
+	for _, b in ipairs(gui:GetDescendants()) do
+		if b:IsA("GuiButton") and not b:IsDescendantOf(Gui.screen) and not (Library.ScreenGui and b:IsDescendantOf(Library.ScreenGui)) and shown(b) then
+			local words = wordsOf(b)
+			if words:find(want, 1, true) and not (avoid and words:find(avoid, 1, true)) then return b end
+		end
+	end
+	return nil
+end
+-- A button pressed as your mouse would
+function Auto.press(button)
+	if not Keys.vim then return false end
+	return pcall(function()
+		local screen = button:FindFirstAncestorOfClass("ScreenGui")
+		local inset = if screen and screen.IgnoreGuiInset then Vector2.new(0, 0) else U.inset()
+		local pos, size = button.AbsolutePosition, button.AbsoluteSize
+		mouseClick(pos.X + size.X / 2 + inset.X, pos.Y + size.Y / 2 + inset.Y)
+	end)
+end
+-- What Fork3x has selected, from its outlines on your screen (nil: none seen)
+function Auto.selection()
+	local found, any = {}, false
+	local roots = { workspace.CurrentCamera, LocalPlayer:FindFirstChildOfClass("PlayerGui") }
+	for _, root in ipairs(roots) do
+		if root then
+			for _, d in ipairs(root:GetDescendants()) do
+				if d:IsA("SelectionBox") and d.Adornee and not d:IsDescendantOf(helpers) then
+					found[d.Adornee] = true
+					any = true
+				end
+			end
+		end
+	end
+	return if any then found else nil
+end
 
 ---====== WHAT YOU ARE MAKING: your morph, the piece you add ======---
 
 local S = { target = nil, targetIsMe = false, asset = nil, assetName = "", sourceName = "", analysis = nil, analysedAt = 0, glow = nil,
-	colorParts = {}, colorScope = nil, fx = {}, fxKey = nil, menuWasOpen = false, loose = nil }
+	colorParts = {}, colorScope = nil, fx = {}, fxKey = nil, morphKey = nil, menuWasOpen = false, loose = nil, undo = 0, back = nil }
 local UI = { labels = {}, ready = false }
 local function mark(ok) return if ok then GOOD else BAD end
 -- Its body's analysis (every second, or now)
@@ -855,12 +1011,42 @@ local function setAsset(part)
 	Mark.glow("asset", piece, YELLOW)
 	UI.refresh()
 end
+-- The morphs on the map (Workspace.Morphs: each its Pad and its Character), by name
+function Find.morphs()
+	local names = {}
+	local folder = workspace:FindFirstChild("Morphs")
+	for _, m in ipairs(if folder then folder:GetChildren() else {}) do
+		if m:FindFirstChild("Character") and not table.find(names, m.Name) then table.insert(names, m.Name) end
+	end
+	table.sort(names, function(a, b) return a:lower() < b:lower() end)
+	return names
+end
+-- How far a piece is from a morph's body
+local function distance(thing, model)
+	local best, mine = math.huge, U.partsOf(thing)
+	for _, b in ipairs(model:GetChildren()) do
+		if b:IsA("BasePart") and BODY[b.Name] then
+			for i, p in ipairs(mine) do
+				if i > 30 then break end
+				best = math.min(best, U.boxDistance(b, p.Position))
+			end
+		end
+	end
+	return best
+end
+-- Back where you were before a test
+local function goBack()
+	local c = U.character()
+	if S.back and c then pcall(function() c:PivotTo(S.back) end) end
+end
 
----====== THE GUIDES: the bar at the top says what to do; the menu out of your way while you tap the world ======---
+---====== THE GUIDES: the bar at the top says what to do; the menu out of your way meanwhile ======---
 
 local Flow = { thread = nil, waiting = false }
 local function showMenu(open) pcall(function() Library:Toggle(open) end) end
+local function useAuto() return Keys.vim ~= nil and Toggles.UMC_Auto ~= nil and Toggles.UMC_Auto.Value == true end
 function Flow.live() return C.alive and Flow.thread ~= nil and coroutine.running() == Flow.thread end
+Auto.alive = Flow.live
 function Flow.resume(value)
 	local thread = Flow.thread
 	if thread and Flow.waiting then
@@ -874,6 +1060,8 @@ function Flow.done()
 	if Keys.held.LeftControl then Keys.hold("LeftControl", false) end
 	Mark.clear("flow")
 	Mark.clear("asset")
+	Auto.restore()
+	Gui.quiet(false)
 	if S.menuWasOpen and C.alive then showMenu(true) end
 	S.menuWasOpen = false
 	Flow.thread, Flow.waiting = nil, false
@@ -885,11 +1073,20 @@ function Flow.cancel()
 	Flow.done()
 	if waiting then task.spawn(thread, nil) end -- (let it end where it waits)
 end
--- On the bar: what to do; waits for one of its buttons: its name (nil: cancelled)
-function Flow.ask(text, buttons)
+-- On the bar: what to do; waits for one of its buttons: its name (nil: cancelled). `update()`: its words again, every half second
+function Flow.ask(text, buttons, update)
 	if not Flow.live() then return nil end
 	Gui.ask(text, buttons, Flow.resume, Flow.cancel)
 	Flow.waiting = true
+	if update then
+		local thread = Flow.thread
+		task.spawn(function()
+			while Flow.thread == thread and Flow.waiting do
+				task.wait(0.5)
+				if Flow.thread == thread and Flow.waiting then Gui.say(update()) end
+			end
+		end)
+	end
 	local r = coroutine.yield()
 	return if Flow.live() then r else nil
 end
@@ -904,7 +1101,7 @@ function Flow.tap(text, accept)
 		if not Flow.live() or typeof(part) ~= "Instance" then return nil end
 		local ok, why = accept(part)
 		if ok then return part end
-		U.notify(TITLE, why or "Not that one. Tap again.", 3)
+		U.notify(TITLE, why or ("Not that one. " .. TAP .. " again."), 3)
 	end
 	return nil
 end
@@ -912,7 +1109,7 @@ end
 function Flow.say(text)
 	if Flow.live() then Gui.ask(text, {}, nil, Flow.cancel) end
 end
--- Waits (a few seconds at most) for Fork3x to have done it: true if it has
+-- Waits (a few seconds at most) for it to be done: true if it is
 function Flow.waitFor(done, seconds)
 	local start = os.clock()
 	while Flow.live() and not done() and os.clock() - start < (seconds or 3) do task.wait(0.1) end
@@ -943,7 +1140,7 @@ local function holdFork()
 	if tool.Parent ~= U.character() then U.equip(tool) end
 end
 function Flows.pickMorph()
-	local part = Flow.tap("Tap the morph you are making.", function(p) return Find.characterOf(p) ~= nil, "That's not a morph. Tap its body." end)
+	local part = Flow.tap(TAP .. " the morph you are making.", function(p) return Find.characterOf(p) ~= nil, "That's not a morph. " .. TAP .. " its body." end)
 	if not part then return end
 	local m = Find.characterOf(part)
 	setTarget(m, m == U.character())
@@ -968,22 +1165,50 @@ local function ctrlTap(text, accept, againText, again)
 	end
 	return nil
 end
--- Add a Piece: from any morph, moved, grouped five times, grouped with your morph and ungrouped: inside it
+-- A part of a morph's body to click, one the camera can see (any part right in the morph counts: its root, its torso...)
+local function bodyPart(model)
+	local function direct(i) return i.Parent == model and i:IsA("BasePart") end
+	for _, n in ipairs({ "UpperTorso", "Torso", "LowerTorso", "Head" }) do
+		local p = model:FindFirstChild(n)
+		if p and p:IsA("BasePart") and Auto.view(p, direct) then return p, direct end
+	end
+	for _, p in ipairs(model:GetChildren()) do
+		if p:IsA("BasePart") and BODY[p.Name] and Auto.view(p, direct) then return p, direct end
+	end
+	return nil
+end
+-- With Ctrl held, clicks `part` for you: true if it could, and what it clicked
+local function ctrlClick(part, ok)
+	Keys.hold("LeftControl", true)
+	local done, what = Auto.click(part, ok)
+	task.wait(0.15)
+	Keys.hold("LeftControl", false)
+	return done, what
+end
+
+-- Add a Piece: you pick it and move it onto your morph; then it is grouped five times, your morph clicked with Ctrl held,
+-- grouped and ungrouped (inside it), and welded, for you
 function Flows.add()
+	S.undo = 0
 	holdFork()
 	if not haveMorph() then return end
-	local part = Flow.tap("Tap the piece you want to add.", function() return true end)
+	local part = Flow.tap(TAP .. " the piece you want to add.", function() return true end)
 	if not part then return end
 	setAsset(part)
 	local piece = Find.pieceOf(part, Find.characterOf(part) or part)
-	local function isPiece(p) return p == part or p:IsDescendantOf(piece), "Tap " .. S.assetName .. "." end
+	local function isPiece(p) return p == part or p:IsDescendantOf(piece), TAP .. " " .. S.assetName .. "." end
 	if part:IsDescendantOf(S.target) then
-		if Flow.ask(S.assetName .. " is already in your morph.", { "Weld It" }) == "Weld It" then Flows.weld(part) end
+		if Flow.ask(S.assetName .. " is already in your morph.", { "Weld It" }) == "Weld It" then Flows.weld(part, true) end
 		return
 	end
-	if Flow.ask("Move " .. S.assetName .. " onto your morph with Fork3x. Keep it selected, then tap Next.", { "Next" }) ~= "Next" then return end
-	-- Grouped five times: each time one more group round it in its morph (not round the whole morph). Fork3x asks the
-	-- server each time: it is waited for
+	local function moveText()
+		local d = distance(piece, S.target)
+		return string.format("Move %s onto your morph with Fork3x (%s), then Next.", S.assetName,
+			if d < 1 then "on it " .. GOOD else string.format("%d studs away", math.floor(d + 0.5)))
+	end
+	if Flow.ask(moveText(), { "Next" }, moveText) ~= "Next" then return end
+	-- Grouped five times: each time one more group round it in its morph (not round the whole morph); Fork3x asks the server
+	-- each time: it is waited for
 	local home = piece.Parent
 	local function depth()
 		local n, o = 0, part
@@ -995,7 +1220,7 @@ function Flows.add()
 	end
 	local grouped = 0
 	while grouped < 5 and Flow.live() do
-		Flow.say(string.format("Grouping it… %d/5", grouped + 1))
+		Flow.say(string.format("Grouping %s… %d/5", S.assetName, grouped + 1))
 		local before = depth()
 		if not Keys.press({ "LeftShift" }, "J") then
 			Flow.ask("Your executor can't press keys, so this guide can't work here.", { "OK" })
@@ -1003,77 +1228,214 @@ function Flows.add()
 		end
 		if Flow.waitFor(function() return depth() > before end, 3) then
 			grouped += 1
+			S.undo += 1
 		elseif Flow.ask("Fork3x didn't group " .. S.assetName .. ". Undo, select only " .. S.assetName .. ", then Retry.", { "Retry" }) ~= "Retry" then
 			return
 		end
 	end
+	-- Inside your morph: your morph clicked with Ctrl held (for you, or by you), grouped, ungrouped
+	local tries = 0
 	while Flow.live() do
-		Mark.glow("flow", S.target, GREEN)
-		local body = ctrlTap("Ctrl is held. Now tap your morph (green).", function(p) return p:IsDescendantOf(S.target) end,
-			"Tap " .. S.assetName .. " again.", isPiece)
-		Mark.clear("flow")
+		tries += 1
+		local body = nil
+		if tries == 1 and useAuto() then
+			Flow.say("Putting " .. S.assetName .. " inside your morph…")
+			local target, direct = bodyPart(S.target)
+			if target then
+				local done, what = ctrlClick(target, direct)
+				if done then body = what end
+			end
+		end
+		if not body then
+			Auto.restore()
+			Mark.glow("flow", S.target, GREEN)
+			body = ctrlTap("Ctrl is held. Now " .. TAP:lower() .. " your morph (green).", function(p) return p:IsDescendantOf(S.target) end,
+				TAP .. " " .. S.assetName .. " again.", isPiece)
+			Mark.clear("flow")
+		end
 		if not body then return end
-		Flow.say("Putting it inside…")
-		local bodyHome = body.Parent
+		Flow.say("Putting " .. S.assetName .. " inside your morph…")
+		local bodyHome, before = body.Parent, depth()
 		Keys.press({ "LeftShift" }, "J")
-		if Flow.waitFor(function() return part:IsDescendantOf(S.target) and body.Parent ~= bodyHome end, 3) then
+		-- grouped (with your morph, or with something else): ungrouped at once
+		if Flow.waitFor(function() return part:IsDescendantOf(S.target) or body.Parent ~= bodyHome or depth() ~= before end, 3) then
 			Keys.press({ "LeftShift" }, "U")
+			S.undo += 2
 			Flow.waitFor(function() return body.Parent == bodyHome end, 3)
 		end
 		if not Flow.live() then return end
 		UI.refresh()
-		if S.asset:IsDescendantOf(S.target) then
-			if Flow.ask("Inside " .. GOOD .. "  Now weld it, or it will fall.", { "Weld It" }) == "Weld It" then Flows.weld(S.asset) end
+		if part:IsDescendantOf(S.target) then
+			Flow.say("Inside " .. GOOD .. "  Welding it…")
+			Flows.weld(part, true)
 			return
 		end
-		if Flow.ask("Not inside yet " .. BAD .. "  Let's try again.", { "Retry" }) ~= "Retry" then return end
-		if not Flow.tap("Tap " .. S.assetName .. " again.", isPiece) then return end
+		if Flow.ask("Not inside yet " .. BAD .. "  Let's try again: you " .. TAP:lower() .. " this time.", { "Retry" }) ~= "Retry" then return end
+		if not Flow.tap(TAP .. " " .. S.assetName .. " again.", isPiece) then return end
+		tries = 1
 	end
 end
--- Fix Loose Parts (or one piece): tap the yellow piece, then (Ctrl held) the green part, then Weld in Fork3x's weld tool
-function Flows.weld(thing)
+
+-- One group welded to the body part it belongs to: clicked for you if it can (else you tap); Weld in Fork3x's panel pressed for
+-- you when Fork3x's outlines show the right two (else you check it and press it). true: welded; false: not; nil: cancelled
+local function weldGroup(g, a)
+	local to = g.to or a.root
+	local name = g.piece.Name
+	Mark.clear("flow")
+	Mark.glow("flow", g.piece, YELLOW)
+	if to then Mark.glow("flow", to, GREEN) end
+	if Keys.held.LeftControl then Keys.hold("LeftControl", false) end
+	local function yellow(q) return Welds.inGroup(g, q), "That's not the yellow one." end
+	local clicked = false
+	if useAuto() and to then
+		Flow.say("Welding " .. name .. " to " .. to.Name .. "…")
+		local parts = table.clone(g.parts)
+		table.sort(parts, function(x, y) return U.volume(x) > U.volume(y) end)
+		for i, p in ipairs(parts) do
+			if i > 5 then break end
+			if Auto.click(p, function(q) return Welds.inGroup(g, q) end) then
+				clicked = ctrlClick(to, function(q) return q == to end)
+				break
+			end
+		end
+	end
+	if not Flow.live() then return nil end
+	if not clicked then
+		Auto.restore()
+		if not Flow.tap(TAP .. " the yellow piece (" .. name .. ").", yellow) then return nil end
+		if not ctrlTap("Ctrl is held. Now " .. TAP:lower() .. " the green part (" .. (if to then to.Name else "its body") .. ").",
+			function(q) return a.heldSet[q] == true end, TAP .. " the yellow piece again.", yellow) then return nil end
+	end
+	Keys.press({}, "F")
+	task.wait(0.4)
+	if not Flow.live() then return nil end
+	local sel = Auto.selection()
+	local right = false
+	if sel then
+		local piece, part, other = false, false, false
+		for inst in pairs(sel) do
+			if inst == to then
+				part = true
+			elseif inst == g.piece or inst:IsDescendantOf(g.piece) or table.find(g.parts, inst) then
+				piece = true
+			else
+				other = true
+			end
+		end
+		right = piece and part and not other
+	end
+	local button = Auto.findButton("weld", "break")
+	local function welded()
+		local after = analysis(true)
+		return after ~= nil and Welds.groupOf(after, g.main) == nil
+	end
+	if useAuto() and right and button and Auto.press(button) then
+		Flow.waitFor(welded, 3)
+	else
+		local check = if sel and not right then "Fork3x has other things selected too: fix it. " else "Check Fork3x has the yellow piece and the green part. "
+		if Flow.ask(check .. "Then Weld in its weld tool, then Done.", { "Done" }) ~= "Done" then return nil end
+	end
+	if not Flow.live() then return nil end
+	return welded()
+end
+-- Fix All (or one piece): each group that would fall, welded to the body part it belongs to
+function Flows.weld(thing, nested)
+	if not nested then S.undo = 0 end
 	holdFork()
 	if not haveMorph() then return end
+	local skipped, count = {}, 0
 	while Flow.live() do
 		local a = analysis(true)
-		local g = if thing then Welds.groupOf(a, thing) else a.loose[1]
+		local g = nil
+		if thing then
+			g = Welds.groupOf(a, thing)
+		else
+			for _, cand in ipairs(a.loose) do
+				if not skipped[cand.main] then
+					g = cand
+					break
+				end
+			end
+		end
 		if not g then
+			Auto.restore()
 			if thing and not thing:IsDescendantOf(S.target) then
 				Flow.ask("Put it inside your morph first.", { "OK" })
+			elseif thing then
+				Flow.ask(S.assetName .. " is in your morph and welded " .. GOOD, { "OK" })
+			elseif #a.loose == 0 then
+				Flow.ask((if count > 0 then string.format("Welded %d. ", count) else "") .. "Nothing will fall " .. GOOD, { "OK" })
 			else
-				Flow.ask((if thing then S.assetName .. " is welded " else "Nothing will fall ") .. GOOD, { "OK" })
+				Flow.ask(string.format("Welded %d. %d skipped: they will still fall.", count, #a.loose), { "OK" })
 			end
 			return
 		end
-		local to = g.to or a.root
-		Mark.clear("flow")
-		Mark.glow("flow", g.piece, YELLOW)
-		if to then Mark.glow("flow", to, GREEN) end
-		if Keys.held.LeftControl then Keys.hold("LeftControl", false) end
-		local function yellow(q) return Welds.inGroup(g, q), "Tap the yellow one." end
-		if not Flow.tap("Tap the yellow piece (" .. g.piece.Name .. ").", yellow) then return end
-		local b = ctrlTap("Ctrl is held. Now tap the green part (" .. (if to then to.Name else "its body") .. ").", function(q) return a.heldSet[q] == true end,
-			"Tap the yellow piece again.", yellow)
-		if not b then return end
-		Keys.press({}, "F")
-		if Flow.ask("Tap Weld in Fork3x's weld tool, then Done.", { "Done" }) ~= "Done" then return end
-		Mark.clear("flow")
-		local after = analysis(true)
-		if after and Welds.groupOf(after, g.main) then
-			if Flow.ask("Not welded yet " .. BAD, { "Retry" }) ~= "Retry" then return end
+		local ok = weldGroup(g, a)
+		if ok == nil then return end
+		if ok then
+			count += 1
+			S.undo += 1
 		else
-			local left = if after then #after.loose else 0
-			if thing or left == 0 then
-				Flow.ask("Welded " .. GOOD .. (if left == 0 then "  Nothing will fall." else ""), { "OK" })
+			Auto.restore()
+			local r = Flow.ask(g.piece.Name .. " is not welded yet " .. BAD, if thing then { "Retry" } else { "Retry", "Skip" })
+			if r == "Skip" then
+				skipped[g.main] = true
+			elseif r ~= "Retry" then
 				return
 			end
-			if Flow.ask(string.format("Welded %s  %d more will fall.", GOOD, left), { "Next One" }) ~= "Next One" then return end
 		end
 	end
+end
+
+-- Test Morph: onto its pad (your body becomes it), thawed; Back to where you were
+function Flows.test()
+	if not haveMorph() then return end
+	local name = Find.nameOf(S.target)
+	local pad = S.target.Parent and S.target.Parent:FindFirstChild("Pad")
+	if S.targetIsMe or not (pad and pad:IsA("BasePart")) then
+		Flow.ask(name .. " has no pad to step on.", { "OK" })
+		return
+	end
+	if not U.privateOwner() then
+		Flow.ask("Test Morph works in your private server.", { "OK" })
+		return
+	end
+	local character, root = U.character(), U.root()
+	if not (character and root) then return end
+	S.back = root.CFrame
+	Flow.say("Going onto " .. name .. "'s pad…")
+	local count = #character:GetDescendants()
+	pcall(function() character:PivotTo(pad.CFrame + Vector3.new(0, 3.5, 0)) end)
+	Flow.waitFor(function()
+		local now = U.character()
+		return now ~= character or (now ~= nil and math.abs(#now:GetDescendants() - count) > 5)
+	end, 6)
+	task.wait(1)
+	if not Flow.live() then return end
+	U.chat(";thaw me")
+	if Flow.ask("Testing " .. name .. " (thawed). Try it, then Back.", { "Back" }) == "Back" then goBack() end
+end
+-- Undo Guide: Fork3x's steps of the last guide, undone
+function Flows.undo()
+	if S.undo <= 0 then
+		Flow.ask("Nothing to undo.", { "OK" })
+		return
+	end
+	if Flow.ask(string.format("Undo the last guide (%d Fork3x steps)?", S.undo), { "Undo" }) ~= "Undo" then return end
+	holdFork()
+	local n = S.undo
+	S.undo = 0
+	for i = 1, n do
+		if not Flow.live() then return end
+		Flow.say(string.format("Undoing… %d/%d", i, n))
+		Keys.press({ "LeftControl" }, "Z")
+		task.wait(0.3)
+	end
+	Flow.ask("Undone " .. GOOD, { "OK" })
 end
 -- Recolor: the part you tap, and all of its colour in its morph
 function Flows.color()
-	local part = Flow.tap("Tap a part to pick its color.", function(p) return p:IsA("BasePart"), "Tap a part." end)
+	local part = Flow.tap(TAP .. " a part to pick its color.", function(p) return p:IsA("BasePart"), TAP .. " a part." end)
 	if not part then return end
 	local scope = if S.target and part:IsDescendantOf(S.target) then S.target else (Find.characterOf(part) or part)
 	local key = Paint.key(part.Color)
@@ -1089,6 +1451,18 @@ function Flows.color()
 	end
 	task.delay(4, function() Mark.clear("color") end)
 end
+-- Go To a morph on the map (yours: your private server)
+local function goTo(name)
+	if not U.privateOwner() then return U.notify(TITLE, "Go To works in your private server.", 4) end
+	local folder = workspace:FindFirstChild("Morphs")
+	local holder = folder and name and folder:FindFirstChild(name)
+	local character = U.character()
+	local at = holder and U.where(holder:FindFirstChild("Character") or holder)
+	if not (at and character) then return U.notify(TITLE, "Pick a morph first.", 3) end
+	local look = flat(workspace.CurrentCamera.CFrame.LookVector)
+	local from = at - look * 8 + Vector3.new(0, 3, 0)
+	pcall(function() character:PivotTo(CFrame.lookAt(from, Vector3.new(at.X, from.Y, at.Z))) end)
+end
 
 ---====== WHAT THE WINDOW SAYS (every half second) ======---
 
@@ -1100,7 +1474,7 @@ function UI.refresh()
 	if not UI.ready then return end
 	local t = if S.target and S.target.Parent then S.target else nil
 	local a = analysis(false)
-	UI.set("morph", if t then string.format("%s · %d parts · anchored %s", Find.nameOf(t), a and a.parts or 0, mark(a and a.anchored)) else "No morph yet. Tap Morph, then tap it.")
+	UI.set("morph", if t then string.format("%s · %d parts · anchored %s", Find.nameOf(t), a and a.parts or 0, mark(a and a.anchored)) else "No morph yet. Pick Morph, then " .. TAP:lower() .. " it.")
 	if S.asset and S.asset.Parent then
 		local inside = t ~= nil and S.asset:IsDescendantOf(t)
 		UI.set("piece", string.format("%s · inside %s · welded %s", S.assetName, mark(inside), mark(inside and a ~= nil and Welds.holds(a, S.asset))))
@@ -1115,6 +1489,13 @@ function UI.refresh()
 		UI.set("weld", string.format("%d %s will fall %s", #a.loose, if #a.loose == 1 then "piece" else "pieces", BAD))
 	end
 	UI.set("tools", string.format("Fork3x %s · Save Tool %s · Private server %s", mark(U.buildTool() ~= nil), mark(U.saveTool() ~= nil), mark(U.privateOwner())))
+	-- the morphs to go to, listed again when they change
+	local names = Find.morphs()
+	local mkey = table.concat(names, "\n")
+	if mkey ~= S.morphKey then
+		S.morphKey = mkey
+		pcall(function() Options.UMC_GoTo:SetValues(names) end)
+	end
 	-- its effects, listed again when they change
 	local fx = if t then Fx.list(t) else {}
 	local labels = {}
@@ -1152,34 +1533,45 @@ end
 
 local view = workspace.CurrentCamera.ViewportSize
 local Window = Library:CreateWindow({ Title = TITLE, Footer = "v" .. VERSION .. " · Toilet World Roleplay 2",
-	Size = if MOBILE then UDim2.fromOffset(view.X, view.Y) else UDim2.fromOffset(720, 540), Center = true, AutoShow = true, Resizable = true,
+	Size = if MOBILE then UDim2.fromOffset(view.X, view.Y) else UDim2.fromOffset(720, 560), Center = true, AutoShow = true, Resizable = true,
 	ShowCustomCursor = not MOBILE, ToggleKeybind = Enum.KeyCode.RightShift, Font = Enum.Font.Gotham, SidebarCompacted = MOBILE, NotifySide = "Right",
 	MobileButtonsSide = "Left" })
 local Tabs = { Build = Window:AddTab("Build", "hammer"), Colors = Window:AddTab("Colors", "palette"), Search = Window:AddTab("Search", "search"),
 	Settings = Window:AddTab("Settings", "settings") }
 local function label(box, text) return box:AddLabel({ Text = text, DoesWrap = true }) end
+local KEYS_PC = { { "F2", "Add a Piece" }, { "F3", "Fix All" }, { "F4", "Test Morph" }, { "F5", "Pick Morph" }, { "F6", "Pick Color" }, { "F7", "Undo Guide" },
+	{ "F8", "Back" }, { "RightShift", "Menu" } }
+local function keysText()
+	local lines = {}
+	for _, k in ipairs(KEYS_PC) do table.insert(lines, k[1] .. "  " .. k[2]) end
+	return table.concat(lines, "\n")
+end
 
 function UI.build()
 	local tab = Tabs.Build
 	local b1 = tab:AddLeftGroupbox("1. Your Morph", "user")
 	UI.labels.morph = label(b1, "…")
-	b1:AddButton({ Text = "Tap Morph", Func = function() Flow.run(Flows.pickMorph) end })
+	b1:AddButton({ Text = "Pick Morph", Func = function() Flow.run(Flows.pickMorph) end })
 		:AddButton({ Text = "Use Me", Func = function() setTarget(U.character(), true) end })
 	label(b1, "Tip: anchor it with Fork3x's Anchor tool, so it stays still while you work.")
 
 	local b2 = tab:AddLeftGroupbox("2. Add a Piece", "package")
 	UI.labels.piece = label(b2, "…")
 	b2:AddButton({ Text = "Start Guide", Func = function() Flow.run(Flows.add) end })
-	label(b2, "Take a piece from any morph and put it on yours. The bar at the top tells you each step.")
+	label(b2, "Pick a piece on any morph and move it onto yours. Then the guide puts it inside and welds it for you.")
+
+	local b6 = tab:AddLeftGroupbox("Go To", "map-pin")
+	b6:AddDropdown("UMC_GoTo", { Values = Find.morphs(), Text = "Morph", Searchable = true, MaxVisibleDropdownItems = 8 })
+	b6:AddButton({ Text = "Go", Func = function() goTo(Options.UMC_GoTo.Value) end })
 
 	local b3 = tab:AddRightGroupbox("3. Weld", "link")
 	UI.labels.weld = label(b3, "…")
-	b3:AddButton({ Text = "Fix Loose Parts", Func = function() Flow.run(function() Flows.weld(nil) end) end })
+	b3:AddButton({ Text = "Fix All", Func = function() Flow.run(function() Flows.weld(nil) end) end })
 	b3:AddToggle("UMC_ShowLoose", { Text = "Show loose parts", Default = false, Callback = function() UI.refresh() end })
 
 	local b4 = tab:AddRightGroupbox("4. Test & Save", "save")
-	label(b4, "Use the morph's pad, then unfreeze yourself:")
-	b4:AddButton({ Text = "Thaw", Func = function() U.chat(";thaw me") end }):AddButton({ Text = "Unfreeze", Func = function() U.chat(";unfreeze me") end })
+	b4:AddButton({ Text = "Test Morph", Func = function() Flow.run(Flows.test) end })
+	b4:AddButton({ Text = "Thaw", Func = function() U.chat(";thaw me") end }):AddButton({ Text = "Back", Func = goBack })
 	b4:AddButton({ Text = "Equip Save Tool", Func = function()
 		local tool = U.saveTool()
 		if tool then U.equip(tool) else U.notify(TITLE, "No Save Morph Tool. Take it in your private server.", 4) end
@@ -1191,6 +1583,8 @@ function UI.build()
 		local tool = U.buildTool()
 		if tool then U.equip(tool) else U.notify(TITLE, "No Fork3x. Take it in your private server.", 4) end
 	end })
+	b5:AddButton({ Text = "Undo Guide", Func = function() Flow.run(Flows.undo) end })
+	if not MOBILE then label(tab:AddRightGroupbox("PC Keys", "keyboard"), keysText()) end
 end
 
 function UI.chosenFx()
@@ -1203,11 +1597,11 @@ end
 function UI.colors()
 	local tab = Tabs.Colors
 	local b1 = tab:AddLeftGroupbox("Recolor", "paintbrush")
-	UI.labels.color = label(b1, "Tap a part to pick its color.")
-	b1:AddButton({ Text = "Tap Part", Func = function() Flow.run(Flows.color) end })
+	UI.labels.color = label(b1, TAP .. " a part to pick its color.")
+	b1:AddButton({ Text = "Pick Color", Func = function() Flow.run(Flows.color) end })
 	b1:AddLabel("New color"):AddColorPicker("UMC_NewColor", { Default = Color3.fromRGB(255, 200, 60), Title = "New color" })
 	b1:AddButton({ Text = "Preview", Func = function()
-		if #S.colorParts == 0 then return U.notify(TITLE, "Tap a part first.", 3) end
+		if #S.colorParts == 0 then return U.notify(TITLE, "Pick a color first.", 3) end
 		for _, p in ipairs(S.colorParts) do
 			if p.Parent then Paint.set(p, "Color", Options.UMC_NewColor.Value) end
 		end
@@ -1228,7 +1622,7 @@ function UI.colors()
 	end }):AddButton({ Text = "Reset", Func = function()
 		if S.target then Paint.restore(S.target) end
 	end })
-	label(b2, "Your whole morph in a style, only on your screen. Then Tap Part to copy a color.")
+	label(b2, "Your whole morph in a style, only on your screen. Then Pick Color to copy a color.")
 
 	local b3 = tab:AddRightGroupbox("Effects", "flame")
 	b3:AddDropdown("UMC_Fx", { Values = {}, Text = "Effect", Callback = function()
@@ -1317,13 +1711,19 @@ function UI.search()
 end
 
 local SIZES = { Small = 85, Normal = 100, Big = 120 }
-local CHANGELOG = [[v2.0
-• In English, with short buttons whose text fits (phones too)
-• Add a Piece and Fix Loose Parts: a bar at the top tells you each step, the menu hides while you tap, and Ctrl, Group and Ungroup are pressed for you
-• 4 tabs: Build, Colors, Search, Settings
-• Phones: the menu fits the screen with bigger text; turning the camera is not taken as a tap; the pad drags without jumping
-• The pad: 8 big keys (Group, Ungroup, Select In, Multi, Undo, Redo, Weld, Menu)
-• Removed: the long guide, the View tab and other extras
+local CHANGELOG = [[v3.0
+• More automatic: after you move a piece, Add a Piece groups it, clicks your morph with Ctrl, puts it inside and welds it for you
+• Fix All welds every loose part for you (Weld pressed only when Fork3x's outlines show the right selection; else it asks you)
+• Test Morph: onto its pad, thawed, then Back to where you were
+• Go To any morph (your private server)
+• Undo Guide: undoes the last guide's Fork3x steps
+• PC: Click instead of Tap, F2 to F8 keys
+• While you move a piece, the bar shows how far it is
+• Auto clicks can be turned off (Settings)
+
+v2.0
+• English, short buttons whose text fits
+• Guides on a bar at the top, 4 tabs, the pad with 8 big keys
 
 v1.0
 • First version]]
@@ -1332,6 +1732,8 @@ function UI.settings()
 	local b1 = tab:AddLeftGroupbox("Menu", "monitor")
 	b1:AddDropdown("UMC_Size", { Values = { "Small", "Normal", "Big" }, Default = if MOBILE then "Big" else "Normal", Text = "Menu size",
 		Callback = function(v) pcall(function() Library:SetDPIScale(SIZES[v] or 100) end) end })
+	b1:AddToggle("UMC_Auto", { Text = "Auto clicks", Default = true })
+	label(b1, "On: the guides click for you (the camera shows where). Off: you " .. TAP:lower() .. " yourself.")
 	b1:AddToggle("UMC_Pad", { Text = "Show pad", Default = MOBILE, Callback = function(v) Gui.showPad(v) end })
 	b1:AddSlider("UMC_PadSize", { Text = "Pad size", Default = 100, Min = 60, Max = 160, Rounding = 0, Suffix = "%", Callback = function(v)
 		Gui.padScale.Scale = v / 100
@@ -1339,6 +1741,7 @@ function UI.settings()
 	b1:AddButton({ Text = "Close Script", Func = function() GENV.__UMCStop() end })
 	local b2 = tab:AddRightGroupbox("What's New", "sparkles")
 	label(b2, CHANGELOG)
+	label(tab:AddRightGroupbox("Keys (PC)", "keyboard"), keysText())
 end
 
 for _, build in ipairs({ UI.build, UI.colors, UI.search, UI.settings }) do
@@ -1349,6 +1752,23 @@ if MOBILE then pcall(function() Library:SetDPIScale(SIZES.Big) end) end
 Gui.showPad(Toggles.UMC_Pad ~= nil and Toggles.UMC_Pad.Value)
 UI.ready = true
 UI.refresh()
+
+---====== PC KEYS: F2 to F8 ======---
+
+local HOTKEYS = {
+	[Enum.KeyCode.F2] = function() Flow.run(Flows.add) end,
+	[Enum.KeyCode.F3] = function() Flow.run(function() Flows.weld(nil) end) end,
+	[Enum.KeyCode.F4] = function() Flow.run(Flows.test) end,
+	[Enum.KeyCode.F5] = function() Flow.run(Flows.pickMorph) end,
+	[Enum.KeyCode.F6] = function() Flow.run(Flows.color) end,
+	[Enum.KeyCode.F7] = function() Flow.run(Flows.undo) end,
+	[Enum.KeyCode.F8] = goBack,
+}
+on(UserInputService.InputBegan, function(input, processed)
+	if processed or input.UserInputType ~= Enum.UserInputType.Keyboard then return end
+	local action = HOTKEYS[input.KeyCode]
+	if action then action() end
+end)
 
 ---====== EVERY HALF SECOND: what the window says ======---
 
@@ -1366,6 +1786,7 @@ local function stop()
 	if not C.alive then return end
 	C.alive, UI.ready = false, false
 	Flow.cancel()
+	Auto.restore()
 	Tap.cancel()
 	Keys.releaseAll()
 	for _, c in ipairs(C.connections) do pcall(function() c:Disconnect() end) end
