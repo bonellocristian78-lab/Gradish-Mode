@@ -33,6 +33,7 @@ mod rather than playing it.
 | Morph: anybody's avatar on you (`_G.User = "name"`), only you see it | `.../Morph` |
 | New Seek: DOORS' Seek with another body (`assets/seek/NewSeek.rbxm`); `_G.Type = "Glitch"`: made of DOORS' Glitch (its purple, cube texture and particles, pink light), glitched eyes, hands of cubes | `.../NewSeek` |
 | Honcho Seek: DOORS' Seek is Honcho (Seek's animations made for his body), Honcho's sounds (DOORS' chase song kept), the kit's eyes and hands on the walls | `.../HonchoSeek` |
+| Teller Seek: when Seek's eyes open, a cutscene: the Teller is taken by Seek (its black, its eyes, its screen), Seek's hands tear out of its back, and Seek's eye opens in the middle of your screen and spreads like Meld; then the infected Teller stays, its hands writhing (every animation made here; `getgenv().TellerSeekPlay()` plays it now) | `.../TellerSeek` |
 | Interminable Rooms: the 675 entities of its wiki in a panel (name and GIF, click to spawn; a tab where they cannot hurt you), or one with `_G.Entity = "A-60"`; their faces, GIFs, sounds and what they do | `.../InterminableRooms` |
 | Surprise: Honcho runs through the rooms like Rush (Seek's run made his) | `.../HonchoRush` |
 | Surprise: a huge Honcho walks to your room, booming; a wardrobe will not hide you, a bed will | `.../HonchoGiant` |
@@ -887,6 +888,45 @@ sent as its own buttons send them. Without it there is no bottle, and DOORS' cap
 If the bottle's unions or the green one's triangle will not load in DOORS, a capsule of the same size and colours
 and a triangle of ours take their place; without `game:GetObjects` the bottle is made here.
 
+## Teller Seek
+
+DOORS' Teller, taken by Seek: a cutscene when Seek's eyes open, only for you.
+
+```lua
+loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/claude/sei-qui-con-noi-ye4k62/TellerSeek"))()
+```
+
+It waits for Seek's eyes (`SeekEye`): the first one you can see, within 45 studs of you, starts it (once each time
+Seek's eyes come). About 20 seconds, between black bars:
+
+- **The Teller rolls up to you** (in front of you, or wherever the room has space), wheels squeaking: NOW SERVING
+  and its number, a chime, it looks at you and punches its ticket twice.
+- **Seek takes it**: black goo seeps out of the floor under it; it looks down, jerks back; Seek's black climbs it
+  from its wheels to the cables on its head, its veins pulsing red, goo dripping, while it convulses in fits; Seek's
+  eyes pop open all over it (ten, each blinking on its own); its screen breaks into static, NOW SEEKING, and Seek's
+  eye, that looks at you. The camera goes round it, shaking more and more.
+- **The hands**: it arches back screaming, and Seek's hands tear out of its back one after another, six of them,
+  goo thrown out with each, unfolding and grasping, writhing behind it like a halo of fingers.
+- **Its screen**: it straightens, its head hanging on one side, and the camera goes straight into its screen.
+- **Seek's eye on your screen**: black, Seek's eye in the middle of it, shut and bulging; it tears open with the
+  hit, looks left, right, then at you; its pupil swallows its iris with the heartbeat (faster and faster), its veins
+  spread out of it and Meld's flesh bubbles out round it and in from the edges of your screen, until it is all
+  flesh; then it is all sucked into the pupil, and white.
+- **After it**: the infected Teller stays where it is, Seek's: breathing, twitching now and then, its hands
+  writhing, its head and its screen's eye following you. When you are far from it (160 studs), it sinks into its goo
+  and is gone.
+
+Every animation is made here, none of Roblox's played: the Teller's joints and the joints of each of Seek's hands are
+posed every frame (its poses, its fits, its breathing; the hands unfolding, writhing and grasping). The Teller is
+from your kit (`assets/teller/TellerKit.rbxm`), Seek's hands and eyes from the HonchoSeek kit
+(`assets/seek/HonchoSeek.rbxm`); the pictures (Seek's eye in layers, Meld's flesh, the veins, the goo, the static)
+and the sounds (chime, wheels, holepunch, riser, squelch, scream, glitches, heartbeat, the eye's hit, the flesh,
+the drone, the white) are made for it (`assets/teller/`). Fetched once, kept in the executor's folder (`TellerSeek/`).
+
+If Rush, Ambush, Seek, A-60 or A-120 come while it plays, it stops at once and gives you back your camera (the
+Teller already all Seek's). `getgenv().TellerSeekPlay()` plays it now, anywhere (the Hotel- too, without Seek);
+`getgenv().__TellerSeek()` takes it all off.
+
 ## Halloween Mode
 
 The hotel dressed for Halloween with your kit (`assets/halloween/HalloweenKit.rbxm`), only for you:
@@ -1432,6 +1472,7 @@ That includes the files made to be copied or filled in (`AchievementConfig`,
 | `ObjectScanner` / `ObjectScanner.rbxm` | The scanners (Nokia and Tablet, their Lights, the Golden Tablet); DOORS' scanner's model, out of a saved place |
 | `LuckyBottle` / `UnluckyBottle` / `Bottles.rbxm` | The two bottles (Starlight Bottle copies: luck through DOORS' Admin Panel, bad luck); your model of them |
 | `HalloweenMode` | The Halloween Mode (the hotel decorated, Seek and Figure for Halloween, the ambience) |
+| `TellerSeek` | Teller Seek: the Teller taken by Seek, its cutscene, Seek's eye spreading like Meld on your screen |
 | `CuriousDoor` / `CuriousShakeLight` | The Curious Door (chests, padlocks, lockpicks, the golden key, the skeleton door and its cutscene, the little room of gold); the Curious Shake Light |
 | `Monochrome` / `Monochrome.rbxm` / `MonochromeTV.rbxm` | VER, the monster of MONOCHROME; its model, out of a saved copy of its place; Noise's TV on its arm (out of Noise's kit), for its Noise variant |
 | `assets/errorbush/` | 3rr0rbu2h's two faces |
@@ -1441,6 +1482,7 @@ That includes the files made to be copied or filled in (`AchievementConfig`,
 | `assets/surprise/` | the surprises' sounds (steps, psst, bite, shriek, heartbeat, whispers, roar, clicks, hum, whoosh, rumble) |
 | `assets/bottles/` | The bottles' hotbar icons and the green one's triangle |
 | `assets/halloween/` | Your Halloween kit (`HalloweenKit.rbxm`), the ambience (`Ambience.mp3`, made here), the stand-in pumpkin face and fog puff |
+| `assets/teller/` | Teller Seek's Teller (`TellerKit.rbxm`, out of your kit), its pictures (Seek's eye in layers, Meld's flesh, veins, goo, static) and sounds, made here |
 | `assets/curious/` | The Curious Door's pieces of your kit (`CuriousKit.rbxm`: the skeleton door and its frame, the chest, the padlock, the skeleton key, the key, the gold, the Curious Light, DOORS' flashlight), its music (`CuriousLight.mp3`, made here) |
 | `assets/monochrome/` | VER's stand-ins, where its game's own files do not load (its presence, its scream, a lamp's click, the radar's ping, its eyes) and the film grain; its own shape (`VERBody.lua`); its Noise variant's tape (sheets, sound) and Noise's Emerge made VER's |
 | `tools/` | Prometheus' settings for the obfuscation, the script that runs it, its fix for Luau |
