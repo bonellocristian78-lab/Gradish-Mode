@@ -1,0 +1,1086 @@
+--[[
+        TELLER SEEK -- DOORS' Teller, taken by Seek
+
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/claude/sei-qui-con-noi-ye4k62/TellerSeek"))()
+
+        When Seek's eyes open on the walls (the first one you can see, within 45 studs of you), a cutscene plays (about 20
+        seconds): the Teller rolls up to you, NOW SERVING, and punches its ticket; black goo seeps out of the floor under it and
+        Seek's black climbs it from its wheels to its head, Seek's eyes opening all over its body while it convulses; its screen
+        breaks into Seek's eye; it arches back screaming and Seek's hands tear out of its back, six of them, writhing behind it;
+        it turns to you, its screen fills your view, and Seek's eye is in the middle of your screen: it opens, looks around,
+        stares at you and spreads like Meld, veins and flesh over everything, until it swallows it all; white. Then the
+        infected Teller stays where it is, its hands writhing behind it, its head and its screen's eye following you (far from
+        it, it sinks into its goo).
+
+        Every animation is made here, none of Roblox's played: the Teller's joints and the joints of Seek's hands posed every
+        frame (its own poses, its fits, its breathing, the hands unfolding and grasping). Its pictures and its sounds are made
+        for it (assets/teller); the Teller is from your kit (assets/teller/TellerKit.rbxm), Seek's hands and eyes from the
+        HonchoSeek kit (assets/seek/HonchoSeek.rbxm). Fetched once, kept in the executor's folder (TellerSeek/). Only you see it.
+        If Rush, Ambush or Seek come while it plays, it stops at once and gives you back your camera.
+
+        getgenv().TellerSeekPlay() plays it now (anywhere, also without Seek); getgenv().__TellerSeek() takes it all off.
+]]
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local CollectionService = game:GetService("CollectionService")
+local Lighting = game:GetService("Lighting")
+local LocalPlayer = Players.LocalPlayer
+
+local REPO = "https://raw.githubusercontent.com/bonellocristian78-lab/Gradish-Mode/claude/sei-qui-con-noi-ye4k62/"
+local FOLDER = "TellerSeek" -- (the executor's folder its files are kept in)
+local NEAR = 45 -- studs: a Seek eye you can see this close starts it
+local FAR = 160 -- studs: the infected Teller sinks away when you are this far
+local LENGTH = 20.6 -- seconds: the whole cutscene
+local ARM_SCALE = 0.24 -- Seek's hands, made the Teller's size
+local GOO = Color3.fromRGB(12, 10, 14) -- Seek's black
+local DANGER = { RushMoving = true, AmbushMoving = true, SeekMoving = true, SeekMovingNewClone = true, A60 = true, A120 = true }
+local ID = CFrame.new()
+local UP = Vector3.new(0, 1, 0)
+local rad = math.rad
+
+-- The one before comes off first
+local SESSION = if getgenv then getgenv() else _G
+if SESSION.__TellerSeek then pcall(SESSION.__TellerSeek) end
+local connections = {}
+
+local function make(class, props, parent)
+	local i = Instance.new(class)
+	for k, v in pairs(props) do i[k] = v end
+	if parent then i.Parent = parent end
+	return i
+end
+local function span(t, a, b) return math.clamp((t - a) / (b - a), 0, 1) end
+local function ease(u)
+	u = math.clamp(u, 0, 1)
+	return u * u * (3 - 2 * u)
+end
+local function out3(u)
+	u = math.clamp(u, 0, 1)
+	return 1 - (1 - u) ^ 3
+end
+local function backOut(u) -- past it, and back
+	u = math.clamp(u, 0, 1) - 1
+	return 1 + 3.2 * u ^ 3 + 2.2 * u ^ 2
+end
+local function lerp(a, b, u) return a + (b - a) * u end
+local function flat(v)
+	local f = Vector3.new(v.X, 0, v.Z)
+	return if f.Magnitude > 1e-3 then f.Unit else Vector3.new(0, 0, -1)
+end
+local function wobble(t, seed) -- smooth, never the same twice: about -1..1
+	return (math.sin(t * 1.7 + seed) + math.sin(t * 2.9 + seed * 2.3) * 0.6 + math.sin(t * 5.3 + seed * 4.1) * 0.3) / 1.9
+end
+
+---====== ITS FILES: fetched once, kept in the executor's folder ======---
+
+local function file(dir, name, magic)
+	local here = FOLDER .. "/" .. name
+	pcall(function()
+		if not isfolder(FOLDER) then makefolder(FOLDER) end
+		if isfile(here) and readfile(here):sub(1, #magic) == magic then return end
+		local data = game:HttpGet(REPO .. "assets/" .. dir .. "/" .. name)
+		if type(data) == "string" and data:sub(1, #magic) == magic then writefile(here, data) end -- (never a "404: Not Found")
+	end)
+	local ok, there = pcall(isfile, here)
+	return if ok and there then here else nil
+end
+local function asset(path)
+	if not path then return nil end
+	local ok, id = pcall(getcustomasset, path)
+	return if ok and type(id) == "string" then id else nil
+end
+local function loadKit(dir, name)
+	local id = asset(file(dir, name, "<roblox!"))
+	if not id then return nil end
+	local ok, objects = pcall(function() return game:GetObjects(id) end)
+	return if ok and type(objects) == "table" then objects[1] else nil
+end
+
+local IMG, SND = {}, {}
+for _, name in ipairs({ "EyeBall", "EyeIris", "EyeSocket", "LidEdge", "Strands", "MeldMass", "MeldEdge", "Tendrils", "Goo", "Drip", "Veins", "Static" }) do
+	IMG[name] = asset(file("teller", name .. ".png", "\137PNG")) or ""
+end
+for _, name in ipairs({ "Punch", "Ding", "DingBad", "Squeak", "Riser", "Squelch", "Heartbeat", "Screech", "Glitch", "Stinger", "Meld", "Drone", "Flash" }) do
+	SND[name] = asset(file("teller", name .. ".mp3", "ID3")) or ""
+end
+local tellerKit, seekKit = loadKit("teller", "TellerKit.rbxm"), loadKit("seek", "HonchoSeek.rbxm")
+local kitTeller = tellerKit and tellerKit:FindFirstChild("Teller")
+if not (kitTeller and kitTeller:FindFirstChild("RootPart") and kitTeller:FindFirstChild("Screen", true)) then
+	warn("[TellerSeek] its kit could not be loaded")
+	return
+end
+local kitArm = seekKit and seekKit:FindFirstChild("Seek_Arm")
+local kitEye = seekKit and seekKit:FindFirstChild("Eye")
+if not kitArm then warn("[TellerSeek] Seek's hands could not be loaded: it plays without them") end
+
+local folder = make("Folder", { Name = "TellerSeek" }, workspace)
+local probe = RaycastParams.new()
+probe.FilterType = Enum.RaycastFilterType.Exclude
+
+-- Its sounds: one-shots go when they are done; loops are stopped by whoever started them
+local function sound(name, volume, speed, looped, parent)
+	local id = SND[name]
+	if not id or id == "" then return nil end
+	local s = make("Sound", { Name = name, SoundId = id, Volume = volume or 1, PlaybackSpeed = speed or 1, Looped = looped == true }, parent or folder)
+	s:Play()
+	if not looped then task.delay(12, function() s:Destroy() end) end
+	return s
+end
+
+---====== THE RIGS: each model's joints read once and taken off; every part anchored, put where its pose says every frame ======---
+
+local function isJoint(d) return d:IsA("Motor6D") or d:IsA("Weld") or d:IsA("ManualWeld") end
+local function rig(model, root)
+	local edges = {}
+	for _, d in ipairs(model:GetDescendants()) do
+		if isJoint(d) and d.Part0 and d.Part1 then
+			table.insert(edges, { a = d.Part0, b = d.Part1, c0 = d.C0, c1 = d.C1, name = d.Part1.Name, motor = d:IsA("Motor6D") })
+		end
+	end
+	-- out from its root, each part on the one it hangs from (its motor before any weld; a weld can be either way round)
+	local joints, order, placed, queue, at = {}, {}, { [root] = true }, { root }, 1
+	while queue[at] do
+		local p = queue[at]
+		at += 1
+		for pass = 1, 2 do
+			for _, e in ipairs(edges) do
+				if e.motor == (pass == 1) then
+					local child, j = nil, nil
+					if e.a == p and not placed[e.b] then
+						child, j = e.b, { p0 = p, c0 = e.c0, c1inv = e.c1:Inverse(), name = e.name }
+					elseif e.b == p and not placed[e.a] then
+						child, j = e.a, { p0 = p, c0 = e.c1, c1inv = e.c0:Inverse(), name = "" }
+					end
+					if child then
+						placed[child], joints[child] = true, j
+						table.insert(order, child)
+						table.insert(queue, child)
+					end
+				end
+			end
+		end
+	end
+	for _, d in ipairs(model:GetDescendants()) do
+		if isJoint(d) or d:IsA("WeldConstraint") then
+			d:Destroy()
+		elseif d:IsA("BasePart") then
+			d.Anchored, d.CanCollide, d.CanQuery, d.CanTouch = true, false, false, false
+		end
+	end
+	return { root = root, joints = joints, order = order, world = {} }
+end
+-- Its parts where its pose (T: a turn per joint, by its part's name) puts them; scale makes its joints longer or shorter
+local function pose(r, rootCF, T, scale)
+	local w = r.world
+	w[r.root] = rootCF
+	r.root.CFrame = rootCF
+	for _, p in ipairs(r.order) do
+		local j = r.joints[p]
+		local c0, c1inv = j.c0, j.c1inv
+		if scale and scale ~= 1 then
+			c0 = c0.Rotation + c0.Position * scale
+			c1inv = c1inv.Rotation + c1inv.Position * scale
+		end
+		local cf = w[j.p0] * c0 * (T[j.name] or ID) * c1inv
+		w[p] = cf
+		p.CFrame = cf
+	end
+end
+
+---====== THE KITS, MADE READY ONCE ======---
+
+-- The Teller: how high its root is over the floor, where its head is
+local REST = {}
+do
+	local root = kitTeller.RootPart
+	local wheels = kitTeller:FindFirstChild("Wheels", true)
+	REST.height = if wheels then root.Position.Y - (wheels.Position.Y - wheels.Size.Y / 2) else 3.96
+	local head = kitTeller:FindFirstChild("Head", true)
+	REST.head = if head then root.CFrame:PointToObjectSpace(head.Position) else Vector3.new(0, 3.2, 0)
+end
+-- Seek's hands: only their bones (its crawlspace, its prompt, its lights and its animations off), wet black
+if kitArm then
+	for _, d in ipairs(kitArm:GetDescendants()) do
+		if d.Name == "AnimatorPart" or d.Name == "Collision" or d:IsA("AnimationController") or d:IsA("Animation") or d:IsA("NumberValue")
+			or d:IsA("Light") or d:IsA("ParticleEmitter") or d:IsA("ProximityPrompt") then
+			d:Destroy()
+		end
+	end
+	for _, d in ipairs(kitArm:GetDescendants()) do
+		if d:IsA("BasePart") and d.Transparency < 1 then
+			d.Color, d.Material, d.Reflectance = GOO, Enum.Material.SmoothPlastic, 0.22
+		end
+	end
+	if not kitArm:FindFirstChild("Base") then kitArm = nil end
+end
+-- Seek's eye: its black, its eye, its sounds (not its veins on the wall, not its sparkles); not one of DOORS' (its tag off)
+local EYE = nil
+if kitEye and kitEye:FindFirstChild("Black") and kitEye:FindFirstChild("Eye") then
+	pcall(function() kitEye:RemoveTag("SeekEye") end)
+	for _, d in ipairs(kitEye:GetDescendants()) do
+		if d.Name == "Veins" or d:IsA("ParticleEmitter") or d:IsA("Light") then d:Destroy() end
+	end
+	EYE = { pivot = kitEye.Black.CFrame, pieces = {} }
+	for _, d in ipairs(kitEye:GetDescendants()) do
+		if d:IsA("BasePart") then table.insert(EYE.pieces, { d.Name, EYE.pivot:ToObjectSpace(d.CFrame), d.Size }) end
+	end
+end
+
+---====== ITS POSES: degrees, each joint turned about its own x, y, z (its front is -z, its right +x) ======---
+
+local JOINTS = { "Pole", "LowerTorso", "UpperTorso", "Neck", "Head", "Jaw", "LeftUpperArm", "LeftLowerArm", "Hand", "Finger1", "Finger2",
+	"Finger3", "Thumb", "RightUpperArm", "RightLowerArm", "HolePunch" }
+local ZERO = { 0, 0, 0 }
+local function posed(base, over)
+	local p = {}
+	for k, v in pairs(base) do p[k] = v end
+	for k, v in pairs(over) do p[k] = v end
+	return p
+end
+-- Standing to serve you: its hand and its holepunch held before it, its head a little on one side
+local IDLE = { UpperTorso = { -4, 0, 0 }, Neck = { -4, 0, 0 }, Head = { 4, 0, 5 }, LeftUpperArm = { 25, 0, 70 }, LeftLowerArm = { 0, -75, 0 },
+	Finger1 = { 0, -10, 0 }, Finger2 = { 0, -15, 0 }, Finger3 = { 0, -20, 0 }, RightUpperArm = { 25, 0, -70 }, RightLowerArm = { 0, 75, 0 } }
+local POSES = {
+	idle = IDLE,
+	roll = posed(IDLE, { Pole = { 3, 0, 0 }, UpperTorso = { -2, 0, 0 }, Head = { 0, 0, 2 } }),
+	-- it sees the goo under it
+	down = posed(IDLE, { Pole = { -3, 0, 0 }, UpperTorso = { -14, 0, 0 }, Neck = { -18, 0, 0 }, Head = { -26, 0, 0 }, Jaw = { -8, 0, 0 },
+		LeftUpperArm = { 40, 0, 58 }, LeftLowerArm = { 0, -95, 0 }, RightUpperArm = { 40, 0, -58 }, RightLowerArm = { 0, 95, 0 } }),
+	recoil = posed(IDLE, { Pole = { 7, 0, 0 }, UpperTorso = { 16, 0, 0 }, Neck = { 10, 0, 0 }, Head = { 18, 0, -12 }, Jaw = { -28, 0, 0 },
+		LeftUpperArm = { 65, 0, 40 }, LeftLowerArm = { 0, -115, 0 }, RightUpperArm = { 65, 0, -40 }, RightLowerArm = { 0, 115, 0 } }),
+	-- bent over it, as Seek takes it
+	hunch = { Pole = { -4, 0, 0 }, LowerTorso = { -6, 0, 0 }, UpperTorso = { -22, 0, 0 }, Neck = { -10, 0, 0 }, Head = { -5, 0, 14 }, Jaw = { -18, 0, 0 },
+		LeftUpperArm = { 20, 0, 80 }, LeftLowerArm = { 0, -30, 0 }, RightUpperArm = { 20, 0, -80 }, RightLowerArm = { 0, 30, 0 } },
+	-- its fits go between these two
+	fitA = { Pole = { -6, 0, 7 }, LowerTorso = { 0, 16, 0 }, UpperTorso = { -24, 22, -10 }, Neck = { -12, -25, 16 }, Head = { 16, 32, -26 },
+		Jaw = { -34, 0, 0 }, LeftUpperArm = { 10, 25, 15 }, LeftLowerArm = { 0, -25, 0 }, RightUpperArm = { 75, 0, -95 }, RightLowerArm = { 0, 45, 0 } },
+	fitB = { Pole = { 5, 0, -8 }, LowerTorso = { 0, -16, 0 }, UpperTorso = { 12, -26, 12 }, Neck = { 16, 26, -20 }, Head = { -30, -36, 30 },
+		Jaw = { -4, 0, 0 }, LeftUpperArm = { 80, 0, 95 }, LeftLowerArm = { 0, -55, 0 }, RightUpperArm = { 0, -25, -15 }, RightLowerArm = { 0, 20, 0 } },
+	-- the hands tear out: thrown back, its arms wide, screaming at the ceiling
+	arch = { Pole = { 9, 0, 0 }, LowerTorso = { 8, 0, 0 }, UpperTorso = { 26, 0, 0 }, Neck = { 22, 0, 0 }, Head = { 34, 0, 0 }, Jaw = { -42, 0, 0 },
+		LeftUpperArm = { 0, 25, 8 }, LeftLowerArm = { 0, -12, 0 }, Finger1 = { 0, 20, 0 }, Finger2 = { 0, 20, 0 }, Finger3 = { 0, 20, 0 },
+		Thumb = { 0, 20, 0 }, RightUpperArm = { 0, -25, -8 }, RightLowerArm = { 0, 12, 0 } },
+	-- Seek's now: limp arms, its head hanging on one side, watching you
+	stare = { UpperTorso = { -10, 0, 0 }, Neck = { 4, 0, 0 }, Head = { 6, 0, -26 }, Jaw = { -14, 0, 0 }, LeftUpperArm = { 4, 0, 84 },
+		LeftLowerArm = { 0, -14, 0 }, Finger1 = { 0, -30, 0 }, Finger2 = { 0, -35, 0 }, Finger3 = { 0, -40, 0 }, RightUpperArm = { 4, 0, -84 },
+		RightLowerArm = { 0, 14, 0 } },
+}
+local function blend(into, a, b, u)
+	for _, j in ipairs(JOINTS) do
+		local p, q = a[j] or ZERO, b[j] or ZERO
+		local o = into[j]
+		if not o then
+			o = {}
+			into[j] = o
+		end
+		o[1], o[2], o[3] = lerp(p[1], q[1], u), lerp(p[2], q[2], u), lerp(p[3], q[3], u)
+	end
+	return into
+end
+
+---====== SEEK'S EYE AS A PICTURE: its ball, its iris and pupil, its lids of goo, its socket (on the Teller's screen and on yours) ======---
+
+local BLACK, WHITE = Color3.new(0, 0, 0), Color3.new(1, 1, 1)
+local function buildEye(parent, z)
+	local e = {}
+	e.root = make("Frame", { Name = "SeekEye", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromScale(1, 1), SizeConstraint = Enum.SizeConstraint.RelativeYY, ZIndex = z }, parent)
+	local function img(name, image, size, zi, p)
+		return make("ImageLabel", { Name = name, Image = image, BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5), Size = size, ZIndex = zi }, p)
+	end
+	-- the almond's box: the ball is seen only inside it, the socket covers its corners
+	local box = make("Frame", { Name = "Opening", BackgroundColor3 = BLACK, BorderSizePixel = 0, ClipsDescendants = true, AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(0.98, 0.5), ZIndex = 1 }, e.root)
+	img("Ball", IMG.EyeBall, UDim2.fromScale(1 / 0.98, 2), 1, box)
+	e.iris = img("Iris", IMG.EyeIris, UDim2.fromScale(0.42 / 0.98, 0.84), 2, box)
+	e.pupil = make("Frame", { Name = "Pupil", BackgroundColor3 = BLACK, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(0.36, 0.36), ZIndex = 3 }, e.iris)
+	make("UICorner", { CornerRadius = UDim.new(0.5, 0) }, e.pupil)
+	local shine = make("Frame", { Name = "Shine", BackgroundColor3 = WHITE, BackgroundTransparency = 0.25, BorderSizePixel = 0,
+		AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.34, 0.3), Size = UDim2.fromScale(0.16, 0.16), ZIndex = 4 }, e.iris)
+	make("UICorner", { CornerRadius = UDim.new(0.5, 0) }, shine)
+	e.strands = img("Strands", IMG.Strands, UDim2.fromScale(0.9, 0), 5, box)
+	e.upper = make("Frame", { Name = "UpperLid", BackgroundColor3 = BLACK, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(1.1, 0.62), ZIndex = 6 }, box)
+	e.lower = make("Frame", { Name = "LowerLid", BackgroundColor3 = BLACK, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(1.1, 0.62), ZIndex = 6 }, box)
+	local top = img("Edge", IMG.LidEdge, UDim2.fromScale(1, 0.55), 6, e.upper)
+	top.AnchorPoint, top.Position = Vector2.new(0.5, 0.42), UDim2.fromScale(0.5, 1)
+	local bottom = img("Edge", IMG.LidEdge, UDim2.fromScale(1, 0.55), 6, e.lower)
+	bottom.AnchorPoint, bottom.Position, bottom.Rotation = Vector2.new(0.5, 0.58), UDim2.fromScale(0.5, 0), 180
+	img("Socket", IMG.EyeSocket, UDim2.fromScale(1.6, 1.6), 2, e.root)
+	-- open: 0 shut .. 1 wide; where it looks: -1..1 across and down; its pupil: 1 as it is, bigger or smaller
+	function e.set(open, lx, ly, pupil)
+		open = math.clamp(open, 0, 1)
+		e.upper.Position = UDim2.fromScale(0.5, 0.5 - 0.5 * open)
+		e.lower.Position = UDim2.fromScale(0.5, 0.5 + 0.5 * open)
+		e.strands.Size = UDim2.fromScale(0.9, open)
+		e.strands.ImageTransparency = if open < 0.02 or open > 0.85 then 1 else open / 0.85
+		e.iris.Position = UDim2.fromScale(0.5 + math.clamp(lx, -1, 1) * 0.17, 0.5 + math.clamp(ly, -1, 1) * 0.16)
+		local s = 0.36 * math.clamp(pupil, 0.3, 2.2)
+		e.pupil.Size = UDim2.fromScale(s, s)
+	end
+	e.set(0, 0, 0, 1)
+	return e
+end
+
+---====== THE TELLER ======---
+
+local tellers = {} -- (the one there is, and any sinking away)
+local VEINED = { UpperTorso = true, LowerTorso = true, Pole = true, Head = true, Neck = true, LeftUpperArm = true, RightUpperArm = true, Jaw = true }
+local GLITCH_TEXT = { "NOW SEEKING", "N0W S3RV1NG", "NOW SERVING", "NOW SEEKING YOU", "SEEK", "N0W" }
+-- Where Seek's eyes open on it: its part, a point on it, which way out, how big
+local EYES = {
+	{ "Pole", Vector3.new(0, 0.7, -0.98), Vector3.new(0, 0, -1), 0.32 },
+	{ "Pole", Vector3.new(0.92, -0.7, 0.1), Vector3.new(1, 0, 0.1), 0.24 },
+	{ "LowerTorso", Vector3.new(0.35, 0.25, -0.66), Vector3.new(0.2, 0, -1), 0.26 },
+	{ "UpperTorso", Vector3.new(-0.5, -0.45, -0.62), Vector3.new(-0.3, -0.1, -1), 0.24 },
+	{ "UpperTorso", Vector3.new(0.42, 0.35, -0.64), Vector3.new(0.25, 0.1, -1), 0.3 },
+	{ "UpperTorso", Vector3.new(0, 0.1, 0.65), Vector3.new(0, 0, 1), 0.34 },
+	{ "LeftUpperArm", Vector3.new(-0.3, 0.38, 0), Vector3.new(0, 1, 0), 0.16 },
+	{ "RightLowerArm", Vector3.new(0, 0.3, -0.2), Vector3.new(0, 1, -0.4), 0.15 },
+	{ "Neck", Vector3.new(-0.35, 0, -0.33), Vector3.new(-0.6, 0, -1), 0.16 },
+	{ "Head", Vector3.new(0.62, 0.15, 0.05), Vector3.new(1, 0.1, 0), 0.2 },
+}
+-- Where Seek's hands come out of its back (its UpperTorso): a point in it, which way the hand goes
+local SOCKETS = {
+	{ Vector3.new(-0.5, 0.6, 0.5), Vector3.new(-0.75, 0.55, 0.45) },
+	{ Vector3.new(0.5, 0.6, 0.5), Vector3.new(0.75, 0.55, 0.45) },
+	{ Vector3.new(-0.3, 0.9, 0.45), Vector3.new(-0.3, 1, 0.35) },
+	{ Vector3.new(0.3, 0.9, 0.45), Vector3.new(0.3, 1, 0.35) },
+	{ Vector3.new(-0.6, -0.1, 0.5), Vector3.new(-1, -0.15, 0.5) },
+	{ Vector3.new(0.6, -0.1, 0.5), Vector3.new(1, -0.15, 0.5) },
+}
+
+local function dripper(parent, rate)
+	return make("ParticleEmitter", { Name = "Goo", Texture = IMG.Drip, Rate = rate or 0, Lifetime = NumberRange.new(0.6, 1.1),
+		Speed = NumberRange.new(0, 1), Acceleration = Vector3.new(0, -32, 0), Size = NumberSequence.new(0.22),
+		Orientation = Enum.ParticleOrientation.VelocityParallel, Color = ColorSequence.new(Color3.fromRGB(26, 22, 28)), LightInfluence = 1 }, parent)
+end
+
+local function newTeller(at)
+	local model = kitTeller:Clone()
+	local root = model.RootPart
+	local tl = { model = model, root = root, at = at, parts = {}, byName = {}, restY = {}, arms = {}, eyes = {}, opened = {}, cur = blend({}, POSES.roll, POSES.roll, 0),
+		T = {}, jerk = {}, mix = {}, target = POSES.roll, stiff = 10, shake = 0, jerkIn = 0, look = nil, lookAmount = 0, front = -99, clock = 0,
+		clickAt = -9, swivel = 0, bob = 0, wild = 0, mode = "film", decals = {}, drips = {}, glitch = 0, screenMode = "text", eyeOpen = 1, beat = 0,
+		lightLevel = 0, puddle = 0 }
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("BasePart") then
+			tl.byName[d.Name] = tl.byName[d.Name] or d
+			local y = root.CFrame:PointToObjectSpace(d.Position).Y
+			tl.restY[d.Name] = tl.restY[d.Name] or y
+			if d.Transparency < 1 and d.Name ~= "Screen" then
+				table.insert(tl.parts, { part = d, y = y, color = d.Color, reflectance = d.Reflectance or 0, a = 0 })
+			end
+		end
+	end
+	tl.rig = rig(model, root)
+	for _, p in ipairs(tl.parts) do
+		if VEINED[p.part.Name] then table.insert(tl.drips, { emitter = dripper(p.part), entry = p }) end
+	end
+	-- Its screen: NOW SERVING; under it, Seek's eye and the static it breaks into
+	local screen = model:FindFirstChild("Screen", true)
+	local gui = screen:FindFirstChildOfClass("SurfaceGui")
+	tl.screen = { part = screen, gui = gui }
+	if gui then
+		tl.screen.number, tl.screen.text = gui:FindFirstChild("NumberLabel"), gui:FindFirstChild("TextLabel")
+		tl.screen.back = make("Frame", { Name = "Black", BackgroundColor3 = BLACK, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), ZIndex = 4,
+			Visible = false }, gui)
+		tl.screen.eye = buildEye(gui, 5)
+		tl.screen.eye.root.Visible = false
+		tl.screen.static = make("ImageLabel", { Name = "Static", Image = IMG.Static, BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1),
+			ImageRectSize = Vector2.new(128, 128), ZIndex = 20, Visible = false }, gui)
+		tl.screen.serving = tostring(math.random(10, 99))
+		if tl.screen.number then tl.screen.number.Text = tl.screen.serving end
+		if tl.screen.text then tl.screen.text.Text = "NOW SERVING" end
+	end
+	tl.light = make("PointLight", { Name = "ScreenLight", Color = Color3.fromRGB(255, 196, 176), Brightness = 0.6, Range = 12, Shadows = false }, screen)
+	tl.goo = make("Part", { Name = "Goo", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.06, 0.1, 0.1), Color = GOO, Material = Enum.Material.SmoothPlastic,
+		Reflectance = 0.35, Transparency = 1, Anchored = true, CanCollide = false, CanQuery = false, CanTouch = false, CastShadow = false }, model)
+	table.insert(tellers, tl)
+	return tl
+end
+
+-- Seek's veins on a part of it, once it is black
+local function veins(tl, entry)
+	for _, face in ipairs({ "Front", "Back", "Left", "Right" }) do
+		table.insert(tl.decals, { decal = make("Decal", { Name = "SeekVeins", Texture = IMG.Veins, Face = Enum.NormalId[face], Transparency = 1 }, entry.part),
+			entry = entry })
+	end
+end
+
+-- One of Seek's eyes opens on it
+local function addEye(tl, i)
+	tl.opened[i] = true
+	if not EYE then return end
+	local spec = EYES[i]
+	local m = kitEye:Clone()
+	local up = if math.abs(spec[3].Unit.Y) > 0.95 then Vector3.new(0, 0, 1) else UP -- (looking straight up: another way up)
+	local e = { spec = spec, born = tl.clock, place = CFrame.lookAt(spec[2], spec[2] + spec[3], up), pieces = {}, model = m, blinkAt = tl.clock + 1 + math.random() * 3 }
+	for _, d in ipairs(m:GetDescendants()) do
+		if d:IsA("BasePart") then
+			d.Anchored, d.CanCollide, d.CanQuery, d.CanTouch, d.CastShadow = true, false, false, false, false
+			for _, piece in ipairs(EYE.pieces) do
+				if piece[1] == d.Name then table.insert(e.pieces, { part = d, offset = piece[2], size = piece[3] }) end
+			end
+		end
+	end
+	e.ball = m:FindFirstChild("Eye")
+	m.Parent = tl.model
+	local splat = m:FindFirstChild("Splat", true)
+	if splat then splat:Play() end
+	table.insert(tl.eyes, e)
+end
+
+-- One of Seek's hands tears out of its back (quiet: just there, no goo thrown, no sound)
+local function addArm(tl, i, quiet)
+	if not kitArm then return end
+	local s = SOCKETS[i]
+	local m = kitArm:Clone()
+	local arm = { model = m, born = tl.clock, phase = i * 1.37, T = {}, parts = {}, open = 0, grown = false,
+		socket = CFrame.lookAt(s[1], s[1] + s[2], Vector3.new(0, 0, 1)) }
+	arm.rig = rig(m, m.Base)
+	for _, d in ipairs(m:GetDescendants()) do
+		if d:IsA("BasePart") then
+			d.CastShadow = false
+			table.insert(arm.parts, { d, d.Size })
+		end
+	end
+	local palm = m:FindFirstChild("Palm")
+	if palm then dripper(palm, 2) end
+	m.Parent = tl.model
+	table.insert(tl.arms, arm)
+	if quiet then return end
+	-- out of it: goo thrown out, its own sound, and the tearing
+	local back = tl.byName.UpperTorso
+	local spot = make("Attachment", { Name = "Tear", CFrame = arm.socket * CFrame.Angles(-math.pi / 2, 0, 0) }, back)
+	local burst = make("ParticleEmitter", { Name = "Burst", Texture = IMG.Goo, Rate = 0, Lifetime = NumberRange.new(0.5, 1.1), Speed = NumberRange.new(9, 20),
+		SpreadAngle = Vector2.new(35, 35), Acceleration = Vector3.new(0, -40, 0), Drag = 1.5, Size = NumberSequence.new(0.45, 0.1),
+		Rotation = NumberRange.new(0, 360), RotSpeed = NumberRange.new(-200, 200), Color = ColorSequence.new(Color3.fromRGB(24, 20, 26)), LightInfluence = 1 }, spot)
+	burst:Emit(30)
+	sound("Squelch", 1, 0.8 + i * 0.06, false, back)
+	local own = palm and palm:FindFirstChildOfClass("Sound")
+	if own then own:Play() end
+end
+
+-- A hand's pose: it unfolds out of the back, then never stops writhing and grasping
+local function armPose(arm, now, wild)
+	local s, T = arm.phase, arm.T
+	local fold = 1 - arm.open
+	T.Arm_Base = CFrame.Angles(math.sin(now * 1.1 + s) * 0.5, wobble(now * 0.9, s) * 0.5 * wild, wobble(now * 0.8, s + 3) * 0.4 * wild + fold * 1.1)
+	T.Arm_Top = CFrame.Angles(math.sin(now * 1.6 + s) * 0.4, wobble(now * 1.3, s + 1) * 0.7 * wild, -0.3 + wobble(now * 1.2, s + 5) * 0.6 * wild - fold * 1.7)
+	T.Palm = CFrame.Angles(wobble(now * 2, s + 7) * 0.5, wobble(now * 1.7, s + 9) * 0.5, -fold * 0.8)
+	local grab = 0.5 + 0.5 * math.sin(now * 2.3 + s)
+	for f = 1, 4 do
+		local c = lerp(0.15 + 0.85 * grab * (0.75 + f * 0.08), 1.2, fold)
+		T["Finger" .. f .. "_Base"] = CFrame.Angles(0, 0, -c * 0.8)
+		T["Finger" .. f .. "_Top"] = CFrame.Angles(0, 0, -c * 0.9)
+	end
+	return T
+end
+
+-- Every frame: its pose (its fits on top), where it looks, Seek's black on it, its eyes, its hands, its screen
+local function stepTeller(tl, dt)
+	tl.clock += dt
+	local now = tl.clock
+	local target = tl.target
+	if tl.shake > 0.01 then
+		tl.jerkIn -= dt
+		if tl.jerkIn <= 0 then
+			tl.jerkIn = (0.05 + math.random() * 0.12) / (0.4 + tl.shake)
+			blend(tl.jerk, POSES.fitA, POSES.fitB, math.random())
+			for _, j in ipairs(JOINTS) do
+				local p = tl.jerk[j]
+				p[1], p[2], p[3] = p[1] + (math.random() - 0.5) * 26, p[2] + (math.random() - 0.5) * 26, p[3] + (math.random() - 0.5) * 26
+			end
+		end
+		target = blend(tl.mix, target, tl.jerk, tl.shake)
+	end
+	local k = 1 - math.exp(-dt * lerp(tl.stiff, 30, tl.shake))
+	local T = tl.T
+	for _, j in ipairs(JOINTS) do
+		local c, g = tl.cur[j], target[j] or ZERO
+		c[1] += (g[1] - c[1]) * k
+		c[2] += (g[2] - c[2]) * k
+		c[3] += (g[3] - c[3]) * k
+		T[j] = CFrame.Angles(rad(c[1]), rad(c[2]), rad(c[3]))
+	end
+	-- Seek's: it never stops twitching a little, it breathes with the heartbeat
+	if tl.front > -9 then
+		local tremor = 0.015 + 0.02 * tl.beat
+		T.Head = T.Head * CFrame.Angles(wobble(now * 9, 1) * tremor, wobble(now * 8, 2) * tremor, wobble(now * 10, 3) * tremor)
+		T.UpperTorso = T.UpperTorso * CFrame.Angles(-0.04 * tl.beat, 0, 0)
+	end
+	T.Pole = CFrame.new(0, tl.bob, 0) * T.Pole
+	if tl.look and tl.lookAmount > 0 then
+		local d = tl.at:PointToObjectSpace(tl.look) - REST.head
+		local yaw = math.clamp(math.atan2(-d.X, -d.Z), -1.1, 1.1) * tl.lookAmount
+		local pitch = math.clamp(math.atan2(d.Y, math.sqrt(d.X * d.X + d.Z * d.Z)), -0.6, 0.6) * tl.lookAmount
+		T.Neck = T.Neck * CFrame.Angles(pitch * 0.4, yaw * 0.4, 0)
+		T.Head = T.Head * CFrame.Angles(pitch * 0.6, yaw * 0.6, 0)
+	end
+	-- its cables swing, its holepunch punches, its wheels turn
+	local swing = 0.05 + 0.3 * tl.shake
+	for i = 1, 4 do T["Hair" .. i] = CFrame.Angles(math.sin(now * 1.3 + i * 1.9) * swing, 0, math.sin(now * 1.7 + i * 2.7) * swing) end
+	local since = now - tl.clickAt
+	T.HolePunchHandle = if since < 0.16 then CFrame.Angles(0, 0, -math.sin(math.pi * since / 0.16) * 0.4) else ID
+	T.Wheels = CFrame.Angles(0, tl.swivel, 0)
+	pose(tl.rig, tl.at, T)
+
+	-- Seek's black climbs it (from its wheels up), its veins pulse, it drips
+	if tl.front > -9 then
+		for _, p in ipairs(tl.parts) do
+			if p.a < 1 then
+				local a = math.clamp((tl.front - p.y) / 1.2, 0, 1)
+				if a > p.a then
+					p.a = a
+					p.part.Color = p.color:Lerp(GOO, a)
+					p.part.Reflectance = lerp(p.reflectance, 0.3, a)
+					if a > 0.5 and not p.goo then
+						p.goo = true
+						p.part.Material = Enum.Material.SmoothPlastic
+						if VEINED[p.part.Name] then veins(tl, p) end
+					end
+				end
+			end
+		end
+		for i, spec in ipairs(EYES) do
+			if not tl.opened[i] and tl.front > (tl.restY[spec[1]] or 0) + spec[2].Y then addEye(tl, i) end
+		end
+	end
+	for _, v in ipairs(tl.decals) do v.decal.Transparency = 1 - v.entry.a * (0.3 + 0.5 * tl.beat) end
+	for _, d in ipairs(tl.drips) do d.emitter.Rate = 5 * d.entry.a end
+	if tl.puddle > 0.05 then
+		tl.goo.Transparency = 0
+		tl.goo.Size = Vector3.new(0.06, tl.puddle, tl.puddle)
+		tl.goo.CFrame = (tl.floor or tl.at * CFrame.new(0, -REST.height, 0)) * CFrame.new(0, 0.04, 0) * CFrame.Angles(0, 0, math.pi / 2)
+	else
+		tl.goo.Transparency = 1
+	end
+
+	-- its eyes: each pops open on its part, and blinks now and then
+	for _, e in ipairs(tl.eyes) do
+		local anchor = tl.byName[e.spec[1]]
+		local grow = math.max(backOut(span(now - e.born, 0, 0.35)), 0.02) * (tl.shrink or 1)
+		local size = e.spec[4] * grow
+		local cf = anchor.CFrame * e.place
+		for _, piece in ipairs(e.pieces) do
+			piece.part.CFrame = cf * (piece.offset.Rotation + piece.offset.Position * size)
+			if now - e.born < 0.4 or tl.shrink then piece.part.Size = piece.size * size end
+		end
+		if e.ball and now >= e.blinkAt then
+			local shut = now - e.blinkAt < 0.13
+			e.ball.Transparency = if shut then 1 else 0
+			for _, decal in ipairs(e.ball:GetChildren()) do
+				if decal:IsA("Decal") then decal.Transparency = e.ball.Transparency end
+			end
+			if not shut then e.blinkAt = now + 1.5 + math.random() * 4 end
+		end
+	end
+
+	-- its hands: out of its back, unfolding, writhing
+	local back = tl.byName.UpperTorso.CFrame
+	for _, arm in ipairs(tl.arms) do
+		local age = now - arm.born
+		local grow = math.max(backOut(span(age, 0, 0.45)), 0.02) * (tl.shrink or 1)
+		arm.open = out3(span(age, 0.08, 0.9)) * (tl.shrink or 1)
+		local scale = ARM_SCALE * grow
+		if not arm.grown or tl.shrink then
+			for _, p in ipairs(arm.parts) do p[1].Size = p[2] * scale end
+			arm.grown = age > 0.45
+		end
+		pose(arm.rig, back * arm.socket, armPose(arm, now, tl.wild), scale)
+	end
+
+	-- its light, redder as Seek takes it
+	tl.light.Color = Color3.fromRGB(255, 196, 176):Lerp(Color3.fromRGB(255, 34, 30), tl.lightLevel)
+	tl.light.Brightness = (0.6 + 2.6 * tl.lightLevel) * (if tl.glitch > 0 and math.random() < tl.glitch * 0.5 then 0.2 else 1)
+
+	-- its screen: NOW SERVING, breaking into static, into Seek's eye (that looks at you)
+	local sc = tl.screen
+	if sc.gui then
+		local glitching = tl.glitch > 0 and math.random() < tl.glitch
+		local showEye = tl.screenMode == "eye"
+		if glitching and math.random() < 0.5 then showEye = not showEye end
+		sc.static.Visible = glitching
+		if glitching then sc.static.ImageRectOffset = Vector2.new(math.random(0, 128), math.random(0, 128)) end
+		sc.back.Visible, sc.eye.root.Visible = showEye, showEye
+		if sc.number then sc.number.Visible = not showEye end
+		if sc.text then sc.text.Visible = not showEye end
+		if glitching and tl.front > -9 then
+			if sc.text then sc.text.Text = GLITCH_TEXT[math.random(1, #GLITCH_TEXT)] end
+			if sc.number then sc.number.Text = if math.random() < 0.5 then "??" else tostring(math.random(0, 99)) end
+		elseif not glitching and sc.text and sc.text.Text ~= "NOW SERVING" and tl.screenMode == "text" then
+			sc.text.Text = "NOW SERVING"
+			if sc.number then sc.number.Text = sc.serving end
+		end
+		if showEye then
+			local camera = workspace.CurrentCamera
+			local d = sc.part.CFrame:PointToObjectSpace(camera.CFrame.Position)
+			local lx, ly = 0, 0
+			if d.Z < -0.2 then lx, ly = d.X / d.Z * 1.5, d.Y / d.Z * 1.5 end
+			local twitch = 0.06 * tl.shake
+			sc.eye.set(tl.eyeOpen, lx + (math.random() - 0.5) * twitch, ly + (math.random() - 0.5) * twitch, 1 + 0.35 * tl.beat)
+		end
+	end
+end
+
+---====== WHERE IT HAPPENS: in front of you (or wherever the room has space), on the floor ======---
+
+local function placeFor(hrp, camera)
+	probe.FilterDescendantsInstances = { folder, hrp.Parent }
+	local from = hrp.Position
+	local view = flat(camera.CFrame.LookVector)
+	local look, room = view, -1
+	for _, turn in ipairs({ 0, 45, -45, 90, -90, 180 }) do
+		local dir = CFrame.Angles(0, rad(turn), 0):VectorToWorldSpace(view)
+		local hit = workspace:Raycast(from, dir * 17, probe)
+		local free = if hit then (hit.Position - from).Magnitude else 17
+		if free > room + 0.5 then look, room = dir, free end
+		if free >= 12 then break end
+	end
+	local spot = from + look * math.clamp(room - 3.5, 4, 13)
+	local down = workspace:Raycast(spot + UP * 3, Vector3.new(0, -16, 0), probe)
+	local ground = Vector3.new(spot.X, if down then down.Position.Y else from.Y - 3, spot.Z)
+	-- it rolls in from further on, as far as the room lets it
+	local high = ground + UP * 2.5
+	local beyond = workspace:Raycast(high, look * 10, probe)
+	local runway = if beyond then math.max((beyond.Position - high).Magnitude - 2.5, 0) else 8
+	return { ground = ground, look = look, right = look:Cross(UP), runway = math.min(runway, 8), frame = CFrame.lookAt(ground, ground - look) }
+end
+
+-- A camera never inside a wall: pulled in front of whatever is between it and what it looks at
+local function unblock(target, pos)
+	local hit = workspace:Raycast(target, pos - target, probe)
+	if hit then return hit.Position + (target - pos).Unit * 0.6 end
+	return pos
+end
+
+---====== THE CUTSCENE ======---
+
+local film = nil -- (the one playing)
+local BEATS = { 0.6, 1.25, 1.85, 2.4, 2.9, 3.35, 3.75, 4.1 } -- (the heartbeats once the eye is open: faster and faster)
+
+-- Its shots: over your shoulder as it rolls up; low in front of it; round it as Seek takes it; behind it as the hands tear out;
+-- in front of it, into its screen
+local function shot(f, t, dt)
+	local tl, sp = f.tl, f.spot
+	local G = sp.frame
+	local function at(x, y, z) return G:PointToWorldSpace(Vector3.new(x, y, z)) end
+	local pos, target, fov, up = nil, nil, nil, UP
+	if t < 3 then
+		target = tl.at.Position + UP * 1.2
+		pos = unblock(target, f.hrp.Position + UP * 2.1 - sp.look * 4.2 + sp.right * 1.9)
+		fov = lerp(70, 60, ease(span(t, 0, 3)))
+	elseif t < 5.6 then
+		local a = span(t, 3, 5.6)
+		target = at(0, 5.8, 0)
+		pos = unblock(target, at(lerp(2, 1.2, a), lerp(2.6, 3.2, a), lerp(-8.6, -6.6, a)))
+		fov = 50
+	elseif t < 9.6 then
+		local a = span(t, 5.6, 9.6)
+		local turn = rad(lerp(-50, 40, ease(a)))
+		local r = lerp(10.5, 9, a)
+		target = at(0, lerp(4.3, 5.8, a), 0)
+		pos = unblock(target, at(math.sin(turn) * r, lerp(2.8, 3.8, a), -math.cos(turn) * r))
+		fov = 55
+	elseif t < 12.6 then
+		local a = out3(span(t, 9.6, 12.6))
+		target = at(0, 6.4, 0.8)
+		pos = unblock(target, at(lerp(-4, -6.5, a), lerp(3, 4.5, a), lerp(6.5, 10, a)))
+		fov = 60
+	else
+		-- straight into its screen, wherever its head hangs, closer and closer (tilted as it is), until it is all you see
+		local a = ease(span(t, 12.6, 14.9))
+		local screen = tl.screen.part.CFrame
+		target = screen.Position
+		pos = target + screen.LookVector * lerp(7.5, 0.7, a) + screen.UpVector * lerp(0.4, 0, a)
+		up = UP:Lerp(screen.UpVector, a)
+		fov = lerp(55, 32, a)
+	end
+	local cf = CFrame.lookAt(pos, target, up)
+	if t >= 12.6 then -- (smoothly: its head never stops twitching)
+		f.near = if f.near then f.near:Lerp(cf, 1 - math.exp(-dt * 8)) else cf
+		cf = f.near
+	end
+	if t < 0.9 then -- (from where your camera was)
+		local u = ease(span(t, 0, 0.9))
+		cf, fov = f.saved.cframe:Lerp(cf, u), lerp(f.saved.fov, fov, u)
+	end
+	local amp = f.kick + (if t >= 5.6 and t < 9.6 then 0.05 + 0.3 * span(t, 5.6, 9.6) else 0)
+	cf = cf * CFrame.Angles(wobble(t * 23, 1) * 0.02 * amp, wobble(t * 21, 2) * 0.02 * amp, wobble(t * 17, 3) * 0.015 * amp)
+	return cf, fov
+end
+
+-- What it does, moment by moment
+local function direct(f, t, dt)
+	local tl, sp = f.tl, f.spot
+	local u = out3(span(t, 0, 2.6))
+	local ground = sp.ground + sp.look * sp.runway * (1 - u)
+	tl.at = CFrame.lookAt(ground, ground - sp.look) + UP * REST.height
+	tl.floor = CFrame.lookAt(sp.ground, sp.ground - sp.look)
+	tl.bob = 0.04 * math.sin(t * 38) * (1 - u)
+	tl.swivel = math.sin(t * 3) * 0.3 * (1 - u)
+	if t < 2.6 then
+		tl.target, tl.stiff = POSES.roll, 8
+	elseif t < 4.3 then
+		tl.target, tl.stiff = POSES.idle, 6
+	elseif t < 4.9 then
+		tl.target, tl.stiff = POSES.down, 7
+	elseif t < 5.6 then
+		tl.target, tl.stiff = POSES.recoil, 14
+	elseif t < 9.65 then
+		tl.target, tl.stiff = POSES.hunch, 10
+	elseif t < 12.4 then
+		tl.target, tl.stiff = POSES.arch, 12
+	else
+		tl.target, tl.stiff = POSES.stare, 5
+	end
+	tl.shake = if t >= 5.6 and t < 9.65 then lerp(0.3, 1, span(t, 5.6, 9.2)) elseif t >= 9.65 and t < 12.4 then 0.3 * (1 - span(t, 9.65, 12.4))
+		elseif t >= 12.4 then 0.04 else 0
+	-- it looks at you as it serves you, and at you again once it is Seek's
+	local camera = workspace.CurrentCamera.CFrame.Position
+	if t >= 2.4 and t < 4.3 then
+		tl.look, tl.lookAmount = camera, 0.7 * span(t, 2.4, 3)
+	elseif t >= 12.6 then -- (straight ahead, where the camera comes from: not the camera itself, that follows its screen)
+		tl.look, tl.lookAmount = tl.at:PointToWorldSpace(REST.head - Vector3.new(0, 0, 8)), ease(span(t, 12.6, 13.6))
+	else
+		tl.lookAmount = math.max(tl.lookAmount - dt * 3, 0)
+	end
+	-- Seek's black: out of the floor, then up it
+	tl.puddle = 8.5 * out3(span(t, 4.35, 6.8))
+	tl.front = if t >= 5.5 then lerp(-4.4, 4.9, ease(span(t, 5.5, 9.4))) else -99
+	tl.lightLevel = span(t, 5.5, 9.5)
+	tl.wild = if t < 12.4 then 1 else 0.7
+	tl.beat = if t - f.beatAt < 1 then math.exp(-math.max(t - f.beatAt, 0) * 7) else 0
+	-- its screen
+	tl.glitch = if t >= 4.9 and t < 5.15 then 0.6 elseif t >= 6 and t < 9.65 then 0.15 + 0.55 * span(t, 6, 9.6)
+		elseif t >= 9.65 and t < 11 then 0.3 * (1 - span(t, 9.65, 11)) else 0
+	tl.screenMode = if t >= 8.4 then "eye" else "text"
+	-- the picture greyer, harder, redder
+	local sick = span(t, 5.5, 10)
+	f.grade.Saturation = -0.15 - 0.45 * sick
+	f.grade.Contrast = 0.05 + 0.2 * sick
+	f.grade.TintColor = WHITE:Lerp(Color3.fromRGB(255, 214, 214), sick)
+	if f.drone then f.drone.Volume = 0.55 * ease(span(t, 0, 1.5)) * (1 - span(t, 19.8, LENGTH)) end
+	f.kick = math.max(f.kick - dt * 1.8, 0)
+end
+
+-- Your screen: the bars; then black, Seek's eye in the middle of it, that opens and spreads like Meld; then white
+local function filmGui(f)
+	local playerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+	local gui = make("ScreenGui", { Name = "TellerSeekFilm", IgnoreGuiInset = true, DisplayOrder = 99999, ResetOnSpawn = false,
+		ZIndexBehavior = Enum.ZIndexBehavior.Sibling }, playerGui)
+	f.gui = gui
+	local function frame(name, color, z, parent)
+		return make("Frame", { Name = name, BackgroundColor3 = color, BackgroundTransparency = 1, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1),
+			ZIndex = z }, parent or gui)
+	end
+	local function picture(name, image, z)
+		return make("ImageLabel", { Name = name, Image = image, BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(0, 0), SizeConstraint = Enum.SizeConstraint.RelativeYY, ZIndex = z }, f.stage)
+	end
+	f.black = frame("Black", BLACK, 1)
+	f.stage = make("Frame", { Name = "Stage", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 2, Visible = false }, gui)
+	f.flesh = frame("Flesh", Color3.fromRGB(58, 6, 14), 1, f.stage)
+	f.tendrils = picture("Tendrils", IMG.Tendrils, 2)
+	f.masses = {}
+	for i = 1, 7 do f.masses[i] = picture("Meld", IMG.MeldMass, 3) end
+	f.edge = picture("MeldEdge", IMG.MeldEdge, 4)
+	f.edge.SizeConstraint = Enum.SizeConstraint.RelativeXY
+	f.eye = buildEye(f.stage, 6)
+	f.bars = { frame("Bar", BLACK, 8), frame("Bar", BLACK, 8) }
+	f.bars[2].AnchorPoint, f.bars[2].Position = Vector2.new(0, 1), UDim2.fromScale(0, 1)
+	for _, bar in ipairs(f.bars) do bar.BackgroundTransparency, bar.Size = 0, UDim2.fromScale(1, 0) end
+	f.flash = frame("Flash", WHITE, 9)
+	f.grade = make("ColorCorrectionEffect", { Name = "TellerSeekGrade" }, Lighting)
+end
+
+local function stepGui(f, t)
+	local bars = ease(span(t, 0, 0.8)) * (1 - ease(span(t, LENGTH - 0.8, LENGTH)))
+	for _, bar in ipairs(f.bars) do bar.Size = UDim2.fromScale(1, 0.11 * bars) end
+	f.black.BackgroundTransparency = if t >= 19.8 then 1 else 1 - ease(span(t, 14.55, 15))
+	f.flash.BackgroundTransparency = if t < 19.8 then 1 else ease(span(t, 19.85, LENGTH))
+	local g = t - 15
+	f.stage.Visible = g > -0.45 and t < 19.8
+	if not f.stage.Visible then return end
+	local view = workspace.CurrentCamera.ViewportSize
+	local aspect = view.Y / math.max(view.X, 1)
+	local beat = 0
+	for _, b in ipairs(BEATS) do
+		if g > b - 0.02 and g < b + 0.4 then beat = math.max(beat, math.exp(-math.max(g - b, 0) * 9)) end
+	end
+	local implode = 1 - ease(span(g, 4.2, 4.55)) -- (at the end it all goes into its pupil)
+	local swirl = (1 - implode) * 140
+	-- the eye: shut, bulging; it tears open with the hit; it looks round, then at you; its pupil swallows its iris
+	local open = if g < 0 then 0.04 * math.max(0, math.sin(g * 40)) * span(g, -0.45, 0) else backOut(span(g, 0, 0.35))
+	local lx, ly = 0, 0
+	if g > 0.3 and g < 0.65 then
+		lx, ly = -0.7, 0.15
+	elseif g >= 0.65 and g < 1 then
+		lx, ly = 0.6, -0.2
+	end
+	local jitter = 0.04 * (1 + beat * 3)
+	local pupil = if g < 0.4 then lerp(1, 0.55, span(g, 0, 0.3)) else lerp(0.55, 2, ease(span(g, 1.2, 4)))
+	f.eye.set(open, lx + (math.random() - 0.5) * jitter, ly + (math.random() - 0.5) * jitter, pupil * (1 + 0.15 * beat))
+	local eyeSize = lerp(0.5, 0.78, ease(span(g, 1.4, 3.8))) * (1 + 0.05 * beat) * implode
+	f.eye.root.Size = UDim2.fromScale(eyeSize, eyeSize) -- (never turned: Roblox does not clip inside a turned frame)
+	-- its veins, out of it
+	local reach = lerp(0.3, 3.4, out3(span(g, 1.2, 4.2))) * implode
+	f.tendrils.Size = UDim2.fromScale(reach, reach)
+	f.tendrils.ImageTransparency = 1 - 0.95 * span(g, 1.2, 1.7)
+	f.tendrils.Rotation = g * 6 + swirl
+	-- Meld's flesh, bubbling out round it in lumps
+	for i, m in ipairs(f.masses) do
+		local start = 1.5 + i * 0.2
+		local grow = out3(span(g, start, start + 1.8))
+		m.Visible = grow > 0
+		if grow > 0 then
+			local angle = i * 2.4
+			local dist = (0.16 + 0.07 * (i % 3)) * (0.6 + 1.4 * grow) * implode
+			local size = (0.6 + 0.12 * ((i * 7) % 5)) * 1.9 * grow * (1 + 0.07 * beat) * implode
+			m.Size = UDim2.fromScale(size, size)
+			m.Position = UDim2.fromScale(0.5 + math.cos(angle) * dist * aspect, 0.5 + math.sin(angle) * dist)
+			m.Rotation = math.deg(angle) + g * (if i % 2 == 0 then 9 else -9) + swirl
+		end
+	end
+	-- and in from the edges of your screen
+	local edge = lerp(lerp(2.6, 1, ease(span(g, 1.8, 4))), 2.6, 1 - implode) * (1 + 0.04 * beat)
+	f.edge.Size = UDim2.fromScale(edge, edge)
+	f.flesh.BackgroundTransparency = 1 - ease(span(g, 2.6, 3.6)) * implode
+	-- all of it jolted by each heartbeat
+	local jolt = beat * 8
+	f.stage.Position = UDim2.fromOffset((math.random() - 0.5) * jolt, (math.random() - 0.5) * jolt)
+end
+
+-- You, your camera, given back
+local function giveBack(f)
+	if f.given then return end
+	f.given = true
+	local camera = f.camera
+	camera.CameraType = f.saved.type
+	camera.CameraSubject = f.saved.subject
+	camera.FieldOfView = f.saved.fov
+	if f.hrp.Parent then f.hrp.Anchored = f.saved.anchored end
+end
+
+local function finish(f, aborted, leaving)
+	if f.done then return end
+	f.done = true
+	pcall(function() RunService:UnbindFromRenderStep("TellerSeekFilm") end)
+	giveBack(f)
+	if f.drone then f.drone:Destroy() end
+	if f.squeak then f.squeak:Destroy() end
+	f.gui:Destroy()
+	f.grade:Destroy()
+	film = nil
+	local tl = f.tl
+	if leaving then return end
+	if aborted then -- (Seek's, all at once)
+		tl.front, tl.puddle, tl.lightLevel = 9, 8.5, 1
+		for i = #tl.arms + 1, #SOCKETS do addArm(tl, i, true) end
+	end
+	tl.mode, tl.afterT = "after", 0
+end
+
+local function cuesFor(f)
+	local tl = f.tl
+	local function heartbeat()
+		f.beatAt = f.t
+		sound("Heartbeat", 1)
+	end
+	local list = {
+		{ 0, function()
+			f.drone = sound("Drone", 0, 1, true)
+			f.squeak = sound("Squeak", 0.45, 1, true)
+		end },
+		{ 2.6, function() if f.squeak then f.squeak:Stop() end end },
+		{ 2.8, function() sound("Ding", 0.8) end },
+		{ 3.3, function()
+			tl.clickAt = tl.clock
+			sound("Punch", 0.8)
+		end },
+		{ 3.62, function()
+			tl.clickAt = tl.clock
+			sound("Punch", 0.8)
+		end },
+		{ 4.35, function() sound("Squelch", 0.45, 0.55) end },
+		{ 4.9, function()
+			f.kick += 0.5
+			sound("Glitch", 0.5)
+		end },
+		{ 5.4, function() sound("Riser", 0.9) end },
+		{ 6, function() sound("DingBad", 0.8) end },
+		{ 6.3, function() sound("Glitch", 0.7) end },
+		{ 7.5, function() sound("Glitch", 0.7, 0.9) end },
+		{ 8.6, function() sound("Glitch", 0.8, 0.8) end },
+		{ 9.7, function()
+			f.kick += 0.9
+			sound("Screech", 1)
+		end },
+		{ 13, heartbeat },
+		{ 13.8, heartbeat },
+		{ 14, function() sound("Stinger", 1) end }, -- (its hit a second in: as the eye opens)
+		{ 14.45, heartbeat },
+		{ 16.2, function() sound("Meld", 0.9) end },
+		{ 19.8, function()
+			sound("Flash", 0.9)
+			giveBack(f)
+		end },
+	}
+	for i = 1, #SOCKETS do
+		table.insert(list, { 9.9 + (i - 1) * 0.24, function()
+			addArm(tl, i)
+			f.kick += 0.45
+		end })
+	end
+	for _, b in ipairs(BEATS) do table.insert(list, { 15 + b, heartbeat }) end
+	table.sort(list, function(a, b) return a[1] < b[1] end)
+	return list
+end
+
+local function stepFilm(dt)
+	local f = film
+	if not f then return end
+	dt = math.min(dt, 0.1)
+	f.t += dt
+	local t = f.t
+	if f.danger or not f.hrp.Parent or (f.humanoid and f.humanoid.Health <= 0) then
+		finish(f, true)
+		return
+	end
+	while f.cues[f.next] and f.cues[f.next][1] <= t do
+		local cue = f.cues[f.next]
+		f.next += 1
+		cue[2]()
+	end
+	direct(f, t, dt)
+	stepTeller(f.tl, dt)
+	stepGui(f, t)
+	if not f.given then
+		local cf, fov = shot(f, t, dt)
+		f.camera.CFrame, f.camera.FieldOfView = cf, fov
+	end
+	if t >= LENGTH then finish(f, false) end
+end
+
+local function melt(tl)
+	tl.mode, tl.meltT, tl.base = "melt", 0, tl.at
+end
+
+local function play()
+	if film then return end
+	local character = LocalPlayer.Character
+	local hrp = character and character:FindFirstChild("HumanoidRootPart")
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	local camera = workspace.CurrentCamera
+	if not (hrp and camera) or (humanoid and humanoid.Health <= 0) then return end
+	for _, old in ipairs(tellers) do
+		if old.mode ~= "melt" then melt(old) end
+	end
+	local sp = placeFor(hrp, camera)
+	local start = sp.ground + sp.look * sp.runway
+	local tl = newTeller(CFrame.lookAt(start, start - sp.look) + UP * REST.height)
+	local f = { t = 0, tl = tl, spot = sp, hrp = hrp, humanoid = humanoid, camera = camera, next = 1, kick = 0, beatAt = -9,
+		saved = { type = camera.CameraType, subject = camera.CameraSubject, fov = camera.FieldOfView, cframe = camera.CFrame, anchored = hrp.Anchored } }
+	film = f
+	stepTeller(tl, 0) -- (posed before it is seen)
+	tl.model.Parent = folder
+	f.cues = cuesFor(f)
+	filmGui(f)
+	hrp.Anchored = true
+	camera.CameraType = Enum.CameraType.Scriptable
+	RunService:BindToRenderStep("TellerSeekFilm", Enum.RenderPriority.Last.Value + 2, stepFilm)
+end
+
+---====== AFTER IT: the infected Teller stays, Seek's; far from it, it sinks into its goo ======---
+
+table.insert(connections, RunService.RenderStepped:Connect(function(dt)
+	dt = math.min(dt, 0.1)
+	local camera = workspace.CurrentCamera
+	local character = LocalPlayer.Character
+	local hrp = character and character:FindFirstChild("HumanoidRootPart")
+	for i = #tellers, 1, -1 do
+		local tl = tellers[i]
+		if film and film.tl == tl then continue end
+		if tl.mode == "after" then
+			tl.afterT += dt
+			tl.target, tl.stiff = POSES.stare, 5
+			tl.beat = math.max(0, math.sin(tl.clock * math.pi / 0.55)) ^ 8
+			if tl.clock > (tl.twitchAt or 0) then
+				tl.twitchAt = tl.clock + 2 + math.random() * 4
+				tl.twitchUntil = tl.clock + 0.25 + math.random() * 0.3
+			end
+			tl.shake = if tl.clock < (tl.twitchUntil or 0) then 0.7 else 0.03
+			tl.look, tl.lookAmount, tl.wild = camera.CFrame.Position, 1, 0.7
+			tl.screenMode, tl.eyeOpen, tl.glitch = "eye", 1, if tl.shake > 0.5 then 0.25 else 0.01
+			tl.lightLevel = 0.85 + 0.15 * tl.beat
+			if hrp and (hrp.Position - tl.at.Position).Magnitude > FAR then melt(tl) end
+		elseif tl.mode == "melt" then
+			tl.meltT += dt
+			tl.shrink = 1 - ease(span(tl.meltT, 0, 1.2)) -- (its hands and its eyes go back in first)
+			tl.at = tl.base - UP * ease(span(tl.meltT, 0.6, 2.6)) * (REST.height + 5)
+			tl.puddle = 8.5 * (1 - span(tl.meltT, 2.4, 3.2))
+			tl.shake, tl.glitch = 0.5 * (1 - span(tl.meltT, 0, 2.6)), 0.3
+			if tl.meltT > 3.2 then
+				tl.model:Destroy()
+				table.remove(tellers, i)
+				continue
+			end
+		end
+		stepTeller(tl, dt)
+	end
+end))
+
+-- Rush, Ambush, Seek (or any of them) while it plays: it stops at once
+table.insert(connections, workspace.ChildAdded:Connect(function(child)
+	if film and DANGER[child.Name] then film.danger = true end
+end))
+
+---====== WHEN: the first of Seek's eyes you can see, near you (once each time Seek's eyes come) ======---
+
+local armed, quiet, every = true, 0, 0
+local function seen(eye, hrp, camera)
+	local ok, at = pcall(function() return if eye:IsA("Model") then eye:GetPivot().Position else eye.Position end)
+	if not ok or (at - hrp.Position).Magnitude > NEAR then return false end
+	probe.FilterDescendantsInstances = { folder, hrp.Parent, eye }
+	local from = camera.CFrame.Position
+	local hit = workspace:Raycast(from, at - from, probe)
+	return hit == nil or (hit.Position - at).Magnitude < 4 -- (nothing between, or the wall it is on)
+end
+table.insert(connections, RunService.Heartbeat:Connect(function(dt)
+	every += dt
+	if every < 0.25 then return end
+	local step = every
+	every = 0
+	local character = LocalPlayer.Character
+	local hrp = character and character:FindFirstChild("HumanoidRootPart")
+	local camera = workspace.CurrentCamera
+	local count = 0
+	for _, eye in ipairs(CollectionService:GetTagged("SeekEye")) do
+		if eye:IsDescendantOf(workspace) and not eye:IsDescendantOf(folder) then
+			count += 1
+			if armed and not film and hrp and camera and seen(eye, hrp, camera) then
+				armed = false
+				task.spawn(play)
+			end
+		end
+	end
+	quiet = if count == 0 then quiet + step else 0
+	if quiet > 8 then armed = true end -- (Seek's eyes gone: the next time they come, again)
+end))
+
+SESSION.TellerSeekPlay = function() task.spawn(play) end
+SESSION.__TellerSeek = function()
+	for _, c in ipairs(connections) do c:Disconnect() end
+	if film then finish(film, true, true) end
+	for _, tl in ipairs(tellers) do tl.model:Destroy() end
+	table.clear(tellers)
+	folder:Destroy()
+	SESSION.TellerSeekPlay = nil
+	SESSION.__TellerSeek = nil
+end
+print("[TellerSeek] ready: it plays when Seek's eyes open near you (getgenv().TellerSeekPlay() plays it now)")
